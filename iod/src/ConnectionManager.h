@@ -27,7 +27,7 @@
 #include "rate.h"
 #include "symboltable.h"
 #include "value.h"
-#include <boost/thread.hpp>
+#include <boost/thread/recursive_mutex.hpp>
 #include <map>
 #include <pthread.h>
 #include <set>

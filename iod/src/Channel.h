@@ -28,7 +28,7 @@
 #include "regular_expressions.h"
 #include "symboltable.h"
 #include "value.h"
-#include <boost/thread.hpp>
+#include <boost/thread/recursive_mutex.hpp>
 #include <map>
 #include <ostream>
 #include <set>
@@ -348,10 +348,6 @@ class Channel : public MachineInstance, public ChannelImplementation {
         void putCompletedCommand(IODCommand *cmd);
         IODCommand *getCompletedCommand();
     */
-  private:
-    void prepareCommandSocketAndSubscriber();
-    void blockThreadUntilStart();
-    bool receivedStateChangeMessage(zmq::socket_t &remote_sock, char *&data, size_t &len);
 
   protected:
     ChannelInternals *internals;
@@ -380,14 +376,12 @@ class Channel : public MachineInstance, public ChannelImplementation {
     SocketMonitor *monit_pubs;
     EventResponder *connect_responder;
     EventResponder *disconnect_responder;
-    boost::thread *monitor_thread;
 
     unsigned int throttle_time;
     static boost::mutex update_mutex;
 
     int connections;
     bool aborted;
-    boost::thread *subscriber_thread;
     bool started_;
     zmq::socket_t *cmd_client;
     zmq::socket_t *cmd_server;

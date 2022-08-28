@@ -22,7 +22,6 @@
 #define __ABORTACTION_H__ 1
 
 #include "Action.h"
-#include <iostream>
 
 class MachineInstance;
 

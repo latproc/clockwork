@@ -3,7 +3,6 @@
 #include "Action.h"
 #include "Expression.h"
 #include "symboltable.h"
-#include <iostream>
 
 class MachineInstance;
 

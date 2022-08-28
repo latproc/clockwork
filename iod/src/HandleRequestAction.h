@@ -24,7 +24,6 @@
 #include "MessagingInterface.h"
 #include "State.h"
 #include "symboltable.h"
-#include <iostream>
 #include <zmq.hpp>
 
 class MachineInstance;

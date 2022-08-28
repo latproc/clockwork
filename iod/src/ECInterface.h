@@ -21,7 +21,6 @@
 #ifndef __ECInterface
 #define __ECInterface
 
-#include <iostream>
 #include <sys/types.h>
 
 #include "IODCommand.h"

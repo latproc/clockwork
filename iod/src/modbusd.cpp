@@ -24,6 +24,8 @@
     changes to items that are exported to modbus.
 */
 
+#include <boost/thread/thread.hpp>
+
 #include "DebugExtra.h"
 #include "IODCommand.h"
 #include "Logger.h"
@@ -33,7 +35,6 @@
 #include <bitset>
 #include <boost/foreach.hpp>
 #include <boost/program_options.hpp>
-#include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
 #include <fstream>

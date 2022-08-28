@@ -1,6 +1,4 @@
-#include <boost/thread.hpp>
 #include <math.h>
-//#include <boost/thread/mutex.hpp>
 #include "filtering.h"
 
 #if 0

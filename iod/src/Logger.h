@@ -23,7 +23,6 @@
 
 #include <boost/thread/mutex.hpp>
 #include <fstream>
-#include <iostream>
 #include <libgen.h>
 #include <map>
 #include <set>

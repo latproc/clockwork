@@ -21,13 +21,13 @@
 #include "Message.h"
 #include "value.h"
 #include <algorithm>
-#include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
 #include <iostream>
 #include <list>
 #include <set>
 #include <string.h>
+#include "Receiver.h"
 
 // Used to generate a unique id for each transmitter.
 long Transmitter::next_id;

@@ -29,7 +29,6 @@
 #include <unistd.h>
 
 #include <boost/filesystem.hpp>
-#include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/utility.hpp>

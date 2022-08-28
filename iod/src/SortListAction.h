@@ -22,7 +22,6 @@
 
 #include "Action.h"
 #include "symboltable.h"
-#include <iostream>
 
 class MachineInstance;
 

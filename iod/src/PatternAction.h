@@ -22,7 +22,6 @@
 #define __PATTERN_ACTION_H
 
 #include "Action.h"
-#include <iostream>
 
 class MachineInstance;
 

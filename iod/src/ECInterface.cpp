@@ -23,7 +23,6 @@
 #include "Statistic.h"
 #include "Statistics.h"
 #include "cJSON.h"
-#include <boost/thread.hpp>
 #include <boost/thread/condition.hpp>
 #include <errno.h>
 #include <fstream>

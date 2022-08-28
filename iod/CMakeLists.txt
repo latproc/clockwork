@@ -91,6 +91,7 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/rate.h
 	${CLOCKWORK_DIR}/watchdog.h
 	${CLOCKWORK_DIR}/Message.h
+	${CLOCKWORK_DIR}/Receiver.h
     )
 
 add_library (cw_client

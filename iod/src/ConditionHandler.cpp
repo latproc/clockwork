@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "ConditionHandler.h"
 #include "DebugExtra.h"
 #include "Logger.h"

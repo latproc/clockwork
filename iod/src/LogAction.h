@@ -21,7 +21,7 @@
 #include "Action.h"
 #include "Expression.h"
 #include "symboltable.h"
-#include <iostream>
+#include <ostream>
 
 class MachineInstance;
 

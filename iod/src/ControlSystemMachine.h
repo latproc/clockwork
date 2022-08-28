@@ -20,7 +20,6 @@
 
 #include "ECInterface.h"
 #include "IOComponent.h"
-#include <iostream>
 
 class ControlSystemMachine : IOComponent {
   public:

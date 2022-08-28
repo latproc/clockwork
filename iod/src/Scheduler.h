@@ -18,8 +18,9 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef cwlang_Scheduler_h
-#define cwlang_Scheduler_h
+#pragma once
+
+#include <boost/thread/thread.hpp>
 
 #include <list>
 #include <ostream>
@@ -30,7 +31,6 @@
 
 #include "Action.h"
 #include "Message.h"
-#include <boost/thread.hpp>
 #include <zmq.hpp>
 
 struct ScheduledItem {
@@ -126,7 +126,3 @@ class Scheduler {
 
     friend class PriorityQueue;
 };
-
-//std::ostream &operator<<(std::ostream &out, const Scheduler &m);
-
-#endif

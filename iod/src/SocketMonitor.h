@@ -25,7 +25,6 @@
 #include "cJSON.h"
 #include "symboltable.h"
 #include "value.h"
-#include <boost/thread.hpp>
 #include <map>
 #include <set>
 #include <sstream>

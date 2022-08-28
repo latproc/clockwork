@@ -26,9 +26,8 @@
 #include "anet.h"
 #include "regular_expressions.h"
 #include <boost/bind.hpp>
-#include <boost/thread.hpp>
-#include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/thread/thread.hpp>
 #include <cassert>
 #include <errno.h>
 #include <exception>
@@ -36,13 +35,11 @@
 #include <iostream>
 #include <signal.h>
 #include <stddef.h>
-#include <sys/socket.h>
 #include <sys/time.h>
 #include <zmq.hpp>
 
 #include "MessageEncoding.h"
 #include "MessagingInterface.h"
-#include "cJSON.h"
 #include "options.h"
 #include "value.h"
 #include <ctype.h>
