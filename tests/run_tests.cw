@@ -1,8 +1,10 @@
 # Run a list of tests
 #
-# This file uses the SYSTEM machine to build a list of
-# testable machines. It assumes that machines matching a
-# certain interface are testable
+# The machines under test are defined explicitly below.
+#
+# In future, this file will use the SYSTEM machine to build a list of
+# testable machines. It will assumes that machines matching a certain
+# interface are testable
 
 TestDriver INTERFACE {
   ok STATE; # tests ran to successful completion
