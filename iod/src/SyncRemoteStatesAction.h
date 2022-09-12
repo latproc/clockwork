@@ -47,6 +47,7 @@ class SyncRemoteStatesActionInternals;
 class SyncRemoteStatesAction : public Action {
 public:
 	SyncRemoteStatesAction(MachineInstance *mi, SyncRemoteStatesActionTemplate &t);
+    ~SyncRemoteStatesAction();
     Status run();
     Status checkComplete();
     virtual std::ostream &operator<<(std::ostream &out)const;
