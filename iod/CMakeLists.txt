@@ -31,6 +31,8 @@ endif()
 if (USE_SOEM)
 	add_subdirectory(ext/SOEM)
 	set(CW_ETHERCAT_DIR "${CMAKE_BINARY_DIR}/ext/SOEM")
+
+    link_directories(${PROJECT_SOURCE_DIR}/stage/lib)
 	if("${CMAKE_SYSTEM}" MATCHES "Linux")
 		set(CW_ETHERCAT_LIB "-lsoem -lpthread -lrt")
 	else()
