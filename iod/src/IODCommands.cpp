@@ -814,12 +814,12 @@ bool IODCommandSend::run(std::vector<Value> &params) {
     }
     std::stringstream ss;
     if (m) {
-        m->sendMessageToReceiver(new Message(strdup(command.c_str())), m, false);
+        m->sendMessageToReceiver(Message(strdup(command.c_str())), m, false);
         if (m->_type == "LIST") {
             for (unsigned int i = 0; i < m->parameters.size(); ++i) {
                 MachineInstance *entry = m->parameters[i].machine;
                 if (entry) {
-                    m->sendMessageToReceiver(new Message(strdup(command.c_str())), entry);
+                    m->sendMessageToReceiver(Message(strdup(command.c_str())), entry);
                 }
             }
         }
@@ -827,7 +827,7 @@ bool IODCommandSend::run(std::vector<Value> &params) {
             for (unsigned int i = 0; i < m->locals.size(); ++i) {
                 MachineInstance *entry = m->locals[i].machine;
                 if (entry) {
-                    m->sendMessageToReceiver(new Message(strdup(command.c_str())), entry);
+                    m->sendMessageToReceiver(Message(strdup(command.c_str())), entry);
                 }
             }
         }
@@ -1488,7 +1488,7 @@ bool IODCommandUnknown::run(std::vector<Value> &params) {
         const std::string &name = message_handlers[ss.str()];
         MachineInstance *m = MachineInstance::find(name.c_str());
         if (m) {
-            m->sendMessageToReceiver(new Message(msg), m);
+            m->sendMessageToReceiver(Message(msg), m);
             result_str = "OK";
             return true;
         }
