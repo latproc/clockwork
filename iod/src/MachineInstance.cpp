@@ -2969,7 +2969,7 @@ void MachineInstance::enable() {
     if (isActive() && !isShadow() && getStateMachine()->token_id != ClockworkToken::EXTERNAL) {
         std::string msgstr(_name);
         msgstr += "_enabled";
-        Message *msg = new Message(msgstr.c_str(), Message::ENABLEMSG);
+        Message msg(msgstr.c_str(), Message::ENABLEMSG);
         sendMessageToReceiver(msg, this, false);
     }
 

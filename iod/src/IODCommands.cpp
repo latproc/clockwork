@@ -312,7 +312,7 @@ bool IODCommandToggle::run(std::vector<Value> &params) {
                 Message *msg;
                 if (m->getCurrent().is(ClockworkToken::on)) {
                     if (m->receives(Message("turnOff"), 0)) {
-                        msg = new Message("turnOff");
+                        Message msg("turnOff");
                         m->sendMessageToReceiver(msg, m);
                     }
                     else {
@@ -331,7 +331,7 @@ bool IODCommandToggle::run(std::vector<Value> &params) {
                 }
                 else if (m->getCurrent().is(ClockworkToken::off)) {
                     if (m->receives(Message("turnOn"), 0)) {
-                        msg = new Message("turnOn");
+                        Message msg("turnOn");
                         m->sendMessageToReceiver(msg, m);
                     }
                     else {
@@ -383,7 +383,7 @@ bool IODCommandToggle::run(std::vector<Value> &params) {
                     msg_str = "off_enter";
                 }
                 //m->mq_interface->send(new Message(msg_str.c_str()), m);
-                m->execute(new Message(msg_str.c_str(), Message::ENTERMSG), m->mq_interface);
+                m->execute(Message(msg_str.c_str(), Message::ENTERMSG), m->mq_interface);
                 result_str = "OK";
                 return true;
             }
