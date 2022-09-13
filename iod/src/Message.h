@@ -61,11 +61,14 @@ class Message {
     std::ostream &operator<<(std::ostream &out) const;
     bool operator==(const Message &other) const;
     bool operator==(const char *msg) const;
+    bool operator!=(const Message &other) const { return !(*this == other); }
+    bool operator!=(const char *msg) const { return !(*this == msg); }
     bool operator<(const Message &other) const { return text < other.text; }
     bool operator>(const Message &other) const { return text > other.text; }
     const std::string getText() const { return text; }
     const std::list<Value> *getParams() const { return params; }
 
+    MessageType getType() const { return kind; }
     bool isEnter() const { return kind == ENTERMSG; }
     bool isLeave() const { return kind == LEAVEMSG; }
     bool isSimple() const { return kind == SIMPLEMSG; }

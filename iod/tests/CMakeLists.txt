@@ -75,6 +75,12 @@ target_link_libraries(test_expressions gmock_main cw_client cw_interpreter ${Zer
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_expressions COMMAND test_expressions)
 
+add_executable(test_message test_message.cpp )
+set_target_properties (test_message PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_message gmock_main cw_client cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_message COMMAND test_message)
+
 add_executable(test_cs_holder test_cs_holder.cpp )
 set_target_properties (test_cs_holder PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(test_cs_holder gmock_main cw_client cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
