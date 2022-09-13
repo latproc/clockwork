@@ -108,23 +108,19 @@ bool Message::operator==(const char *msg) const {
     return strcmp(text.c_str(), msg) == 0;
 }
 
-Package::Package(const Package &other) 
-	:transmitter(other.transmitter), 
-	receiver(other.receiver), 
-	message(new Message(other.message)),
-	needs_receipt(other.needs_receipt) {	
-}
+Package::Package(const Package &other)
+    : transmitter(other.transmitter), receiver(other.receiver), message(new Message(other.message)),
+      needs_receipt(other.needs_receipt) {}
 
-Package::~Package() {
-    delete message;
-}
+Package::~Package() { delete message; }
 
 Package &Package::operator=(const Package &other) {
-	transmitter = other.transmitter;
-	receiver = other.receiver;
-	message = new Message(other.message);
-	needs_receipt = other.needs_receipt;
-	return *this;
+    transmitter = other.transmitter;
+    receiver = other.receiver;
+    if (message) { delete message; }
+    message = new Message(other.message);
+    needs_receipt = other.needs_receipt;
+    return *this;
 }
 
 std::ostream& Package::operator<<(std::ostream &out) const {
@@ -142,7 +138,7 @@ std::ostream &operator<<(std::ostream &out, const Package &package) {
 Transmitter::~Transmitter() { }
 
 
-void Transmitter::sendMessageToReceiver(Message *m, Receiver *r, bool expect_reply) { assert(false); }
+void Transmitter::sendMessageToReceiver(const Message &m, Receiver *r, bool expect_reply) { assert(false); }
 
 bool Receiver::hasPending(const Message &msg) {
 	boost::mutex::scoped_lock lock(q_mutex);

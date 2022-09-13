@@ -107,7 +107,7 @@ public:
   virtual bool receives(const Message&, Transmitter *t);
   Action::Status execute(const Message&m, Transmitter *from, Action *action = 0);
   virtual void handle(const Message&, Transmitter *from, bool send_receipt = false);
-  virtual void sendMessageToReceiver(Message *m, Receiver *r = NULL, bool expect_reply = false);
+  virtual void sendMessageToReceiver(const Message &m, Receiver *r = NULL, bool expect_reply = false);
 
   virtual void idle();
   //virtual bool hasWork() { return has_work; }

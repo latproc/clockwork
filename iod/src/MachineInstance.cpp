@@ -2315,13 +2315,13 @@ void MachineInstance::handle(const Message&m, Transmitter *from, bool send_recei
 	ProcessingThread::activate(this);
 }
 
-void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect_reply) {
+void MachineInstance::sendMessageToReceiver(const Message &m, Receiver *r, bool expect_reply) {
 	MachineShadowInstance *msi = dynamic_cast<MachineShadowInstance*>(r);
 	if (msi) {
-		DBG_MSG << _name << " sending message " << *m << " to shadow " << r->getName() << "\n";
+		DBG_MSG << _name << " sending message " << m << " to shadow " << r->getName() << "\n";
 		std::string addressed_message = r->getName();
 		addressed_message += ".";
-		addressed_message += m->getText();
+		addressed_message += m.getText();
 		std::list<Value> *params = new std::list<Value>;
 		params->push_back(addressed_message.c_str());
 		MachineInstance *mi = dynamic_cast<MachineInstance*>(r);
@@ -2338,9 +2338,9 @@ void MachineInstance::sendMessageToReceiver(Message *m, Receiver *r, bool expect
 		}
 	}
 	else {
-		DBG_MESSAGING << _name << " sending message " << *m << " to " << r->getName() << "\n";
+		DBG_MESSAGING << _name << " sending message " << m << " to " << r->getName() << "\n";
 		if (r->enabled() || expect_reply) { // allow the call to hang here, this will change when throw works TBD
-			DBG_M_MESSAGING << _name << " message " << m->getText() << " expect reply: " << expect_reply << "\n";
+			DBG_M_MESSAGING << _name << " message " << m.getText() << " expect reply: " << expect_reply << "\n";
 			Package *p = new Package(this, r, m, expect_reply);
 			Dispatcher::instance()->deliver(p);
 		}
@@ -2604,14 +2604,12 @@ void MachineInstance::enable() {
 		b->enable();
 	}
 
-#if 1
-	if (isActive() && !isShadow()) {
-		std::string msgstr(_name);
-		msgstr += "_enabled";
-		Message *msg = new Message(msgstr.c_str(), Message::ENABLEMSG);
-		sendMessageToReceiver(msg, this, false);
-	}
-#endif
+    if (isActive() && !isShadow() && getStateMachine()->token_id != ClockworkToken::EXTERNAL) {
+        std::string msgstr(_name);
+        msgstr += "_enabled";
+        Message msg(msgstr.c_str(), Message::ENABLEMSG);
+        sendMessageToReceiver(msg, this, false);
+    }
 
 	if (_type == "LIST")
 		fixListState(*this);

@@ -98,7 +98,7 @@ Action::Status SendMessageAction::run() {
 			std::set<MachineInstance*> targets;
 			collect_target_list(target_machine, targets);
 			for (auto receiver : targets) {
-				owner->sendMessageToReceiver(new Message(msg_str.c_str()), receiver);
+				owner->sendMessageToReceiver(Message(msg_str.c_str()), receiver);
 			}
 		}
 		else {

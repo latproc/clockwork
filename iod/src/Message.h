@@ -99,7 +99,7 @@ public:
         ss << id;
         _name = ss.str();
     }
-	virtual void sendMessageToReceiver(Message *m, Receiver *r = NULL, bool expect_reply = false);
+	virtual void sendMessageToReceiver(const Message &m, Receiver *r = NULL, bool expect_reply = false);
     const std::string &getName() const { return _name; }
 	virtual Receiver *asReceiver() { return 0; }
 	virtual bool debug() { return allow_debug; }

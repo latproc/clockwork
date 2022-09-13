@@ -82,7 +82,7 @@ Action::Status CallMethodAction::run() {
 	{
 		if (!getTrigger() || getTrigger()->fired() || !trigger->enabled()) {
 			setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
-			owner->sendMessageToReceiver(new Message(message.get()), target_machine, true);
+			owner->sendMessageToReceiver(Message(message.get()), target_machine, true);
 			status = Action::Running;
 		}
 		else {
@@ -94,7 +94,7 @@ Action::Status CallMethodAction::run() {
 			DBG_MSG << ss.str() << "\n";
 			/*trigger->disable();
 			setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
-			owner->sendMessageToReceiver(new Message(message.get()), target_machine, true);
+			owner->sendMessageToReceiver(Message(message.get()), target_machine, true);
 			*/
 		}
 	}
@@ -119,7 +119,7 @@ Action::Status CallMethodAction::checkComplete() {
 	if (status == New) {
 		if (!trigger || trigger->fired()) {
 			setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
-			owner->sendMessageToReceiver(new Message(message.get()), target_machine, true);
+			owner->sendMessageToReceiver(Message(message.get()), target_machine, true);
 			status = Action::Running;
 		}
 		return status;

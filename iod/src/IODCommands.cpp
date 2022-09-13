@@ -289,10 +289,9 @@ bool IODCommandResume::run(std::vector<Value> &params) {
 					return false;
 				}
 		  	 	if (m->_type != "POINT") {
-				     Message *msg;
                     if (m->getCurrent().is(ClockworkToken::on)) {
                         if (m->receives(Message("turnOff"), 0)) {
-                            msg = new Message("turnOff");
+                            Message msg("turnOff");
                             m->sendMessageToReceiver(msg, m);
                         }
                         else {
@@ -309,7 +308,7 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                     }
                     else if (m->getCurrent().is(ClockworkToken::off) ) {
                         if (m->receives(Message("turnOn"), 0)) {
-                            msg = new Message("turnOn");
+                            Message msg("turnOn");
                             m->sendMessageToReceiver(msg, m);
                         }
                         else{
@@ -352,7 +351,6 @@ bool IODCommandResume::run(std::vector<Value> &params) {
                         msg_str = "on_enter";
                     else
                         msg_str = "off_enter";
-                    //m->mq_interface->send(new Message(msg_str.c_str()), m);
 					m->execute(new Message(msg_str.c_str(), Message::ENTERMSG), m->mq_interface);
                     result_str = "OK";
                     return true;
@@ -751,17 +749,17 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         }
         std::stringstream ss;
 		if (m) {
-			m->sendMessageToReceiver( new Message(strdup(command.c_str())), m, false);
+			m->sendMessageToReceiver( Message(strdup(command.c_str())), m, false);
             if (m->_type == "LIST") {
                 for (unsigned int i=0; i<m->parameters.size(); ++i) {
                     MachineInstance *entry = m->parameters[i].machine;
-                    if (entry) m->sendMessageToReceiver(new Message(strdup(command.c_str())), entry);
+                    if (entry) m->sendMessageToReceiver(Message(strdup(command.c_str())), entry);
                 }
             }
             else if (m->_type == "REFERENCE" && m->locals.size()) {
                 for (unsigned int i=0; i<m->locals.size(); ++i) {
                     MachineInstance *entry = m->locals[i].machine;
-                    if (entry) m->sendMessageToReceiver(new Message(strdup(command.c_str())), entry);
+                    if (entry) m->sendMessageToReceiver(Message(strdup(command.c_str())), entry);
                 }
             }
 			ss << command << " sent to " << m->getName() << std::flush;
@@ -1387,7 +1385,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
             const std::string &name = message_handlers[ss.str()];
             MachineInstance *m = MachineInstance::find(name.c_str());
             if (m) {
-                m->sendMessageToReceiver(new Message(msg),m);
+                m->sendMessageToReceiver(Message(msg),m);
                 result_str = "OK";
                 return true;
             }
