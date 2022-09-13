@@ -31,17 +31,17 @@ class Logger::Internals {
 public:
     static Logger *logger_instance;
     Level log_level;
-    std::stringstream *dummy_output;
-    std::ostream *log_stream;
+    std::stringstream *dummy_output = nullptr;
+    std::ostream *log_stream = nullptr;
     boost::mutex mutex_;
 
     Internals() : log_level(None), dummy_output(0), log_stream(&std::cout) {}
 };
 
 Logger::Internals * Logger::internals = nullptr;
-LogState *LogState::state_instance = 0;
+LogState *LogState::state_instance = nullptr;
 static std::string header;
-Logger *Logger::Internals::logger_instance = 0;
+Logger *Logger::Internals::logger_instance = nullptr;
 struct timeval last_time;
 
 LogState *LogState::instance() {
@@ -51,7 +51,7 @@ LogState *LogState::instance() {
     return state_instance;
 }
 
-void LogState::cleanup() { delete state_instance; }
+void LogState::cleanup() { delete state_instance; state_instance = nullptr; }
 
 int LogState::define(std::string new_name) {
     int logid = name_map[new_name] = flag_names.size();
