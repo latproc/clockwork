@@ -159,6 +159,7 @@ Package::~Package() { delete message; }
 Package &Package::operator=(const Package &other) {
     transmitter = other.transmitter;
     receiver = other.receiver;
+    if (message) { delete message; }
     message = new Message(other.message);
     needs_receipt = other.needs_receipt;
     return *this;
