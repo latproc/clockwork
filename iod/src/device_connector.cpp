@@ -344,7 +344,7 @@ class Options {
         }
         pattern_ = strdup(p);
         compiled_pattern = create_pattern(pattern_);
-        got_pattern = (compiled_pattern->compilation_result == 0) ? true : false;
+        got_pattern = compiled_pattern->compilation_result == 0;
         if (!got_pattern) {
             std::cerr << compiled_pattern->compilation_error << "\n";
         }
@@ -442,7 +442,7 @@ int getSettings(const char *str, struct termios *settings) {
         }
 
         char *tmp = 0;
-        // most fields are numbers so we usually attempt to convert the field to a number
+        // most fields are numbers, so we usually attempt to convert the field to a number
         long val = 8;
         if (state != cs_parity && state != cs_flow) {
             val = strtol(fld, &tmp, 10);
@@ -709,7 +709,7 @@ struct ConnectionThread {
             const int buffer_size = 100;
             char buf[buffer_size];
             size_t offset = 0;
-            useconds_t retry_delay = 50000; // usec delay before trying to setup
+            useconds_t retry_delay = 50000; // usec delay before trying to set up
             // the connection initialy 50ms with a back-off algorithim
 
             DeviceStatus::instance()->setStatus(DeviceStatus::e_disconnected);
@@ -833,7 +833,7 @@ struct ConnectionThread {
                 if (Options::instance()->server() &&
                     DeviceStatus::instance()->current() == DeviceStatus::e_disconnected &&
                     FD_ISSET(listener, &read_ready)) {
-                    // Accept and setup a connection
+                    // Accept and set up a connection
                     int port;
                     char hostip[16]; // dot notation
                     connection = anetAccept(msg_buffer, listener, hostip, &port);

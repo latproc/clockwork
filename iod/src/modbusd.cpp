@@ -445,7 +445,7 @@ struct ModbusServerThread {
                                                           << " to " << ((val) ? 1 : 0) << "\n";
                                             }
                                             iod_sync_commands.push_back(getIODSyncCommand(
-                                                0, addr + 1, (val) ? true : false));
+                                                    0, addr + 1, val != 0));
                                             initialised_address[addr_str] = true;
                                         }
                                     }
