@@ -214,8 +214,7 @@ double slope(struct CircularBuffer *buf) {
     double sumXsquared = 0.0;
     int n = bufferLength(buf) - 1;
     double t0 = getTime(buf, n);
-    int i = 0;
-    for (i = n - 1; i > 0; i--) {
+    for (int i = n - 1; i > 0; i--) {
         double y = getBufferValue(buf, i) - getBufferValue(buf, n); // degrees
         double x = getTime(buf, i) - t0;
         sumX += x;

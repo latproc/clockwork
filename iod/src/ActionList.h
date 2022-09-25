@@ -1,5 +1,4 @@
-#ifndef __ACTIONLIST_H__
-#define __ACTIONLIST_H__
+#pragma once
 
 #include <boost/thread/recursive_mutex.hpp>
 #include <list>
@@ -23,5 +22,3 @@ class ActionList {
     boost::recursive_mutex mutex;
     std::list<Action *> actions;
 };
-
-#endif

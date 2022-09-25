@@ -37,7 +37,6 @@ std::string MessageLog::add(const std::string a, const std::string b, const std:
         std::list<LogEntry *>::iterator iter = entries.begin();
         while (iter != entries.end() && current_memory + extra > max_memory) {
             LogEntry *e = *iter;
-            //std::cout << "trimming log; removing entry " << e->getText() << "\n";
             current_memory -= e->size();
             iter = entries.erase(iter);
             delete e;

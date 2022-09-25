@@ -79,7 +79,6 @@ char *rl_gets(const char *prompt) {
         return the memory to the free pool. */
     if (line_read) {
         free(line_read);
-        line_read = 0;
     }
 
     /* Get a line from the user. */
@@ -120,21 +119,23 @@ char *send_command(std::list<Value> &params) {
         write_history(history_file);
     }
     sendMessage(*psocket, msg);
-    size_t size = strlen(msg);
+    size_t size;
     free(msg);
     zmq::message_t reply;
     if (psocket->recv(&reply)) {
         size = reply.size();
         char *data = (char *)malloc(size + 1);
-        memcpy(data, reply.data(), size);
-        data[size] = 0;
+        if (data) {
+            memcpy(data, reply.data(), size);
+            data[size] = 0;
 
-        if (cmd == "LIST") {
-            initialise_machine_names(data);
+            if (cmd == "LIST") {
+                initialise_machine_names(data);
+            }
         }
         return data;
     }
-    return 0;
+    return nullptr;
 }
 void process_command(std::list<Value> &params) {
     char *data = send_command(params);
@@ -255,11 +256,12 @@ void initialise_machine_names(char *data) {
     }
     if (data) {
         cleanup();
-        char buf[500];
+        const size_t buffer_size = 5000;
+        char buf[buffer_size];
         char *p = data, *q = buf;
         while (*p) {
             if (*p != ' ' && *p != '\n') {
-                if (q - buf < 499) {
+                if (q - buf < buffer_size - 1) {
                     *q++ = *p++;
                 }
             }
@@ -274,6 +276,7 @@ void initialise_machine_names(char *data) {
     }
     if (did_alloc) {
         free(data);
+        data = 0;
     }
 }
 

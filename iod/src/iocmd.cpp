@@ -91,17 +91,16 @@ int main(int argc, const char *argv[]) {
         zmq::socket_t socket(*context, ZMQ_REQ);
         int linger = 0; // do not wait at socket close time
         socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-        psocket = &socket;
 
         socket.connect(url.c_str());
         std::string cmd;
         while (std::getline(std::cin, cmd)) {
-            sendMessage(*psocket, cmd.c_str());
+            sendMessage(socket, cmd.c_str());
             if (!quiet) {
                 std::cout << cmd << "\n";
             }
             zmq::message_t reply;
-            if (psocket->recv(&reply)) {
+            if (socket.recv(&reply)) {
                 auto size = reply.size();
                 char *data = (char *)malloc(size + 1);
                 memcpy(data, reply.data(), size);

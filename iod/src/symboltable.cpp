@@ -68,27 +68,29 @@ int ClockworkToken::TRACE;
 Tokeniser *Tokeniser::instance() {
     if (!_instance) {
         _instance = new Tokeniser();
-        ClockworkToken::EXTERNAL = _instance->getTokenId("EXTERNAL");
-        ClockworkToken::POINT = _instance->getTokenId("POINT");
-        ClockworkToken::LIST = _instance->getTokenId("LIST");
-        ClockworkToken::TIMER = _instance->getTokenId("TIMER");
-        ClockworkToken::REFERENCE = _instance->getTokenId("REFERENCE");
-        ClockworkToken::tokITEM = _instance->getTokenId("ITEM");
-        ClockworkToken::VARIABLE = _instance->getTokenId("VARIABLE");
-        ClockworkToken::CONSTANT = _instance->getTokenId("CONSTANT");
-        ClockworkToken::tokCONDITION = _instance->getTokenId("CONDITION");
-        ClockworkToken::MQTTPUBLISHER = _instance->getTokenId("MQTTPUBLISHER");
-        ClockworkToken::MQTTSUBSCRIBER = _instance->getTokenId("MQTTSUBSCRIBER");
-        ClockworkToken::POLLING_DELAY = _instance->getTokenId("POLLING_DELAY");
-        ClockworkToken::CYCLE_DELAY = _instance->getTokenId("CYCLE_DELAY");
-        ClockworkToken::tokMessage = _instance->getTokenId("message");
-        ClockworkToken::SYSTEMSETTINGS = _instance->getTokenId("SYSTEMSETTINGS");
-        ClockworkToken::TRACEABLE = _instance->getTokenId("TRACEABLE");
-        ClockworkToken::tokVALUE = _instance->getTokenId("VALUE");
-        ClockworkToken::on = _instance->getTokenId("on");
-        ClockworkToken::off = _instance->getTokenId("off");
-        ClockworkToken::DEBUG = _instance->getTokenId("DEBUG");
-        ClockworkToken::TRACE = _instance->getTokenId("TRACE");
+        if (_instance) {
+            ClockworkToken::EXTERNAL = _instance->getTokenId("EXTERNAL");
+            ClockworkToken::POINT = _instance->getTokenId("POINT");
+            ClockworkToken::LIST = _instance->getTokenId("LIST");
+            ClockworkToken::TIMER = _instance->getTokenId("TIMER");
+            ClockworkToken::REFERENCE = _instance->getTokenId("REFERENCE");
+            ClockworkToken::tokITEM = _instance->getTokenId("ITEM");
+            ClockworkToken::VARIABLE = _instance->getTokenId("VARIABLE");
+            ClockworkToken::CONSTANT = _instance->getTokenId("CONSTANT");
+            ClockworkToken::tokCONDITION = _instance->getTokenId("CONDITION");
+            ClockworkToken::MQTTPUBLISHER = _instance->getTokenId("MQTTPUBLISHER");
+            ClockworkToken::MQTTSUBSCRIBER = _instance->getTokenId("MQTTSUBSCRIBER");
+            ClockworkToken::POLLING_DELAY = _instance->getTokenId("POLLING_DELAY");
+            ClockworkToken::CYCLE_DELAY = _instance->getTokenId("CYCLE_DELAY");
+            ClockworkToken::tokMessage = _instance->getTokenId("message");
+            ClockworkToken::SYSTEMSETTINGS = _instance->getTokenId("SYSTEMSETTINGS");
+            ClockworkToken::TRACEABLE = _instance->getTokenId("TRACEABLE");
+            ClockworkToken::tokVALUE = _instance->getTokenId("VALUE");
+            ClockworkToken::on = _instance->getTokenId("on");
+            ClockworkToken::off = _instance->getTokenId("off");
+            ClockworkToken::DEBUG = _instance->getTokenId("DEBUG");
+            ClockworkToken::TRACE = _instance->getTokenId("TRACE");
+        }
     }
     return _instance;
 }
