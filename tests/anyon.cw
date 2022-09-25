@@ -90,7 +90,7 @@ AnyOnWithSubMachineScript MACHINE {
         SET anyon_f1 TO on;
         WAITFOR test IS on_a;
         LOG "PASSED";
-        SET self TO ok;
+        SET SELF TO ok;
     }
 }
 
