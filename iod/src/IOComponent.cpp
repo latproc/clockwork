@@ -279,9 +279,9 @@ void IOComponent::updatesSent(bool which) {
     updates_sent = which;
 }
 
-bool IOComponent::updatesToSend() { return updates_sent == false; }
+bool IOComponent::updatesToSend() { return !updates_sent; }
 
-IOComponent *IOComponent::lookup_device(const std::string name) {
+IOComponent *IOComponent::lookup_device(const std::string &name) {
     IOComponent::DeviceList::iterator device_iter = IOComponent::devices.find(name);
     if (device_iter != IOComponent::devices.end()) {
         return (*device_iter).second;

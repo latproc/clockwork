@@ -183,7 +183,7 @@ class IOComponent : public Transmitter {
 
     typedef std::map<std::string, IOComponent *> DeviceList;
     static IOComponent::DeviceList devices;
-    static IOComponent *lookup_device(const std::string name);
+    static IOComponent *lookup_device(const std::string &name);
 
     int index() { return io_index; } // this component's index into the io array
     void setIndex(int idx) { io_index = idx; }

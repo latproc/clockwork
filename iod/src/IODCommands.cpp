@@ -656,7 +656,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         free(cs);
     }
     else {
-        IOComponent *device = IOComponent::lookup_device(m->getName().c_str());
+        IOComponent *device = IOComponent::lookup_device(m->getName());
         if (device) {
             const char *state = device->getStateString();
             cJSON_AddStringToObject(node, "state", state);
