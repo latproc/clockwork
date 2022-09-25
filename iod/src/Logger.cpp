@@ -173,8 +173,8 @@ std::ostream &FileLogger::f() {
 }
 
 FileLogger::~FileLogger() {
-    delete internals;
     internals->lock.unlock();
+    delete internals;
 }
 
 void FileLogger::getTimeString(char *buf, size_t buf_size) {
