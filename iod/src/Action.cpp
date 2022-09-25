@@ -53,13 +53,13 @@ char *Trigger::getTriggers() {
     std::stringstream ss;
     {
         boost::recursive_mutex::scoped_lock scoped_lock(trigger_list_mutex);
-        std::list<Trigger *>::iterator iter = all_triggers.begin();
+        auto iter = all_triggers.begin();
         while (iter != all_triggers.end()) {
             Trigger *t = *iter++;
             ss << t->getName() << " (" << t->refs;
-            if (t->_internals->holders.size()) {
+            if (!t->_internals->holders.empty()) {
                 ss << ":";
-                std::list<Action *>::iterator h_iter = t->_internals->holders.begin();
+                auto h_iter = t->_internals->holders.begin();
                 while (h_iter != t->_internals->holders.end()) {
                     ss << *(*h_iter++) << " ";
                 }
@@ -177,13 +177,13 @@ void Action::disableTrigger() {
     }
 }
 
-bool Action::started() { return started_; }
+bool Action::started() const { return started_; }
 void Action::start() {
     assert(!started_);
     started_ = true;
 }
 void Action::stop() { started_ = false; }
-bool Action::aborted() { return aborted_; }
+bool Action::aborted() const { return aborted_; }
 void Action::reset() {
     status = New;
     error_str = "";
@@ -300,12 +300,12 @@ Action::Status Action::operator()() {
     if (status == Failed) {
         if (error_msg) {
             AbortActionTemplate aat(true, error_msg->get());
-            AbortAction *aa = (AbortAction *)aat.factory(owner);
+            auto *aa = (AbortAction *)aat.factory(owner);
             owner->enqueueAction(aa);
         }
         else if (timeout_msg) {
             AbortActionTemplate aat(true, timeout_msg->get());
-            AbortAction *aa = (AbortAction *)aat.factory(owner);
+            auto *aa = (AbortAction *)aat.factory(owner);
             owner->enqueueAction(aa);
         }
     }

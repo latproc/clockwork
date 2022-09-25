@@ -17,7 +17,6 @@ void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
 
 void copyMaskedBits(uint8_t *dest, uint8_t *src, uint8_t *mask, size_t len) {
 
-    uint8_t *result = dest;
 #if VERBOSE_DEBUG
     std::cout << "copying masked bits: \n";
     display(dest, len);

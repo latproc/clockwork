@@ -3,8 +3,7 @@
     written by: Martin Leadbeater 2015
 */
 
-#ifndef __ARRAYSTR_H__
-#define __ARRAYSTR_H__
+#pragma once
 
 char *longArrayToString(int n, long *values);
 int stringToLongArray(const char *str, int n, long *values);
@@ -14,5 +13,3 @@ int stringToLongArray(const char *str, int n, long *values);
 */
 char *doubleArrayToString(int n, double *values);
 int stringToDoubleArray(const char *str, int n, double *values);
-
-#endif

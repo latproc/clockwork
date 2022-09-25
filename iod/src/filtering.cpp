@@ -160,7 +160,6 @@ int findMovement(FloatBuffer *buf, double amount, int max_len) {
 
 double FloatBuffer::inner_product(double *coefficients, unsigned int num_coeff) const {
     float sum = 0;
-    unsigned int l = length();
     for (unsigned int i = 0; i < num_coeff; i++) {
         float x = (i < length()) ? get(i) : 0;
         sum += x * coefficients[i];

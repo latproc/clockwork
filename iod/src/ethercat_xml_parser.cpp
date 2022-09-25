@@ -720,5 +720,4 @@ bool EtherCATXMLParser::loadDeviceConfigurationXML(const char *filename) {
         std::cerr << "Failed to open an xml reader on file " << filename << "\n";
         return false;
     }
-    return false;
 }

@@ -89,14 +89,14 @@ Value resolve(Predicate *p, MachineInstance *m) {
         else {
             Value prop = m->getValue(v.sValue); // property lookup
             if (prop != SymbolTable::Null) {
-                if (m && m->debug()) {
+                if (m->debug()) {
                     DBG_PREDICATES << "Using property " << p->entry << " to resolve search ("
                                    << prop << ", type: " << prop.kind << ")"
                                    << ")\n";
                 }
                 return prop;
             }
-            else if (m && m->debug()) {
+            else if (m->debug()) {
                 DBG_PREDICATES << "Predicate action resolve failed to resolve a value: " << v
                                << "\n";
             }

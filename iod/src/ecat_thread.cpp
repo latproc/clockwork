@@ -435,7 +435,6 @@ bool EtherCATThread::getEtherCatResponse(zmq::socket_t *sync_sock, uint64_t glob
         }
         return false;
     }
-    return true;
 }
 bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
     zmq::message_t output_update;

@@ -101,7 +101,7 @@ Action::Status MachineCommand::runActions() {
 
         // An abort action needs special processing to cause the action pointer
         // to immediately move to the end of the action list
-        AbortAction *aa = dynamic_cast<AbortAction *>(a);
+        auto aa = dynamic_cast<AbortAction *>(a);
         if (aa) {
             std::stringstream ss;
             ss << "ABORTING: " << *this << " at action " << *a << "\n";

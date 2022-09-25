@@ -150,10 +150,10 @@ class Action : public TriggerOwner {
     void cleanupTrigger();
 
     MachineInstance *getOwner() { return owner; }
-    bool started();
+    bool started() const;
     void start();
     void stop();
-    bool aborted();
+    bool aborted() const;
 
     virtual void toString(char *buf, int buffer_size);
     virtual std::ostream &operator<<(std::ostream &out) const { return out << "(Action)"; }
@@ -162,18 +162,18 @@ class Action : public TriggerOwner {
     virtual Status run() = 0;
     virtual Status checkComplete() = 0;
     int refs;
-    MachineInstance *owner;
+    MachineInstance *owner = nullptr;
     CStringHolder error_str;
     CStringHolder result_str;
     Status status;
     Status saved_status; // used when an action is suspended
-    Action *blocked;     // blocked on this action
+    Action *blocked = nullptr;     // blocked on this action
     Trigger *trigger;
-    uint64_t start_time;
-    bool started_;
-    bool aborted_;
-    CStringHolder *timeout_msg; // message to send on timeout
-    CStringHolder *error_msg;   // message to send on error
+    uint64_t start_time{};
+    bool started_ = false;
+    bool aborted_ = false;
+    CStringHolder *timeout_msg = nullptr; // message to send on timeout
+    CStringHolder *error_msg = nullptr;   // message to send on error
 };
 
 std::ostream &operator<<(std::ostream &out, const Action::Status &state);

@@ -43,7 +43,7 @@
 
 Scheduler *Scheduler::instance_;
 static const uint32_t ONEMILLION = 1000000L;
-static Watchdog *wd = 0;
+static Watchdog *watch_dog = 0;
 
 class SchedulerInternals {
   public:
@@ -231,7 +231,7 @@ Scheduler::Scheduler()
     : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PAIR), update_notify(0),
       next_delay_time(0), notification_sent(0) {
     internals = new SchedulerInternals;
-    wd = new Watchdog("Scheduler", 300, false);
+    watch_dog = new Watchdog("Scheduler", 300, false);
     update_sync.bind("inproc://sch_items");
     next_time = 0;
 }
@@ -286,9 +286,9 @@ void Scheduler::add(ScheduledItem *item) {
             update_notify = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
             update_notify->connect("inproc://sch_items");
         }
-        wd->start();
+        watch_dog->start();
         while (true) {
-            wd->poll();
+            watch_dog->poll();
             try {
                 safeSend(*update_notify, "poke", 4);
                 notification_sent = microsecs();
@@ -305,11 +305,11 @@ void Scheduler::add(ScheduledItem *item) {
                 MessageLog::instance()->add(errmsg);
                 delete update_notify;
                 update_notify = 0;
-                wd->stop();
+                watch_dog->stop();
                 throw;
             }
         }
-        wd->stop();
+        watch_dog->stop();
     }
     else {
         if (wait_duration >= 1000000L && item->action) {
@@ -361,7 +361,7 @@ void Scheduler::idle() {
     while (state != e_aborted) {
         next_delay_time = getNextDelay(last_poll);
         if (!ready(last_poll) && state == e_waiting) {
-            wd->stop();
+            watch_dog->stop();
             try {
                 long delay = next_delay_time;
                 if (delay > 10) {
@@ -392,7 +392,7 @@ void Scheduler::idle() {
         int items_found = 0;
         //is_ready = ready();
         while (state == e_running && is_ready) {
-            wd->poll();
+            watch_dog->poll();
             ScheduledItem *item = 0;
             {
                 boost::recursive_mutex::scoped_lock scoped_lock(
@@ -444,7 +444,7 @@ void Scheduler::idle() {
                 DBG_SCHEDULER << "no more scheduled items\n";
             }
             state = e_waiting;
-            wd->stop();
+            watch_dog->stop();
         }
     }
 }

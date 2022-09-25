@@ -93,7 +93,6 @@ void PersistentStore::split(std::string &name, std::string &prop) const {
 
 std::ostream &PersistentStore::operator<<(std::ostream &out) const {
     std::pair<std::string, std::map<std::string, Value>> prop;
-    int result = 1;
     const char *symbol_pattern = "^[\"]{0,1}[A-Za-z][A-Za-z0-9_.]*[\"]{0,1}$";
     const char *number_pattern = "^[-]{0,1}[0-9]+$";
     rexp_info *sym_info = create_pattern(symbol_pattern);
