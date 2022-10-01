@@ -1458,6 +1458,7 @@ static void copyJSONArrayToMap(cJSON *obj, const char *key, std::map<std::string
     }
 }
 
+#if 0
 ChannelDefinition *ChannelDefinition::fromJSON(const char *json) {
     cJSON *obj = cJSON_Parse(json);
     if (!obj) {
@@ -1495,8 +1496,10 @@ ChannelDefinition *ChannelDefinition::fromJSON(const char *json) {
     copyJSONArrayToMap(obj, "updates", defn->updates_names);
     copyJSONArrayToSet(obj, "sends", defn->send_messages);
     copyJSONArrayToSet(obj, "receives", defn->recv_messages);
+    cJSON_Delete(obj);
     return defn;
 }
+#endif
 
 static cJSON *StringSetToJSONArray(std::set<std::string> &items) {
     cJSON *res = cJSON_CreateArray();
@@ -1524,6 +1527,7 @@ static cJSON *MapToJSONArray(std::map<std::string, Value> &items, const char *ke
     return res;
 }
 
+#if 0
 char *ChannelDefinition::toJSON() {
     cJSON *obj = cJSON_CreateObject();
     cJSON_AddStringToObject(obj, "identifier", this->name.c_str());
@@ -1546,6 +1550,7 @@ char *ChannelDefinition::toJSON() {
     cJSON_Delete(obj);
     return str;
 }
+#endif
 
 MessageHandler::MessageHandler() : data(0), data_size(0) {}
 
@@ -1565,6 +1570,7 @@ void MessageHandler::handleMessage(const char *buf, size_t len) {
     memcpy(data, buf, len);
 }
 
+#if 0
 bool MessageHandler::receiveMessage(zmq::socket_t &sock) {
     if (data) {
         free(data);
@@ -1582,6 +1588,7 @@ bool MessageHandler::receiveMessage(zmq::socket_t &sock) {
     }
     return false;
 }
+#endif
 
 Channel *Channel::find(const std::string & channel_name) {
     if (!all) {
@@ -1858,6 +1865,7 @@ bool Channel::matches(MachineInstance *machine, const std::string &channel_name)
     return false;
 }
 
+#if 0
 bool Channel::patternMatches(const std::string &machine_name) {
     // no match on channel_name but we still may match on pattern
     std::set<std::string>::iterator iter = monitors_patterns.begin();
@@ -1893,6 +1901,7 @@ bool Channel::doesMonitor() {
     }
     return does_monitor;
 }
+#endif
 
 bool Channel::filtersAllow(MachineInstance *machine) {
     if (!definition()->monitor_linked.empty() &&
