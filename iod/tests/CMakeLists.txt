@@ -93,6 +93,12 @@ target_link_libraries(test_expr_eval gmock_main cw_client cw_interpreter ${ZeroM
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_expr_eval COMMAND test_expr_eval)
 
+add_executable(test_channels test_channels.cpp )
+set_target_properties (test_channels PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_channels gmock_main cw_client cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_channels COMMAND test_message)
+
 #add_executable(test_ecat_xml test_ecat_xml.cpp ${PROJECT_SOURCE_DIR}/src/ethercat_xml_parser.cpp )
 #set_target_properties (test_ecat_xml PROPERTIES COMPILE_DEFINITIONS EC_SIMULATOR )
 #add_custom_command(
