@@ -236,7 +236,7 @@ class Channel : public MachineInstance, public ChannelImplementation {
     void setDefinition(const ChannelDefinition *);
     void requestStateChange(MachineInstance *machine, std::string new_state, uint64_t authority);
 
-    const std::string &getName() const { return name; }
+    const std::string &getName() const override { return channel_name; }
     const std::set<MachineInstance *> &channelMachines() const { return channel_machines; }
 
     static std::map<std::string, Channel *> *channels() { return all; }
@@ -317,6 +317,8 @@ class Channel : public MachineInstance, public ChannelImplementation {
         IODCommand *getCompletedCommand();
     */
 
+  private:
+    std::string channel_name;
   protected:
     ChannelInternals *internals;
 
@@ -328,7 +330,6 @@ class Channel : public MachineInstance, public ChannelImplementation {
     bool throttledItemsReady(uint64_t now_usecs) const;
     void sendThrottledUpdates();
 
-    std::string name;
     unsigned int port;
     const ChannelDefinition *definition_;
     std::string identifier;
