@@ -18,8 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __cw_CHANNEL_H__
-#define __cw_CHANNEL_H__
+#pragma once
 
 #include "IODCommand.h"
 #include "MachineInstance.h"
@@ -38,36 +37,6 @@ class Channel;
 class MachineInterface;
 class SubscriptionManager;
 
-struct MachineRef {
-  public:
-    static MachineRef *create(const std::string name, MachineInstance *machine,
-                              MachineInterface *iface);
-    MachineRef *ref() {
-        ++refs;
-        return this;
-    }
-    void release() {
-        --refs;
-        if (!refs) {
-            delete this;
-        }
-    }
-    std::ostream &operator<<(std::ostream &out) const;
-    bool operator==(const MachineRef &other);
-
-  private:
-    std::string key;
-    std::string name;
-    std::string interface_name;
-    MachineInstance *item;
-    MachineInterface *interface;
-    int refs;
-    MachineRef();
-    MachineRef(const MachineRef &orig);
-    MachineRef &operator=(const MachineRef &other);
-};
-
-std::ostream &operator<<(std::ostream &out, const MachineRef &m);
 
 class ChannelImplementation {
   public:
@@ -172,7 +141,6 @@ class ChannelDefinition : public MachineClass, public ChannelImplementation {
 
   private:
     static std::map<std::string, ChannelDefinition *> *all;
-    std::map<std::string, MachineRef *> interfaces;
     std::set<Feature> features;
     ChannelDefinition *parent;
     bool ignore_response;
@@ -243,7 +211,6 @@ class ChannelInternals;
 class IODCommand;
 class Channel : public MachineInstance, public ChannelImplementation {
   public:
-    typedef std::set<MachineRef *> MachineList;
     Channel(const std::string name, const std::string type);
     ~Channel();
     Channel(const Channel &orig);
@@ -365,7 +332,6 @@ class Channel : public MachineInstance, public ChannelImplementation {
     const ChannelDefinition *definition_;
     std::string identifier;
     std::string version;
-    MachineList shared_machines;
     MessagingInterface *mif;
     static std::map<std::string, Channel *> *all;
     std::set<MachineInstance *> channel_machines;
@@ -398,5 +364,3 @@ class Channel : public MachineInstance, public ChannelImplementation {
 };
 
 std::ostream &operator<<(std::ostream &out, const Channel &m);
-
-#endif
