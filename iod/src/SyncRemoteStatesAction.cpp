@@ -173,7 +173,7 @@ Action::Status SyncRemoteStatesAction::execute() {
         char *ack;
         size_t len;
         if (safeRecv(*internals->sock, &ack, &len, false, 0, internals->header)) {
-            DBG_CHANNELS << "channel " << chn->name << " got " << ack << " from server\n";
+            DBG_CHANNELS << "channel " << chn->getName() << " got " << ack << " from server\n";
             status = Complete;
             result_str = (const char *)ack; // force a new allocation
             delete[] ack;

@@ -106,7 +106,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     // tbd record which parts of the program refer to this machine
     //void addReferenceLocation(const char *file, int line_no);
 
-    std::ostream &operator<<(std::ostream &out) const;
+    virtual std::ostream &operator<<(std::ostream &out) const;
     void describe(std::ostream &out);
 
     static void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
@@ -242,7 +242,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     virtual void resume();
     void resume(const State &state);
     void resumeAll(); // resume all disable sub-machines
-    void disable();
+    virtual void disable();
     inline bool enabled() const { return is_enabled; }
     void clearAllActions();
     void checkActions();
@@ -354,10 +354,12 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     uint64_t setupSubconditionTriggers(const StableState &s, uint64_t earliestTimer);
     Action *findReceiveHandler(Transmitter *from, const Message &m, const std::string short_name,
                                bool response_required);
-    virtual Action::Status setState(const State &new_state, uint64_t authority = 0,
-                                    bool resume = false);
-    virtual Action::Status setState(const char *new_state, uint64_t authority = 0,
-                                    bool resume = false);
+    virtual Action::Status setState(const State & new_state) { return setState(new_state, 0, false); }
+    virtual Action::Status setState(const char *new_state) { return setState(new_state, 0, false); }
+    virtual Action::Status setState(const State &new_state, uint64_t authority,
+                                    bool resume);
+    virtual Action::Status setState(const char *new_state, uint64_t authority,
+                                    bool resume);
     bool is_enabled;
     Value state_timer;
     MachineInstance *locked;

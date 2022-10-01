@@ -165,7 +165,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
                 do not expect to receive events
             */
             if (mi->isShadow()) {
-                mi->setState(state_name.c_str(), auth);
+                mi->setState(state_name.c_str(), auth, false);
             }
             else {
                 SetStateActionTemplate ssat("SELF", state_name);
