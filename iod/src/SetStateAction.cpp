@@ -283,7 +283,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
                 }
                 //DBG_M_ACTIONS << "SetStateAction didn't find a transition for " << machine->getCurrent() << " to " << value << "; manually setting\n";
             }
-            status = machine->setState(value, authority);
+            status = machine->setState(value, authority, false);
             cleanupTrigger();
             if (status == Complete || status == Failed) {
                 owner->stop(this);
@@ -481,7 +481,7 @@ Action::Status SetIOStateAction::checkComplete() {
         return status;
     }
     if (state.getName() == io_interface->getStateString()) {
-        status = owner->setState(state, authority);
+        status = owner->setState(state, authority, false);
         if (status == Complete || status == Failed) {
             owner->stop(this);
         }

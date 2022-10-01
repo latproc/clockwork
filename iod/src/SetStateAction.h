@@ -78,7 +78,7 @@ struct SetStateAction : public Action {
 };
 
 struct MoveStateActionTemplate : public SetStateActionTemplate {
-    MoveStateActionTemplate(CStringHolder target, Value newstate)
+    MoveStateActionTemplate(const CStringHolder & target, Value newstate)
         : SetStateActionTemplate(target, newstate) {}
     Action *factory(MachineInstance *mi) override;
 };

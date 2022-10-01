@@ -36,8 +36,6 @@
 class Channel;
 class MachineInterface;
 class SubscriptionManager;
-
-
 class ChannelImplementation {
   public:
     ChannelImplementation();
@@ -106,7 +104,7 @@ class ChannelDefinition : public MachineClass, public ChannelImplementation {
     void removeFeature(Feature f);
     bool hasFeature(Feature f) const;
 
-    ChannelDefinition(const char *name, ChannelDefinition *parent = 0);
+    explicit ChannelDefinition(const char *name, ChannelDefinition *parent = nullptr);
     Channel *instantiate(unsigned int port);
     static void instantiateInterfaces();
     static ChannelDefinition *find(const char *name);
@@ -131,7 +129,7 @@ class ChannelDefinition : public MachineClass, public ChannelImplementation {
     MachineClass *interfaceFor(const char *monitored_machine) const;
 
     void setThrottleTime(unsigned int t) { throttle_time = t; }
-    unsigned int getThrottleTime() { return throttle_time; }
+    unsigned int getThrottleTime() const { return throttle_time; }
 
     const std::string &getIdent() { return identifier; }
     const std::string &getKey() { return psk; }
@@ -170,7 +168,8 @@ class MachineRecord {
     MachineInstance *machine;
     uint64_t last_sent;
     std::map<std::string, Value> properties;
-    MachineRecord(MachineInstance *m);
+
+    explicit MachineRecord(MachineInstance *m);
 
   private:
     MachineRecord(const MachineRecord &other);
@@ -197,7 +196,7 @@ class CommandSocketInfo {
     zmq::socket_t *sock;
     unsigned int index;
     static unsigned int lastIndex() { return last_idx; }
-    CommandSocketInfo(Channel *chn);
+    explicit CommandSocketInfo(Channel *chn);
     ~CommandSocketInfo();
     const std::string &commandSocketName() { return cmd_socket_name; }
 
@@ -211,20 +210,22 @@ class ChannelInternals;
 class IODCommand;
 class Channel : public MachineInstance, public ChannelImplementation {
   public:
-    Channel(const std::string name, const std::string type);
-    ~Channel();
-    Channel(const Channel &orig);
+    Channel(const std::string & name, const std::string & type);
+    ~Channel() override;
+    Channel(const Channel &orig) = delete;
     Channel &operator=(const Channel &other);
-    std::ostream &operator<<(std::ostream &out) const;
+    std::ostream &operator<<(std::ostream &out) const override;
     bool operator==(const Channel &other);
 
     void operator()();
     void abort();
 
-    virtual Action::Status setState(const State &new_state, uint64_t authority = 0,
-                                    bool resume = false);
-    virtual Action::Status setState(const char *new_state, uint64_t authority = 0,
-                                    bool resume = false);
+    Action::Status setState(const State &new_state, uint64_t authority,
+                            bool resume) override;
+    Action::Status setState(const char *new_state, uint64_t authority,
+                            bool resume) override;
+    Action::Status setState(const State & new_state) override { return setState(new_state, 0, false); }
+    Action::Status setState(const char *new_state) override { return setState(new_state, 0, false); }
 
     static void initialiseChannels();
 
@@ -240,8 +241,8 @@ class Channel : public MachineInstance, public ChannelImplementation {
 
     static std::map<std::string, Channel *> *channels() { return all; }
     static Channel *create(unsigned int port, ChannelDefinition *defn);
-    static Channel *find(const std::string name);
-    static void remove(const std::string name);
+    static Channel *find(const std::string &name);
+    static void remove(const std::string &name);
     static int uniquePort(unsigned int range_start = 7600, unsigned int range_end = 7799);
     static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val,
                                    uint64_t authority = 0);
@@ -252,7 +253,7 @@ class Channel : public MachineInstance, public ChannelImplementation {
     static void sendCommand(MachineInstance *machine, std::string cmd, std::list<Value> *params,
                             MessageHeader mh);
     static void setupAllShadows();
-    static Channel *findByType(const std::string kind);
+    static Channel *findByType(const std::string & kind);
     MessagingInterface *getPublisher() { return mif; }
 
     void setupFilters();
@@ -276,8 +277,8 @@ class Channel : public MachineInstance, public ChannelImplementation {
     void start(); // begin executing by making connections or serving
     void stop();
     bool started();
-    void enable(); // enable messages to pass through the channel
-    void disable();
+    void enable() override; // enable messages to pass through the channel
+    void disable() override;
     void
     checkStateChange(std::string event); // change state after receiving a done from current state
 

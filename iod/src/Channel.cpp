@@ -154,7 +154,7 @@ ChannelImplementation::ChannelImplementation()
 
 ChannelImplementation::~ChannelImplementation() {}
 
-Channel::Channel(const std::string ch_name, const std::string type)
+Channel::Channel(const std::string & ch_name, const std::string & type)
     : MachineInstance(ch_name.c_str(), type.c_str()), ChannelImplementation(), internals(0),
       name(ch_name), port(0), mif(0), communications_manager(0), monit_subs(0), monit_pubs(0),
       connect_responder(0), disconnect_responder(0), throttle_time(0),
@@ -194,7 +194,7 @@ Channel::~Channel() {
         MachineInstance *machine = *iter++;
         machine->unpublish();
     }
-    ::machines.erase(_name);
+    ::machines.erase(name);
     this->channel_machines.clear();
     SharedWorkSet::instance()->remove(this);
     all_machines.remove(this);
@@ -382,7 +382,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
         }
     }
 
-    Action::Status res = MachineInstance::setState(new_state, resume);
+    Action::Status res = MachineInstance::setState(new_state, 0, resume);
     char buf[100];
 
     /*
@@ -465,7 +465,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 
 Action::Status Channel::setState(const char *new_state_cstr, uint64_t authority, bool resume) {
     State new_state(new_state_cstr);
-    return setState(new_state, resume);
+    return setState(new_state, authority, resume);
 }
 
 void Channel::start() {
@@ -615,7 +615,7 @@ void Channel::dropConnection() {
     }
     assert(connections >= 0);
     if (connections == 0) {
-        //DBG_CHANNELS << "last connection dropped, stopping channel " << _name << "\n";
+        //DBG_CHANNELS << "last connection dropped, stopping channel " << name << "\n";
         //stopServer();
         //delete this;
     }
@@ -963,7 +963,7 @@ void Channel::operator()() {
             }
         }
 
-        DBG_CHANNELS << " channel " << _name << " starting subscription to " << host << ":" << port
+        DBG_CHANNELS << " channel " << name << " starting subscription to " << host << ":" << port
                      << "\n";
         communications_manager = new SubscriptionManager(definition()->name.c_str(), eCHANNEL,
                                                          host.asString().c_str(), 0, (int)port);
@@ -1582,7 +1582,7 @@ bool MessageHandler::receiveMessage(zmq::socket_t &sock) {
     return false;
 }
 
-Channel *Channel::find(const std::string name) {
+Channel *Channel::find(const std::string & name) {
     if (!all) {
         return 0;
     }
@@ -1593,7 +1593,7 @@ Channel *Channel::find(const std::string name) {
     return (*found).second;
 }
 
-void Channel::remove(const std::string name) {
+void Channel::remove(const std::string & name) {
     if (!all) {
         return;
     }
@@ -1930,7 +1930,7 @@ bool Channel::filtersAllow(MachineInstance *machine) {
     */
 }
 
-Channel *Channel::findByType(const std::string kind) {
+Channel *Channel::findByType(const std::string & kind) {
     if (!all) {
         return 0;
     }
