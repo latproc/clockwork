@@ -145,8 +145,6 @@ class ChannelInternals {
     boost::thread *subscriber_thread = nullptr;
 };
 
-MachineRef::MachineRef() : refs(1) {}
-
 MachineRecord::MachineRecord(MachineInstance *m) : machine(m), last_sent(0) {}
 
 ChannelImplementation::ChannelImplementation()
