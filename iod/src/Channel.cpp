@@ -52,9 +52,9 @@ class chn_scoped_lock {
 class CommandLogFilter : public MessageFilter {
   public:
     CommandLogFilter(Channel *chn, const char *hdr) : channel(chn), header(hdr) {}
-    void init(MessageFilterInternals *init_data) {}
-    bool filter(char **buf, size_t &len);
-    bool filter(char **buf, size_t &len, MessageHeader &mh);
+    void init(MessageFilterInternals *init_data) override {}
+    bool filter(char **buf, size_t &len) override;
+    bool filter(char **buf, size_t &len, MessageHeader &mh) override;
     Channel *channel;
     std::string header;
 };
@@ -76,9 +76,9 @@ class RemoteClockworkCommandFilterInternals : public MessageFilterInternals {};
 class RemoteClockworkCommandFilter : public MessageFilter {
   public:
     RemoteClockworkCommandFilter(Channel *chn) : channel(chn) {}
-    void init(MessageFilterInternals *init_data) {}
-    bool filter(char **buf, size_t &len);
-    bool filter(char **buf, size_t &len, MessageHeader &mh);
+    void init(MessageFilterInternals *init_data) override {}
+    bool filter(char **buf, size_t &len) override;
+    bool filter(char **buf, size_t &len, MessageHeader &mh) override;
     Channel *channel;
 };
 
@@ -152,7 +152,7 @@ ChannelImplementation::ChannelImplementation()
     authority = random();
 }
 
-ChannelImplementation::~ChannelImplementation() {}
+ChannelImplementation::~ChannelImplementation() = default;
 
 Channel::Channel(const std::string & ch_name, const std::string & type)
     : MachineInstance(ch_name.c_str(), type.c_str()), ChannelImplementation(),
