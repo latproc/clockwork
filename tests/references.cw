@@ -3,6 +3,7 @@
 Sample1 MACHINE {
 
   content REFERENCE(tab:Refs);
+  OPTION prop "id";
 
   holding WHEN content IS ASSIGNED;
   waiting WHEN content IS EMPTY;
@@ -12,10 +13,11 @@ Sample1 MACHINE {
   RECEIVE content.EMPTY_enter { LOG "detected clear" }
   RECEIVE content.changed { LOG "detected change of assignment" }
 
+  ENTER holding { LOG content.ITEM.NAME + " " + PROPERTY prop OF content.ITEM; }
 }
 
-item1 FLAG(tab:Refs);
-item2 FLAG(tab:Refs);
+item1 FLAG(tab:Refs, id: 1);
+item2 FLAG(tab:Refs, id: 2);
 
 Manager MACHINE sampler {
 
