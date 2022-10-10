@@ -44,6 +44,12 @@ target_link_libraries(test_disable_action gmock_main cw_client cw_interpreter
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_disable_action COMMAND test_disable_action)
 
+add_executable(test_sync_remote_states_action iod_mock.h test_sync_remote_states_action.cpp)
+target_link_libraries(test_sync_remote_states_action gmock_main cw_client cw_interpreter
+        ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_sync_remote_states_action COMMAND test_sync_remote_states_action)
+
 add_executable(test_buffering test_buffering.cpp )
 target_link_libraries(test_buffering gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
