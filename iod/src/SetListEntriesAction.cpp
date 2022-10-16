@@ -38,7 +38,7 @@ SetListEntriesAction::SetListEntriesAction(MachineInstance *m,
 SetListEntriesAction::SetListEntriesAction() : dest_machine(0) {}
 
 std::ostream &SetListEntriesAction::operator<<(std::ostream &out) const {
-    return out << "Set List Entires Action " << source << " to " << dest << "\n";
+    return out << "Set List Entries " << source << " to " << dest << "\n";
 }
 
 void SetListEntriesAction::setListEntries(unsigned long bitmap) {
@@ -67,15 +67,12 @@ Action::Status SetListEntriesAction::run() {
             setListEntries((unsigned long)source.fValue);
         }
         else if (source.kind == Value::t_symbol) {
-            const std::string src = source.asString();
-
             long val;
-            if (owner->getValue(source.asString().c_str()).asInteger(val)) {
-                unsigned long bitmap = (unsigned long)val;
+            if (owner->getValue(source).asInteger(val) ) {
+                unsigned long bitmap = (unsigned long) val;
                 setListEntries(bitmap);
             }
         }
-
         status = Complete;
     }
     else {
