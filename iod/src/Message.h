@@ -114,8 +114,6 @@ struct Package {
     Receiver *receiver;
     Message *message;
     bool needs_receipt;
-    Package(Transmitter *t, Receiver *r, Message *m, bool need_receipt = false)
-        : transmitter(t), receiver(r), message(m), needs_receipt(need_receipt) {}
     Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt = false)
         : transmitter(t), receiver(r), message(new Message(m)), needs_receipt(need_receipt) {}
     Package(const Package &);

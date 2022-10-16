@@ -2970,7 +2970,7 @@ void MachineInstance::enable() {
         std::string msgstr(_name);
         msgstr += "_enabled";
         Message msg(msgstr.c_str(), Message::ENABLEMSG);
-        sendMessageToReceiver(msg, this, false);
+        sendMessageToReceiver(&msg, this, false);
     }
 
     if (_type == "LIST") {
