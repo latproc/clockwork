@@ -313,7 +313,7 @@ bool IODCommandToggle::run(std::vector<Value> &params) {
                 if (m->getCurrent().is(ClockworkToken::on)) {
                     if (m->receives(Message("turnOff"), 0)) {
                         Message msg("turnOff");
-                        m->sendMessageToReceiver(msg, m);
+                        m->sendMessageToReceiver(&msg, m);
                     }
                     else {
                         const State *s = m->getStateMachine()->findState("off");
@@ -332,7 +332,7 @@ bool IODCommandToggle::run(std::vector<Value> &params) {
                 else if (m->getCurrent().is(ClockworkToken::off)) {
                     if (m->receives(Message("turnOn"), 0)) {
                         Message msg("turnOn");
-                        m->sendMessageToReceiver(msg, m);
+                        m->sendMessageToReceiver(&msg, m);
                     }
                     else {
                         const State *s = m->getStateMachine()->findState("on");
