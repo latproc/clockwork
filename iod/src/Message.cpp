@@ -75,8 +75,6 @@ Message::Message(CStringHolder msg, MessageType t, std::list<Value> *param_list)
 }
 
 // in this form, the message takes ownership of the parameters
-Message::Message(Message *m, MessageType t, Parameters *p)
-    : kind(t), seq(++sequence), text(m->text), params(p) {}
 
 Message::Message(const Message &orig) : kind(orig.kind), seq(orig.seq), text(orig.text), params(0) {
     if (orig.params) {
@@ -151,7 +149,7 @@ bool Message::operator==(const char *msg) const {
 }
 
 Package::Package(const Package &other)
-    : transmitter(other.transmitter), receiver(other.receiver), message(new Message(other.message)),
+    : transmitter(other.transmitter), receiver(other.receiver), message(new Message(*other.message)),
       needs_receipt(other.needs_receipt) {}
 
 Package::~Package() { delete message; }
@@ -160,7 +158,7 @@ Package &Package::operator=(const Package &other) {
     transmitter = other.transmitter;
     receiver = other.receiver;
     if (message) { delete message; }
-    message = new Message(other.message);
+    message = new Message(*other.message);
     needs_receipt = other.needs_receipt;
     return *this;
 }
@@ -182,6 +180,10 @@ std::ostream &operator<<(std::ostream &out, const Package &package) {
 Transmitter::~Transmitter() {}
 
 void Transmitter::sendMessageToReceiver(const Message &m, Receiver *r, bool expect_reply) {
+    assert(false);
+}
+
+void Transmitter::sendMessageToReceiver(const char *msg, Receiver *r, bool expect_reply) {
     assert(false);
 }
 

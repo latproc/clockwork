@@ -200,7 +200,7 @@ void Dispatcher::idle() {
                     DBG_DISPATCHER << "Dispatcher sending package " << *p << "\n";
                     Receiver *to = p->receiver;
                     Transmitter *from = p->transmitter;
-                    Message m(p->message); //TBD is this copy necessary
+                    Message m(*p->message); //TBD is this copy necessary
                     if (to) {
                         MachineInstance *mi = dynamic_cast<MachineInstance *>(to);
                         Channel *chn = dynamic_cast<Channel *>(to);

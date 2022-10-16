@@ -26,7 +26,7 @@ class MachineInstance;
 struct HandleMessageActionTemplate : public ActionTemplate {
     explicit HandleMessageActionTemplate(const Package &p) : package(p) {}
     HandleMessageActionTemplate(Transmitter *t, Receiver *r, const Message &m, bool needs_receipt)
-        : package(t, r, new Message(m), needs_receipt) {}
+        : package(t, r, m, needs_receipt) {}
     Action *factory(MachineInstance *mi) override;
     std::ostream &operator<<(std::ostream &out) const override {
         return out << "Message: " << package.message;

@@ -1581,8 +1581,9 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             std::list<MachineInstance *>::iterator owner_iter = owners.begin();
             while (owner_iter != owners.end()) {
                 ProcessingThread::activate(*owner_iter);
+                Message m(evt, Message::LEAVEMSG);
                 work_queue.push_back(
-                    new Package(this, *owner_iter++, new Message(evt, Message::LEAVEMSG)));
+                    new Package(this, *owner_iter++, m));
             }
 #endif
             if (value) {
@@ -1593,8 +1594,9 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             }
             owner_iter = owners.begin();
             while (owner_iter != owners.end()) {
+                Message msg(evt, Message::ENTERMSG);
                 work_queue.push_back(
-                    new Package(this, *owner_iter++, new Message(evt, Message::ENTERMSG)));
+                    new Package(this, *owner_iter++, msg));
             }
         }
         address.value = value;
