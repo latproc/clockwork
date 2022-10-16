@@ -689,7 +689,7 @@ void ProcessingThread::operator()()
 				size_t len = resource_mgr.recv(buf, 100, ZMQ_NOBLOCK);
 				if (len) {
 					char msgbuf[200];
-					snprintf(msgbuf, 100, "Warning: processing thread ignoring incoming data '%.*s' from client\n", (int)len, msgbuf);
+					snprintf(msgbuf, 200, "Warning: processing thread ignoring incoming data '%.*s' from client\n", (int)len, buf);
 					MessageLog::instance()->add(msgbuf);
 				}
 			}
