@@ -1091,7 +1091,7 @@ void MachineInstance::idle() {
             mail_queue.pop_front();
         }
         if (p) {
-            handle(p->message, p->transmitter, p->needs_receipt);
+            handle(*p->message, p->transmitter, p->needs_receipt);
             delete p;
         }
     }
@@ -2616,7 +2616,8 @@ Action::Status MachineInstance::execute(const Message &m, Transmitter *from, Act
     }
     // execute the method if there is one
     DBG_M_MESSAGING << _name << " executing " << event_name << "\n";
-    HandleMessageActionTemplate hmat(Package(from, this, new Message(event_name.c_str())));
+    Message msg(event_name.c_str());
+    HandleMessageActionTemplate hmat(Package(from, this, msg));
     HandleMessageAction *hma = new HandleMessageAction(this, hmat);
     Action::Status res = (*hma)();
     hma->release();
@@ -2645,13 +2646,13 @@ void MachineInstance::handle(const Message &m, Transmitter *from, bool send_rece
     ProcessingThread::activate(this);
 }
 
-void MachineInstance::sendMessageToReceiver(const Message &m, Receiver *r, bool expect_reply) {
+void MachineInstance::sendMessageToReceiver(const Message &message, Receiver *r, bool expect_reply) {
     MachineShadowInstance *msi = dynamic_cast<MachineShadowInstance *>(r);
     if (msi) {
-        DBG_MSG << _name << " sending message " << m << " to shadow " << r->getName() << "\n";
+        DBG_MSG << _name << " sending message " << message << " to shadow " << r->getName() << "\n";
         std::string addressed_message = r->getName();
         addressed_message += ".";
-        addressed_message += m.getText();
+        addressed_message += message.getText();
         std::list<Value> *params = new std::list<Value>;
         params->push_back(addressed_message.c_str());
         MachineInstance *mi = dynamic_cast<MachineInstance *>(r);
@@ -2668,12 +2669,12 @@ void MachineInstance::sendMessageToReceiver(const Message &m, Receiver *r, bool 
         }
     }
     else {
-        DBG_MESSAGING << _name << " sending message " << m << " to " << r->getName() << "\n";
+        DBG_MESSAGING << _name << " sending message " << message << " to " << r->getName() << "\n";
         if (r->enabled() ||
             expect_reply) { // allow the call to hang here, this will change when throw works TBD
-            DBG_M_MESSAGING << _name << " message " << m.getText()
+            DBG_M_MESSAGING << _name << " message " << message.getText()
                             << " expect reply: " << expect_reply << "\n";
-            Package *p = new Package(this, r, m, expect_reply);
+            Package *p = new Package(this, r, message, expect_reply);
             Dispatcher::instance()->deliver(p);
         }
         else {
@@ -2684,11 +2685,17 @@ void MachineInstance::sendMessageToReceiver(const Message &m, Receiver *r, bool 
             MessageLog::instance()->add(buf);
             DBG_MSG << buf << "\n";
 #endif
+            Message msg("DisabledMessageTargetException");
             Package *p =
-                new Package(this, this, new Message("DisabledMessageTargetException"), false);
+                new Package(this, this, msg, false);
             Dispatcher::instance()->deliver(p);
         }
     }
+}
+
+void MachineInstance::sendMessageToReceiver(const char *msg, Receiver *r, bool expect_reply) {
+    Message m(msg);
+    sendMessageToReceiver(m, r, expect_reply);
 }
 
 MachineEvent::MachineEvent(MachineInstance *machine, Message *message)
@@ -2970,7 +2977,7 @@ void MachineInstance::enable() {
         std::string msgstr(_name);
         msgstr += "_enabled";
         Message msg(msgstr.c_str(), Message::ENABLEMSG);
-        sendMessageToReceiver(&msg, this, false);
+        sendMessageToReceiver(msg, this, false);
     }
 
     if (_type == "LIST") {

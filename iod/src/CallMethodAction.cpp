@@ -81,7 +81,7 @@ Action::Status CallMethodAction::run() {
     else if (target_machine->enabled()) {
         if (!getTrigger() || getTrigger()->fired() || !trigger->enabled()) {
             setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
-            owner->sendMessageToReceiver(Message(message.get()), target_machine, true);
+            owner->sendMessageToReceiver(message.get(), target_machine, true);
             status = Action::Running;
         }
         else {

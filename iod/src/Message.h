@@ -53,7 +53,6 @@ class Message {
     typedef std::list<Value> Parameters;
 
     Message(MessageType t = SIMPLEMSG) : kind(t), seq(++sequence), text(""), params(0) {}
-    Message(Message *m, MessageType t = SIMPLEMSG, Parameters *p = 0);
     Message(CStringHolder msg, MessageType t = SIMPLEMSG, Parameters *p = 0);
     Message(const Message &orig);
     Message &operator=(const Message &other);
@@ -100,6 +99,7 @@ class Transmitter {
         _name = ss.str();
     }
     virtual void sendMessageToReceiver(const Message &m, Receiver *r = NULL, bool expect_reply = false);
+    virtual void sendMessageToReceiver(const char *msg, Receiver *r = NULL, bool expect_reply = false);
     virtual const std::string &getName() const { return _name; }
     virtual Receiver *asReceiver() { return 0; }
     virtual bool debug() { return allow_debug; }

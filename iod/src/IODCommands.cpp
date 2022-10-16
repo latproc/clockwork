@@ -313,7 +313,7 @@ bool IODCommandToggle::run(std::vector<Value> &params) {
                 if (m->getCurrent().is(ClockworkToken::on)) {
                     if (m->receives(Message("turnOff"), 0)) {
                         Message msg("turnOff");
-                        m->sendMessageToReceiver(&msg, m);
+                        m->sendMessageToReceiver(msg, m);
                     }
                     else {
                         const State *s = m->getStateMachine()->findState("off");
@@ -332,7 +332,7 @@ bool IODCommandToggle::run(std::vector<Value> &params) {
                 else if (m->getCurrent().is(ClockworkToken::off)) {
                     if (m->receives(Message("turnOn"), 0)) {
                         Message msg("turnOn");
-                        m->sendMessageToReceiver(&msg, m);
+                        m->sendMessageToReceiver(msg, m);
                     }
                     else {
                         const State *s = m->getStateMachine()->findState("on");
@@ -814,12 +814,12 @@ bool IODCommandSend::run(std::vector<Value> &params) {
     }
     std::stringstream ss;
     if (m) {
-        m->sendMessageToReceiver(Message(strdup(command.c_str())), m, false);
+        m->sendMessageToReceiver(command.c_str(), m, false);
         if (m->_type == "LIST") {
             for (unsigned int i = 0; i < m->parameters.size(); ++i) {
                 MachineInstance *entry = m->parameters[i].machine;
                 if (entry) {
-                    m->sendMessageToReceiver(Message(strdup(command.c_str())), entry);
+                    m->sendMessageToReceiver(command.c_str(), entry);
                 }
             }
         }
@@ -827,7 +827,7 @@ bool IODCommandSend::run(std::vector<Value> &params) {
             for (unsigned int i = 0; i < m->locals.size(); ++i) {
                 MachineInstance *entry = m->locals[i].machine;
                 if (entry) {
-                    m->sendMessageToReceiver(Message(strdup(command.c_str())), entry);
+                    m->sendMessageToReceiver(command.c_str(), entry);
                 }
             }
         }
@@ -1488,7 +1488,7 @@ bool IODCommandUnknown::run(std::vector<Value> &params) {
         const std::string &name = message_handlers[ss.str()];
         MachineInstance *m = MachineInstance::find(name.c_str());
         if (m) {
-            m->sendMessageToReceiver(Message(msg), m);
+            m->sendMessageToReceiver(msg, m);
             result_str = "OK";
             return true;
         }

@@ -415,7 +415,7 @@ void Scheduler::idle() {
             else if (item->package) {
                 DBG_SCHEDULER << "Scheduler activating package on "
                               << item->package->receiver->getName() << "\n";
-                item->package->receiver->handle(item->package->message, item->package->transmitter);
+                item->package->receiver->handle(*item->package->message, item->package->transmitter);
                 delete item->package;
                 delete item;
                 ++items_found;

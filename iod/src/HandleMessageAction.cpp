@@ -41,7 +41,7 @@ Action::Status HandleMessageAction::run() {
                     << package.transmitter->getName() << " to " << owner->getName() << "\n";
 
     if (owner->io_interface && package.transmitter == owner->io_interface) {
-        Status sent = owner->execute(package.message, package.transmitter);
+        Status sent = owner->execute(*package.message, package.transmitter);
         if (sent == Failed) {
             status = Failed;
         }
