@@ -84,14 +84,14 @@ Test01 MACHINE result_map {
     
     true WHEN TRUE;
     false DEFAULT;
-    
+
     ENTER INIT { 
         IF (TRUE) { LOG "TRUE ok"; };
         IF (FALSE) { LOG "FALSE returned true"; } 
         ELSE { LOG "FALSE ok"; };
 
         IF (flags INCLUDES a) { LOG "a is in flags. correct" }
-		ELSE { LOG "a is not in flags, incorrect" };
+		    ELSE { LOG "a is not in flags, incorrect" };
 
         INCLUDE d IN flags;
         INCLUDE d IN flags;
@@ -124,11 +124,11 @@ Test01 MACHINE result_map {
         
         # the following ideas aren't implemented yet and will probably change form 
         
-        CREATE test WITH COPY 2 FROM flags;
-        LOG "copied " + test + " from " + flags;
-        
-        CREATE test WITH TAKE 2 FROM flags;
-        LOG "took " + test + " from " + flags;
+        #CREATE test WITH COPY 2 FROM flags;
+        #LOG "copied " + test + " from " + flags;
+        #
+        #CREATE test WITH TAKE 2 FROM flags;
+        #LOG "took " + test + " from " + flags;
 
     }
 }

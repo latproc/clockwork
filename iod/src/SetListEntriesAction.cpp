@@ -41,7 +41,7 @@ SetListEntriesAction::SetListEntriesAction() : dest_machine(0) {
 }
 
 std::ostream &SetListEntriesAction::operator<<(std::ostream &out) const {
-	return out << "Set List Entires Action " << source << " to " << dest << "\n";
+    return out << "Set List Entries " << source << " to " << dest << "\n";
 }
 
 void SetListEntriesAction::setListEntries(unsigned long bitmap) {
@@ -59,9 +59,9 @@ void SetListEntriesAction::setListEntries(unsigned long bitmap) {
 }
 
 Action::Status SetListEntriesAction::run() {
-	owner->start(this);
+    owner->start(this);
     dest_machine = owner->lookup(dest);
-	if (dest_machine && dest_machine->_type == "LIST") {
+    if (dest_machine && dest_machine->_type == "LIST") {
         if (source.kind == Value::t_integer) {
             setListEntries((unsigned long)source.iValue);
         }
@@ -69,32 +69,30 @@ Action::Status SetListEntriesAction::run() {
             setListEntries((unsigned long)source.fValue);
         }
         else if (source.kind == Value::t_symbol) {
-            const char *src = source.asString().c_str();
-            
             long val;
-            if (owner->getValue(src).asInteger(val) ) {
+            if (owner->getValue(source).asInteger(val) ) {
                 unsigned long bitmap = (unsigned long) val;
                 setListEntries(bitmap);
             }
         }
-        
         status = Complete;
-	}
-    else
+    }
+    else {
         status = Failed;
+    }
     owner->stop(this);
-	return status;
+    return status;
 }
 
 Action::Status SetListEntriesAction::checkComplete() {
-	if (status == Complete || status == Failed) return status;
-	if (this != owner->executingCommand()) {
-		DBG_MSG << "checking complete on " << *this << " when it is not the top of stack \n";
-	}
-	else {
-		status = Complete;
-		owner->stop(this);
-	}
-	return status;
+    if (status == Complete || status == Failed) return status;
+    if (this != owner->executingCommand()) {
+        DBG_MSG << "checking complete on " << *this << " when it is not the top of stack \n";
+    }
+    else {
+        status = Complete;
+        owner->stop(this);
+    }
+    return status;
 }
 
