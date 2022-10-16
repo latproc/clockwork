@@ -187,14 +187,14 @@ bool setupEtherCatThread() {
 						const ec_slave_info_t &slave( slave_arr[ position.iValue ]);
 						pc = (long)slave.product_code;
 						std::cout << "setting product code for position " << position.iValue
-							<< " to " 
-							<< std::hex << "0x" << pc << std::dec 
+							<< " to "
+							<< std::hex << "0x" << pc << std::dec
 							<< " from bus slave at position " << position.iValue
 							<< "\n";
 					}
 					else {
 						std::cout << "using config file product code "
-							<< std::hex << "0x" << pc << std::dec 
+							<< std::hex << "0x" << pc << std::dec
 							<< " for position " << position.iValue
 							<< "\n";
 					}
@@ -203,11 +203,11 @@ bool setupEtherCatThread() {
 						// find product code of the device at this position
 						const ec_slave_info_t &slave( slave_arr[ position.iValue ]);
 						std::cout << "setting product code for position " << position.iValue
-							<< " to " 
+							<< " to "
 							<< std::hex << "0x" << rn << std::dec << "\n";
 					}
 					if (sm == SymbolTable::Null) sm = Value("", Value::t_string);
-					
+
 					parser.xml_configured.clear();
 					DeviceInfo *dev = new DeviceInfo(pc.iValue, rn.iValue, sm.sValue.c_str() );
 					parser.xml_configured.push_back( dev );
@@ -253,8 +253,8 @@ bool setupEtherCatThread() {
 
 						}
 						else {
-							std::cout << "error: found " << collected_configurations.size() << " for slave at position " << position 
-								<< " when earching xml file for device " 
+							std::cout << "error: found " << collected_configurations.size() << " for slave at position " << position
+								<< " when earching xml file for device "
 								<< std::hex << pc.iValue << "/" << rn.iValue << std::dec << ":" << sm.sValue << "\n";
 						}
 					}
@@ -274,7 +274,7 @@ bool setupEtherCatThread() {
 		}
 		std::cout << "Collected " << collected_configurations.size() << " configurations\n\n";
 #endif
-		
+
 		char *slave_config = collectSlaveConfig(true);
 		if (slave_config) free(slave_config);
 		ECInterface::instance()->configureModules();
@@ -285,7 +285,7 @@ bool setupEtherCatThread() {
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
 	// prepare all SDO entries
-	SDOEntry::resolveSDOModules(); 
+	SDOEntry::resolveSDOModules();
 #endif //USE_SDO
 #endif
 	IOComponent::setupIOMap();
@@ -442,7 +442,7 @@ std::string thread_name("iod_main");
 	ECInterface::FREQUENCY=1000000 / delay;
 
 	MachineInstance *ethercat_status = MachineInstance::find("ETHERCAT");
-	if (!ethercat_status) 
+	if (!ethercat_status)
 		std::cerr << "Warning: No instance of the EtherCAT control machine found\n";
 
 	if (num_errors > 0) {
@@ -524,7 +524,7 @@ std::string thread_name("iod_main");
 		ethercat.stop();
 		delete context;
 	}
-	catch (zmq::error_t) { // expected error when we remove the zmq context
+	catch (const zmq::error_t &) { // expected error when we remove the zmq context
 	}
 	//monitor.join();
 	return 0;

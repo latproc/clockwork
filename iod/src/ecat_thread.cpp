@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -68,7 +68,7 @@ const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
 static bool machine_was_ready = false;
 uint64_t next_ecat_receive = 0;
 
-EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(4000),last_ping(0) { 
+EtherCATThread::EtherCATThread() : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(4000),last_ping(0) {
 }
 
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
@@ -85,11 +85,11 @@ bool EtherCATThread::waitForSync(zmq::socket_t &sync_sock) {
 
 static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
 	bool received = false;
-	try { 
+	try {
 		received = sock.recv(&msg, ZMQ_DONTWAIT);
 	}
-	catch (zmq::error_t err) {
-		if (zmq_errno() == EINTR) { 
+	catch (const zmq::error_t &err) {
+		if (zmq_errno() == EINTR) {
 			std::cout << "ecat_thread interrupted in recv\n";
 			return false;
 		}
@@ -112,7 +112,7 @@ bool EtherCATThread::checkAndUpdateCycleDelay()
 
 #if VERBOSE_DEBUG
 static void display(uint8_t *p, size_t len) {
-	for (size_t i=0; i<len; ++i) 
+	for (size_t i=0; i<len; ++i)
 		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
 }
 #endif
@@ -146,7 +146,7 @@ void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
 	std::cout << "default data: "; display(default_data, len); std::cout << "\n";
 	std::cout << "default mask: "; display(default_mask, len); std::cout << "\n";
 #endif
-} 
+}
 
 #ifdef USE_SIGNALLER
 void sync(zmq::socket_t &clock_sync) {
@@ -157,7 +157,7 @@ void sync(zmq::socket_t &clock_sync) {
 void sync(int rtc) {
 	static uint64_t last_read_sync_check = 0;
 	{
-		unsigned long val = 0; 
+		unsigned long val = 0;
 		unsigned long period = 1000000 / ECInterface::FREQUENCY;
 		uint64_t t = 0;
 		while (1) {
@@ -167,7 +167,7 @@ void sync(int rtc) {
 			if (last_read_sync_check) {
 				if ( (t - last_read_sync_check) * 2 < period) continue;
 			}
-			if (t - last_read_sync_check < 100) 
+			if (t - last_read_sync_check < 100)
 				std::cout << t - last_read_sync_check << "\n";
 			last_read_sync_check = t;
 			break;
@@ -181,23 +181,23 @@ void sync(int rtc) {
 		unsigned long freq = ECInterface::FREQUENCY;
 		unsigned long rtc_val;
 		int rc = ioctl(rtc, RTC_IRQP_READ, &rtc_val);
-		if (rc == -1) { 
+		if (rc == -1) {
 			if (errno == EBADF) {
 				rtc = open("/dev/rtc", 0);
 				if (rtc == -1) { perror("open rtc"); exit(1); }
 			}
-			perror("read rtc"); exit(1); 
+			perror("read rtc"); exit(1);
 		}
-		else 
+		else
 			freq = rtc_val;
 		if ( freq != ECInterface::FREQUENCY ) {
-			std::cout << "-------------------- adjusting frequency: " 
+			std::cout << "-------------------- adjusting frequency: "
 				<< freq << "->" << ECInterface::FREQUENCY << "\n";
 			unsigned long saved_freq = freq;
 			freq = ECInterface::FREQUENCY;
 			rc = ioctl(rtc, RTC_IRQP_SET, freq);
-			if (rc == -1) { 
-				perror("set rtc freq"); 
+			if (rc == -1) {
+				perror("set rtc freq");
 				freq = saved_freq; // will retry
 			}
 			else {
@@ -229,7 +229,7 @@ void sync() {
 
 int EtherCATThread::sendMultiPart( zmq::socket_t *sync_sock, uint64_t global_clock ) {
 	// sending a four-part message, each stage may be interrupted
-	// so we use a try-catch around the whole process 
+	// so we use a try-catch around the whole process
 	ECInterface::instance()->setMinIOIndex(IOComponent::getMinIOOffset());
 	ECInterface::instance()->setMaxIOIndex(IOComponent::getMaxIOOffset());
 	uint32_t size = ECInterface::instance()->getProcessDataSize();
@@ -249,7 +249,7 @@ int EtherCATThread::sendMultiPart( zmq::socket_t *sync_sock, uint64_t global_clo
 //{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
 				zmq::message_t iomsg(sizeof(global_clock));
-				memcpy(iomsg.data(), (void*)&global_clock, sizeof(global_clock) ); 
+				memcpy(iomsg.data(), (void*)&global_clock, sizeof(global_clock) );
 				sync_sock->send(iomsg, ZMQ_SNDMORE);
 				++stage;
 			}
@@ -260,7 +260,7 @@ int EtherCATThread::sendMultiPart( zmq::socket_t *sync_sock, uint64_t global_clo
 //{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
 				zmq::message_t iomsg(4);
-				memcpy(iomsg.data(), (void*)&size, 4); 
+				memcpy(iomsg.data(), (void*)&size, 4);
 				sync_sock->send(iomsg, ZMQ_SNDMORE);
 				++stage;
 			}
@@ -279,11 +279,11 @@ int EtherCATThread::sendMultiPart( zmq::socket_t *sync_sock, uint64_t global_clo
 				}
 #endif
 				zmq::message_t iomsg(size);
-				memcpy(iomsg.data(), (void*)upd_data, size); 
+				memcpy(iomsg.data(), (void*)upd_data, size);
 				sync_sock->send(iomsg, ZMQ_SNDMORE);
 				++stage;
 #if VERBOSE_DEBUG
-				if (size && last_data ==0) { 
+				if (size && last_data ==0) {
 					last_data = new uint8_t[size];
 					memset(last_data, 0, size);
 					dbg_mask = new uint8_t[size];
@@ -310,8 +310,8 @@ int EtherCATThread::sendMultiPart( zmq::socket_t *sync_sock, uint64_t global_clo
 //DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 #endif
 				zmq::message_t iomsg(size);
-				uint8_t *mask = ECInterface::instance()->getUpdateMask(); 
-				memcpy(iomsg.data(), (void*)mask,size); 
+				uint8_t *mask = ECInterface::instance()->getUpdateMask();
+				memcpy(iomsg.data(), (void*)mask,size);
 				sync_sock->send(iomsg);
 #if VERBOSE_DEBUG
 				if (found_change) {
@@ -326,14 +326,14 @@ int EtherCATThread::sendMultiPart( zmq::socket_t *sync_sock, uint64_t global_clo
 			} // end of switch
 			break;
 		}
-		catch (zmq::error_t err) {
-			if (zmq_errno() == EINTR) { 
+		catch (const zmq::error_t &err) {
+			if (zmq_errno() == EINTR) {
 				DBG_ETHERCAT << "interrupted when sending update (" << stage << ")\n";
-				usleep(50); 
-				continue; 
+				usleep(50);
+				continue;
 			}
 			else {
-				std::cerr << "EtherCAT exception " << err.what() 
+				std::cerr << "EtherCAT exception " << err.what()
 				<< " error " << zmq_strerror(errno) << "sending EtherCAT data to clockwork\n";
 			}
 		}
@@ -393,12 +393,12 @@ bool EtherCATThread::getEtherCatResponse( zmq::socket_t *sync_sock, uint64_t glo
 		}
 		return false;
 	}
-	catch (zmq::error_t ex) {
+	catch (const zmq::error_t &ex) {
 		if (zmq_errno() != EINTR) {
 			DBG_ETHERCAT << "EtherCAT error " << zmq_strerror(errno) << "checking for update from clockwork\n";
 		}
 		else {
-			DBG_ETHERCAT << "EtherCAT exception " << ex.what() 
+			DBG_ETHERCAT << "EtherCAT exception " << ex.what()
 				<< " error " << zmq_strerror(errno) << "checking for update from clockwork\n";
 		}
 		return false;
@@ -436,11 +436,11 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
 		memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
 		if (driver_state == s_driver_init) {
 			if (packet_type == DEFAULT_DATA) {
-				DBG_MSG << "received initial values from clockwork; size: " 
+				DBG_MSG << "received initial values from clockwork; size: "
 					<< len << " packet: " << (int)packet_type << "\n";
 			}
 			else {
-				DBG_MSG << "received process values from clockwork; size: " 
+				DBG_MSG << "received process values from clockwork; size: "
 						<< len << " packet: " << (int)packet_type << "\n";
 			}
 		}
@@ -520,7 +520,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
 	}
 	else if (packet_type == PROCESS_DATA) {
 		if ( driver_state == s_driver_init) {
-			if (!default_data) 
+			if (!default_data)
 				std::cerr << "WARNING: Getting process data from driver with no default set\n";
 			else {
 				driver_state = s_driver_operational;
@@ -537,7 +537,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
 			ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
 #if VERBOSE_DEBUG
       // check if our mask is not the same as the data that cw has
-      // 
+      //
       if (last_data) {
         bool done_header = false;
 				uint8_t *upd_data = ECInterface::instance()->getUpdateData();
@@ -547,7 +547,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
             if (!done_header) { done_header = true; std::cout << "process data diffs at bytes: "; }
             std::cout << i << " ";
           }
-        } 
+        }
         if (done_header) std::cout << "\n";
       }
 #endif
@@ -583,7 +583,7 @@ void EtherCATThread::operator()() {
 #endif
 	uint64_t then = nowMicrosecs();
 	ECInterface::instance()->setReferenceTime(then % 0x100000000);
-	
+
 	sync_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REP);
 	sync_sock->bind("inproc://ethercat_sync");
 
@@ -597,18 +597,18 @@ void EtherCATThread::operator()() {
 	int res = zmq_setsockopt (clock_sync, ZMQ_SUBSCRIBE, "", 0);
     assert (res == 0);
 #endif
-            
+
 	uint64_t global_clock = 0;
 	bool first_run = true;
 	// assume all is ok with EtherCAT. If modules go offline this flips and we stop polling
-	static bool ec_ok = true; 
+	static bool ec_ok = true;
 	while (!program_done && !waitForSync(*sync_sock)) usleep(100);
 	while (!program_done) {
 #ifdef USE_RTC
-		sync(rtc);	
+		sync(rtc);
 #else
 #ifdef USE_SIGNALLER
-		sync(clock_sync);	
+		sync(clock_sync);
 #else
 		sync();
 #endif
@@ -663,14 +663,14 @@ void EtherCATThread::operator()() {
 				assert(stage == 5);
 				status = e_update; // time to send process data to EtherCAT
 			}
-			if (status == e_update && getEtherCatResponse(sync_sock, global_clock, keep_alive_stat)) 
+			if (status == e_update && getEtherCatResponse(sync_sock, global_clock, keep_alive_stat))
 				status = e_collect;
-		}	
-//		else 
+		}
+//		else
 //			std::cout << "machine is not ready; no state collected\n";
-	
+
 		// check for communication from clockwork
-		if( getClockworkMessage(out_sock, ec_ok) 
+		if( getClockworkMessage(out_sock, ec_ok)
 				&& microsecs() < next_ecat_receive - 300) {
 //			std::cout << "ecat thread got clockwork message. next ecat: " << next_ecat_receive << "\n";
 			usleep(20);

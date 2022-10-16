@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -183,7 +183,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
 							if (got_address) {
 								{FileLogger fl(program_name); fl.f() << tnam << " received 	addressed message " << header << " " << (*buf) << "\n"; }
 							}
-							else 
+							else
 								{FileLogger fl(program_name); fl.f() << tnam << " received: " << *buf << "\n"; }
 						}
 #endif
@@ -250,13 +250,13 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
 		}
 		catch (const zmq::error_t &e) {
 			{
-				FileLogger fl(program_name); 
+				FileLogger fl(program_name);
 				fl.f() << tnam << " safeRecv error " << errno << " " << zmq_strerror(errno) << "\n";
 			}
 			if (--retries == 0) {
 				exit(EXIT_FAILURE);
 			}
-			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n"; 
+			if (errno == EINTR) { std::cerr << "interrupted system call, retrying\n";
 				if (block) continue;
 			}
 			usleep(10);
@@ -295,7 +295,7 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
 			}
 			break;
 		}
-		catch (zmq::error_t) {
+		catch (const zmq::error_t &) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				{
 					FileLogger fl(program_name);
@@ -330,10 +330,10 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen) {
 			sock.send(msg);
 			break;
 		}
-		catch (zmq::error_t) {
+		catch (const zmq::error_t &) {
 			if (zmq_errno() != EINTR && zmq_errno() != EAGAIN) {
 				{
-					FileLogger fl(program_name); 
+					FileLogger fl(program_name);
 					fl.f()  << tnam << " safeSend error " << errno << " " << zmq_strerror(errno) << "\n";
 				}
 				if (zmq_errno() == EFSM || STATE_ERROR == zmq_strerror(errno)) {
@@ -450,11 +450,11 @@ void MessagingInterface::start() {
 	}
 }
 
-void MessagingInterface::stop() { 
+void MessagingInterface::stop() {
 	started_ = false;
 }
 
-bool MessagingInterface::started() { 
+bool MessagingInterface::started() {
 	return started_;
 }
 
@@ -524,7 +524,7 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
 void MessagingInterface::connect() {
 	if (protocol == eCLOCKWORK || protocol == eZMQ || protocol == eCHANNEL) {
 		if (pthread_equal(owner_thread, pthread_self())) {
-			FileLogger fl(program_name); fl.f() << hostname<<":"<<port 
+			FileLogger fl(program_name); fl.f() << hostname<<":"<<port
 				<<" attempt to call socket connect from a thread that isn't the owner\n";
 		  // return; // no longer returning here, we have some evidence this is not a good test. TBD
 		}
@@ -546,7 +546,7 @@ void MessagingInterface::connect() {
 
 MessagingInterface::~MessagingInterface() {
 	int retries = 3;
-	while  (retries-- && connection != -1) { 
+	while  (retries-- && connection != -1) {
 		int err = close(connection);
 		if (err == -1 && errno == EINTR) continue;
 		connection = -1;
@@ -593,7 +593,7 @@ char *MessagingInterface::send(const char *txt) {
         DBG_MESSAGING << getName() << " sending message " << txt << "\n";
     }
     size_t len = strlen(txt);
-    
+
     // We try to send a few times and if an exception occurs we try a reconnect
     // but is this useful without a sleep in between?
     // It seems unlikely the conditions will have changed between attempts.
@@ -633,11 +633,11 @@ char *MessagingInterface::send(const char *txt) {
 			    continue;
 		    }
 		    if (zmq_errno()) {
-			    FileLogger fl(program_name); fl.f() 
+			    FileLogger fl(program_name); fl.f()
 				    << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno()) << "\n";
 		    }
 		    else {
-			    FileLogger fl(program_name); fl.f() 
+			    FileLogger fl(program_name); fl.f()
 				    << "Exception when sending " << url << ": " << e.what() << "\n";
 		    }
 		    /*			socket->disconnect(url.c_str());
@@ -716,16 +716,16 @@ char *MessagingInterface::sendCommand(std::string cmd, std::list<Value> *params)
     return response;
 }
 
-/* TBD, this may need to be optimised, one approach would be to use a 
+/* TBD, this may need to be optimised, one approach would be to use a
  templating system; a property message looks like this:
- 
- { "command":    "PROPERTY", "params":   
+
+ { "command":    "PROPERTY", "params":
     [
          { "type":  "NAME", "value":    $1 },
          { "type":   "NAME", "value":   $2 },
          { "type":  TYPEOF($3), "value":  $3 }
      ] }
- 
+
  */
 
 char *MessagingInterface::sendCommand(std::string cmd, Value p1, Value p2, Value p3)

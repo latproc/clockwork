@@ -187,7 +187,7 @@ static uint64_t global_clock = 0;
 static void display(uint8_t *p) {
 	int max = IOComponent::getMaxIOOffset();
 	int min = IOComponent::getMinIOOffset();
-	for (int i=min; i<=max; ++i) 
+	for (int i=min; i<=max; ++i)
 		std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
 }
 #endif
@@ -200,10 +200,10 @@ public:
 
 
 int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int num_items,
-		zmq::socket_t &ecat_sync, 
-		zmq::socket_t &resource_mgr, 
-		zmq::socket_t &dispatcher, 
-		zmq::socket_t &scheduler, 
+		zmq::socket_t &ecat_sync,
+		zmq::socket_t &resource_mgr,
+		zmq::socket_t &dispatcher,
+		zmq::socket_t &scheduler,
 		zmq::socket_t &ecat_out)
 {
 	int res = 0;
@@ -279,7 +279,7 @@ DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 									if (!incoming_process_data) incoming_process_data = new uint8_t[msglen];
 									memcpy(incoming_process_data, message.data(), msglen);
 #if VERBOSE_DEBUG
-									std::cout << std::flush << "got data: "; 
+									std::cout << std::flush << "got data: ";
 									display(incoming_process_data); std::cout << "\n" << std::flush;
 #endif
 									++stage;
@@ -310,7 +310,7 @@ DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 						}
 						break;
 					}
-					catch(zmq::error_t ex) {
+					catch(const zmq::error_t &ex) {
 						if (zmq_errno() == EINTR) {
 							NB_MSG << "interrupted when sending update (" << (unsigned int)stage << ")\n";
 							continue;
@@ -325,7 +325,7 @@ DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
 			}
 			break;
 		}
-		catch (std::exception ex)
+		catch (const std::exception &ex)
 		{
 			if (errno == EINTR) continue; // TBD watch for infinite loop here
 			const char *fnam = strrchr(__FILE__, '/');
@@ -379,7 +379,7 @@ void ProcessingThread::HandleIncomingEtherCatData( std::set<IOComponent *> &io_w
 #ifdef KEEPSTATS
 			AutoStat stats(avg_io_time);
 #endif
-			IOComponent::processAll( global_clock, incoming_data_size, incoming_process_mask, 
+			IOComponent::processAll( global_clock, incoming_data_size, incoming_process_mask,
 					incoming_process_data, io_work_queue);
 		}
 		else
@@ -475,7 +475,7 @@ void ProcessingThread::operator()()
 	assert(system);
 
 	enum { s_update_idle, s_update_sent } update_state = s_update_idle;
-    
+
 	bool commands_started = false;
 
 	enum { eIdle, eStableStates, ePollingMachines} processing_state = eIdle;
@@ -596,7 +596,7 @@ void ProcessingThread::operator()()
 			systems_waiting = pollZMQItems(poll_wait, items, 6 + num_channels,
 				ecat_sync, resource_mgr, dispatch_sync, sched_sync, ecat_out);
 
-			if (systems_waiting > 0 
+			if (systems_waiting > 0
 				|| (machines_have_work && curr_t - last_checked_machines >= machine_check_delay)) break;
 			if (IOComponent::updatesWaiting() || !io_work_queue.empty()) break;
 			if (!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) break;
@@ -636,7 +636,7 @@ void ProcessingThread::operator()()
 #endif
 
 		/* this loop prioritises ethercat processing but if a certain
-			number of ethercat cycles have been processed with no 
+			number of ethercat cycles have been processed with no
 			other activities being given time, we give other jobs
 			some time anyway.
 		*/
@@ -659,7 +659,7 @@ void ProcessingThread::operator()()
 				io_work = io_work_queue.erase(io_work);
 			}
 		}
-		
+
 		if (program_done) break;
 		if (!MachineInstance::pluginMachines().empty()) {
 			if (processing_state == eIdle  && curr_t - last_checked_plugins >= 1000) {
@@ -698,7 +698,7 @@ void ProcessingThread::operator()()
 		if (program_done) break;
 
 		if (status == e_waiting && items[internals->DISPATCHER_ITEM].revents & ZMQ_POLLIN) {
-			if (status == e_waiting) 
+			if (status == e_waiting)
 			{
 				size_t len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
 				if (len) {
@@ -800,7 +800,7 @@ void ProcessingThread::operator()()
 									ok  = (*command)();
 									//NB_MSG << "execution result " << command->result() << "\n";
 								}
-								catch (std::exception e) {
+								catch (const std::exception & e) {
 									FileLogger fl(program_name);
 									fl.f() << "command execution threw an exception " << e.what() << "\n";
 								}
@@ -895,7 +895,7 @@ void ProcessingThread::operator()()
 			status = e_waiting_sched;
 		}
 
-		if (status == e_waiting && machines_have_work 
+		if (status == e_waiting && machines_have_work
 			&& curr_t - last_checked_machines >= machine_check_delay)
 		{
 
@@ -968,9 +968,9 @@ void ProcessingThread::operator()()
 		}
 		// send a message to the ethercat thread requesting activation
 		// or deactivation of the master
-		if (status == e_waiting && !IOComponent::devices.empty() 
+		if (status == e_waiting && !IOComponent::devices.empty()
 				&& update_state == s_update_idle
-				&& (machine.activationRequested() || machine.deactivationRequested()) 
+				&& (machine.activationRequested() || machine.deactivationRequested())
 			) {
 			std::cout << "activation/deactivation requested\n";
 			uint32_t size = 0;
@@ -981,7 +981,7 @@ void ProcessingThread::operator()()
 					case 1:
 						{
 							zmq::message_t iomsg(4);
-							memcpy(iomsg.data(), (void*)&size, 4); 
+							memcpy(iomsg.data(), (void*)&size, 4);
 							ecat_out.send(iomsg, ZMQ_SNDMORE);
 							++stage;
 						}
@@ -990,7 +990,7 @@ void ProcessingThread::operator()()
 							uint8_t packet_type = 2;
 							packet_type = machine.activationRequested() ? 3 : 4;
 							zmq::message_t iomsg(1);
-							memcpy(iomsg.data(), (void*)&packet_type, 1); 
+							memcpy(iomsg.data(), (void*)&packet_type, 1);
 							ecat_out.send(iomsg);
 							++stage;
 						}
@@ -998,7 +998,7 @@ void ProcessingThread::operator()()
 					update_state = s_update_sent;
 					break;
 				}
-				catch (zmq::error_t err) {
+				catch (const zmq::error_t &err) {
 					if (zmq_errno() == EINTR) {
 						std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
 						continue;
@@ -1009,17 +1009,17 @@ void ProcessingThread::operator()()
 				}
 			}
 		}
-		else if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty() 
+		else if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty()
 			&&
 				(
-				 IOComponent::updatesWaiting() 
+				 IOComponent::updatesWaiting()
 				 || IOComponent::getHardwareState() != IOComponent::s_operational
 				)
 		   ) {
 #ifdef KEEPSTATS
 			avg_update_time.start();
 #endif
-//			if (IOComponent::updatesWaiting() && IOComponent::updatesToSend()) 
+//			if (IOComponent::updatesWaiting() && IOComponent::updatesToSend())
 //				std::cout << "ProcessingThread has new updates to send\n";
 
 			if (update_state == s_update_idle) {
@@ -1044,7 +1044,7 @@ void ProcessingThread::operator()()
 								case 1:
 									{
 										zmq::message_t iomsg(4);
-										memcpy(iomsg.data(), (void*)&size, 4); 
+										memcpy(iomsg.data(), (void*)&size, 4);
 										ecat_out.send(iomsg, ZMQ_SNDMORE);
 										++stage;
 									}
@@ -1054,7 +1054,7 @@ void ProcessingThread::operator()()
 										if (IOComponent::getHardwareState() != IOComponent::s_operational)
 											packet_type = 1;
 										zmq::message_t iomsg(1);
-										memcpy(iomsg.data(), (void*)&packet_type, 1); 
+										memcpy(iomsg.data(), (void*)&packet_type, 1);
 										ecat_out.send(iomsg, ZMQ_SNDMORE);
 										++stage;
 									}
@@ -1078,10 +1078,10 @@ void ProcessingThread::operator()()
 							}
 							break;
 						}
-						catch (zmq::error_t err) {
+						catch (const zmq::error_t &err) {
 							if (zmq_errno() == EINTR) {
 								std::cout << "interrupted when sending update (" << (unsigned int)stage << ")\n";
-								//usleep(50); 
+								//usleep(50);
 								continue;
 							}
 							else
@@ -1126,7 +1126,7 @@ void ProcessingThread::operator()()
 				avg_update_time.update();
 #endif
 			}
-			catch (zmq::error_t err) {
+			catch (const zmq::error_t &err) {
 				if (zmq_errno() != EINTR) {
 					NB_MSG << "Exception: " << err.what() << " (" << zmq_strerror(errno) << ")\n";
 				}

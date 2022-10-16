@@ -7,7 +7,7 @@
   modify it under the terms of the GNU General Public License
   as published by the Free Software Foundation; either version 2
   of the License, or (at your option) any later version.
-  
+
   Latproc is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -52,12 +52,12 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
 		    socket.send (reply);
 			break;
 		}
-		catch (zmq::error_t) {
+		catch (const zmq::error_t &) {
 			if (zmq_errno() == EINTR) continue;
 			throw;
 		}
 	}
-	
+
 }
 
 #ifdef USE_READLINE
@@ -164,9 +164,9 @@ char *command_generator (const char *text, int state);
 char **my_rl_completion (const char *text, int start, int end)
 {
     char **matches;
-    
+
     matches = (char **)NULL;
-    
+
     if (start == 0)
         matches = rl_completion_matches (text, command_generator);
     else
@@ -181,7 +181,7 @@ char *command_generator (const char *text, int state)
 {
     static std::list<const char *>::iterator iter;
     static size_t len;
-    
+
     /* If this is a new word to complete, initialize now.  This includes
      saving the length of TEXT for efficiency, and initializing the iterator
      */
@@ -190,7 +190,7 @@ char *command_generator (const char *text, int state)
         iter = commands.begin();
         len = strlen (text);
     }
-    
+
     /* Return the next name which partially matches from the command list. */
     while (iter != commands.end())
     {
@@ -210,7 +210,7 @@ char *machine_name_generator (const char *text, int state)
 {
     static std::list<char *>::iterator iter;
     static size_t len;
-    
+
     /* If this is a new word to complete, initialize now.  This includes
      saving the length of TEXT for efficiency, and initializing the iterator
      */
@@ -219,7 +219,7 @@ char *machine_name_generator (const char *text, int state)
         iter = machine_names.begin();
         len = strlen (text);
     }
-    
+
 //    const char *search = text + strlen(text)-1;
 //    while (search>text && (isalnum(*search) || strchr("_.-",*search))) search--;
 //    if (search>text) ++search;
@@ -326,11 +326,11 @@ int main(int argc, const char * argv[])
 	size_t len = strlen(home_dir)+strlen(history_name)+2;
 	history_file = new char[len];
 	snprintf(history_file, len, "%s/%s",home_dir, history_name);
-	if (read_history(history_file) != 0) 
+	if (read_history(history_file) != 0)
 		printf("Error reading history from %s: %s\n",history_name, strerror(errno));
 
     context = new zmq::context_t;
-    
+
     try {
 		int port = 5555;
 		bool quiet = false;
@@ -338,10 +338,10 @@ int main(int argc, const char * argv[])
 		for (int i=1; i<argc; ++i) {
 			if (i<argc-1 && strcmp(argv[i],"-p") == 0) {
 				port = (int)strtol(argv[++i], 0, 10);
-			} 
+			}
 			else if (i<argc-1 && strcmp(argv[i],"-h") == 0) {
 				host = argv[++i];
-			} 
+			}
 			else if (strcmp(argv[i],"-?") == 0) {
 				usage(argv[0]); exit(0);
 			}
@@ -366,7 +366,7 @@ int main(int argc, const char * argv[])
 		std::string msg;
 		std::string line;
 		std::stringstream line_input(line);
-        
+
         // readline completion function
         rl_attempted_completion_function = my_rl_completion;
 				if (!quiet) {

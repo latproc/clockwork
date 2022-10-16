@@ -1038,7 +1038,7 @@ void Channel::operator()() {
 				if (rc == 0) {poll_timeout = 20; continue; } else poll_timeout = 1;
 
 			}
-			catch ( zmq::error_t tex) {
+			catch (const zmq::error_t &tex) {
 				{FileLogger fl(program_name);
 					fl.f() << name << "Error polling channel port\n";
 				}
