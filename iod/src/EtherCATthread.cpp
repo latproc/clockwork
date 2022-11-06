@@ -29,6 +29,7 @@ void EtherCATthread::stop() {
 
 void EtherCATthread::activate(const std::string & adapter) {
     m_pimpl->adapter = adapter;
+#ifdef SOEM_ETHERCAT
     if (ec_init(m_pimpl->adapter.c_str())) {
         std::cerr << "SOEM EtherCAT initialised.";
         if ( ec_config_init(false) > 0 ) {
@@ -36,6 +37,7 @@ void EtherCATthread::activate(const std::string & adapter) {
         }
     }
     ec_close();
+#endif
 }
 
 void EtherCATthread::operator()() {
