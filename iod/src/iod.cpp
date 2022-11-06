@@ -23,6 +23,7 @@
 #include "IOComponent.h"
 #include "boost/filesystem/operations.hpp"
 #include "boost/filesystem/path.hpp"
+#include <iostream>
 #include <sstream>
 #include <stdio.h>
 #include <sys/stat.h>
