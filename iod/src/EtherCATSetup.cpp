@@ -37,6 +37,7 @@
 #include <map>
 #include <utility>
 #ifndef EC_SIMULATOR
+#include <iostream>
 #include <tool/MasterDevice.h>
 #endif
 
