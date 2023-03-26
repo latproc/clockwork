@@ -67,7 +67,7 @@ bool MQTTDCommandSetStatus::run(std::vector<std::string> &params) {
         const char *msg_text = "Not found: ";
         size_t len = strlen(msg_text) + ds.length();
         char *text = (char *)malloc(len + 1);
-        sprintf(text, "%s%s", msg_text, ds.c_str());
+        snprintf(text, len + 1, "%s%s", msg_text, ds.c_str());
         error_str = text;
         return false;
     }

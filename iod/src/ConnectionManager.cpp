@@ -801,10 +801,6 @@ void MessageRouter::poll() {
                     }
                 }
                 if (do_send) {
-                    //char disp[2*len+1];
-                    //for (int i=0; i<len; ++i) sprintf(disp+2*i, "%x", buf[i]);
-                    //disp[2*len] = 0;
-                    //DBG_CHANNELS << "Sending '" << disp << "'\n";
                     mh.start_time = microsecs();
                     safeSend(*internals->remote, buf, len, mh);
                 }

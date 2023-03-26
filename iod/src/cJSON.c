@@ -164,18 +164,18 @@ static char *print_number(cJSON *item) {
     //if (fabs(((double)item->valueint)-d)<=DBL_EPSILON && d<=LONG_MAX && d>=LONG_MAX)
     if (item->valueNumber.kind == cJSON_Number_int_t) {
         str = (char *)cJSON_malloc(21); // 2^64+1 can be represented in 21 chars.
-        sprintf(str, "%ld", item->valueint);
+        snprintf(str, 21, "%ld", item->valueint);
     }
     else {
         double d = item->valuedouble;
         str = (char *)cJSON_malloc(64); // This is a nice tradeoff.
-        //if (fabs(floor(d)-d)<=DBL_EPSILON)            sprintf(str,"%.0lf",d);
+        //if (fabs(floor(d)-d)<=DBL_EPSILON)            snprintf(str,64,"%.0lf",d);
         //else
         if (d != 0.0 && (fabs(d) < 1.0e-6 || fabs(d) > 1.0e9)) {
-            sprintf(str, "%1.20e", d);
+            snprintf(str, 64, "%1.20e", d);
         }
         else {
-            sprintf(str, "%lf", d);
+            snprintf(str, 64, "%lf", d);
         }
     }
     return str;
