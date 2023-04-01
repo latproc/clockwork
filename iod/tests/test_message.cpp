@@ -37,7 +37,7 @@ namespace {
         void reset() { received_message = false; }
         bool got_message() { return received_message; }
     private:
-        const std::function<bool(const Message &, Transmitter *)> & m_can_receive;
+        const std::function<bool(const Message &, Transmitter *)> m_can_receive;
         bool received_message = false;
     };
 
