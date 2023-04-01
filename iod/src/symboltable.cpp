@@ -19,16 +19,10 @@
 */
 
 #include "symboltable.h"
-#include "DebugExtra.h"
-#include "Logger.h"
 #include "value.h"
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/foreach.hpp>
-#include <functional>
 #include <iostream>
 #include <iterator>
-#include <numeric>
-#include <sstream>
 #include <utility>
 
 const Value SymbolTable::Null;
@@ -38,10 +32,10 @@ const Value SymbolTable::Zero(0);
 Value NullValue;
 
 bool SymbolTable::initialised = false;
-SymbolTable *SymbolTable::keywords = 0;
-std::set<std::string> *SymbolTable::reserved = 0;
+SymbolTable *SymbolTable::keywords = nullptr;
+std::set<std::string> *SymbolTable::reserved = nullptr;
 
-Tokeniser *Tokeniser::_instance = 0;
+Tokeniser *Tokeniser::_instance = nullptr;
 
 int ClockworkToken::EXTERNAL;
 int ClockworkToken::POINT;
@@ -67,36 +61,35 @@ int ClockworkToken::TRACE;
 
 Tokeniser *Tokeniser::instance() {
     if (!_instance) {
-        _instance = new Tokeniser();
-        if (_instance) {
-            ClockworkToken::EXTERNAL = _instance->getTokenId("EXTERNAL");
-            ClockworkToken::POINT = _instance->getTokenId("POINT");
-            ClockworkToken::LIST = _instance->getTokenId("LIST");
-            ClockworkToken::TIMER = _instance->getTokenId("TIMER");
-            ClockworkToken::REFERENCE = _instance->getTokenId("REFERENCE");
-            ClockworkToken::tokITEM = _instance->getTokenId("ITEM");
-            ClockworkToken::VARIABLE = _instance->getTokenId("VARIABLE");
-            ClockworkToken::CONSTANT = _instance->getTokenId("CONSTANT");
-            ClockworkToken::tokCONDITION = _instance->getTokenId("CONDITION");
-            ClockworkToken::MQTTPUBLISHER = _instance->getTokenId("MQTTPUBLISHER");
-            ClockworkToken::MQTTSUBSCRIBER = _instance->getTokenId("MQTTSUBSCRIBER");
-            ClockworkToken::POLLING_DELAY = _instance->getTokenId("POLLING_DELAY");
-            ClockworkToken::CYCLE_DELAY = _instance->getTokenId("CYCLE_DELAY");
-            ClockworkToken::tokMessage = _instance->getTokenId("message");
-            ClockworkToken::SYSTEMSETTINGS = _instance->getTokenId("SYSTEMSETTINGS");
-            ClockworkToken::TRACEABLE = _instance->getTokenId("TRACEABLE");
-            ClockworkToken::tokVALUE = _instance->getTokenId("VALUE");
-            ClockworkToken::on = _instance->getTokenId("on");
-            ClockworkToken::off = _instance->getTokenId("off");
-            ClockworkToken::DEBUG = _instance->getTokenId("DEBUG");
-            ClockworkToken::TRACE = _instance->getTokenId("TRACE");
-        }
+        auto tokeniser = new Tokeniser();
+        ClockworkToken::EXTERNAL = tokeniser->getTokenId("EXTERNAL");
+        ClockworkToken::POINT = tokeniser->getTokenId("POINT");
+        ClockworkToken::LIST = tokeniser->getTokenId("LIST");
+        ClockworkToken::TIMER = tokeniser->getTokenId("TIMER");
+        ClockworkToken::REFERENCE = tokeniser->getTokenId("REFERENCE");
+        ClockworkToken::tokITEM = tokeniser->getTokenId("ITEM");
+        ClockworkToken::VARIABLE = tokeniser->getTokenId("VARIABLE");
+        ClockworkToken::CONSTANT = tokeniser->getTokenId("CONSTANT");
+        ClockworkToken::tokCONDITION = tokeniser->getTokenId("CONDITION");
+        ClockworkToken::MQTTPUBLISHER = tokeniser->getTokenId("MQTTPUBLISHER");
+        ClockworkToken::MQTTSUBSCRIBER = tokeniser->getTokenId("MQTTSUBSCRIBER");
+        ClockworkToken::POLLING_DELAY = tokeniser->getTokenId("POLLING_DELAY");
+        ClockworkToken::CYCLE_DELAY = tokeniser->getTokenId("CYCLE_DELAY");
+        ClockworkToken::tokMessage = tokeniser->getTokenId("message");
+        ClockworkToken::SYSTEMSETTINGS = tokeniser->getTokenId("SYSTEMSETTINGS");
+        ClockworkToken::TRACEABLE = tokeniser->getTokenId("TRACEABLE");
+        ClockworkToken::tokVALUE = tokeniser->getTokenId("VALUE");
+        ClockworkToken::on = tokeniser->getTokenId("on");
+        ClockworkToken::off = tokeniser->getTokenId("off");
+        ClockworkToken::DEBUG = tokeniser->getTokenId("DEBUG");
+        ClockworkToken::TRACE = tokeniser->getTokenId("TRACE");
+        _instance = tokeniser;
     }
     return _instance;
 }
 
 int Tokeniser::getTokenId(const std::string &name) {
-    std::map<std::string, int>::iterator found = tokens.find(name);
+    auto found = tokens.find(name);
     if (found != tokens.end()) {
         return (*found).second;
     }
@@ -110,24 +103,25 @@ int Tokeniser::getTokenId(const char *name) { return getTokenId(std::string(name
 SymbolTable::SymbolTable() {
     if (!initialised) {
         initialised = true;
-        keywords = new SymbolTable();
-        keywords->add("NOW", 0);
-        keywords->add("CLOCK", 0);
-        keywords->add("SECONDS", 0);
-        keywords->add("MINUTE", 0);
-        keywords->add("HOUR", 0);
-        keywords->add("DAY", 0);
-        keywords->add("MONTH", 0);
-        keywords->add("YR", 0);
-        keywords->add("YEAR", 0);
-        keywords->add("TIMESEQ", "");
-        keywords->add("LOCALTIME", "");
-        keywords->add("UTCTIME", "");
-        keywords->add("TIMEZONE", "");
-        keywords->add("TIMESTAMP", "");
-        keywords->add("UTCTIMESTAMP", "");
-        keywords->add("ISOTIMESTAMP", "");
-        keywords->add("RANDOM", "");
+        auto keyword_table = new SymbolTable();
+        keyword_table->add("NOW", 0);
+        keyword_table->add("CLOCK", 0);
+        keyword_table->add("SECONDS", 0);
+        keyword_table->add("MINUTE", 0);
+        keyword_table->add("HOUR", 0);
+        keyword_table->add("DAY", 0);
+        keyword_table->add("MONTH", 0);
+        keyword_table->add("YR", 0);
+        keyword_table->add("YEAR", 0);
+        keyword_table->add("TIMESEQ", "");
+        keyword_table->add("LOCALTIME", "");
+        keyword_table->add("UTCTIME", "");
+        keyword_table->add("TIMEZONE", "");
+        keyword_table->add("TIMESTAMP", "");
+        keyword_table->add("UTCTIMESTAMP", "");
+        keyword_table->add("ISOTIMESTAMP", "");
+        keyword_table->add("RANDOM", "");
+        keywords = keyword_table;
         reserved = new std::set<std::string>;
         reserved->insert("NAME");
         reserved->insert("PERSISTENT");
@@ -137,8 +131,8 @@ SymbolTable::SymbolTable() {
 }
 
 SymbolTable::SymbolTable(const SymbolTable &orig) {
-    SymbolTableConstIterator iter = orig.st.begin();
-    while (iter != orig.st.end()) {
+    auto iter = orig.st.cbegin();
+    while (iter != orig.st.cend()) {
         st[(*iter).first] = (*iter).second;
         if ((*iter).second.kind == Value::t_symbol) {
             int tok = Tokeniser::instance()->getTokenId((*iter).first.c_str());
@@ -150,8 +144,8 @@ SymbolTable::SymbolTable(const SymbolTable &orig) {
 
 SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
     st.erase(st.begin(), st.end());
-    SymbolTableConstIterator iter = orig.st.begin();
-    while (iter != orig.st.end()) {
+    auto iter = orig.st.cbegin();
+    while (iter != orig.st.cend()) {
         st[(*iter).first] = (*iter).second;
         if ((*iter).second.kind == Value::t_symbol) {
             int tok = Tokeniser::instance()->getTokenId((*iter).first.c_str());
@@ -163,7 +157,7 @@ SymbolTable &SymbolTable::operator=(const SymbolTable &orig) {
 }
 
 bool SymbolTable::isKeyword(const Value &name) {
-    if (name.kind == Value::t_symbol || name.kind == Value::t_string) {
+    if (keywords && (name.kind == Value::t_symbol || name.kind == Value::t_string)) {
         if (name.token_id && keywords->exists(name.token_id)) {
             return true;
         }
@@ -177,14 +171,14 @@ bool SymbolTable::isKeyword(const char *name) {
     if (!name) {
         return false;
     }
-    return keywords->exists(name);
+    return keywords && keywords->exists(name);
 }
 
 const Value &SymbolTable::getKeyValue(const char *name) {
     if (!name) {
         return Null;
     }
-    if (keywords->exists(name)) {
+    if (keywords && keywords->exists(name)) {
         using namespace boost::posix_time;
         Value &res = keywords->find(name);
         if (strcmp("NOW", name) == 0) {
@@ -193,9 +187,9 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             return res;
         }
         else if (strcmp("CLOCK", name) == 0) {
-            Value &res = keywords->find(name);
-            res = (long)microsecs();
-            return res;
+            Value &clock = keywords->find(name);
+            clock = (long)microsecs();
+            return clock;
         }
         else if (strcmp("RANDOM", name) == 0) {
             unsigned long val = random();
@@ -243,7 +237,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             return res;
         }
         if (strcmp("TIMEZONE", name) == 0) {
-            time_t now = time(0);
+            time_t now = time(nullptr);
             localtime_r(&now, &lt);
             res = lt.tm_zone;
             return res;
@@ -284,7 +278,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         }
         if (strcmp("TIMESTAMP", name) == 0) {
             char buf[40];
-            time_t now = time(0);
+            time_t now = time(nullptr);
             localtime_r(&now, &lt);
             asctime_r(&lt, buf);
             size_t n = strlen(buf);
@@ -300,8 +294,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         }
         if (strcmp("UTCTIMESTAMP", name) == 0) {
             char buf[40];
-            tm ut;
-            ut = to_tm(utc);
+            tm ut = to_tm(utc);
             asctime_r(&ut, buf);
             size_t n = strlen(buf);
             if (n > 1 && buf[n - 1] == '\n') {
@@ -332,7 +325,7 @@ bool SymbolTable::add(const char *name, const Value &val, ReplaceMode replace_mo
     }
 }
 
-bool SymbolTable::add(const std::string name, const Value &val, ReplaceMode replace_mode) {
+bool SymbolTable::add(const std::string & name, const Value &val, ReplaceMode replace_mode) {
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
         st[name] = val;
         if (val.kind == Value::t_symbol) {
@@ -347,8 +340,8 @@ bool SymbolTable::add(const std::string name, const Value &val, ReplaceMode repl
 }
 
 void SymbolTable::add(const SymbolTable &orig, ReplaceMode replace_mode) {
-    SymbolTableConstIterator iter = orig.st.begin();
-    while (iter != orig.st.end()) {
+    auto iter = orig.st.cbegin();
+    while (iter != orig.st.cend()) {
         if (replace_mode != ST_REPLACE &&
             st.find((*iter).first) !=
                 st.end()) { // skip entries we already have if not replace mode
@@ -372,59 +365,47 @@ bool SymbolTable::exists(const char *name) const { return st.find(name) != st.en
 bool SymbolTable::exists(int tok) const { return stok.find(tok) != stok.end(); }
 
 const Value &SymbolTable::find(const char *name) const {
-    if (this != keywords) {
+    if (keywords && this != keywords) {
         Value &res = keywords->find(name);
         if (res != SymbolTable::Null) {
             return res;
         }
     }
-    SymbolTableConstIterator iter = st.find(name);
-    if (iter != st.end()) {
-        return (*iter).second;
-    }
-    return NullValue;
+    auto iter = st.find(name);
+    return (iter != st.end()) ? (*iter).second : NullValue;
 }
 
 Value &SymbolTable::find(const char *name) {
-    if (this != keywords) {
+    if (keywords && this != keywords) {
         Value &res = keywords->find(name);
         if (res != SymbolTable::Null) {
             return res;
         }
     }
-    SymbolTableIterator iter = st.find(name);
-    if (iter != st.end()) {
-        return (*iter).second;
-    }
-    return NullValue;
+    auto iter = st.find(name);
+    return (iter != st.end()) ? (*iter).second : NullValue;
 }
 
 const Value &SymbolTable::lookup(const char *name) const {
-    if (this != keywords) {
+    if (keywords && this != keywords) {
         const Value &res = keywords->lookup(name);
         if (res != SymbolTable::Null) {
             return res;
         }
     }
-    SymbolTableConstIterator iter = st.find(name);
-    if (iter != st.end()) {
-        return (*iter).second;
-    }
-    return SymbolTable::Null;
+    auto iter = st.find(name);
+    return (iter != st.end()) ? (*iter).second : NullValue;
 }
 
 const Value &SymbolTable::lookup(const Value &name) const {
-    if (this != keywords) {
+    if (keywords && this != keywords) {
         const Value &res = keywords->lookup(name);
         if (res != SymbolTable::Null) {
             return res;
         }
     }
-    TokenTableConstIterator iter = stok.find(name.token_id);
-    if (iter != stok.end()) {
-        return (*iter).second;
-    }
-    return SymbolTable::Null;
+    auto iter = stok.find(name.token_id);
+    return (iter != stok.end()) ? (*iter).second : NullValue;
 }
 
 #if 0
@@ -474,10 +455,10 @@ void SymbolTable::clear() {
 }
 
 std::ostream &SymbolTable::operator<<(std::ostream &out) const {
-    SymbolTableConstIterator iter = st.begin();
+    auto iter = st.cbegin();
     const char *delim = "";
     size_t column = 1;
-    while (iter != st.end()) {
+    while (iter != st.cend()) {
         size_t len =
             strlen(delim) + (*iter).first.length() + (*iter).second.asString().length() + 1;
         out << delim;
