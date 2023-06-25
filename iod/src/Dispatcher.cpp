@@ -32,12 +32,52 @@
 #include <assert.h>
 #include <iostream>
 #include <list>
+#include <memory>
 #include <pthread.h>
 #include <zmq.hpp>
 
-Dispatcher *Dispatcher::instance_ = NULL;
-static boost::mutex dispatcher_mutex;
-static boost::condition_variable package_available;
+namespace {
+
+struct DispatcherInternals {
+    Dispatcher *dispatcher;
+    typedef std::list<Receiver *> ReceiverList;
+    ReceiverList all_receivers;
+    std::list<Package *> to_deliver;
+    zmq::socket_t *socket;
+    bool started;
+    bool finished;
+    DispatchThread *dispatch_thread;
+    boost::thread *thread_ref;
+    zmq::socket_t sync;
+    enum {
+        e_waiting,
+        e_waiting_cw,
+        w_waiting_cmd,
+        e_running,
+        e_aborted,
+        e_handling_dispatch
+    } status;
+    zmq::socket_t self;
+    pthread_t owner_thread;
+
+    DispatcherInternals(Dispatcher *owner);
+    ~DispatcherInternals();
+
+    bool wait();
+    void idle();
+};
+
+std::unique_ptr<DispatcherInternals> impl;
+boost::mutex dispatcher_mutex;
+boost::condition_variable package_available;
+
+DispatcherInternals *instance() {
+    assert(impl);
+    return impl.get();
+}
+
+} // namespace
+
 //boost::mutex Dispatcher::delivery_mutex;
 
 // class SocketPool {
@@ -64,42 +104,47 @@ void DispatchThread::operator()() {
     Dispatcher::instance()->idle();
 }
 
-Dispatcher::Dispatcher()
-    : socket(0), started(false), finished(false), dispatch_thread(0), thread_ref(0),
+DispatcherInternals::DispatcherInternals(Dispatcher *owner)
+    : dispatcher(owner),
+      socket(0), started(false), finished(false), dispatch_thread(0), thread_ref(0),
       sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting_cw),
       self(*MessagingInterface::getContext(), ZMQ_REP), owner_thread(0) {
     dispatch_thread = new DispatchThread;
     thread_ref = new boost::thread(boost::ref(*dispatch_thread));
 }
 
-Dispatcher::~Dispatcher() {
+Dispatcher::Dispatcher() {
+    impl.reset(new DispatcherInternals(this));
+}
+
+DispatcherInternals::~DispatcherInternals() {
     if (socket) {
         delete socket;
     }
 }
 
 Dispatcher *Dispatcher::instance() {
-    if (!instance_) {
-        instance_ = new Dispatcher();
+    if (!impl) {
+        new Dispatcher;
     }
-    assert(instance_);
-    return instance_;
+    return ::instance()->dispatcher;
 }
+
 void Dispatcher::start() {
-    while (!Dispatcher::instance()->started) {
+    while (!::instance()->started) {
         usleep(20);
     }
 }
 
 void Dispatcher::stop() {
-    instance()->finished = true;
+    ::instance()->finished = true;
     package_available.notify_one();
     zmq::socket_t to_self(*MessagingInterface::getContext(), ZMQ_REQ);
     to_self.connect("inproc://dispatcher_self");
     to_self.send("exit", 4);
 
-    if (thread_ref) {
-        thread_ref->join();
+    if (::instance()->thread_ref) {
+        ::instance()->thread_ref->join();
     }
 }
 
@@ -110,20 +155,24 @@ std::ostream &Dispatcher::operator<<(std::ostream &out) const {
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m) { return m.operator<<(out); }
 
-void Dispatcher::addReceiver(Receiver *r) { all_receivers.push_back(r); }
+void Dispatcher::addReceiver(Receiver *r) { ::instance()->all_receivers.push_back(r); }
 
-void Dispatcher::removeReceiver(Receiver *r) { all_receivers.remove(r); }
+void Dispatcher::removeReceiver(Receiver *r) { ::instance()->all_receivers.remove(r); }
 
 void Dispatcher::deliver(Package *p) {
     {
         boost::lock_guard<boost::mutex> lock(dispatcher_mutex);
         DBG_DISPATCHER << "Dispatcher accepted package " << *p << "\n";
-        to_deliver.push_back(p);
+        ::instance()->to_deliver.push_back(p);
     }
     package_available.notify_one();
 }
 
-bool Dispatcher::wait() {
+void Dispatcher::idle() {
+    ::instance()->idle();
+}
+
+bool DispatcherInternals::wait() {
     zmq::pollitem_t items[] = {{(void *)self, 0, ZMQ_POLLIN, 0}, {(void *)sync, 0, ZMQ_POLLIN, 0}};
     while (!finished) {
         for (;;) {
@@ -141,7 +190,7 @@ bool Dispatcher::wait() {
     return false;
 }
 
-void Dispatcher::idle() {
+void DispatcherInternals::idle() {
     // this sync socket is used to request access to shared resources from
     // the driver
     sync.bind("inproc://dispatcher_sync");

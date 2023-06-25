@@ -39,8 +39,11 @@ class DispatchThread {
 };
 
 class Dispatcher {
+    Dispatcher();
   public:
-    ~Dispatcher();
+    Dispatcher(const Dispatcher &orig) = delete;
+    Dispatcher &operator=(const Dispatcher &other) = delete;
+
     std::ostream &operator<<(std::ostream &out) const;
     void deliver(Package *p);
     void deliverZ(Package *p);
@@ -52,30 +55,6 @@ class Dispatcher {
     void stop();
 
   private:
-    Dispatcher();
-    Dispatcher(const Dispatcher &orig);
-    Dispatcher &operator=(const Dispatcher &other);
-    bool wait();
-    typedef std::list<Receiver *> ReceiverList;
-    ReceiverList all_receivers;
-    static Dispatcher *instance_;
-    std::list<Package *> to_deliver;
-    zmq::socket_t *socket;
-    bool started;
-    bool finished;
-    DispatchThread *dispatch_thread;
-    boost::thread *thread_ref;
-    zmq::socket_t sync;
-    enum {
-        e_waiting,
-        e_waiting_cw,
-        w_waiting_cmd,
-        e_running,
-        e_aborted,
-        e_handling_dispatch
-    } status;
-    zmq::socket_t self;
-    pthread_t owner_thread;
 };
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m);
