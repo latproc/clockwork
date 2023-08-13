@@ -522,7 +522,8 @@ int main(int argc, char const *argv[]) {
         ethercat.stop();
         delete context;
     }
-    catch (zmq::error_t) { // expected error when we remove the zmq context
+    catch (const zmq::error_t &ex) { // expected error when we remove the zmq context
+        std::cerr << "Error on exit: " << ex.what() << "\n";
     }
     //monitor.join();
     return 0;
