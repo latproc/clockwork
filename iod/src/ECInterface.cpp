@@ -39,13 +39,6 @@
 #include "SDOEntry.h"
 #include "symboltable.h"
 #include <ecrt.h>
-#include <tool/MasterDevice.h>
-
-struct list_head {
-    struct list_head *next, *prev;
-};
-
-#include "domain.h"
 #endif
 
 #define VERBOSE_DEBUG 0
@@ -491,7 +484,6 @@ void ECInterface::checkSDOUpdates() {
         case EC_REQUEST_BUSY:
             break;
         case EC_REQUEST_SUCCESS:
-
             // before updating the value of the object check whether a new value is about to
             // be written to the io
             if (entry->operation() == SDOEntry::READ) {
@@ -709,7 +701,7 @@ void ECInterface::configureModules() {
                 if (res < 0) {
                     char buf[100];
                     snprintf(buf, 100, "Error %d setting WD enable state on sync manager %d for module %d\n",
-                            res, i, m->slave_config->position);
+                            res, i, m->position);
                     MessageLog::instance()->add(buf);
                     std::cout << buf << "\n";
                 }
@@ -1807,9 +1799,7 @@ bool ECInterface::stop() {
 #ifdef USE_ETHERCAT
 
 #include <Command.h>
-int tool_main(int argc, char **argv);
 typedef list<Command *> CommandList;
-extern CommandList commandList;
 
 // in a real environment we can look for devices on the bus
 
@@ -1818,10 +1808,7 @@ ec_pdo_info_t *c_pdos = 0;
 ec_sync_info_t *c_syncs = 0;
 EntryDetails *c_entry_details = 0;
 
-cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool reconfigure) {
-    ec_ioctl_slave_sync_t sync;
-    ec_ioctl_slave_sync_pdo_t pdo;
-    ec_ioctl_slave_sync_pdo_entry_t entry;
+cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool reconfigure) {
     unsigned int i, j, k, pdo_pos = 0, entry_pos = 0;
 
     const unsigned int estimated_max_entries = 128;
@@ -1837,6 +1824,9 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
     cJSON_AddNumberToObject(root, "drawn_current", slave.current_on_ebus);
     cJSON_AddStringToObject(root, "tab", "Modules");
     cJSON_AddStringToObject(root, "class", "MODULE");
+    cJSON_AddNumberToObject(root, "error_flag", slave.error_flag);
+    cJSON_AddNumberToObject(root, "scan_required", slave.scan_required);
+    cJSON_AddNumberToObject(root, "ready", slave.ready);
     char *name = strdup(slave.name);
     int name_len = strlen(name);
     for (int i = 0; i < name_len; ++i) {
@@ -1851,6 +1841,7 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
     free(name);
 
     if (slave.sync_count) {
+        ec_sync_info_t sync = {};
         // add pdo entries for this slave
         // note the assumptions here about the maximum number of entries, pdos and syncs we expect
         const int c_entries_size = sizeof(ec_pdo_entry_info_t) * estimated_max_entries;
@@ -1872,53 +1863,52 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
         cJSON *json_syncs = cJSON_CreateArray();
         for (i = 0; i < slave.sync_count; i++) {
             cJSON *json_sync = cJSON_CreateObject();
-            m.getSync(&sync, slave.position, i);
-            c_syncs[i].index = sync.sync_index;
-            c_syncs[i].dir = EC_READ_BIT(&sync.control_register, 2) ? EC_DIR_OUTPUT : EC_DIR_INPUT;
-            c_syncs[i].n_pdos = (unsigned int)sync.pdo_count;
-            cJSON_AddNumberToObject(json_sync, "index", c_syncs[i].index);
+            assert(ecrt_master_get_sync_manager(m, slave.position, i, &c_syncs[i]) == 0);
+            char index_str[40];
+            snprintf(index_str, 40, "0x%04X (%d)", c_syncs[i].index, c_syncs[i].index);
+            cJSON_AddStringToObject(json_sync, "index", index_str);
             cJSON_AddStringToObject(json_sync, "direction",
                                     (c_syncs[i].dir == EC_DIR_OUTPUT) ? "Output" : "Input");
-            if (sync.pdo_count) {
-                c_syncs[i].pdos = c_pdos + pdo_pos;
-            }
-            else {
+
+            // Copy pdo entries to c_pdos
+            if (!c_syncs[i].n_pdos) {
                 c_syncs[i].pdos = 0;
             }
-            c_syncs[i].watchdog_mode =
-                EC_READ_BIT(&sync.control_register, 6) ? EC_WD_ENABLE : EC_WD_DISABLE;
-
-            total_pdos += sync.pdo_count;
-            assert(total_pdos < estimated_max_pdos);
-            if (sync.pdo_count) {
+            else {
+                ec_pdo_info_t pdo = {};
+                unsigned int pdo_count = c_syncs[i].n_pdos;
+                c_syncs[i].pdos = c_pdos + pdo_pos;
+                total_pdos += pdo_count;
+                assert(total_pdos < estimated_max_pdos);
                 cJSON *json_pdos = cJSON_CreateArray();
-                if (isEL2535 && sync.pdo_count == 2) {
-                    std::cout << "******* detected EL2535 with 2 pdos (need 4)\n";
+                if (isEL2535 && pdo_count == 2) {
+                    std::cerr << "******* detected EL2535 with 2 pdos (need 4)\n";
+                    std::flush(std::cerr);
+                    // assert(false); // TODO: what is the above comment about?
                 }
-                for (j = 0; j < sync.pdo_count; j++) {
-                    m.getPdo(&pdo, slave.position, i, j);
+                for (j = 0; j < pdo_count; j++) {
+                    ecrt_master_get_pdo(m, slave.position, i, j, &pdo);
                     cJSON *json_pdo = cJSON_CreateObject();
-                    cJSON_AddNumberToObject(json_pdo, "index", pdo.index);
-                    cJSON_AddNumberToObject(json_pdo, "entry_count", pdo.entry_count);
-                    cJSON_AddStringToObject(json_pdo, "name", (const char *)pdo.name);
-                    std::cout << "sync: " << i << " pdo: " << j << " " << pdo.name << ": ";
+                    snprintf(index_str, 40, "0x%04X (%d)", pdo.index, pdo.index);
+                    cJSON_AddStringToObject(json_pdo, "index", index_str);
+                    cJSON_AddNumberToObject(json_pdo, "entry_count", pdo.n_entries);
+                    cJSON_AddStringToObject(json_pdo, "name", "no-name"); // TODO: Find the name
+                    std::cout << "sync: " << i << " pdo: " << j << " " << ": ";
                     c_pdos[j + pdo_pos].index = pdo.index;
-                    c_pdos[j + pdo_pos].n_entries = (unsigned int)pdo.entry_count;
-                    if (pdo.entry_count) {
-                        c_pdos[j + pdo_pos].entries = c_entries + entry_pos;
-                    }
-                    else {
+                    c_pdos[j + pdo_pos].n_entries = (unsigned int)pdo.n_entries;
+                    if (!pdo.n_entries) {
                         c_pdos[j + pdo_pos].entries = 0;
                     }
-
-                    if (pdo.entry_count) {
+                    else {
+                        c_pdos[j + pdo_pos].entries = c_entries + entry_pos;
                         cJSON *json_entries = cJSON_CreateArray();
-                        total_entries += pdo.entry_count;
+                        total_entries += pdo.n_entries;
                         assert(total_entries < estimated_max_entries);
-                        for (k = 0; k < pdo.entry_count; k++) {
+                        ec_pdo_entry_info_t entry = {};
+                        for (k = 0; k < pdo.n_entries; k++) {
                             cJSON *json_entry = cJSON_CreateObject();
-                            m.getPdoEntry(&entry, slave.position, i, j, k);
-#if 0
+
+                            ecrt_master_get_pdo_entry(m, slave.position, i, j, k, &entry);
                             std::cout << " entry: " << k
                                     << "{"
                                     << entry_pos << ", "
@@ -1926,20 +1916,20 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
                                     << std::dec
                                     << (int)entry.subindex << ", "
                                     << (int)entry.bit_length << ", "
-                                    << '"' << entry.name << "\"}";
-#endif
+                                    << "\"no-name\"}";
                             c_entries[entry_pos].index = entry.index;
                             c_entries[entry_pos].subindex = entry.subindex;
                             c_entries[entry_pos].bit_length = entry.bit_length;
-                            c_entry_details[entry_pos].name = (const char *)pdo.name;
+                            c_entry_details[entry_pos].name = "no-pdo-name";
                             c_entry_details[entry_pos].name += " ";
-                            c_entry_details[entry_pos].name += (const char *)entry.name;
+                            c_entry_details[entry_pos].name += "no-entry-name";
                             c_entry_details[entry_pos].entry_index = entry_pos;
                             c_entry_details[entry_pos].pdo_index = j + pdo_pos;
                             c_entry_details[entry_pos].sm_index = i;
 
                             cJSON_AddNumberToObject(json_entry, "pos", entry_pos);
-                            cJSON_AddNumberToObject(json_entry, "index", entry.index);
+                            snprintf(index_str, 40, "0x%04X (%d)", entry.index, entry.index);
+                            cJSON_AddStringToObject(json_entry, "index", index_str);
                             cJSON_AddStringToObject(json_entry, "name",
                                                     c_entry_details[entry_pos].name.c_str());
                             cJSON_AddNumberToObject(json_entry, "subindex", entry.subindex);
@@ -1950,12 +1940,12 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
                         }
                         cJSON_AddItemToObject(json_pdo, "entries", json_entries);
                     }
-                    //std::cout << "\n";
+                    std::cout << "\n";
                     cJSON_AddItemToArray(json_pdos, json_pdo);
                 }
                 cJSON_AddItemToObject(json_sync, "pdos", json_pdos);
             }
-            pdo_pos += sync.pdo_count;
+            pdo_pos += sync.n_pdos;
             cJSON_AddItemToArray(json_syncs, json_sync);
         }
         cJSON_AddItemToObject(root, "sync_managers", json_syncs);
@@ -2007,7 +1997,7 @@ cJSON *generateSlaveCStruct(MasterDevice &m, const ec_ioctl_slave_t &slave, bool
 }
 
 char *collectSlaveConfig(bool reconfigure) {
-#if 0
+#if 1
     cJSON *root = cJSON_CreateArray();
     unsigned int pos = 0;
     int res = 0;
@@ -2020,7 +2010,7 @@ char *collectSlaveConfig(bool reconfigure) {
             memset(&slave_info, 0, sizeof(ec_slave_info_t));
             res = ecrt_master_get_slave(ECInterface::master, pos, &slave_info);
 
-            cJSON_AddItemToArray(root, generateSlaveCStruct(m, slave_info, true));
+            cJSON_AddItemToArray(root, generateSlaveCStruct(ECInterface::master, slave_info, true));
         }
         else {
             std::cout << "Skipped scanning of module at position " << pos << " already loaded\n";
