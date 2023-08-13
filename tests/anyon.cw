@@ -24,6 +24,8 @@ anyon_l1 LIST anyon_f1,anyon_f2;
 anyon_x1 FLAG;
 anyon_x2 FLAG;
 anyon_l2 LIST anyon_x1,anyon_x2;
+list1 LIST;
+list2 LIST;
 
 AnyOnTest MACHINE a,b{
     both WHEN ANY a ARE on AND ANY b ARE on;
@@ -31,7 +33,7 @@ AnyOnTest MACHINE a,b{
     on_b WHEN ANY b ARE on;
     off DEFAULT;
 }
-anyon_test_machine AnyOnTest l1,l2;
+anyon_test_machine AnyOnTest list1, list2;
 
 anyon_it1 FLAG;
 anyon_it2 FLAG;
@@ -67,7 +69,7 @@ AnyonTestScript MACHINE test {
         SET anyon_x1 TO off;
         WAITFOR test IS on_a;
         LOG "ANY on test is reevaluated when the list is changed";
-        INCLUDE anyon_f1 IN l2;
+        INCLUDE anyon_f1 IN list2;
         WAITFOR test IS both;
         LOG "PASSED";
         SET SELF TO ok;
