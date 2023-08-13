@@ -76,7 +76,7 @@ class ECModule {
     EntryDetails *entry_details;
 };
 
-#else
+#else // EC_SIMULATOR
 typedef unsigned char uint8_t;
 typedef struct ECMaster {
     unsigned int reserved;
@@ -98,7 +98,8 @@ typedef struct ECSlaveConfigState {
 typedef struct ECPDOEntryReg {
 } ec_pdo_entry_reg_t;
 
-#endif
+#endif // EC_SIMULATOR
+
 #include <string>
 #include <time.h>
 #include <vector>
@@ -112,10 +113,6 @@ class ECInterface {
     static uint64_t master_last_checked;  // time the master status was last checked
     static uint64_t master_state_changed; // time a last state change was detected in the master
 
-#if 0
-    static ec_master_info_t master_info;
-    static uint64_t master_info_time; // time the master info was last read
-#endif
     static ec_master_state_t master_state;
 
     static ec_domain_t *domain1;
@@ -146,6 +143,7 @@ class ECInterface {
     void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
     const ec_master_t *getMaster() { return master; }
     const ec_master_state_t *getMasterState() { return &master_state; }
+
 #ifndef EC_SIMULATOR
     void listSlaves(std::list<ec_slave_info_t> &slaves);
     bool prepare();
@@ -156,7 +154,6 @@ class ECInterface {
     bool addModule(ECModule *m, bool reset_io);
     bool online();
     bool operational();
-    //bool configurePDOs();
     static ECModule *findModule(unsigned int position);
 
     void setProcessData(uint8_t *pd);
@@ -192,7 +189,8 @@ class ECInterface {
     void queueInitialisationRequest(SDOEntry *entry, Value val);
     void queueRuntimeRequest(SDOEntry *entry);
 #endif //USE_SDO
-#endif
+
+#endif // ifndef EC_SIMULATOR
   private:
     ECInterface();
     static ECInterface *instance_;
@@ -226,10 +224,6 @@ class ECInterface {
 #ifdef USE_ETHERCAT
 char *collectSlaveConfig(bool reconfigure);
 #endif
-
-struct IODCommandEtherCATTool : public IODCommand {
-    bool run(std::vector<Value> &params);
-};
 
 struct IODCommandMasterInfo : public IODCommand {
     bool run(std::vector<Value> &params);

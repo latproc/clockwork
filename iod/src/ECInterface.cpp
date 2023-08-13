@@ -59,7 +59,6 @@ void signal_handler(int signum);
 
 unsigned int ECInterface::FREQUENCY = 2000;
 ec_master_t *ECInterface::master = NULL;
-//ec_master_into_t master_info = {};
 ec_master_state_t ECInterface::master_state = {};
 uint64_t ECInterface::master_state_changed = 0;
 uint64_t ECInterface::master_last_checked = 0;
@@ -287,8 +286,6 @@ void ECInterface::setReferenceTime(uint32_t now) { reference_time = now; }
 uint32_t ECInterface::getReferenceTime() { return reference_time; }
 
 bool ECModule::ecrtMasterSlaveConfig(ec_master_t *master) {
-    //std::cout << name << ": " << alias <<", " << position
-    //  << std::hex<< vendor_id << ", " << product_code << std::dec <<"\n";
     if (master) {
         slave_config = ecrt_master_slave_config(master, alias, position, vendor_id, product_code);
     }
@@ -449,7 +446,6 @@ void ECInterface::checkSDOUpdates() {
     if (current_update_entry != sdo_update_entries.end()) {
         SDOEntry *entry = *current_update_entry;
         if (!entry) {
-            //std::cerr << "Skipping null entry when checking SDO updates\n";
             current_update_entry++;
             return;
         } // odd: no entry at this position
@@ -458,13 +454,11 @@ void ECInterface::checkSDOUpdates() {
         // in the middle of a poll when they were disabled
         if (sdo_entry_state == e_None && entry->machineInstance() &&
             !entry->machineInstance()->enabled()) {
-            //std::cerr << "Skipping disabled entry when checking SDO updates\n";
             current_update_entry++;
             return;
         }
         ec_sdo_request_t *sdo = entry->getRequest();
 
-        //std::cerr << "checking SDO entry " << entry->getName() << " for updates\n";
         if (sdo_entry_state == e_None) {
             if (entry->operation() == SDOEntry::WRITE) {
                 assert(!initialisation_entries.empty());
@@ -473,7 +467,6 @@ void ECInterface::checkSDOUpdates() {
 
             switch (entry->operation()) {
             case SDOEntry::READ:
-                //std::cerr << "SDO entry updates - trigger read\n";
                 ecrt_sdo_request_read(sdo); // trigger first read
                 sdo_entry_state = e_Busy_Update;
                 break;
@@ -496,10 +489,8 @@ void ECInterface::checkSDOUpdates() {
             sdo_entry_state = e_None;
             break;
         case EC_REQUEST_BUSY:
-            //std::cerr << "SDO entry in progress\n";
             break;
         case EC_REQUEST_SUCCESS:
-            //std::cerr << "SDO entry written\n";
 
             // before updating the value of the object check whether a new value is about to
             // be written to the io
@@ -515,7 +506,6 @@ void ECInterface::checkSDOUpdates() {
             std::cerr << "Failed to read SDO!" << std::hex << "0x" << entry->getIndex() << ":"
                       << (int)entry->getSubindex() << std::dec << "\n";
             entry->failure();
-            //ecrt_sdo_request_write(sdo); // retry reading
             current_update_entry++; // move on to the next item and retry soon
             sdo_entry_state = e_None;
             break;
@@ -548,7 +538,6 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
 
         ec_sdo_request_t *sdo = entry->getRequest();
 
-        //std::cerr << "checking SDO entry " << entry->getName() << "\n";
         if (sdo_entry_state == e_None) {
             entry->setOperation(SDOEntry::WRITE);
             if (entry->getSize() == 1) {
@@ -576,7 +565,6 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             sdo_entry_state = e_None;
             break;
         case EC_REQUEST_BUSY:
-            //std::cerr << "SDO entry in progress\n";
             break;
         case EC_REQUEST_SUCCESS:
             if (entry->operation() == SDOEntry::READ) {
@@ -601,7 +589,6 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             std::cerr << std::hex << "0x" << entry->getIndex() << ":" << (int)entry->getSubindex()
                       << std::dec << "\n";
             entry->failure();
-            //ecrt_sdo_request_write(sdo); // retry reading
             if (entry->getErrorCount() < 4) {
                 current_init_entry++; // move on to the next item and retry soon
             }
@@ -631,16 +618,6 @@ ECModule *ECInterface::findModule(unsigned int pos) {
         }
     }
     return 0;
-#if 0
-    std::vector<ECModule *>::iterator iter = modules.begin();
-    while (iter != modules.end()) {
-        ECModule *m = *iter++;
-        if (m->position == pos) {
-            return m;
-        }
-    }
-    return 0;
-#endif
 }
 
 void ECInterface::registerModules() {
@@ -661,8 +638,6 @@ void ECInterface::registerModules() {
                 for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
                     int res = ecrt_slave_config_reg_pdo_entry_pos(
                         m->slave_config,
-                        //m->syncs[i].pdos[j].entries[k].index,
-                        //m->syncs[i].pdos[j].entries[k].subindex,
                         m->syncs[i].index, j, k, domain1, &(m->bit_positions[module_offset_idx]));
                     if (res < 0) {
                         std::cerr << "Error: " << res << " registering pdo entry mapping "
@@ -703,13 +678,7 @@ void ECInterface::configureModules() {
             return;
         }
         assert(m->slave_config);
-        std::cout << "\n\nConfiguring module: " << m->name << "\n";
-        /*
-                int res = ecrt_slave_config_pdos( m->slave_config, m->sync_count, m->syncs);
-                if (res) {
-                    std::cerr << "Error " << res << " configuring slave " << m->name << "\n";
-                }
-        */
+        std::cout << "\n\nConfiguring module" << m->position << ": " << m->name << "\n";
         unsigned int module_offset_idx = 0;
 
         for (unsigned int i = 0; i < m->sync_count; ++i) {
@@ -734,6 +703,7 @@ void ECInterface::configureModules() {
             }
 
 #if 0
+            // TODO: why is this chunk here?
             if (m->syncs[i].dir == EC_DIR_OUTPUT && m->syncs[i].n_pdos > 0) {
                 res = ecrt_slave_config_sync_manager(m->slave_config, i, EC_DIR_OUTPUT, EC_WD_ENABLE);
                 if (res < 0) {
@@ -1609,7 +1579,7 @@ void ECInterface::check_master_state(void) {
         master_state_changed = now;
         std::cout << "AL states: 0x" << std::ios::hex << ms.al_states << std::ios::dec << "\n";
         char buf[100];
-        snprintf(buf, 100, "EtherCAT state change: was 0x%04x now 0x%04x", master_state.al_states,
+        snprintf(buf, 100, "EtherCAT state change: was 0x%04X now 0x%04X", master_state.al_states,
                  ms.al_states);
         MessageLog::instance()->add(buf);
         std::cout << buf << "\n";
@@ -1757,7 +1727,7 @@ void ECInterface::check_slave_config_states(void) {
             //MEMCHECK();
             std::cout << "ecat_thread: " << m->name << ": State 0x" << std::ios::hex << s.al_state
                       << ".\n";
-            snprintf(buf, BUFSIZE, "Slave %d (%s) changed state was 02x%x now 02x%x", i,
+            snprintf(buf, BUFSIZE, "Slave %d (%s) changed state was 0x%x now 0x%x", i,
                      m->name.c_str(), m->slave_config_state.al_state, s.al_state);
             MessageLog::instance()->add(buf);
             //MEMCHECK();
@@ -2093,44 +2063,6 @@ char *collectSlaveConfig(bool reconfigure) {
     return json;
 }
 
-bool IODCommandEtherCATTool::run(std::vector<Value> &params) {
-    if (params.size() > 1) {
-        int argc = params.size();
-        char **argv = (char **)malloc((argc + 1) * sizeof(char *));
-        for (int i = 0; i < argc; ++i) {
-            argv[i] = strdup(params[i].asString().c_str());
-        }
-        argv[argc] = 0;
-        std::stringstream tool_output;
-        std::stringstream tool_err;
-        std::streambuf *old_cout = std::cout.rdbuf(tool_output.rdbuf());
-        std::streambuf *old_cerr = std::cerr.rdbuf(tool_err.rdbuf());
-        int res = tool_main(argc, argv);
-        std::cout.rdbuf(old_cout);
-        std::cerr.rdbuf(old_cerr);
-        std::cout << tool_output.str() << "\n";
-        std::cerr << tool_err.str() << "\n";
-        for (int i = 0; i < argc; ++i) {
-            free(argv[i]);
-        }
-        free(argv);
-        result_str = tool_output.str();
-        //cleanup the command list left over from the ethercat tool
-        CommandList::iterator iter = commandList.begin();
-        while (iter != commandList.end()) {
-            Command *cmd = *iter;
-            iter = commandList.erase(iter);
-            delete cmd;
-        }
-
-        return true;
-    }
-    else {
-        error_str = "Usage: EC command [params]";
-        return false;
-    }
-}
-
 bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
     char *res = collectSlaveConfig(false);
     if (res) {
@@ -2176,11 +2108,6 @@ bool IODCommandMasterInfo::run(std::vector<Value> &params) {
 }
 
 #else
-
-bool IODCommandEtherCATTool::run(std::vector<Value> &params) {
-    error_str = "EtherCAT Tool is not available";
-    return false;
-}
 
 bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
     cJSON *root = cJSON_CreateObject();
