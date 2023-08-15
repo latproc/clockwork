@@ -1252,8 +1252,12 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 }
 
 void ECInterface::receiveState() {
+	  static long warned = 0;
     if (!master || !initialised) {
-        //std::cerr << "master not ready to collect state\n" << std::flush;
+				if (warned++ %100 == 0)
+            std::cerr << "master not ready to receive state "
+                << ( (!master) ? "(no master)" : "(!initialised)") 
+                << "\n" << std::flush;
         return;
     }
 
@@ -1300,7 +1304,12 @@ void ECInterface::receiveState() {
 
 int ECInterface::collectState() {
     if (!master || !initialised || !active || !domain1) {
-        std::cerr << "master not ready to collect state\n" << std::flush;
+        std::cerr << "master not ready to collect state ";
+        if (!master) std::cerr << "(no master)";
+        else if (!initialised) std::cerr << "(not initialised)";
+        else if (!active) std::cerr << "(not active)";
+        else if (!domain1) std::cerr << "(no domain)";
+        std::cerr << "\n";
         return 0;
     }
 #ifndef EC_SIMULATOR
@@ -1825,8 +1834,6 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
     cJSON_AddStringToObject(root, "tab", "Modules");
     cJSON_AddStringToObject(root, "class", "MODULE");
     cJSON_AddNumberToObject(root, "error_flag", slave.error_flag);
-    cJSON_AddNumberToObject(root, "scan_required", slave.scan_required);
-    cJSON_AddNumberToObject(root, "ready", slave.ready);
     char *name = strdup(slave.name);
     int name_len = strlen(name);
     for (int i = 0; i < name_len; ++i) {
@@ -1865,6 +1872,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
             cJSON *json_sync = cJSON_CreateObject();
             assert(ecrt_master_get_sync_manager(m, slave.position, i, &c_syncs[i]) == 0);
             char index_str[40];
+            char pdo_name[40];
             snprintf(index_str, 40, "0x%04X (%d)", c_syncs[i].index, c_syncs[i].index);
             cJSON_AddStringToObject(json_sync, "index", index_str);
             cJSON_AddStringToObject(json_sync, "direction",
@@ -1892,7 +1900,8 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
                     snprintf(index_str, 40, "0x%04X (%d)", pdo.index, pdo.index);
                     cJSON_AddStringToObject(json_pdo, "index", index_str);
                     cJSON_AddNumberToObject(json_pdo, "entry_count", pdo.n_entries);
-                    cJSON_AddStringToObject(json_pdo, "name", "no-name"); // TODO: Find the name
+										snprintf(pdo_name, 40, "pdo-%04X", pdo.index);
+                    cJSON_AddStringToObject(json_pdo, "name", pdo_name); // TODO: Find the name
                     std::cout << "sync: " << i << " pdo: " << j << " " << ": ";
                     c_pdos[j + pdo_pos].index = pdo.index;
                     c_pdos[j + pdo_pos].n_entries = (unsigned int)pdo.n_entries;
@@ -1909,6 +1918,8 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
                             cJSON *json_entry = cJSON_CreateObject();
 
                             ecrt_master_get_pdo_entry(m, slave.position, i, j, k, &entry);
+														char entry_name[40];
+														snprintf(entry_name, 20, "entry-%X-%X", entry.index, entry.subindex);
                             std::cout << " entry: " << k
                                     << "{"
                                     << entry_pos << ", "
@@ -1916,13 +1927,14 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
                                     << std::dec
                                     << (int)entry.subindex << ", "
                                     << (int)entry.bit_length << ", "
-                                    << "\"no-name\"}";
+                                    << entry_name
+																		<< "}";
                             c_entries[entry_pos].index = entry.index;
                             c_entries[entry_pos].subindex = entry.subindex;
                             c_entries[entry_pos].bit_length = entry.bit_length;
-                            c_entry_details[entry_pos].name = "no-pdo-name";
+                            c_entry_details[entry_pos].name = pdo_name;
                             c_entry_details[entry_pos].name += " ";
-                            c_entry_details[entry_pos].name += "no-entry-name";
+                            c_entry_details[entry_pos].name += entry_name;
                             c_entry_details[entry_pos].entry_index = entry_pos;
                             c_entry_details[entry_pos].pdo_index = j + pdo_pos;
                             c_entry_details[entry_pos].sm_index = i;

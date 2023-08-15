@@ -25,7 +25,6 @@
 */
 #include "anet.h"
 #include "regular_expressions.h"
-#include <boost/bind.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
 #include <cassert>

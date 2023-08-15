@@ -36,7 +36,7 @@
 #include "ProcessingThread.h"
 #include "buffering.c"
 
-#define VERBOSE_DEBUG 0
+#define VERBOSE_DEBUG 1
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 /* byte swapping macros using either custom code or the network byte order std functions */
@@ -496,7 +496,7 @@ IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos,
     {
         boost::recursive_mutex::scoped_lock lock(io_names_mutex);
         if (io_names.find(std::string(buf)) != io_names.end()) {
-            std::cerr << "IOComponent::add_io_entry: warning - an IO component named " << name
+            DBG_MSG << "IOComponent::add_io_entry: warning - an IO component named " << name
                       << " already existed on module " << module_pos << "\n";
         }
         io_names[buf] = addr;
