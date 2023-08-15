@@ -61,7 +61,7 @@
 
 #endif
 
-#define VERBOSE_DEBUG 0
+#define VERBOSE_DEBUG 1
 
 extern bool machine_is_ready;
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
@@ -716,6 +716,7 @@ void EtherCATThread::operator()() {
         if (machine_is_ready && ECInterface::instance()->getProcessMask()) {
             global_clock = updateClock(global_clock);
             if (status == e_collect) {
+								DBG_ETHERCAT << "Asking ECInterface to collect state\n";
                 num_updates = ECInterface::instance()->collectState();
             }
 
