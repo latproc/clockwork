@@ -2164,15 +2164,20 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
                                             const std::string short_name, bool response_required) {
     std::map<Message, MachineCommand *>::iterator receive_handler_i =
         receives_functions.find(Message(m.getText().c_str()));
+	  DBG_MSG << getName() << " " << state_machine->name  << " (" << current_state.getName() << ")"
+						<< " receiving " << m.getText() << " short name: " << short_name << "\n";
+//    if (receive_handler_i == receives_functions.end()) {
+//	  	DBG_MSG << getName() << " no handler found for " << m.getText() << "\n";
+//		}
     if (receive_handler_i != receives_functions.end()) {
 
         while (receive_handler_i != receives_functions.end() && receive_handler_i->first == m) {
 
-            if (debug()) {
-                DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first
+            //if (debug()) {
+                DBG_MESSAGING << " found event receive handler: " << (*receive_handler_i).first
                                 << "\n"
                                 << "handler: " << *((*receive_handler_i).second) << "\n";
-            }
+            //}
 #ifndef EC_SIMULATOR
             if (state_machine && state_machine->name == "ETHERCAT_BUS") {
                 if (short_name == "activate" &&

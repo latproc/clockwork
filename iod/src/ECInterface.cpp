@@ -20,6 +20,7 @@
 #include "ECInterface.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
+#include "DebugExtra.h"
 #include "Statistic.h"
 #include "Statistics.h"
 #include "cJSON.h"
@@ -878,7 +879,7 @@ bool ECInterface::deactivate() {
     char buf[200];
     snprintf(buf, 200, "EtherCAT interface: Deactivating the EtherCAT master");
     MessageLog::instance()->add(buf);
-    std::cout << buf << "\n";
+    DBG_ETHERCAT << buf << "\n";
     active = false;
     if (master) {
         domain1 = 0;
@@ -937,20 +938,20 @@ bool ECInterface::activate() {
     int res;
     unsigned int pos = 0;
     ec_master_info_t master_info;
-    std::cout << "Activating master with configured slaves : \n";
+    DBG_ETHERCAT << "Activating master with configured slaves : \n";
     res = ecrt_master(ECInterface::master, &master_info);
     while (res >= 0 && pos < master_info.slave_count) {
         ECModule *module = ECInterface::findModule(pos);
         if (module) {
-            std::cout << pos << " " << module->name << "\n";
+            DBG_ETHERCAT << pos << " " << module->name << "\n";
         }
         else {
-            std::cout << pos << " "
+            DBG_ETHERCAT << pos << " "
                       << "no module\n";
         }
         ++pos;
     }
-    std::cerr << "Activating master...";
+    DBG_ETHERCAT << "Activating master...";
     char buf[200];
     if ((res = ecrt_master_activate(master))) {
         snprintf(buf, 200, "EtherCAT interface: Activating master failed with code: %d", res);
@@ -961,7 +962,7 @@ bool ECInterface::activate() {
     active = true;
     snprintf(buf, 200, "Activated master");
     MessageLog::instance()->add(buf);
-    std::cout << buf << "\n";
+    DBG_ETHERCAT << buf << "\n";
 
     if (!(domain1_pd = ecrt_domain_data(domain1))) {
         snprintf(buf, 200, "EtherCAT interface: ecrt_domain_data failure");
@@ -975,7 +976,7 @@ bool ECInterface::activate() {
     }
     size_t domain_size = ecrt_domain_size(domain1);
     snprintf(buf, 200, "Activated master with domain size %ld", domain_size);
-    std::cout << buf << "\n";
+    DBG_ETHERCAT << buf << "\n";
     return true;
 }
 
@@ -985,12 +986,9 @@ bool ECInterface::online() {
     while (iter != modules.end()) {
         ECModule *m = *iter++;
         if (!m->online()) {
-            //std::cout << "Module: " << m->getName()  << " " << ++count << " of " << n << " not online\n";
+            //DBG_ETHERCAT << "Module: " << m->getName()  << " " << ++count << " of " << n << " not online\n";
             return false;
         }
-#if VERBOSE_DEBUG
-        //      std::cout << "Module: " << m->getName() << " online\n";
-#endif
     }
     return true;
 }
@@ -1001,11 +999,11 @@ bool ECInterface::operational() {
     while (iter != modules.end()) {
         ECModule *m = *iter++;
         if (!m->operational()) {
-            //std::cout << "Module: " << m->getName()  << " " << ++count << " of " << n << " not operational\n";
+            //DBG_ETHERCAT << "Module: " << m->getName()  << " " << ++count << " of " << n << " not operational\n";
             return false;
         }
 #if VERBOSE_DEBUG
-        //      std::cout << "Module: " << m->getName() << " is operational\n";
+        DBG_ETHERCAT << "Module: " << m->getName() << " is operational\n";
 #endif
     }
     return true;

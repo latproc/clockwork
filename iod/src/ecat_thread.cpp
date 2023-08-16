@@ -256,17 +256,20 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
     ECInterface::instance()->setMinIOIndex(IOComponent::getMinIOOffset());
     ECInterface::instance()->setMaxIOIndex(IOComponent::getMaxIOOffset());
     uint32_t size = ECInterface::instance()->getProcessDataSize();
+    DBG_ETHERCAT << "ecat_thread sending multipart message, size: " << size << "\n";
 
     uint8_t stage = 1;
 #if VERBOSE_DEBUG
     bool found_change = false;
 #endif
+    uint8_t *upd_data = ECInterface::instance()->getUpdateData();
+    if (upd_data == nullptr) { return 0; }
     while (true) {
         try {
             switch (stage) {
             case 1: {
 #if VERBOSE_DEBUG
-                //DBG_MSG << " send stage: " << (int)stage << " " << sizeof(global_clock) << "\n";
+                DBG_MSG << " send stage: " << (int)stage << " " << sizeof(global_clock) << "\n";
                 //{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
                 zmq::message_t iomsg(sizeof(global_clock));
@@ -276,8 +279,8 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
             }
             case 2: {
 #if VERBOSE_DEBUG
-                //DBG_MSG << " send stage: " << (int)stage << " " << "4\n";
-                //{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
+                DBG_MSG << " send stage: " << (int)stage << " " << "4\n";
+                {uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
                 zmq::message_t iomsg(4);
                 memcpy(iomsg.data(), (void *)&size, 4);
@@ -286,10 +289,9 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
             }
             case 3: {
 #if VERBOSE_DEBUG
-                //DBG_MSG << " send stage: " << (int)stage << " " << size << "\n";
+                DBG_MSG << " send stage: " << (int)stage << " " << size << "\n";
                 //{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
-                uint8_t *upd_data = ECInterface::instance()->getUpdateData();
 #if VERBOSE_DEBUG
                 if (driver_state == s_driver_init) {
                     std::cout << "ecat_thread sending :";
@@ -713,11 +715,13 @@ void EtherCATThread::operator()() {
         next_ecat_receive = microsecs() + period / 2;
         ECInterface::instance()->receiveState();
 
-        if (machine_is_ready && ECInterface::instance()->getProcessMask()) {
+        if (machine_is_ready && ECInterface::instance()->getUpdateData()
+                && ECInterface::instance()->getProcessMask()) {
             global_clock = updateClock(global_clock);
             if (status == e_collect) {
-								DBG_ETHERCAT << "Asking ECInterface to collect state\n";
+                DBG_ETHERCAT << "Asking ECInterface to collect state\n";
                 num_updates = ECInterface::instance()->collectState();
+                DBG_ETHERCAT << "Num updates from ecat_thread: " << num_updates << "\n";
             }
 
             // send all process domain data once the domain is operational
@@ -734,7 +738,7 @@ void EtherCATThread::operator()() {
                 need_ping = false;
                 int stage = sendMultiPart(sync_sock, global_clock);
 #if VERBOSE_DEBUG
-                std::cout << "send done\n";
+                if (stage == 5) { DBG_MSG  << "send done\n"; }
 #endif
                 assert(stage == 5);
                 status = e_update; // time to send process data to EtherCAT
@@ -744,12 +748,12 @@ void EtherCATThread::operator()() {
                 status = e_collect;
             }
         }
-        //      else
-        //          std::cout << "machine is not ready; no state collected\n";
+        //else
+        //    DBG_ETHERCAT << "machine is not ready; no state collected\n";
 
         // check for communication from clockwork
         if (getClockworkMessage(out_sock, ec_ok) && microsecs() < next_ecat_receive - 300) {
-            //          std::cout << "ecat thread got clockwork message. next ecat: " << next_ecat_receive << "\n";
+            DBG_ETHERCAT << "ecat thread got clockwork message. next ecat: " << next_ecat_receive << "\n";
             usleep(20);
         }
         usleep(20);

@@ -63,7 +63,7 @@ extern void handle_io_sampling(uint64_t clock);
 
 //#define KEEPSTATS
 
-#define VERBOSE_DEBUG 0
+#define VERBOSE_DEBUG 1
 #define MEMCHECK()
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
@@ -917,6 +917,8 @@ void ProcessingThread::operator()() {
             status = e_waiting_sched;
         }
 
+				if (machine.activationRequested()) { DBG_MSG << " activation requested\n";}
+
         if (status == e_waiting && machines_have_work &&
             curr_t - last_checked_machines >= machine_check_delay) {
 
@@ -1086,13 +1088,13 @@ void ProcessingThread::operator()() {
                                 zmq::message_t iomsg(size);
                                 memcpy(iomsg.data(), (void *)upd->data(), size);
                                 ecat_out.send(iomsg, ZMQ_SNDMORE);
-                                //                                      std::cout << "sending to EtherCAT: "; display(upd->data()); std::cout << "\n";
+                                DBG_ETHERCAT << "sending to EtherCAT: "; display(upd->data()); std::cout << "\n";
                                 ++stage;
                             }
                             case 4: {
                                 zmq::message_t iomsg(size);
                                 memcpy(iomsg.data(), (void *)upd->mask(), size);
-                                //                                      std::cout << "using mask: "; display(upd->mask()); std::cout << "\n";
+                                DBG_ETHERCAT << "using mask: "; display(upd->mask()); std::cout << "\n";
                                 ecat_out.send(iomsg);
                                 ++stage;
                             }
