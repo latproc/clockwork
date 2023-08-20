@@ -103,3 +103,5 @@ iod/persistd
 iod/iosh
 iod/device_connector
 iod/iocmd
+examples/wecon/wecon
+examples/wecon/wecon-test

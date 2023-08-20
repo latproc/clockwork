@@ -12,6 +12,7 @@
 #include <sys/mman.h>
 #include <malloc.h>
 #include "ecrt.h"
+#include <assert.h>
 
 
 
@@ -55,7 +56,7 @@ static uint8_t *domain_w_pd = NULL;
 /***************************** 20140224	************************************/
 
 //signal to turn off servo on state
-static unsigned int servo_flag;
+static unsigned int user_interrupt;
 static unsigned int deactive;
 
 // offsets for PDO entries
@@ -166,8 +167,8 @@ struct timespec timespec_add(struct timespec time1, struct timespec time2)
 void endsignal(int sig)
 {
 	
-	servo_flag = 1;
-	deactive = 10; // do 10 more cycles and exit
+  user_interrupt = 1;
+	deactive = 5000; // do 5000 more cycles and exit
 	signal( SIGINT , SIG_DFL );
 	signal( SIGTERM , SIG_DFL );
 }
@@ -222,9 +223,63 @@ void check_master_state(void)
 
 /****************************************************************************/
 
+enum StatusBits {
+				ready           = 0b000000000001,
+				can_start       = 0b000000000010,
+				operation       = 0b000000000100,
+				fault           = 0b000000001000,
+				electrical_ok   = 0b000000010000, 
+				quick_shutdown  = 0b000000100000,
+				not_operational = 0b000001000000,
+				warning         = 0b000010000000,
+				unknown         = 0b000100000000,
+				remote          = 0b001000000000,
+				arrived         = 0b010000000000
+};
+
+// status bits set exactly match the query
+uint16_t status_is(uint16_t query) {
+		assert(query & 0xf800 == 0); // bits after bit 11 are reserved
+		uint16_t status = temp[0] & 0x06f; // mask out the unknown bit
+		return status == query;
+}
+
+// status bits include the bits set in the query
+// but may also have other bits set.
+uint16_t status_includes(uint16_t query) {
+		assert( (query & 0xf800) == 0); // bits after bit 11 are reserved
+		uint16_t status = (temp[0] & 0x07ef); // mask out the unknown bit
+		return (status & query) == query;
+}
+
+
+int is_not_ready() {
+	 return (temp[0] & 0x4f) == 0;
+}
+
+int is_startup_failure() {
+		return status_includes(fault);
+		//return status_includes(not_operational) && ((temp[0] & 0x000F) == 0);
+}
+
+int is_servo_ready() {
+	return (!status_includes(not_operational) && status_includes(quick_shutdown))
+					&& ((temp[0] & 0x0f) == 0b0001);
+}
+
+int is_startup() {
+							return (!status_includes(not_operational) && status_includes(quick_shutdown))
+										&& ((temp[0] & 0x0f) == 0b0011);
+}
+
+int is_servo_enabled() {
+							return (!status_includes(not_operational) && status_includes(quick_shutdown))
+										&& ((temp[0] & 0x0f) == 0b0111);
+}
+
 void show_status(long status) {
-	const char *bits[] = {"+ready", "+can-start", "+operation", "+fault",
-					"+electrical-ok", "+quick-shutdown", "+not-operational",
+	const char *bits[] = {"+ready", "+can_start", "+operation", "+fault",
+					"+electrical_ok", "+quick_shutdown", "+not_operational",
 					"+warning", "+unknown", "+remote", "+arrived" };
 	printf("%s%s%s%s%s%s%s%s%s%s%s\n",
 			(status & 0b000000000001) ? bits[0] : "",
@@ -242,30 +297,109 @@ void show_status(long status) {
 
 }
 
-void cyclic_task()
-{
-		struct timespec wakeupTime, time;
-		// get current time
-		clock_gettime(CLOCK_TO_USE, &wakeupTime);
+/******************************************************/
 
-	while(1) 
-	{
-		if (deactive > 1) --deactive;
-		if(deactive==1)
-		{
-			printf("stopping\n");
-			break;
+enum ControlBits {
+		enable_start           = 0b0000000000000001, 
+		enable_main_circuit    = 0b0000000000000010, 
+		enable_quick_shutdown  = 0b0000000000000100, 
+		enable_servo_operation = 0b0000000000001000,
+	  reset_fault            = 0b0000000010000000	 // 0x80
+};
+
+uint8_t control_reg = 0; // this is copied to the control register
+
+// Preparation functions setup the control register but
+// do not send it
+
+void prepare_turn_on(uint16_t control_bits) {
+	  control_reg |= control_bits;
+}
+
+void prepare_turn_off(uint16_t control_bits) {
+		uint16_t mask = 0xffff ^ control_bits;
+	  control_reg &= mask;
+}
+
+void set_mode(uint16_t mode) {
+		assert(mode <= 10 && mode != 2 && mode != 5); // invalid mode value
+		EC_WRITE_U16(domain_r_pd+modeofoper, mode);
+}
+
+// Setting functions prepare and send the control command
+
+void send_control() {
+		static uint16_t last_sent = 0;
+		if (last_sent != control_reg) {
+				printf("sending control: %04X\n", control_reg); 
 		}
+		EC_WRITE_U16(domain_r_pd+ctrl_word, control_reg );
+		last_sent = control_reg;
+}
 
-		wakeupTime = timespec_add(wakeupTime, cycletime);
-		 		clock_nanosleep(CLOCK_TO_USE, TIMER_ABSTIME, &wakeupTime, NULL);
+void set_control(uint16_t control_bits) {
+		control_reg = control_bits;
+		send_control();
+}
 
-		ecrt_master_receive(master);
-		ecrt_domain_process(domain_r);
-		ecrt_domain_process(domain_w);
-		
+void turn_on(uint16_t control_bits) {
+	  prepare_turn_on(control_bits);
+		send_control();
+}
+
+void turn_off(uint16_t control_bits) {
+	  prepare_turn_off(control_bits);
+		send_control();
+}
+
+/**************************************/
+enum ControlState { off, enabled_start,
+				enabled_ready,
+				enabled_servo_operation,
+				has_fault,
+				operational,
+				moving};
+
+int control_state = off;
+
+const char *states[] = {
+		"OFF",
+		"ENABLED_START",
+		"ENABLED_READY",
+		"ENABLED_SERVO_OPERATION",
+		"HAS_FAULT",
+		"OPERATIONAL",
+		"MOVING"
+};
+const char * control_state_str(int state) {
+		return states[state];
+}
+
+void stop_servo() {
+	printf("stopping servo\n");
+	//servo off
+	set_mode(0);
+	if (is_servo_ready()) {
+			turn_off(enable_start 
+					| enable_servo_operation
+					| enable_quick_shutdown
+					| reset_fault
+					| enable_main_circuit
+					);
+	}
+  else	{
+			prepare_turn_off(enable_start 
+					| enable_servo_operation
+					| enable_quick_shutdown
+					| reset_fault);
+			turn_on(enable_main_circuit);
+	}
+}
+/***************************************************/
+int collect(int control_state) {
+		int returned_state = control_state;
 		long prev_status = temp[0];
-		long prev_pos;
+		static long prev_pos = 0;
 		long prev_error = temp[2];
 		long mode = temp[3];
 
@@ -284,13 +418,48 @@ void cyclic_task()
 				printf("position: %ld\n", temp[1]);
 				printf("error: %ld\n", temp[2]);
 				printf("mode: %ld\n", temp[3]);
-				EC_WRITE_U16(domain_r_pd+ctrl_word, 0x0080 );
+				//EC_WRITE_U16(domain_r_pd+ctrl_word, 0x80);
 		}
 		else {
 				if (prev_status != temp[0]) {
 					printf("status change: %04lx to %04lx", prev_status, temp[0]);
 					show_status(temp[0]);
 					printf("\n");
+
+					// Refer operating manual p79.
+					if (is_not_ready()) {
+							printf("servo is not ready\n");
+							returned_state = off;
+					}
+					else if (is_startup_failure()) {
+							printf("startup failure (ignored)\n");
+							//returned_state = has_fault;
+					}
+					else if (is_servo_ready()) {
+							printf("servo ready\n");
+					}
+					else if (is_startup()) {
+							printf("start up\n");
+					}
+					else if (is_servo_enabled()) {
+							printf("servo enabled\n");
+					}
+					else if (!status_includes(not_operational) && !status_includes(quick_shutdown)) {
+							printf("malfunction shutdown valid\n");
+							returned_state = fault;
+					}
+					else if (!status_includes(not_operational) && status_includes(fault)) {
+							if ((temp[0] & 0x0f) == 0b0111) {
+									printf("fault response valid\n");
+									returned_state = fault;
+							}
+							else if (temp[0] & 0x0f == 0b0000) {
+									printf("fault\n");
+									returned_state = fault;
+							}
+					}
+					else printf("unknown state\n");
+		
 				}
 				long dist = prev_pos > temp[1] ? prev_pos - temp[1] : temp[1] - prev_pos; 
 				if (dist > 20) {
@@ -298,14 +467,59 @@ void cyclic_task()
 					prev_pos = temp[1];
 				}
 				else if (dist > 5) printf(".");
-				if (prev_error != temp[2]) { printf("error change: %ld to %ld\n", prev_error, temp[2]); }
-				if (mode != temp[3]) { printf("mode change: %ld to %ld\n", mode, temp[3]); }
+				if (prev_error != temp[2]) {
+					printf("error change: %ld to %ld\n", prev_error, temp[2]); 
+#if 0
+					// what do we do about error states?
+					if (temp[2]) { control_state = has_fault; }
+					else {
+						// What state is the servo in after a fault resets?
+						printf("error cleared\n");
+						control_state = off;
+						set_control(0);
+					} 
+#endif
+				}
+				if (mode != temp[3]) {
+					printf("mode change: %ld to %ld\n", mode, temp[3]); 
+				}
 		}
-		if (error_code) {
-			printf("attempting to reset error\n");
+    if (temp[2] || status_includes(fault)) {
+				set_control(reset_fault);
+		}
+		else {
+				turn_off(reset_fault);
+		}
+		return returned_state;
+}
 
-			// reset from failure?
-			EC_WRITE_U16(domain_r_pd+ctrl_word, 0x0080 );
+void cyclic_task()
+{
+    struct timespec wakeupTime, time;
+    // get current time
+    clock_gettime(CLOCK_TO_USE, &wakeupTime);
+
+		unsigned long timer = 0;
+
+	while(1) 
+	{
+	  if (deactive > 1) --deactive;
+		if(deactive==1)
+		{
+			break;
+		}
+
+		wakeupTime = timespec_add(wakeupTime, cycletime);
+     		clock_nanosleep(CLOCK_TO_USE, TIMER_ABSTIME, &wakeupTime, NULL);
+
+		ecrt_master_receive(master);
+		ecrt_domain_process(domain_r);
+		ecrt_domain_process(domain_w);
+
+		int new_state = collect(control_state);
+		if (new_state != control_state) {
+				printf("control state changed from %s to %s\n", control_state_str(control_state), control_state_str(new_state));
+				control_state = new_state;
 		}
 		
 		if (counter) 
@@ -320,25 +534,90 @@ void cyclic_task()
 			blink = !blink;
 		}
 
-		// write process data
+		++timer;
+		if (timer > 1000) {
 
-		 static long last_sent = 0;
-		if(servo_flag==1)
-		{
-			//servo off
-			EC_WRITE_U16(domain_r_pd+ctrl_word, 0x0080 );
-		}	
+		// control
 
-		else if( (temp[0]&0x004f) == 0x0000	)
+		int saved_control_state = control_state;
+		static long sent_stop = 0;
+		static int reported_waiting = 0;
+		if (user_interrupt == 1)
 		{
-			if (last_sent != 0x0001) {
-					printf("setting control word to 0x0001\n");
-					EC_WRITE_U16(domain_r_pd+ctrl_word, 0x0006 );
+			if (sent_stop == 0) {
+				sent_stop = 1;
+				printf("stopping\n");
+				stop_servo();
 			}
-			last_sent = 0x0001;
+#if 0
+			if (deactive == 4000) {
+				turn_off(enable_start + enable_main_circuit
+					+ enable_quick_shutdown + enable_servo_operation);
+			}
+#endif
+		}	
+		else if (control_state == off) {
+			set_mode(0);
+			turn_on(enable_main_circuit + enable_quick_shutdown);
+			timer=800;
+			if (!is_not_ready()) {
+				control_state = enabled_start;
+				reported_waiting = 0;
+			}
+			else {
+				if (!reported_waiting) printf("waiting for the servo to become ready\n");
+				reported_waiting = 1;
+			}
+		}
+		else if (control_state == enabled_start) {
+			//prepare_turn_off(enabled_start);
+			turn_on(ready);
+			timer=800;
+			if (is_startup()) {
+				printf("enabling ready for start\n");
+				control_state = enabled_ready;
+				reported_waiting = 0;
+			}
+			else {
+				if (!reported_waiting) printf("waiting for servo startup\n");
+				reported_waiting = 1;
+			}
+		}
+		else if (control_state == enabled_ready) {
+			turn_on(enable_servo_operation);
+			timer=800;
+			if (is_servo_enabled()) {
+				control_state = operational;
+				EC_WRITE_S32(domain_r_pd+target_pos, temp[1]);
+				prev_target_pos = temp[1];
+				reported_waiting = 0;
+				printf("setting mode to 8\n");
+				set_mode(8); // set position mode
+			}
+			else {
+				if (!reported_waiting)
+					printf("waiting for the servo to become operational\n");
+				reported_waiting = 1;
+			}
+		}
+		else if (control_state == operational) {
+				int error = (temp[1] > prev_target_pos) ? temp[1] - prev_target_pos : prev_target_pos - temp[1];
+				if (status_includes(arrived) && error < 100 ) {
+						EC_WRITE_S32(domain_r_pd+target_pos, temp[1] + 1000);
+						printf("setting target %ld to %ld\n", prev_target_pos , temp[1] + 1000);
+						prev_target_pos += 1000;
+						//control_state = moving;
+				}
+		}
+		if (saved_control_state != control_state) {
+				printf("control state changed from %s to %s\n", 
+								control_state_str(saved_control_state), control_state_str(control_state));
 		}
 
-		else if( (temp[0]&0x004f) == 0x0040	)
+		} // timer
+
+#if 0
+		else if( (temp[0]&0x004f) == 0x0040  )
 		{
 			if (last_sent != 0x0006) {
 				printf("setting control word to 0x0006\n");
@@ -397,6 +676,8 @@ void cyclic_task()
 				last_sent = 0x0007;
 			}
 		}
+#endif
+
 		// write application time to master
 		clock_gettime(CLOCK_TO_USE, &time);
 		ecrt_master_application_time(master, TIMESPEC2NS(time));
@@ -425,6 +706,27 @@ void cyclic_task()
 	}
 
 }
+
+#ifdef TESTING
+
+void can_test_arrived() {
+		temp[0] = arrived + electrical_ok + remote;
+		assert(status_includes(arrived));
+		temp[0] = ready+can_start+operation+electrical_ok+quick_shutdown+remote+arrived;
+		assert(status_includes(arrived));
+}
+
+void can_detect_bit() {
+		temp[0] = 0x250;
+		assert(status_includes(not_operational));
+}
+
+int main() {
+		can_detect_bit();
+		can_test_arrived();
+}
+
+#else
 
 int main(int argc, char **argv)
 {
@@ -515,4 +817,4 @@ int main(int argc, char **argv)
 		return 0;
 }
 
-
+#endif
