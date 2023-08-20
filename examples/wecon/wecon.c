@@ -42,7 +42,7 @@ static ec_domain_state_t domain_r_state = {};
 static ec_domain_t *domain_w = NULL;
 static ec_domain_state_t domain_w_state = {};
 
-static ec_slave_config_t *sc  = NULL;
+static ec_slave_config_t *sc	= NULL;
 static ec_slave_config_state_t sc_state = {};
 /****************************************************************************/
 
@@ -52,7 +52,7 @@ static uint8_t *domain_w_pd = NULL;
 #define wecon		0,0
 #define wecon_vd3e 	0x00000eff, 0x10003101
 
-/***************************** 20140224  ************************************/
+/***************************** 20140224	************************************/
 
 //signal to turn off servo on state
 static unsigned int servo_flag;
@@ -99,40 +99,41 @@ static unsigned int counter = 0;
 static unsigned int blink = 0;
 static unsigned int sync_ref_counter = 0;
 const struct timespec cycletime = {0, PERIOD_NS};
+long prev_target_pos = 0;
 
 /*****************************************************************************/
 
 #if PDO_SETTING1
 /* Master 0, Slave 0, "Wecon VD3E EtherCAT Servo_v1.05"
- * Vendor ID:       0x00000eff
- * Product code:    0x10003101
+ * Vendor ID:			 0x00000eff
+ * Product code:		0x10003101
  * Revision number: 0x00000069
  */
 
 ec_pdo_entry_info_t slave_0_pdo_entries[] = {
-    {0x6040, 0x00, 16}, /* ControlWord */
-    {0x607a, 0x00, 32}, /* Target position */
-    {0x60b8, 0x00, 16}, /* Touch probe function */
-    {0x6060, 0x00, 8}, /* Modes of operation */
-    {0x603f, 0x00, 16}, /* Error Code */
-    {0x6041, 0x00, 16}, /* statusWord */
-    {0x6064, 0x00, 32}, /* Position actual value */
-    {0x6077, 0x00, 16}, /* Torque actual value */
-    {0x60f4, 0x00, 32}, /* Following error actual value */
-    {0x6061, 0x00, 8}, /* Modes of operation display */
+		{0x6040, 0x00, 16}, /* ControlWord */
+		{0x607a, 0x00, 32}, /* Target position */
+		{0x60b8, 0x00, 16}, /* Touch probe function */
+		{0x6060, 0x00, 8}, /* Modes of operation */
+		{0x603f, 0x00, 16}, /* Error Code */
+		{0x6041, 0x00, 16}, /* statusWord */
+		{0x6064, 0x00, 32}, /* Position actual value */
+		{0x6077, 0x00, 16}, /* Torque actual value */
+		{0x60f4, 0x00, 32}, /* Following error actual value */
+		{0x6061, 0x00, 8}, /* Modes of operation display */
 };//{index,subindex,lenth}
 
 ec_pdo_info_t slave_0_pdos[] = {
-    {0x1701, 4, slave_0_pdo_entries + 0}, /* RxPDO */
-    {0x1b01, 6, slave_0_pdo_entries + 4}, /* TxPDO */
+		{0x1701, 4, slave_0_pdo_entries + 0}, /* RxPDO */
+		{0x1b01, 6, slave_0_pdo_entries + 4}, /* TxPDO */
 };
 
 ec_sync_info_t slave_0_syncs[] = {
-    {0, EC_DIR_OUTPUT, 0, NULL, EC_WD_DISABLE},
-    {1, EC_DIR_INPUT, 0, NULL, EC_WD_DISABLE},
-    {2, EC_DIR_OUTPUT, 1, slave_0_pdos + 0, EC_WD_ENABLE},
-    {3, EC_DIR_INPUT, 1, slave_0_pdos + 1, EC_WD_DISABLE},
-    {0xff}
+		{0, EC_DIR_OUTPUT, 0, NULL, EC_WD_DISABLE},
+		{1, EC_DIR_INPUT, 0, NULL, EC_WD_DISABLE},
+		{2, EC_DIR_OUTPUT, 1, slave_0_pdos + 0, EC_WD_ENABLE},
+		{3, EC_DIR_INPUT, 1, slave_0_pdos + 1, EC_WD_DISABLE},
+		{0xff}
 };
 #endif
 
@@ -176,47 +177,47 @@ void endsignal(int sig)
 
 void check_domain_r_state(void)
 {
-    ec_domain_state_t ds;
-    ecrt_domain_state(domain_r, &ds);
+		ec_domain_state_t ds;
+		ecrt_domain_state(domain_r, &ds);
 
 	//struct timespec time_wc1,time_wc2;
 	if (ds.working_counter != domain_r_state.working_counter)
 		printf("domain_r: WC %u.\n", ds.working_counter);
 	if (ds.wc_state != domain_r_state.wc_state)
-        	printf("domain_r: State %u.\n", ds.wc_state);
+					printf("domain_r: State %u.\n", ds.wc_state);
 
-    domain_r_state = ds;
+		domain_r_state = ds;
 }
 
 void check_domain_w_state(void)
 {
-    ec_domain_state_t ds2;
-    ecrt_domain_state(domain_w, &ds2);
+		ec_domain_state_t ds2;
+		ecrt_domain_state(domain_w, &ds2);
 
 	if (ds2.working_counter != domain_w_state.working_counter)
 		printf("domain_w: WC %u.\n", ds2.working_counter);
 	if (ds2.wc_state != domain_w_state.wc_state)
-       	 	printf("domain_w: State %u.\n", ds2.wc_state);
+			 	 	printf("domain_w: State %u.\n", ds2.wc_state);
 	
-    domain_w_state = ds2;
+		domain_w_state = ds2;
 }
 
 
 
 void check_master_state(void)
 {
-    ec_master_state_t ms;
+		ec_master_state_t ms;
 
-    ecrt_master_state(master, &ms);
+		ecrt_master_state(master, &ms);
 
-    if (ms.slaves_responding != master_state.slaves_responding)
-        printf("%u slave(s).\n", ms.slaves_responding);
-    if (ms.al_states != master_state.al_states)
-        printf("AL states: 0x%02X.\n", ms.al_states);
-    if (ms.link_up != master_state.link_up)
-        printf("Link is %s.\n", ms.link_up ? "up" : "down");
+		if (ms.slaves_responding != master_state.slaves_responding)
+				printf("%u slave(s).\n", ms.slaves_responding);
+		if (ms.al_states != master_state.al_states)
+				printf("AL states: 0x%02X.\n", ms.al_states);
+		if (ms.link_up != master_state.link_up)
+				printf("Link is %s.\n", ms.link_up ? "up" : "down");
 
-    master_state = ms;
+		master_state = ms;
 }
 
 /****************************************************************************/
@@ -243,13 +244,13 @@ void show_status(long status) {
 
 void cyclic_task()
 {
-    struct timespec wakeupTime, time;
-    // get current time
-    clock_gettime(CLOCK_TO_USE, &wakeupTime);
+		struct timespec wakeupTime, time;
+		// get current time
+		clock_gettime(CLOCK_TO_USE, &wakeupTime);
 
 	while(1) 
 	{
-	  if (deactive > 1) --deactive;
+		if (deactive > 1) --deactive;
 		if(deactive==1)
 		{
 			printf("stopping\n");
@@ -257,7 +258,7 @@ void cyclic_task()
 		}
 
 		wakeupTime = timespec_add(wakeupTime, cycletime);
-     		clock_nanosleep(CLOCK_TO_USE, TIMER_ABSTIME, &wakeupTime, NULL);
+		 		clock_nanosleep(CLOCK_TO_USE, TIMER_ABSTIME, &wakeupTime, NULL);
 
 		ecrt_master_receive(master);
 		ecrt_domain_process(domain_r);
@@ -265,13 +266,14 @@ void cyclic_task()
 		
 		long prev_status = temp[0];
 		long prev_pos;
-		long prev_error =temp[2];
+		long prev_error = temp[2];
 		long mode = temp[3];
 
 		temp[0]=EC_READ_U16(domain_w_pd + status_word);
 		temp[1]=EC_READ_U32(domain_w_pd + actual_pos);
 		temp[2]=EC_READ_U16(domain_w_pd + error_code);
 		temp[3]=EC_READ_U8(domain_w_pd + modeofop_display);
+		temp[4]=EC_READ_U32(domain_w_pd + following_actu_val);
 	
 		static int first_time = 1;
 
@@ -282,12 +284,13 @@ void cyclic_task()
 				printf("position: %ld\n", temp[1]);
 				printf("error: %ld\n", temp[2]);
 				printf("mode: %ld\n", temp[3]);
-				//EC_WRITE_U16(domain_r_pd+ctrl_word, 0x0080 );
+				EC_WRITE_U16(domain_r_pd+ctrl_word, 0x0080 );
 		}
 		else {
 				if (prev_status != temp[0]) {
 					printf("status change: %04lx to %04lx", prev_status, temp[0]);
 					show_status(temp[0]);
+					printf("\n");
 				}
 				long dist = prev_pos > temp[1] ? prev_pos - temp[1] : temp[1] - prev_pos; 
 				if (dist > 20) {
@@ -298,7 +301,7 @@ void cyclic_task()
 				if (prev_error != temp[2]) { printf("error change: %ld to %ld\n", prev_error, temp[2]); }
 				if (mode != temp[3]) { printf("mode change: %ld to %ld\n", mode, temp[3]); }
 		}
-    if (error_code) {
+		if (error_code) {
 			printf("attempting to reset error\n");
 
 			// reset from failure?
@@ -326,7 +329,7 @@ void cyclic_task()
 			EC_WRITE_U16(domain_r_pd+ctrl_word, 0x0080 );
 		}	
 
-		else if( (temp[0]&0x004f) == 0x0000  )
+		else if( (temp[0]&0x004f) == 0x0000	)
 		{
 			if (last_sent != 0x0001) {
 					printf("setting control word to 0x0001\n");
@@ -335,7 +338,7 @@ void cyclic_task()
 			last_sent = 0x0001;
 		}
 
-		else if( (temp[0]&0x004f) == 0x0040  )
+		else if( (temp[0]&0x004f) == 0x0040	)
 		{
 			if (last_sent != 0x0006) {
 				printf("setting control word to 0x0006\n");
@@ -358,7 +361,6 @@ void cyclic_task()
 			if (last_sent != 0x000f) {
 				printf("setting control word to 0x000f\n");
 				EC_WRITE_U16(domain_r_pd+ctrl_word, 0x000f);
-				EC_WRITE_S32(domain_r_pd+target_pos, temp[1] - 10000);
 				EC_WRITE_S32(domain_r_pd+modeofoper, 1);
 				last_sent = 0x000f;
 			}
@@ -368,10 +370,24 @@ void cyclic_task()
 		else if( (temp[0]&0x027f) == 0x0237)
 		{
 			// moving?
-			//EC_WRITE_S32(domain_r_pd+interpolateddata,( move_value+=1000 ));
-			//EC_WRITE_U16(domain_r_pd+ctrl_word, 0x001f);
+			EC_WRITE_S32(domain_r_pd+interpolateddata,( move_value+=1000 ));
+			EC_WRITE_U16(domain_r_pd+ctrl_word, 0x001f);
 		}
 
+		if((temp[0]&0x067f) == 0x637)
+		{
+			if(prev_target_pos == 0) {
+				prev_target_pos = 1000000;
+				EC_WRITE_S32(domain_r_pd+target_pos, prev_target_pos);
+				printf("set initial target %ld to %ld\n", temp[1], prev_target_pos);
+			}
+		/*	else if((temp[0]&0b010000000000) )
+			{
+				prev_target_pos = prev_target_pos + 10000;
+				EC_WRITE_S32(domain_r_pd+target_pos, prev_target_pos);
+				printf("setting target %ld to %ld\n", temp[1], prev_target_pos);
+			} */
+		}
 		else if( (temp[0]&0x067f) == 0x0637)
 		{
 			if (last_sent != 0x0007) {
@@ -412,92 +428,91 @@ void cyclic_task()
 
 int main(int argc, char **argv)
 {
-    ec_slave_config_t *sc;
+		ec_slave_config_t *sc;
 	
 	
-    if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) 
-    {
+		if (mlockall(MCL_CURRENT | MCL_FUTURE) == -1) 
+		{
 		perror("mlockall failed");
 		return -1;
 		}
 
-    master = ecrt_request_master(0);
-    if (!master)
-	        return -1;
+		master = ecrt_request_master(0);
+		if (!master)
+					return -1;
 
-    domain_r = ecrt_master_create_domain(master);
-    if (!domain_r)
-	        return -1;
+		domain_r = ecrt_master_create_domain(master);
+		if (!domain_r)
+					return -1;
 	
-    domain_w = ecrt_master_create_domain(master);
-    if (!domain_w)
-	        return -1;
+		domain_w = ecrt_master_create_domain(master);
+		if (!domain_w)
+					return -1;
 			
 	 	
-	    
-    if (!(sc = ecrt_master_slave_config(master, wecon, wecon_vd3e))) 
-    {
+			
+		if (!(sc = ecrt_master_slave_config(master, wecon, wecon_vd3e))) 
+		{
 	fprintf(stderr, "Failed to get slave1 configuration.\n");
-        return -1;
+				return -1;
 		}
-    
+		
 #if CONFIGURE_PDOS
 
-    printf("Configuring PDOs...\n");
+		printf("Configuring PDOs...\n");
 	
-    if (ecrt_slave_config_pdos(sc, EC_END, slave_0_syncs)) 
-    {
-        fprintf(stderr, "Failed to configure 1st PDOs.\n");
-        return -1;
+		if (ecrt_slave_config_pdos(sc, EC_END, slave_0_syncs)) 
+		{
+				fprintf(stderr, "Failed to configure 1st PDOs.\n");
+				return -1;
 		}
 	
 
 #endif
 
 	
-    if (ecrt_domain_reg_pdo_entry_list(domain_r, domain_r_regs)) 
-    {
-        fprintf(stderr, "1st motor RX_PDO entry registration failed!\n");
-        return -1;
+		if (ecrt_domain_reg_pdo_entry_list(domain_r, domain_r_regs)) 
+		{
+				fprintf(stderr, "1st motor RX_PDO entry registration failed!\n");
+				return -1;
 		}	
 	
-    if (ecrt_domain_reg_pdo_entry_list(domain_w, domain_w_regs)) 
-    {
-        fprintf(stderr, "1st motor TX_PDO entry registration failed!\n");
-        return -1;
+		if (ecrt_domain_reg_pdo_entry_list(domain_w, domain_w_regs)) 
+		{
+				fprintf(stderr, "1st motor TX_PDO entry registration failed!\n");
+				return -1;
 		}
 		
 	
-    ecrt_slave_config_dc(sc,0x0300,4000000,125000,0,0);  
+		ecrt_slave_config_dc(sc,0x0300,4000000,125000,0,0);	
 
-    printf("Activating master...\n");
+		printf("Activating master...\n");
 	
-    if (ecrt_master_activate(master))
-        return -1;
+		if (ecrt_master_activate(master))
+				return -1;
 
-    if (!(domain_r_pd = ecrt_domain_data(domain_r))) 
-    {
-        return -1;
+		if (!(domain_r_pd = ecrt_domain_data(domain_r))) 
+		{
+				return -1;
 		}
 
-    if (!(domain_w_pd = ecrt_domain_data(domain_w))) 
-    {
-        return -1;
+		if (!(domain_w_pd = ecrt_domain_data(domain_w))) 
+		{
+				return -1;
 		}
-
 	
-    pid_t pid = getpid();
-    if (setpriority(PRIO_PROCESS, pid, -20))
-        fprintf(stderr, "Warning: Failed to set priority: %s\n",
-                strerror(errno));
+		pid_t pid = getpid();
+		if (setpriority(PRIO_PROCESS, pid, -20))
+			fprintf(stderr, "Warning: Failed to set priority: %s\n",
+								strerror(errno));
 
 		signal( SIGINT , endsignal ); //interrupt program		
 		signal( SIGTERM , endsignal ); //interrupt program		
 		printf("Starting cyclic function.\n");
-  	cyclic_task();
+		cyclic_task();
 		ecrt_release_master(master);
 	
-    return 0;
+		return 0;
 }
 
 
