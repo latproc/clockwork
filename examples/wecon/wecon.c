@@ -56,7 +56,7 @@ static uint8_t *domain_w_pd = NULL;
 /***************************** 20140224	************************************/
 
 //signal to turn off servo on state
-static unsigned int user_interrupt;
+static unsigned int user_interrupt = 0;
 static unsigned int deactive;
 
 // offsets for PDO entries
@@ -493,6 +493,118 @@ int collect(int control_state) {
 		return returned_state;
 }
 
+/********* terminal *************/
+
+// note: commands have to end with ';'
+
+#include <sys/select.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <string.h>
+
+int started = 0;
+
+void process_command(const char *cmd) {
+		printf("executing: %s\n", cmd);
+		if (strcmp(cmd, "go") == 0) {
+				started = 1;
+				user_interrupt = 0;
+		}
+		else if (strncmp(cmd, "exit", 4) == 0) {
+				started = 0;
+				user_interrupt = 1;
+				deactive = 5000; // do 5000 more cycles and exit
+		}
+}
+
+char *terminal_buf = NULL;
+size_t terminal_bufsize = 0;
+
+void cleanup_terminal() {
+	if (terminal_buf != NULL) {
+		free(terminal_buf);
+		terminal_bufsize = 0;
+	}
+}
+
+void trim(char *buf) {
+		char *found = strchr(buf, '\n');
+		while (found) {
+				memmove(found, found+1, strlen(buf) - (found - buf));
+				found = strchr(buf, '\n');
+		}
+}
+
+void process_terminal_buf() {
+		if (terminal_bufsize == 0) { return; }
+		char *end = strchr(terminal_buf, ';');
+		while (end) {
+				size_t len = end - terminal_buf;
+				char buf[len + 1];
+				memmove(buf, terminal_buf, len);
+				buf[len] = 0;
+				memmove(terminal_buf, end + 1, strlen(terminal_buf) - len);
+				trim(buf);
+				process_command(buf);
+				end = strchr(terminal_buf, ';');
+		}
+}
+
+void read_terminal() {
+	if (terminal_buf == NULL) {
+			terminal_buf = malloc(40);
+			if (terminal_buf) {
+					terminal_bufsize = 40;
+					memset(terminal_buf, 0, terminal_bufsize);
+			}
+	}
+	char incoming[100];
+	int num_read = read(0, incoming, 100);
+	if (num_read == 0) {
+			if (errno != 0) {
+					perror("read()");
+			}
+			process_command("exit");
+			return;
+	}
+	if (num_read == -1) {
+			perror("read()");
+			user_interrupt = 1;
+	}
+	size_t input_len = strlen(terminal_buf);
+	size_t len = input_len + num_read;
+  if (len	>= terminal_bufsize) {
+			char * before = terminal_buf;
+			terminal_buf = realloc(terminal_buf, terminal_bufsize + len * 2);
+			if (terminal_buf != NULL && before != terminal_buf) { terminal_bufsize += len* 2; }
+	}
+	memcpy(terminal_buf + input_len, incoming, num_read);
+	terminal_buf[len] = 0;
+}
+
+void terminal_task() {
+		fd_set read_fds;
+		int nfds;
+		struct timeval timeout;
+		int res = 0;
+
+		FD_ZERO(&read_fds);
+		FD_SET(0, &read_fds);
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 0;
+		res = select(1, &read_fds, NULL, NULL, &timeout);
+		if (res == -1) {
+				perror("select()");
+		}
+		else if (res) {
+				read_terminal();
+				process_terminal_buf();
+		}
+}
+
+
+
 void cyclic_task()
 {
     struct timespec wakeupTime, time;
@@ -521,6 +633,8 @@ void cyclic_task()
 				printf("control state changed from %s to %s\n", control_state_str(control_state), control_state_str(new_state));
 				control_state = new_state;
 		}
+
+		terminal_task();
 		
 		if (counter) 
 		{
@@ -705,6 +819,7 @@ void cyclic_task()
 		ecrt_master_send(master);
 	}
 
+	cleanup_terminal();
 }
 
 #ifdef TESTING
@@ -721,9 +836,27 @@ void can_detect_bit() {
 		assert(status_includes(not_operational));
 }
 
+#include <sys/time.h>
+void terminal_works() {
+		struct timeval start;
+		struct timezone tz;
+		int res = gettimeofday(&start, &tz);
+		struct timeval now;
+		res = gettimeofday(&now, &tz);
+		while (!user_interrupt && now.tv_sec < start.tv_sec + 5) {
+				terminal_task();
+				res = gettimeofday(&now, &tz);
+		}
+		if (terminal_bufsize > 0) {
+				printf("terminal: %s\n", terminal_buf);
+		}
+		cleanup_terminal();
+}
+
 int main() {
 		can_detect_bit();
 		can_test_arrived();
+		terminal_works();
 }
 
 #else
@@ -810,8 +943,18 @@ int main(int argc, char **argv)
 
 		signal( SIGINT , endsignal ); //interrupt program		
 		signal( SIGTERM , endsignal ); //interrupt program		
-		printf("Starting cyclic function.\n");
-		cyclic_task();
+
+		printf("Ready to start. Enter commands separated by ';'\n");
+		printf("\navailable commands: go, exit\n\n");
+
+		while (!started && !user_interrupt) {
+				terminal_task();
+		}
+
+		if (user_interrupt == 0) {
+			printf("Starting cyclic function.\n");
+			cyclic_task();
+		}
 		ecrt_release_master(master);
 	
 		return 0;
