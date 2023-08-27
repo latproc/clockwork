@@ -46,6 +46,7 @@ iod.conf
 .vim
 LocalCMakeLists.txt
 LocalCMakeLists.cmake
+.clangd/
 
 # OS generated files #
 ######################
