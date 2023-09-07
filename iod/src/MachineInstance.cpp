@@ -2164,7 +2164,7 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
                                             const std::string short_name, bool response_required) {
     std::map<Message, MachineCommand *>::iterator receive_handler_i =
         receives_functions.find(Message(m.getText().c_str()));
-	  DBG_MSG << getName() << " " << state_machine->name  << " (" << current_state.getName() << ")"
+	  DBG_MESSAGING << getName() << " " << state_machine->name  << " (" << current_state.getName() << ")"
 						<< " receiving " << m.getText() << " short name: " << short_name << "\n";
 //    if (receive_handler_i == receives_functions.end()) {
 //	  	DBG_MSG << getName() << " no handler found for " << m.getText() << "\n";
@@ -2654,7 +2654,7 @@ void MachineInstance::handle(const Message &m, Transmitter *from, bool send_rece
 void MachineInstance::sendMessageToReceiver(const Message &message, Receiver *r, bool expect_reply) {
     MachineShadowInstance *msi = dynamic_cast<MachineShadowInstance *>(r);
     if (msi) {
-        DBG_MSG << _name << " sending message " << message << " to shadow " << r->getName() << "\n";
+        DBG_CHANNELS << _name << " sending message " << message << " to shadow " << r->getName() << "\n";
         std::string addressed_message = r->getName();
         addressed_message += ".";
         addressed_message += message.getText();

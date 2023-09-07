@@ -256,7 +256,7 @@ void initialise_machine_names(char *data) {
     }
     if (data) {
         cleanup();
-        const size_t buffer_size = 5000;
+        long buffer_size = 5000;
         char buf[buffer_size];
         char *p = data, *q = buf;
         while (*p) {
