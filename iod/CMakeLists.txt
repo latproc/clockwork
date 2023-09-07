@@ -5,16 +5,8 @@ set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 9.7)
 
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
-  # By default support EtherLab builds with EoE enabled
-  # this can be overridden in the LocalCMakeLists.txt file
-  set (SUPPORT_EOE true)
-endif()
-
-if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
-		  set(CMAKE_INSTALL_PREFIX "${PROJECT_SOURCE_DIR}/stage" CACHE PATH "..." FORCE)
-endif()
-
-if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
+  set(USE_ETHERCAT true)
+	set(USE_ETHERCAT_SOURCE true)
   # By default support EtherLab builds with EoE enabled
   # this can be overridden in the LocalCMakeLists.txt file
   set (SUPPORT_EOE true)
@@ -28,6 +20,7 @@ if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 	include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 
+if (USE_ETHERCAT)
 if (USE_SOEM)
 	add_subdirectory(ext/SOEM)
 	set(CW_ETHERCAT_DIR "${CMAKE_BINARY_DIR}/ext/SOEM")
@@ -40,7 +33,7 @@ if (USE_SOEM)
 	endif()
 
 endif()
-
+endif() # USE_ETHERCAT
 
 cmake_policy(SET CMP0008 NEW)
 cmake_policy(SET CMP0015 NEW)
@@ -214,7 +207,7 @@ set (Clockwork_Headers
 	src/ResetAction.h src/LoadPropertiesAction.h
 
 )
-if (USE_SOEM)
+if (USE_ETHERCAT)
 	LIST (APPEND Clockwork_Headers "src/EtherCATthread.h")
 endif()
 
@@ -248,6 +241,7 @@ set (Clockwork_SRCS
 	src/HandleRequestAction.cpp src/AutoStats.cpp src/Configuration.cpp
 	src/ResetAction.cpp src/LoadPropertiesAction.cpp
 	)
+if (USE_ETHERCAT)
 if (USE_SOEM)
 	include_directories("${PROJECT_SOURCE_DIR}/ext/SOEM/soem")
 	include_directories("${PROJECT_SOURCE_DIR}/ext/SOEM/osal")
@@ -262,6 +256,7 @@ if (USE_SOEM)
 
 	LIST (APPEND Clockwork_SRCS "src/EtherCATthread.cpp")
 endif()
+endif()
 add_library(cw_interpreter ${Clockwork_SRCS})
 set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 
@@ -270,6 +265,7 @@ set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 #target_link_libraries(cw cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES})
 target_link_libraries(cw cw_interpreter cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 
+if (USE_ETHERCAT)
 # Experimental cw with SOEM EtherCAT library support
 if(USE_SOEM)
 add_executable(cw_ecat src/cw.cpp) # ${Clockwork_SRCS})
@@ -278,8 +274,10 @@ target_link_directories(cw_ecat PRIVATE "${CW_ETHERCAT_DIR}")
 target_link_libraries(cw_ecat cw_interpreter cw_client "dl" ${CW_ETHERCAT_LIB} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 endif()
 
-
-if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
+if(USE_ETHERCAT_SOURCE)
+if (NOT EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
+	message("Cannot find EtherLab source")
+endif()
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
 set (ectool_extras "")
 if (EXISTS "${ETHERCAT_DIR}/tool/CommandDiag.cpp")
@@ -353,8 +351,10 @@ INCLUDE_DIRECTORIES(${ETHERCAT_DIR})
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/tool)
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/include)
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/master)
-INCLUDE_DIRECTORIES(${LIBXML2_INCLUDE_DIR})
 LINK_DIRECTORIES(${ETHERCAT_DIR}/lib/.libs)
+endif()
+
+INCLUDE_DIRECTORIES(${LIBXML2_INCLUDE_DIR})
 LINK_DIRECTORIES("LIBXML2_LIBRARIES")
 
 add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp

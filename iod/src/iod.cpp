@@ -38,7 +38,6 @@
 #include <map>
 #include <utility>
 #ifndef EC_SIMULATOR
-#include <tool/MasterDevice.h>
 #ifdef USE_SDO
 #include "SDOEntry.h"
 #endif //USE_SDO

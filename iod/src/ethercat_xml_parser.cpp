@@ -10,7 +10,6 @@
 #include <iterator>
 #include <libxml/xmlreader.h>
 #include <map>
-#include <tool/MasterDevice.h>
 
 using namespace std;
 

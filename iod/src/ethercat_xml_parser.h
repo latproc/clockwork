@@ -11,7 +11,6 @@
 #include <iterator>
 #include <libxml/xmlreader.h>
 #include <map>
-#include <tool/MasterDevice.h>
 
 struct ConfigurationDetails {
     EntryDetails *c_entry_details;

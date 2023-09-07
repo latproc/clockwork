@@ -1805,9 +1805,6 @@ bool ECInterface::stop() {
 
 #ifdef USE_ETHERCAT
 
-#include <Command.h>
-typedef list<Command *> CommandList;
-
 // in a real environment we can look for devices on the bus
 
 ec_pdo_entry_info_t *c_entries = 0;
