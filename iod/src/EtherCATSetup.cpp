@@ -38,7 +38,6 @@
 #include <utility>
 #ifndef EC_SIMULATOR
 #include <iostream>
-#include <tool/MasterDevice.h>
 #endif
 
 #define __MAIN__
