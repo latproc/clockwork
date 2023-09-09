@@ -25,6 +25,14 @@ EK1814_IN_1  POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EK1814, 5
 EK1814_IN_2  POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EK1814, 6;
 EK1814_IN_3  POINT (type:Input, tab:Inputs, image:input64x64) Beckhoff_EK1814, 7;
 
+#SDO_1_MicroIncrements SDO(default:1) Beckhoff_EL5152, 0x8000, 0x0A, 1;
+#SDO_1_FrequencyWindow SDO(default:20000) Beckhoff_EL5152, 0x8000, 0x11, 16;
+#SDO_1_FrequencyWaitTime SDO(default:100) Beckhoff_EL5152, 0x8000, 0x17, 16;
+#
+#SDO_2_MicroIncrements SDO(default:1) Beckhoff_EL5152, 0x8010, 0x0A, 1;
+#SDO_2_IndexFrequencyWindow SDO(default:20000) Beckhoff_EL5152, 0x8010, 0x11, 16;
+#SDO_2_GrabIndexFrequencyWaitTime SDO(default:100) Beckhoff_EL5152, 0x8010, 0x17, 16;
+
 # Define a machine called 'STARTUP' to take control of the startup sequence.
 STARTUP MACHINE modules, points {
   GLOBAL ETHERCAT;
