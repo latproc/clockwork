@@ -136,6 +136,8 @@ class IODHardwareActivation : public HardwareActivation {
         DBG_INITIALISATION << "----------- Initialising machines ------------\n";
         initialise_machines();
     }
+
+    bool initialiseHardware() override { return true; }
 };
 
 void write_pin_definitions(std::ostream &out) {

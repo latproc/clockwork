@@ -1270,7 +1270,7 @@ void load_properties_file(const std::string &filename, bool only_persistent) {
     }
 }
 
-void initialise_machines() {
+bool initialise_machines() {
 
     std::list<MachineInstance *>::iterator m_iter;
 
@@ -1291,4 +1291,5 @@ void initialise_machines() {
 
     // let channels start processing messages
     Channel::startChannels();
+    return true;
 }

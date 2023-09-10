@@ -11,9 +11,10 @@
 #include <list>
 class MockSystemSetup {
   public:
-    class IODHardwareActivation : public HardwareActivation {
+    class MockHardwareActivation : public HardwareActivation {
       public:
-        void operator()(void) { initialise_machines(); }
+        bool initialiseHardware() override { return initialise_machines(); }
+        void operator()(void) override { }
     };
     MockSystemSetup() {
         // TODO: lots of setup needed here...
@@ -29,5 +30,5 @@ class MockSystemSetup {
     void activate() { iod_activation(); }
 
   private:
-    IODHardwareActivation iod_activation;
+    MockHardwareActivation iod_activation;
 };
