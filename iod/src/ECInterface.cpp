@@ -217,11 +217,11 @@ void SDOEntry::resolveSDOModules() {
         if (entry->getModule()) {
             // this occurs when an entry has been automatically setup in the code
             // (only done for EL2535 modules as a temporary measure to be removed)
-            std::cout << "Module already linked to SDO entry " << entry->getName() << "\n";
+            std::cerr << "Module already linked to SDO entry " << entry->getName() << "- replacing old entry\n";
             iter = new_sdo_entries.erase(iter);
             continue;
         }
-        std::cout << "Attempting to prepare SDO entry: " << entry->getName() << "\n";
+        DBG_ETHERCAT << "Attempting to prepare SDO entry: " << entry->getName() << "\n";
         MachineInstance *mi = MachineInstance::find(entry->getModuleName().c_str());
         if (mi) {
             int module_position = mi->properties.lookup("position").iValue;
@@ -230,22 +230,22 @@ void SDOEntry::resolveSDOModules() {
                 module = ECInterface::findModule(module_position);
             }
             if (module && entry->prepareRequest(module)) {
-                std::cout << "Prepared SDO entry: " << entry->getName() << "\n";
+                DBG_ETHERCAT << "Prepared SDO entry: " << entry->getName() << "\n";
                 iter = new_sdo_entries.erase(iter);
                 if (entry->machineInstance() &&
                     entry->machineInstance()->properties.exists("default")) {
                     const Value &val = entry->machineInstance()->properties.lookup("default");
-                    std::cout << "setting default value of " << entry->getName() << " to " << val
+                    DBG_ETHERCAT << "setting default value of " << entry->getName() << " to " << val
                               << "\n";
                     ECInterface::instance()->queueInitialisationRequest(entry, val);
                 }
                 else {
-                    std::cout << "no default value for " << entry->getName() << "\n";
+                    DBG_ETHERCAT << "no default value for " << entry->getName() << "\n";
                 }
                 ECInterface::instance()->queueRuntimeRequest(entry);
             }
             else {
-                std::cout << "Warning: failed to prepare SDO entry: " << entry->getName() << "\n";
+                DBG_ETHERCAT << "Warning: failed to prepare SDO entry: " << entry->getName() << "\n";
                 iter++;
             }
         }
@@ -330,7 +330,7 @@ ec_sdo_request_t *SDOEntry::prepareRequest(ECModule *module) {
     // our bit-sized fields before creating the sdo request
     size_t sz = ((size_ + offset_ - 1) / 8) + 1;
 
-    std::cerr << "Creating SDO request " << module->getName() << " 0x" << std::hex << index_ << ":"
+    DBG_ETHERCAT << "Creating SDO request " << module->getName() << " 0x" << std::hex << index_ << ":"
               << subindex_ << std::dec << " (" << sz << ")"
               << "\n";
     realtime_request = ecrt_slave_config_create_sdo_request(x, index_, subindex_, sz);
@@ -366,7 +366,7 @@ void ECInterface::queueInitialisationRequest(SDOEntry *entry, Value val) {
 void ECInterface::queueRuntimeRequest(SDOEntry *entry) { sdo_update_entries.push_back(entry); }
 
 void ECInterface::beginModulePreparation() {
-    std::cerr << "beginning module preparation\n";
+    DBG_ETHERCAT << "beginning module preparation\n";
     current_init_entry = initialisation_entries.begin();
     sdo_entry_state = e_None;
 }
@@ -466,7 +466,7 @@ void ECInterface::checkSDOUpdates() {
                 break;
             case SDOEntry::WRITE:
                 assert(false); // this should not be active
-                std::cerr << "SDO entry updates- trigger write\n";
+                DBG_ETHERCAT << "SDO entry updates- trigger write\n";
                 readValue(sdo, entry->getSize(), entry->getOffset());
                 ecrt_sdo_request_write(sdo); // trigger first read
                 sdo_entry_state = e_Busy_Update;
@@ -495,15 +495,26 @@ void ECInterface::checkSDOUpdates() {
             current_update_entry++;
             sdo_entry_state = e_None;
             break;
-        case EC_REQUEST_ERROR:
-            std::cerr << "Failed to read SDO!" << std::hex << "0x" << entry->getIndex() << ":"
-                      << (int)entry->getSubindex() << std::dec << "\n";
+        case EC_REQUEST_ERROR: {
+            std::stringstream error;
+            error << "Failed to read SDO!" << std::hex << "0x" << entry->getIndex() << ":"
+                  << (int)entry->getSubindex() << std::dec;
+            MessageLog::instance()->add(error.str());
+            NB_MSG << error.str() << "\n";
             entry->failure();
             current_update_entry++; // move on to the next item and retry soon
             sdo_entry_state = e_None;
+                        }
             break;
         default:
-            std::cerr << "unexpected sdo request state: " << state << "\n";
+            {
+            std::stringstream error;
+            error << "unexpected sdo request state: " << state
+                << std::hex << "0x" << entry->getIndex()
+                << ":" << (int)entry->getSubindex() << std::dec;
+            MessageLog::instance()->add(error.str());
+            NB_MSG << error.str() << "\n";
+            }
         }
     }
 }
@@ -524,7 +535,7 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
         std::pair<SDOEntry *, Value> curr = *current_init_entry;
         SDOEntry *entry = curr.first;
         if (!entry) {
-            std::cerr << "Skipping null entry when checking SDO\n";
+            DBG_ETHERCAT << "Skipping null entry when checking SDO\n";
             current_init_entry++;
             return false;
         } // odd: no entry at this position
@@ -545,7 +556,7 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             else if (entry->getSize() == 32) {
                 entry->setData((uint32_t)curr.second.iValue);
             }
-            std::cerr << "SDO entry - trigger write " << curr.second << "\n";
+            DBG_ETHERCAT << "SDO entry - trigger write " << curr.second << "\n";
             readValue(sdo, entry->getSize());
             ecrt_sdo_request_write(sdo);
             sdo_entry_state = e_Busy_Initialisation;
@@ -561,10 +572,10 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             break;
         case EC_REQUEST_SUCCESS:
             if (entry->operation() == SDOEntry::READ) {
-                std::cerr << "SDO entry read\n";
+                DBG_ETHERCAT << "SDO entry read\n";
             }
             else {
-                std::cerr << "SDO entry written\n";
+                DBG_ETHERCAT << "SDO entry written\n";
             }
             entry->syncValue();
             entry->success();
@@ -574,12 +585,12 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             break;
         case EC_REQUEST_ERROR:
             if (entry->operation() == SDOEntry::READ) {
-                std::cerr << "Failed to read SDO entry ";
+                DBG_ETHERCAT << "Failed to read SDO entry ";
             }
             else {
-                std::cerr << "Failed to write SDO entry ";
+                DBG_ETHERCAT << "Failed to write SDO entry ";
             }
-            std::cerr << std::hex << "0x" << entry->getIndex() << ":" << (int)entry->getSubindex()
+            DBG_ETHERCAT << std::hex << "0x" << entry->getIndex() << ":" << (int)entry->getSubindex()
                       << std::dec << "\n";
             entry->failure();
             if (entry->getErrorCount() < 4) {
@@ -592,7 +603,7 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             sdo_entry_state = e_None;
             break;
         default:
-            std::cerr << "unexpected sdo request state: " << state << "\n";
+            DBG_ETHERCAT << "unexpected sdo request state: " << state << "\n";
         }
     }
     return false;
@@ -620,7 +631,9 @@ void ECInterface::registerModules() {
         ECModule *m = findModule(mi);
         assert(m);
         if (!m->ecrtMasterSlaveConfig(master)) {
-            std::cerr << "Failed to get slave configuration.\n";
+            auto error = "Failed to get slave configuration.";
+                        MessageLog::instance()->add(error);
+                        DBG_ETHERCAT << error << "\n";
             return;
         }
         assert(m->slave_config);
@@ -1250,9 +1263,9 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 }
 
 void ECInterface::receiveState() {
-	  static long warned = 0;
+      static long warned = 0;
     if (!master || !initialised) {
-				if (warned++ %100 == 0)
+                if (warned++ %100 == 0)
             std::cerr << "master not ready to receive state "
                 << ( (!master) ? "(no master)" : "(!initialised)") 
                 << "\n" << std::flush;
@@ -1895,7 +1908,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
                     snprintf(index_str, 40, "0x%04X (%d)", pdo.index, pdo.index);
                     cJSON_AddStringToObject(json_pdo, "index", index_str);
                     cJSON_AddNumberToObject(json_pdo, "entry_count", pdo.n_entries);
-										snprintf(pdo_name, 40, "pdo-%04X", pdo.index);
+                                        snprintf(pdo_name, 40, "pdo-%04X", pdo.index);
                     cJSON_AddStringToObject(json_pdo, "name", pdo_name); // TODO: Find the name
                     std::cout << "sync: " << i << " pdo: " << j << " " << ": ";
                     c_pdos[j + pdo_pos].index = pdo.index;
@@ -1913,8 +1926,8 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
                             cJSON *json_entry = cJSON_CreateObject();
 
                             ecrt_master_get_pdo_entry(m, slave.position, i, j, k, &entry);
-														char entry_name[40];
-														snprintf(entry_name, 20, "entry-%X-%X", entry.index, entry.subindex);
+                                                        char entry_name[40];
+                                                        snprintf(entry_name, 20, "entry-%X-%X", entry.index, entry.subindex);
                             std::cout << " entry: " << k
                                     << "{"
                                     << entry_pos << ", "
@@ -1923,7 +1936,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
                                     << (int)entry.subindex << ", "
                                     << (int)entry.bit_length << ", "
                                     << entry_name
-																		<< "}";
+                                    << "}";
                             c_entries[entry_pos].index = entry.index;
                             c_entries[entry_pos].subindex = entry.subindex;
                             c_entries[entry_pos].bit_length = entry.bit_length;
