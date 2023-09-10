@@ -279,7 +279,7 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
             case 2: {
 #if VERBOSE_DEBUG
                 DBG_MSG << " send stage: " << (int)stage << " " << "4\n";
-                {uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
+                //{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
                 zmq::message_t iomsg(4);
                 memcpy(iomsg.data(), (void *)&size, 4);
@@ -714,8 +714,7 @@ void EtherCATThread::operator()() {
         next_ecat_receive = microsecs() + period / 2;
         ECInterface::instance()->receiveState();
 
-        if (machine_is_ready && ECInterface::instance()->getUpdateData()
-                && ECInterface::instance()->getProcessMask()) {
+        if (machine_is_ready && ECInterface::instance()->getProcessMask()) {
             global_clock = updateClock(global_clock);
             if (status == e_collect) {
                 DBG_ETHERCAT << "Asking ECInterface to collect state\n";
