@@ -495,7 +495,7 @@ void ECInterface::checkSDOUpdates() {
             case SDOEntry::WRITE:
                 assert(false); // this should not be active
                 DBG_ETHERCAT << "ecrt_sdo_request_write\n";
-                std::cerr << "SDO entry updates- trigger write\n";
+                DBG_ETHERCAT << "SDO entry updates- trigger write\n";
                 readValue(sdo, entry->getSize(), entry->getOffset());
                 ecrt_sdo_request_write(sdo); // trigger first read
                 sdo_entry_state = e_Busy_Update;
