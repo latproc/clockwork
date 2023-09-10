@@ -297,14 +297,17 @@ class IODHardwareActivation : public HardwareActivation {
     IODHardwareActivation() : setup_done(false) {}
     bool initialiseHardware() {
         assert(!setup_done);
-        setup_done = true;
         if (setupEtherCatThread()) {
 #ifdef USE_SDO
             ECInterface::instance()->beginModulePreparation();
 #endif
+            DBG_INITIALISATION << "EtherCAT thread setup ok\n";
+            setup_done = true;
             return true;
         }
         else {
+            DBG_MSG << "Warning: ECInterface failed to setup the EtherCAT thread\n";
+            assert(false);
             return false;
         }
     }

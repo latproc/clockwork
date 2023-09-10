@@ -1094,7 +1094,9 @@ void ECInterface::init() {
     DBG_ETHERCAT << "ecrt_request_master\n";
     master = ecrt_request_master(0);
     if (!master) {
+        DBG_MSG << "Failed to obtain access to the EtherCAT master\n";
         initialised = false;
+        assert(master);
         return;
     }
     /*  trying to work out how to increase the master debug level
@@ -1751,6 +1753,10 @@ void ECInterface::check_master_state(void) {
             // if the master was active before the link went down,
             // automatically activate it again (with reset) now the link is back
             if (active) {
+                char buf[100];
+                snprintf(buf, 100, "Automatically reactivating the EtherCAT master");
+                MessageLog::instance()->add(buf);
+                DBG_MSG << buf << "\n";
                 activate();
             }
             else {
