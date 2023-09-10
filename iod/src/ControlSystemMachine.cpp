@@ -50,12 +50,12 @@ bool ControlSystemMachine::connected() const {
 void ControlSystemMachine::requestActivation(bool which) {
 		DBG_MSG << "requesting activation of control system\n";
     activate_requested = which;
-    deactivate_requested = false;
+    if (activate_requested) { deactivate_requested = false; }
 }
 bool ControlSystemMachine::activationRequested() { return activate_requested; }
 void ControlSystemMachine::requestDeactivation(bool which) {
     deactivate_requested = which;
-    activate_requested = false;
+    if (deactivate_requested) { activate_requested = false; }
 }
 bool ControlSystemMachine::deactivationRequested() { return deactivate_requested; }
 
