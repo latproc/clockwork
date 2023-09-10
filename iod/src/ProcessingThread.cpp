@@ -45,6 +45,7 @@
 #include "clockwork.h"
 #include "options.h"
 #include "symboltable.h"
+#include "IOInterface.h"
 
 #include "Channel.h"
 #include "ControlSystemMachine.h"
@@ -386,6 +387,40 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     }
 }
 
+ProcessingThread::ProcessingState ProcessingThread::poll_machines() {
+#ifdef KEEPSTATS
+                    avg_clockwork_time.start();
+#endif
+                    std::set<MachineInstance *> to_process;
+                    {
+                        boost::recursive_mutex::scoped_lock lock(runnable_mutex);
+                        std::set<MachineInstance *>::iterator iter = runnable.begin();
+                        while (iter != runnable.end()) {
+                            MachineInstance *mi = *iter;
+                            if (mi->executingCommand() || !mi->pendingEvents().empty() ||
+                                mi->hasMail()) {
+                                to_process.insert(mi);
+                                if (!mi->queuedForStableStateTest()) {
+                                    iter = runnable.erase(iter);
+                                }
+                                else {
+                                    iter++;
+                                }
+                            }
+                            else {
+                                iter++;
+                            }
+                        }
+                    }
+
+                    if (!to_process.empty()) {
+                        DBG_SCHEDULER << "processing " << to_process.size() << " machines\n";
+                        MachineInstance::processAll(to_process, 150000,
+                                                    MachineInstance::NO_BUILTINS);
+                    }
+                    return eStableStates;
+}
+
 void ProcessingThread::operator()() {
 
 #ifdef __APPLE__
@@ -469,7 +504,7 @@ void ProcessingThread::operator()() {
 
     bool commands_started = false;
 
-    enum { eIdle, eStableStates, ePollingMachines } processing_state = eIdle;
+    ProcessingState processing_state = eIdle;
     std::set<IOComponent *> io_work_queue;
 
     //  we need to stop polling io (ie exit) if the control threads do not seem
@@ -923,37 +958,7 @@ void ProcessingThread::operator()() {
             const int num_loops = 1;
             for (int i = 0; i < num_loops; ++i) {
                 if (processing_state == ePollingMachines) {
-#ifdef KEEPSTATS
-                    avg_clockwork_time.start();
-#endif
-                    std::set<MachineInstance *> to_process;
-                    {
-                        boost::recursive_mutex::scoped_lock lock(runnable_mutex);
-                        std::set<MachineInstance *>::iterator iter = runnable.begin();
-                        while (iter != runnable.end()) {
-                            MachineInstance *mi = *iter;
-                            if (mi->executingCommand() || !mi->pendingEvents().empty() ||
-                                mi->hasMail()) {
-                                to_process.insert(mi);
-                                if (!mi->queuedForStableStateTest()) {
-                                    iter = runnable.erase(iter);
-                                }
-                                else {
-                                    iter++;
-                                }
-                            }
-                            else {
-                                iter++;
-                            }
-                        }
-                    }
-
-                    if (!to_process.empty()) {
-                        DBG_SCHEDULER << "processing " << to_process.size() << " machines\n";
-                        MachineInstance::processAll(to_process, 150000,
-                                                    MachineInstance::NO_BUILTINS);
-                    }
-                    processing_state = eStableStates;
+                    processing_state = poll_machines();
                 }
                 if (processing_state == eStableStates) {
                     std::set<MachineInstance *> to_process;
@@ -1016,8 +1021,9 @@ void ProcessingThread::operator()() {
                         ++stage;
                     }
                     case 2: {
-                        uint8_t packet_type = 2;
-                        packet_type = machine.activationRequested() ? 3 : 4;
+                        auto packet_type = machine.activationRequested()
+                            ? IOInterface::MessageType::ACTIVATE_REQUEST
+                            : IOInterface::MessageType::DEACTIVATE_REQUEST;
                         zmq::message_t iomsg(1);
                         memcpy(iomsg.data(), (void *)&packet_type, 1);
                         ecat_out.send(iomsg);
@@ -1076,9 +1082,9 @@ void ProcessingThread::operator()() {
                                 ++stage;
                             }
                             case 2: {
-                                uint8_t packet_type = 2;
+                                auto packet_type = IOInterface::MessageType::PROCESS_DATA;
                                 if (IOComponent::getHardwareState() != IOComponent::s_operational) {
-                                    packet_type = 1;
+                                    packet_type = IOInterface::MessageType::DEFAULT_DATA;
                                 }
                                 zmq::message_t iomsg(1);
                                 memcpy(iomsg.data(), (void *)&packet_type, 1);

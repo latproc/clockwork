@@ -20,6 +20,8 @@
 
 #include "ECInterface.h"
 #include "MessageLog.h"
+#include "IOInterface.h"
+#include <ostream>
 #include <sstream>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -121,12 +123,6 @@ static void display(uint8_t *p, size_t len) {
 
 enum DriverState { s_driver_init, s_driver_operational };
 DriverState driver_state = s_driver_init;
-// data from clockwork should be one of these two types.
-// process data will only be used if default data has been sent
-const int DEFAULT_DATA = 1;
-const int PROCESS_DATA = 2;
-const int ACTIVATE_REQUEST = 3;
-const int DEACTIVATE_REQUEST = 4;
 
 size_t default_data_size = 0;
 uint8_t *default_data = 0;
@@ -443,7 +439,7 @@ bool EtherCATThread::getEtherCatResponse(zmq::socket_t *sync_sock, uint64_t glob
 }
 bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
     zmq::message_t output_update;
-    uint8_t packet_type = 0;
+    IOInterface::MessageType packet_type;
     uint32_t len = 0;
     {
         zmq::message_t iomsg;
@@ -475,7 +471,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         assert(iomsg.size() == sizeof(packet_type));
         memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
         if (driver_state == s_driver_init) {
-            if (packet_type == DEFAULT_DATA) {
+            if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
                 DBG_MSG << "received initial values from clockwork; size: " << len
                         << " packet: " << (int)packet_type << "\n";
             }
@@ -487,14 +483,14 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         //      else {
         //          DBG_ETHERCAT << "WARNING: read packet type but driver is not in state init\n";
         //      }
-        if (packet_type == DEFAULT_DATA || packet_type == PROCESS_DATA) {
+        if (packet_type == IOInterface::MessageType::DEFAULT_DATA || packet_type == IOInterface::MessageType::PROCESS_DATA) {
             int64_t more = 0;
             size_t more_size = sizeof(more);
             out_sock.getsockopt(ZMQ_RCVMORE, &more, &more_size);
             assert(more);
         }
     }
-    if (packet_type == DEFAULT_DATA || packet_type == PROCESS_DATA) {
+    if (packet_type == IOInterface::MessageType::DEFAULT_DATA || packet_type == IOInterface::MessageType::PROCESS_DATA) {
         {
             zmq::message_t iomsg;
             recv(out_sock, iomsg);
@@ -502,7 +498,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
             memcpy(cw_data, iomsg.data(), iomsg.size());
             assert(iomsg.size() == len);
 
-            if (packet_type == DEFAULT_DATA) {
+            if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
                 //TBD. this hack removes a dependency inside ECInterface but more work is needed
                 // to cleanup this initialisation
                 ECInterface::instance()->setAppProcessMask(IOComponent::getProcessMask(),
@@ -511,12 +507,12 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         }
 #if VERBOSE_DEBUG
         if (!default_data) {
-            assert(packet_type == DEFAULT_DATA);
+            assert(packet_type == IOInterface::MessageType::DEFAULT_DATA);
             DBG_ETHERCAT << "received default data from driver\n";
             display(cw_data, len);
             DBG_ETHERCAT << "\n";
         }
-        else if (packet_type == PROCESS_DATA) {
+        else if (packet_type == IOInterface::MessageType::PROCESS_DATA) {
             std::cout << "p:";
             display(cw_data, len);
             DBG_ETHERCAT << "\n";
@@ -539,7 +535,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
             }
         }
     }
-    if (packet_type == ACTIVATE_REQUEST) {
+    if (packet_type == IOInterface::MessageType::ACTIVATE_REQUEST) {
         std::cout << "---------------- Activate\n";
         if (ECInterface::instance()->activate()) {
             safeSend(out_sock, "ok", 2);
@@ -548,20 +544,20 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
             safeSend(out_sock, "nack", 2);
         }
     }
-    else if (packet_type == DEACTIVATE_REQUEST) {
+    else if (packet_type == IOInterface::MessageType::DEACTIVATE_REQUEST) {
         std::cout << "---------------- Deactivate\n";
         IOComponent::reset();
         assert(ECInterface::instance()->deactivate());
         IOComponent::setHardwareState(IOComponent::s_hardware_preinit);
         safeSend(out_sock, "ok", 2);
     }
-    else if (packet_type == DEFAULT_DATA) {
+    else if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
         setDefaultData(len, cw_data, cw_mask);
         delete[] cw_mask;
         delete[] cw_data;
         safeSend(out_sock, "ok", 2);
     }
-    else if (packet_type == PROCESS_DATA) {
+    else if (packet_type == IOInterface::MessageType::PROCESS_DATA) {
         if (driver_state == s_driver_init) {
             if (!default_data) {
                 std::cerr << "WARNING: Getting process data from driver with no default set\n";
