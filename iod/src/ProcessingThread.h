@@ -39,6 +39,9 @@ class ProcessingThread : public ClockworkProcessManager {
     static void suspend(MachineInstance *m);
     static bool is_pending(MachineInstance *m);
 
+    enum ProcessingState { eIdle, eStableStates, ePollingMachines };
+    ProcessingState poll_machines();
+
     void operator()();
 
     void stop();
