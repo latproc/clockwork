@@ -19,6 +19,7 @@
 */
 
 #include "ECInterface.h"
+#include "MessageLog.h"
 #include <sstream>
 #include <stdio.h>
 #include <sys/stat.h>

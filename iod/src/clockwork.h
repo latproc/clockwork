@@ -24,6 +24,9 @@
 #include <list>
 #include <string>
 
+class MachineInstance;
+class Value;
+
 extern std::list<std::string> error_messages;
 extern int num_errors;
 
