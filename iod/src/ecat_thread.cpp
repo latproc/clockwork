@@ -89,7 +89,9 @@ static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
     }
     catch (const zmq::error_t &err) {
         if (zmq_errno() == EINTR) {
-            std::cout << "ecat_thread interrupted in recv\n";
+            auto buf = "ecat_thread interrupted in recv";
+            MessageLog::instance()->add(buf);
+            std::cerr << buf << "\n" << std::flush;
             return false;
         }
         assert(false);

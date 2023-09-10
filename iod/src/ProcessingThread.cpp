@@ -22,6 +22,7 @@
 #include "boost/filesystem/operations.hpp"
 #include "boost/filesystem/path.hpp"
 #include <assert.h>
+#include <sstream>
 #include <stdio.h>
 #include <unistd.h>
 #include <zmq.hpp>
@@ -297,8 +298,10 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                     }
                     catch (const zmq::error_t &ex) {
                         if (zmq_errno() == EINTR) {
-                            NB_MSG << "interrupted when sending update (" << (unsigned int)stage
-                                   << ")\n";
+                            std::stringstream err;
+                            err << "interrupted when sending update (" << (unsigned int)stage
+                                   << ")";
+                            MessageLog::instance()->add(err.str());
                             continue;
                         }
                         else {
@@ -989,6 +992,12 @@ void ProcessingThread::operator()() {
                     }
                 }
             }
+        }
+        if (machine.activationRequested()) {
+            DBG_MSG << "activation requested, status == e_waiting?: " << (status == e_waiting)
+                    << " device list empty?: " << IOComponent::devices.empty()
+                    << " update_state == s_update_idle?: " << (update_state == s_update_idle)
+                    << "\n";
         }
         // send a message to the ethercat thread requesting activation
         // or deactivation of the master
