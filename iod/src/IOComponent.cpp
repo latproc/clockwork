@@ -36,7 +36,7 @@
 #include "ProcessingThread.h"
 #include "buffering.c"
 
-#define VERBOSE_DEBUG 1
+#define VERBOSE_DEBUG 0
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 /* byte swapping macros using either custom code or the network byte order std functions */
@@ -179,7 +179,7 @@ bool IOComponent::updates_sent = false;
 
 IOComponent::HardwareState IOComponent::getHardwareState() { return hardware_state; }
 void IOComponent::setHardwareState(IOComponent::HardwareState state) {
-    const char *hw_state_str = "Hardware preinitialisatio";
+    const char *hw_state_str = "Hardware preinitialisation";
     if (state == s_hardware_init) {
         hw_state_str = "Hardware Initialisation";
     }
@@ -1429,12 +1429,12 @@ void IOComponent::setupIOMap() {
     if (indexed_components) {
         delete indexed_components;
     }
-    std::cout << "\n\n setupIOMap\n";
+    //std::cout << "\n\n setupIOMap\n";
     // find the highest and lowest offset location within the process data
     std::list<IOComponent *>::iterator iter = processing_queue.begin();
     while (iter != processing_queue.end()) {
         IOComponent *ioc = *iter++;
-        std::cout << ioc->getName() << " " << ioc->address << "\n";
+        //std::cout << ioc->getName() << " " << ioc->address << "\n";
         unsigned int offset = ioc->address.io_offset;
         unsigned int bitpos = ioc->address.io_bitpos;
         offset += bitpos / 8;
@@ -1491,10 +1491,9 @@ void IOComponent::setupIOMap() {
             }
             cl->push_back(ioc);
             io_map[offset + i] = cl;
-            std::cout << "offset: " << (offset + i) << " io name: " << ioc->io_name << "\n";
+            //std::cout << "offset: " << (offset + i) << " io name: " << ioc->io_name << "\n";
         }
     }
-    std::cout << "\n\n\n";
     io_process_mask = generateProcessMask(io_process_mask, process_data_size);
 }
 
@@ -1559,7 +1558,6 @@ void IOComponent::markChange() {
 
 void IOComponent::handleChange(std::list<Package *> &work_queue) {
     assert(io_process_data);
-    //  std::cout << io_name << "::handleChange() " << last_event << "\n";
     uint8_t *offset = io_process_data + address.io_offset;
     int bitpos = address.io_bitpos;
     offset += (bitpos / 8);
