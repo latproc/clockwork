@@ -33,7 +33,7 @@ extern int num_errors;
 int loadOptions(int argc, char const *argv[], std::list<std::string> &files);
 int loadConfig(std::list<std::string> &files);
 
-void initialise_machines();
+bool initialise_machines();
 
 class ClockworkProcessManager {
   public:
