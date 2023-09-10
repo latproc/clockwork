@@ -4,7 +4,7 @@
 #include "AutoStats.h"
 #include "ClientInterface.h"
 #include "clockwork.h"
-#include <boost/thread/mutex.hpp>
+#include <boost/thread.hpp>
 #include <set>
 #include <zmq.hpp>
 
@@ -20,6 +20,8 @@ class ProcessingThreadInternals;
 class ControlSystemMachine;
 class CommandSocketInfo;
 class Channel;
+class MachineInstance;
+
 class ProcessingThread : public ClockworkProcessManager {
   public:
     ProcessingThreadInternals *internals;

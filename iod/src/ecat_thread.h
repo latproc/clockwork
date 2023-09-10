@@ -3,6 +3,8 @@
 
 #include "zmq.hpp"
 
+class Statistic;
+
 class EtherCATThread {
   public:
     static const char *ZMQ_Addr;
