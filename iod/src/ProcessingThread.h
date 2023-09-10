@@ -11,8 +11,8 @@
 class IOComponent;
 class HardwareActivation {
   public:
-    virtual ~HardwareActivation() {}
-    virtual bool initialiseHardware() { return true; }
+    virtual ~HardwareActivation() = default;
+    virtual bool initialiseHardware() = 0;
     virtual void operator()(void) {}
 };
 
