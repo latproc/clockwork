@@ -124,7 +124,7 @@ void EtherCATXMLParser::init() {
 uint64_t EtherCATXMLParser::intFromHex(const char *s) {
     char *rem = 0;
     errno = 0;
-    unsigned long res = strtol(s, &rem, 16);
+    uint64_t res = strtoll(s, &rem, 16);
     if (errno != 0) {
         std::cout << " error " << strerror(errno) << " converting " << s << " to an integer\n";
         return 0;
