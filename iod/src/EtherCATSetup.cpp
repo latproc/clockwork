@@ -221,14 +221,12 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                 unsigned int bitlen = module->pdo_entries[entry_position].bit_length;
 
                 if (direction == EC_DIR_OUTPUT) {
-#if 1
-                    std::cerr << "Adding new output device " << m->getName()
+                    DBG_ETHERCAT << "Adding new output device " << m->getName()
                               << " position: " << entry_position
                               << " name: " << module->entry_details[offset_idx].name
                               << " bit_pos: " << module->bit_positions[offset_idx]
                               << " offset: " << module->offsets[offset_idx] << " bitlen: " << bitlen
                               << "\n";
-#endif
                     IOAddress addr(IOComponent::add_io_entry(
                         ed->name.c_str(), module_position, module->offsets[offset_idx],
                         module->bit_positions[offset_idx], offset_idx, bitlen));
@@ -255,7 +253,7 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                     //sstr << m->getName() << "_IN_" << entry_position << std::flush;
                     //const char *name_str = sstr.str().c_str();
 #if 1
-                    std::cerr << "Adding new input device " << m->getName()
+                    DBG_ETHERCAT << "Adding new input device " << m->getName()
                               << " position: " << entry_position
                               << " name: " << module->entry_details[offset_idx].name
                               << " sm_idx: " << std::hex << ed->sm_index << std::dec
