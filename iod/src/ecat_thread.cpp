@@ -509,14 +509,14 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
 #if VERBOSE_DEBUG
         if (!default_data) {
             assert(packet_type == DEFAULT_DATA);
-            std::cout << "received default data from driver\n";
+            DBG_ETHERCAT << "received default data from driver\n";
             display(cw_data, len);
-            std::cout << "\n";
+            DBG_ETHERCAT << "\n";
         }
         else if (packet_type == PROCESS_DATA) {
             std::cout << "p:";
             display(cw_data, len);
-            std::cout << "\n";
+            DBG_ETHERCAT << "\n";
         }
 #endif
 
