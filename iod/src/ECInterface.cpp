@@ -1856,7 +1856,6 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
     free(name);
 
     if (slave.sync_count) {
-        ec_sync_info_t sync = {};
         // add pdo entries for this slave
         // note the assumptions here about the maximum number of entries, pdos and syncs we expect
         const int c_entries_size = sizeof(ec_pdo_entry_info_t) * estimated_max_entries;
@@ -1965,7 +1964,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
                 }
                 cJSON_AddItemToObject(json_sync, "pdos", json_pdos);
             }
-            pdo_pos += sync.n_pdos;
+            pdo_pos += c_syncs[i].n_pdos;
             cJSON_AddItemToArray(json_syncs, json_sync);
         }
         cJSON_AddItemToObject(root, "sync_managers", json_syncs);
