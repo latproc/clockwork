@@ -693,6 +693,9 @@ void ECInterface::configureModules() {
             if (dir == EC_DIR_OUTPUT) {
                 m->syncs[i].watchdog_mode = EC_WD_ENABLE;
             }
+            else {
+                m->syncs[i].watchdog_mode = EC_WD_DEFAULT;
+            }
 
             res = ecrt_slave_config_sync_manager(m->slave_config, m->syncs[i].index,
                                                  m->syncs[i].dir, m->syncs[i].watchdog_mode);
