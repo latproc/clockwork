@@ -174,11 +174,11 @@ static uint32_t incoming_data_size;
 static uint64_t global_clock = 0;
 
 #if VERBOSE_DEBUG
-static void display(uint8_t *p) {
+static void display(std::ostream & out, uint8_t *p) {
     int max = IOComponent::getMaxIOOffset();
     int min = IOComponent::getMinIOOffset();
     for (int i = min; i <= max; ++i) {
-        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
+        out << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
                   << std::dec;
     }
 }
@@ -229,9 +229,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             // clock
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
-#if VERBOSE_DEBUGx
-                            DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
-#endif
+                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
                             assert(msglen == sizeof(global_clock));
                             memcpy(&global_clock, message.data(), msglen);
                             ++stage;
@@ -241,9 +239,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             // data length
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
-#if VERBOSE_DEBUGx
-                            DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
-#endif
+                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
                             assert(msglen == sizeof(incoming_data_size));
                             memcpy(&incoming_data_size, message.data(), msglen);
                             len = incoming_data_size;
@@ -259,18 +255,16 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             zmq::message_t message;
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
-#if VERBOSE_DEBUGx
-                            DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
-#endif
+                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
                             assert(msglen == incoming_data_size);
                             if (!incoming_process_data) {
                                 incoming_process_data = new uint8_t[msglen];
                             }
                             memcpy(incoming_process_data, message.data(), msglen);
 #if VERBOSE_DEBUG
-                            std::cout << std::flush << "got data: ";
-                            display(incoming_process_data);
-                            std::cout << "\n" << std::flush;
+                            DBG_PROCESSING << std::flush << "got data: ";
+                            display(std::cout, incoming_process_data);
+                            DBG_PROCESSING << "\n" << std::flush;
 #endif
                             ++stage;
                         }
@@ -280,9 +274,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             assert(more);
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
-#if VERBOSE_DEBUGx
-                            DBG_MSG << "recv stage: " << (int)stage << " " << msglen << "\n";
-#endif
+                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
                             assert(msglen == incoming_data_size);
                             if (!incoming_process_mask) {
                                 incoming_process_mask = new uint8_t[msglen];
@@ -290,14 +282,14 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             memcpy(incoming_process_mask, message.data(), msglen);
 #if VERBOSE_DEBUG
                             std::cout << "got mask: ";
-                            display(incoming_process_mask);
+                            display(std::cout, incoming_process_mask);
                             std::cout << "\n";
 #endif
                             ++stage;
                             break;
                         }
                         default: {
-                            DBG_MSG << "unexpected stage " << (int)stage << "\n";
+                            DBG_PROCESSING << "unexpected stage " << (int)stage << "\n";
                             assert(stage <= 4);
                         };
                         }
@@ -576,7 +568,7 @@ void ProcessingThread::operator()() {
                 machines_have_work = !runnable.empty() || !MachineInstance::pendingEvents().empty();
                 size_t runnable_count = runnable.size();
                 if (runnable_count != last_runnable_count) {
-                    //DBG_MSG << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
+                    //DBG_PROCESSING << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
                     last_runnable_count = runnable_count;
                 }
             }
@@ -625,7 +617,7 @@ void ProcessingThread::operator()() {
         // debug code to work out what machines or systems tend to need processing
         {
             if (systems_waiting > 0 || !io_work_queue.empty() || (machines_have_work || processing_state != eIdle || status != e_waiting)) {
-                DBG_MSG << "handling activity. zmq: " << systems_waiting << " state: " << processing_state << " substate: " << status
+                DBG_PROCESSING << "handling activity. zmq: " << systems_waiting << " state: " << processing_state << " substate: " << status
                         << ((items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
                         << ((IOComponent::updatesWaiting()) ? " io components" : "")
                         << ((!io_work_queue.empty()) ? " io work" : "")
@@ -659,7 +651,6 @@ void ProcessingThread::operator()() {
             break;
         }
         if (machine_is_ready && processing_state != eStableStates && !io_work_queue.empty()) {
-            DBG_MSG << " processing io changes\n";
 #ifdef KEEPSTATS
             AutoStat stats(avg_iowork_time);
 #endif
@@ -727,7 +718,6 @@ void ProcessingThread::operator()() {
             }
         }
         if (status == e_handling_dispatch) {
-            //DBG_MSG << " processing dispatcher\n";
             if (processing_state != eIdle) {
                 // cannot process dispatch events at present
                 status = e_waiting;
@@ -917,7 +907,9 @@ void ProcessingThread::operator()() {
             status = e_waiting_sched;
         }
 
-        if (machine.activationRequested()) { DBG_MSG << " activation requested\n";}
+        if (machine.activationRequested()) {
+            DBG_PROCESSING << " activation requested\n";
+        }
 
         if (status == e_waiting && machines_have_work &&
             curr_t - last_checked_machines >= machine_check_delay) {
@@ -1052,9 +1044,9 @@ void ProcessingThread::operator()() {
                     upd = IOComponent::getDefaults();
                     assert(upd);
 #if VERBOSE_DEBUG
-                    display(upd->data());
+                    display(std::cout, upd->data());
                     std::cout << ":";
-                    display(upd->mask());
+                    display(std::cout, upd->mask());
                     std::cout << "\n";
 #endif
                 }
@@ -1097,7 +1089,7 @@ void ProcessingThread::operator()() {
                                 zmq::message_t iomsg(size);
                                 memcpy(iomsg.data(), (void *)upd->mask(), size);
 #if VERBOSE_DEBUG
-                                DBG_ETHERCAT << "using mask: "; display(upd->mask()); std::cout << "\n";
+                                DBG_ETHERCAT << "using mask: "; display(std::cout, upd->mask()); std::cout << "\n";
 #endif
                                 ecat_out.send(iomsg);
                                 ++stage;
