@@ -13,6 +13,7 @@
 #include <libxml/xmlreader.h>
 #include <map>
 #include <ostream>
+#include <DebugExtra.h>
 
 struct ConfigurationDetails {
     EntryDetails *c_entry_details = 0;
@@ -88,7 +89,8 @@ struct DeviceInfo {
     ~DeviceInfo();
     bool operator==(const DeviceInfo &other) {
         DBG_INITIALISATION << "same product code?: " << (other.product_code == product_code)
-                           << " same revision?: " << (other.revision_no == revision_no) << "\n";
+                << " same revision?: " << (other.revision_no == revision_no)
+                << "\n";
         return other.product_code == product_code && other.revision_no == revision_no;
     }
     std::ostream &operator<<(std::ostream &out) const {
