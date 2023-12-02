@@ -61,6 +61,7 @@ Thumbs.db
 .vim/
 *.swp
 .cache/
+.clangd/
 
 #project build files
 iod/build/
@@ -72,6 +73,7 @@ modbus/xcode/
 etc/
 bin/
 iod/stage
+compile_commands.json
 
 #project runtime scraps
 modbus_mappings.bak
@@ -103,5 +105,7 @@ iod/persistd
 iod/iosh
 iod/device_connector
 iod/iocmd
+lib/
+ethercat-lib/
 examples/wecon/wecon
 examples/wecon/wecon-test
