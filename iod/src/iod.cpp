@@ -121,13 +121,13 @@ std::map<unsigned int, DeviceInfo *> slave_configuration;
 class ClockworkDeviceConfigurator : public DeviceConfigurator {
   public:
     bool configure(DeviceInfo *dev) {
-        std::cout << "collected configuration for device " << std::hex << " 0x" << dev->product_code
+        DBG_INITIALISATION << "collected configuration for device " << std::hex << " 0x" << dev->product_code
                   << " " << std::hex << " 0x" << dev->revision_no << "\n";
         std::list<DeviceInfo *>::iterator iter = collected_configurations.begin();
         while (iter != collected_configurations.end()) {
             const DeviceInfo *di = *iter++;
             if (*dev == *di) {
-                std::cout << " using item already found\n";
+                DBG_INITIALISATION << " using item already found\n";
                 return true;
             }
         }
@@ -138,7 +138,7 @@ class ClockworkDeviceConfigurator : public DeviceConfigurator {
 
 bool setupEtherCatThread() {
     if (!ECInterface::instance()->initialised) {
-        std::cout << "Cannect setup the EtherCAT thread until the interface is initialised\n";
+        DBG_INITIALISATION << "Cannect setup the EtherCAT thread until the interface is initialised\n";
         return false;
     }
 #ifndef EC_SIMULATOR
@@ -158,7 +158,7 @@ bool setupEtherCatThread() {
         ECInterface::instance()->listSlaves(slaves);
         std::vector<ec_slave_info_t> slave_arr;
         std::copy(slaves.begin(), slaves.end(), std::back_inserter(slave_arr));
-        std::cout << "found " << slave_arr.size() << " slaves on the bus\n";
+        DBG_INITIALISATION << "found " << slave_arr.size() << " slaves on the bus\n";
 
         std::list<MachineInstance *>::iterator iter = MachineInstance::begin();
         std::set<std::string> xml_files;
@@ -173,7 +173,7 @@ bool setupEtherCatThread() {
                 const Value &product_code = m->getValue("ProductCode");
                 const Value &revision_no = m->getValue("RevisionNo");
                 if (xml_filename != SymbolTable::Null) {
-                    std::cout << "using xml configuration file " << xml_filename << " for "
+                    DBG_INITIALISATION << "using xml configuration file " << xml_filename << " for "
                               << m->getName() << " at position " << position << "\n";
                     xml_files.insert(xml_filename.sValue);
                     Value pc(product_code);
@@ -183,19 +183,22 @@ bool setupEtherCatThread() {
                         // find product code of the device at this position
                         const ec_slave_info_t &slave(slave_arr[position.iValue]);
                         pc = (long)slave.product_code;
-                        std::cout << "setting product code for position " << position.iValue
+                        DBG_INITIALISATION << "setting product code for position " << position.iValue
                                   << " to " << std::hex << "0x" << pc << std::dec
                                   << " from bus slave at position " << position.iValue << "\n";
                     }
                     else {
-                        std::cout << "using config file product code " << std::hex << "0x" << pc
-                                  << std::dec << " for position " << position.iValue << "\n";
+                        DBG_INITIALISATION << "using config file product code "
+                                  << std::hex << "0x" << pc << std::dec
+                                  << ":"
+                                  << std::hex << "0x" << rn << std::dec
+                                  << " for position " << position.iValue << "\n";
                     }
                     if (revision_no == SymbolTable::Null) {
                         rn = (long)slave_arr[position.iValue].revision_number;
                         // find product code of the device at this position
                         const ec_slave_info_t &slave(slave_arr[position.iValue]);
-                        std::cout << "setting product code for position " << position.iValue
+                        DBG_INITIALISATION << "setting product code for position " << position.iValue
                                   << " to " << std::hex << "0x" << rn << std::dec << "\n";
                     }
                     if (sm == SymbolTable::Null) {
@@ -211,17 +214,17 @@ bool setupEtherCatThread() {
                                   << xml_filename << "\n";
                     }
                     else {
-                        std::cout << "checking for " << *dev << "\n";
+                        DBG_INITIALISATION << "checking for " << *dev << "\n";
                         DeviceInfo *di = 0;
                         std::list<DeviceInfo *>::iterator iter = collected_configurations.begin();
                         while (iter != collected_configurations.end()) {
                             DeviceInfo *item = *iter++;
                             if (*dev == *item) {
-                                std::cout << " using item " << *item << "\n";
+                                DBG_INITIALISATION << " using item " << *item << "\n";
                                 di = item;
                                 break;
                             }
-                            std::cout << "no match with " << *item << "\n";
+                            DBG_INITIALISATION << "no match with " << *item << "\n";
                         }
                         //if (collected_configurations.size() == 1) {
                         if (di) {
@@ -247,9 +250,9 @@ bool setupEtherCatThread() {
                             }
                         }
                         else {
-                            std::cout << "error: found " << collected_configurations.size()
+                            DBG_INITIALISATION << "error: found " << collected_configurations.size()
                                       << " for slave at position " << position
-                                      << " when earching xml file for device " << std::hex
+                                      << " when searching xml file for device " << std::hex
                                       << pc.iValue << "/" << rn.iValue << std::dec << ":"
                                       << sm.sValue << "\n";
                         }
@@ -263,12 +266,12 @@ bool setupEtherCatThread() {
         while (fi != xml_files.end()) {
             const std::string &fname = *fi++;
             parser.init();
-            std::cout << "attempting to load devices from " << fname << "\n";
+            DBG_INITIALISATION << "attempting to load devices from " << fname << "\n";
             if (!parser.loadDeviceConfigurationXML(fname.c_str())) {
                 std::cerr << "Warning: failed to load module configuration from " << fname << "\n";
             }
         }
-        std::cout << "Collected " << collected_configurations.size() << " configurations\n\n";
+        DBG_INITIALISATION << "Collected " << collected_configurations.size() << " configurations\n\n";
 #endif
 
         char *slave_config = collectSlaveConfig(true);
@@ -327,7 +330,7 @@ int main(int argc, char const *argv[]) {
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
 
-    std::cout << "main starting\n";
+    DBG_INITIALISATION << "main starting\n";
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
@@ -335,7 +338,7 @@ int main(int argc, char const *argv[]) {
     MessageLog::setMaxMemory(10000);
     Scheduler::instance();
 
-    std::cout << "-------- Creating Command Interface ---------\n";
+    DBG_INITIALISATION << "-------- Creating Command Interface ---------\n";
     ControlSystemMachine machine;
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
@@ -357,7 +360,7 @@ int main(int argc, char const *argv[]) {
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_INITIALISATION);
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_MESSAGING);
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_ACTIONS);
-    //std::cout << DebugExtra::instance()->DEBUG_PREDICATES << "\n";
+    //DBG_INITIALISATION << DebugExtra::instance()->DEBUG_PREDICATES << "\n";
     //assert (!LogState::instance()->includes(DebugExtra::instance()->DEBUG_PREDICATES));
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_SCHEDULER);
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_PROPERTIES);
@@ -389,7 +392,7 @@ int main(int argc, char const *argv[]) {
         return load_result;
     }
     if (dependency_graph()) {
-        std::cout << "writing dependency graph to " << dependency_graph() << "\n";
+        DBG_INITIALISATION << "writing dependency graph to " << dependency_graph() << "\n";
         std::ofstream graph(dependency_graph());
         if (graph) {
             graph << "digraph G {\n";
@@ -471,7 +474,7 @@ int main(int argc, char const *argv[]) {
                 std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
             }
             else {
-                std::cout << "Set ethercat thread cpu affinity to " << ecat_cpu << "\n";
+                DBG_INITIALISATION << "Set ethercat thread cpu affinity to " << ecat_cpu << "\n";
             }
         }
     }
@@ -501,7 +504,7 @@ int main(int argc, char const *argv[]) {
                 std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
             }
             else {
-                std::cout << "Set processing thread cpu affinity to " << processing_cpu << "\n";
+                DBG_INITIALISATION << "Set processing thread cpu affinity to " << processing_cpu << "\n";
             }
         }
     }

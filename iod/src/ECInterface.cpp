@@ -1388,9 +1388,9 @@ int ECInterface::collectState() {
     }
 #ifndef EC_SIMULATOR
 
-        DBG_ETHERCAT << "ecrt_domain_size\n";
+    DBG_ETHERCAT << "ecrt_domain_size\n";
     size_t domain_size = ecrt_domain_size(domain1);
-        DBG_ETHERCAT << "ecrt_domain_data\n";
+    DBG_ETHERCAT << "ecrt_domain_data\n";
     uint8_t *domain1_pd = ecrt_domain_data(domain1);
 
     unsigned int max = max_io_index;
@@ -1623,7 +1623,7 @@ void ECInterface::check_master_state(void) {
     }
 #endif
 
-    DBG_ETHERCAT << "ecrt_master_state\n";
+    //DBG_ETHERCAT << "ecrt_master_state\n";
     ecrt_master_state(master, &ms);
 
     if (ms.slaves_responding != master_state.slaves_responding) {
@@ -1792,7 +1792,7 @@ void ECInterface::check_slave_config_states(void) {
         }
         // check for errors
         uint8_t errbuf[EC_COE_EMERGENCY_MSG_SIZE];
-                DBG_ETHERCAT << "ecrt_islave_config_emerg_pop\n";
+        //DBG_ETHERCAT << "ecrt_islave_config_emerg_pop\n";
         int res = ecrt_slave_config_emerg_pop(m->slave_config, errbuf);
         if (res == 0) {
             char buf[200];
@@ -1802,7 +1802,7 @@ void ECInterface::check_slave_config_states(void) {
             MessageLog::instance()->add(buf);
         }
 
-                DBG_ETHERCAT << "ecrt_slave_config_state\n";
+        //DBG_ETHERCAT << "ecrt_slave_config_state\n";
         ecrt_slave_config_state(m->slave_config, &s);
         if (!s.online) {
             ++slaves_not_operational;
@@ -1811,7 +1811,7 @@ void ECInterface::check_slave_config_states(void) {
 
         if (s.al_state != m->slave_config_state.al_state) {
             //MEMCHECK();
-            std::cout << "ecat_thread: " << m->name << ": State 0x" << std::ios::hex << s.al_state
+            DBG_ETHERCAT << "ecat_thread: " << m->name << ": State 0x" << std::ios::hex << s.al_state
                       << ".\n";
             snprintf(buf, BUFSIZE, "Slave %d (%s) changed state was 0x%x now 0x%x", i,
                      m->name.c_str(), m->slave_config_state.al_state, s.al_state);
@@ -1951,7 +1951,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
         cJSON *json_syncs = cJSON_CreateArray();
         for (i = 0; i < slave.sync_count; i++) {
             cJSON *json_sync = cJSON_CreateObject();
-                        DBG_ETHERCAT << "ecrt_master_get_sync_manager\n";
+            DBG_ETHERCAT << "ecrt_master_get_sync_manager\n";
             assert(ecrt_master_get_sync_manager(m, slave.position, i, &c_syncs[i]) == 0);
             char index_str[40];
             char pdo_name[40];

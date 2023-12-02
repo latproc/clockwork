@@ -1,6 +1,7 @@
 #ifndef __ethercat_xml_parser_h__
 #define __ethercat_xml_parser_h__
 
+#include "Logger.h"
 #include <ECInterface.h>
 #include <Statistics.h>
 #include <algorithm>
@@ -11,6 +12,7 @@
 #include <iterator>
 #include <libxml/xmlreader.h>
 #include <map>
+#include <DebugExtra.h>
 
 struct ConfigurationDetails {
     EntryDetails *c_entry_details;
@@ -80,8 +82,10 @@ struct DeviceInfo {
     DeviceInfo(uint64_t pc, uint64_t rn, const char *which);
     ~DeviceInfo();
     bool operator==(const DeviceInfo &other) {
+        DBG_INITIALISATION << "same product code?: " << (other.product_code == product_code)
+                << " same revision?: " << (other.revision_no == revision_no)
+                << "\n";
         return other.product_code == product_code && other.revision_no == revision_no;
-        //&& other.selected_alt_sm_name == selected_alt_sm_name;
     }
     std::ostream &operator<<(std::ostream &out) const {
         out << "DeviceInfo: 0x" << std::hex << product_code << ":" << revision_no;

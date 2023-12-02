@@ -213,7 +213,7 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                     std::cerr << error_buf << "\n";
                     error_messages.push_back(error_buf);
                     ++num_errors;
-                    continue; // could not find this device
+                    continue;
                 }
                 EntryDetails *ed = &module->entry_details[entry_position];
                 unsigned int direction = module->syncs[ed->sm_index].dir;
