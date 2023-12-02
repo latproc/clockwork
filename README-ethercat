@@ -1,0 +1,53 @@
+# Example of EtherCAT setup
+#
+# Part A: building from source
+#
+# This won't work as-is on recent kernels
+#
+# Method
+# ------
+#
+# in the ethercat dir
+git clone git@github.com:ribalda/ethercat.git
+cd ethercat
+
+./bootstrap
+./configure --prefix=/opt/etherlab --enable-generic --enable-e1000e=no --enable-8139too=no --enable-hrtimer
+
+make -j20 && make modules -j20 
+sudo make install
+sudo make modules_install
+sudo depmod -a
+
+# cd to clockwork
+
+ln -s $ETHERCAT_DIR ./ethercat
+scripts/prepare_ec_tool ethercat
+MY_ETHERNET_DEVICE=enp5s0
+sudo scripts/ethercat.sh start $MY_ETHERNET_DEVICE
+sudo scripts/ethercat.sh stop $MY_ETHERNET_DEVICE
+
+# Part B: using debian packages
+#
+# install precompiled ethercat library
+sudo dpkg -i ethercat-lib/*.deb
+
+# removing precompiled library
+sudo dpkg -r libethercat libethercat-dbg libethercat-dev ethercat-master ethercat-dkms
+
+# configure netplan
+#   cat /etc/netplan/01-network-manager-all.yaml :
+------------------
+# Let NetworkManager manage all devices on this system
+network:
+  version: 2
+  #renderer: NetworkManager
+  ethernets:
+    enp5s0:
+      {}
+    enp6s0:
+      dhcp4: true
+      dhcp6: true
+      optional: true
+------------------
+
