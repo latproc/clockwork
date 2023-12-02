@@ -19,6 +19,7 @@
 */
 
 #include "IOComponent.h"
+#include "PolledMessageHandler.h"
 #include "boost/filesystem/operations.hpp"
 #include "boost/filesystem/path.hpp"
 #include <assert.h>
@@ -383,6 +384,27 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     }
 }
 
+void ProcessingThread::handle_plugin_machines(ProcessingStates processing_state, uint64_t curr_t, uint64_t last_checked_plugins) {
+    if (!MachineInstance::pluginMachines().empty()) {
+        if (processing_state == ProcessingStates::eIdle && curr_t - last_checked_plugins >= 1000) {
+#ifdef KEEPSTATS
+            AutoStat stats(avg_plugin_time);
+#endif
+            MachineInstance::checkPluginStates();
+            last_checked_plugins = curr_t;
+        }
+    }
+    else {
+        last_checked_plugins = curr_t;
+    }
+}
+
+#include "handle_command.cpp"
+#include "handle_scheduler.cpp"
+#include "handle_hardware.cpp"
+#include "handle_machines.cpp"
+#include "wait_for_work.cpp"
+
 void ProcessingThread::operator()() {
 
 #ifdef __APPLE__
@@ -462,11 +484,11 @@ void ProcessingThread::operator()() {
     MachineInstance *system = MachineInstance::find("SYSTEM");
     assert(system);
 
-    enum { s_update_idle, s_update_sent } update_state = s_update_idle;
+    UpdateStates update_state = UpdateStates::s_update_idle;
 
     bool commands_started = false;
 
-    enum { eIdle, eStableStates, ePollingMachines } processing_state = eIdle;
+    ProcessingStates processing_state = ProcessingStates::eIdle;
     std::set<IOComponent *> io_work_queue;
 
     //  we need to stop polling io (ie exit) if the control threads do not seem
@@ -531,111 +553,44 @@ void ProcessingThread::operator()() {
         uint64_t last_sample_poll = 0;
         bool machines_have_work = false;
         unsigned int num_channels = 0;
-        while (!program_done) {
-            MEMCHECK();
-            curr_t = nowMicrosecs();
-            internals->process_manager.SetTime(curr_t);
-            //TBD add a guard here to detect/prevent rapid cycling
+        MEMCHECK();
+        curr_t = nowMicrosecs();
+        internals->process_manager.SetTime(curr_t);
+        //TBD add a guard here to detect/prevent rapid cycling
 
-            for (int i = 0; i < dynamic_poll_start_idx; ++i) {
-                items[i] = fixed_items[i];
-            }
-
-            // add the channel sockets to our poll info
-            {
-                std::list<CommandSocketInfo *>::iterator csi_iter =
-                    internals->channel_sockets.begin();
-                int idx = dynamic_poll_start_idx;
-                while (csi_iter != internals->channel_sockets.end()) {
-                    CommandSocketInfo *info = *csi_iter++;
-                    items[idx].socket = (void *)(*info->sock);
-                    items[idx].fd = 0;
-                    items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
-                    items[idx].revents = 0;
-                    idx++;
-                    if (idx == max_poll_sockets) {
-                        break;
-                    }
-                }
-                num_channels =
-                    idx - dynamic_poll_start_idx; // the number channels we are actually monitoring
-            }
-
-            //machines_have_work = MachineInstance::workToDo();
-            {
-                static size_t last_runnable_count = 0;
-                boost::recursive_mutex::scoped_lock lock(runnable_mutex);
-                machines_have_work = !runnable.empty() || !MachineInstance::pendingEvents().empty();
-                size_t runnable_count = runnable.size();
-                if (runnable_count != last_runnable_count) {
-                    //DBG_PROCESSING << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
-                    last_runnable_count = runnable_count;
-                }
-            }
-            if (machines_have_work || IOComponent::updatesWaiting() || !io_work_queue.empty()) {
-                poll_wait = 1;
-            }
-            else {
-                poll_wait = 100;
-            }
-
-            //if (Watchdog::anyTriggered(curr_t))
-            //  Watchdog::showTriggered(curr_t, true, std::cerr);
-            systems_waiting = pollZMQItems(poll_wait, items, 6 + num_channels, ecat_sync,
-                                           resource_mgr, dispatch_sync, sched_sync, ecat_out);
-
-            if (systems_waiting > 0 ||
-                (machines_have_work && curr_t - last_checked_machines >= machine_check_delay)) {
-                break;
-            }
-            if (IOComponent::updatesWaiting() || !io_work_queue.empty()) {
-                break;
-            }
-            if (!MachineInstance::pluginMachines().empty() &&
-                curr_t - last_checked_plugins >= 1000) {
-                break;
-            }
-            if (curr_t - last_machine_change > 10000) {
-                last_machine_change = curr_t;
-                machine.idle();
-            }
-            if (last_machine_change < machine.lastUpdated()) {
-                break;
-            }
-#ifdef KEEPSTATS
-            avg_poll_time.update();
-            usleep(1);
-            avg_poll_time.start();
-#endif
+        for (int i = 0; i < dynamic_poll_start_idx; ++i) {
+          items[i] = fixed_items[i];
         }
+
+        wait_for_work(items,
+            &machine,
+            dynamic_poll_start_idx,
+            curr_t,
+            max_poll_sockets,
+            poll_wait,
+            machines_have_work,
+            systems_waiting,
+            runnable_mutex,
+            last_machine_change,
+            num_channels,
+            machine_check_delay,
+            dispatch_sync,
+            sched_sync,
+            resource_mgr,
+            ecat_sync,
+            command_sync,
+            ecat_out,
+            io_work_queue,
+            last_checked_cycle_time,
+            last_checked_plugins,
+            last_checked_machines,
+            last_sample_poll
+        );
 
 #ifdef KEEPSTATS
         avg_poll_time.update();
 #endif
-
-#if 0
-        // debug code to work out what machines or systems tend to need processing
-        {
-            if (systems_waiting > 0 || !io_work_queue.empty() || (machines_have_work || processing_state != eIdle || status != e_waiting)) {
-                DBG_PROCESSING << "handling activity. zmq: " << systems_waiting << " state: " << processing_state << " substate: " << status
-                        << ((items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
-                        << ((IOComponent::updatesWaiting()) ? " io components" : "")
-                        << ((!io_work_queue.empty()) ? " io work" : "")
-                        << ((machines_have_work) ? " machines" : "")
-                        << ((!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) ? " plugins" : "")
-                        << "\n";
-            }
-            if (IOComponent::updatesWaiting()) {
-                extern std::set<IOComponent *> updatedComponentsOut;
-                std::set<IOComponent *>::iterator iter = updatedComponentsOut.begin();
-                std::cout << updatedComponentsOut.size() << " entries in updatedComponentsOut:\n";
-                while (iter != updatedComponentsOut.end()) {
-                    std::cout << " " << (*iter++)->io_name;
-                }
-                std::cout << " \n";
-            }
-        }
-#endif
+//#include "display_machines_waiting.cpp"
 
         /*  this loop prioritises ethercat processing but if a certain
             number of ethercat cycles have been processed with no
@@ -647,10 +602,8 @@ void ProcessingThread::operator()() {
             safeSend(ecat_sync, "go", 2);
         }
 
-        if (program_done) {
-            break;
-        }
-        if (machine_is_ready && processing_state != eStableStates && !io_work_queue.empty()) {
+        if (program_done) { break; }
+        if (machine_is_ready && processing_state != ProcessingStates::eStableStates && !io_work_queue.empty()) {
 #ifdef KEEPSTATS
             AutoStat stats(avg_iowork_time);
 #endif
@@ -662,33 +615,17 @@ void ProcessingThread::operator()() {
             }
         }
 
-        if (program_done) {
-            break;
-        }
-        if (!MachineInstance::pluginMachines().empty()) {
-            if (processing_state == eIdle && curr_t - last_checked_plugins >= 1000) {
-#ifdef KEEPSTATS
-                AutoStat stats(avg_plugin_time);
-#endif
-                MachineInstance::checkPluginStates();
-                last_checked_plugins = curr_t;
-            }
-        }
-        else {
-            last_checked_plugins = curr_t;
-        }
+        if (program_done) { break; }
+        handle_plugin_machines(processing_state, curr_t, last_checked_plugins);
 
         if (status == e_waiting) {
 #ifdef KEEPSTATS
             AutoStat stats(avg_channel_time);
 #endif
-            // poll channels
             Channel::handleChannels();
         }
 
-        if (program_done) {
-            break;
-        }
+        if (program_done) { break; }
         char buf[200];
         if (status == e_waiting) {
             if (items[internals->CMD_ITEM].revents & ZMQ_POLLIN) {
@@ -705,10 +642,6 @@ void ProcessingThread::operator()() {
             }
         }
 
-        if (program_done) {
-            break;
-        }
-
         if (status == e_waiting && items[internals->DISPATCHER_ITEM].revents & ZMQ_POLLIN) {
             if (status == e_waiting) {
                 size_t len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
@@ -718,7 +651,7 @@ void ProcessingThread::operator()() {
             }
         }
         if (status == e_handling_dispatch) {
-            if (processing_state != eIdle) {
+            if (processing_state != ProcessingStates::eIdle) {
                 // cannot process dispatch events at present
                 status = e_waiting;
             }
@@ -736,170 +669,19 @@ void ProcessingThread::operator()() {
         }
 
         if (status == e_waiting && systems_waiting > 0) {
-            // check the command interface and any command channels for activity
-            bool have_command = false;
-            if (items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
-                have_command = true;
-            }
-            else {
-                for (unsigned int i = dynamic_poll_start_idx;
-                     i < dynamic_poll_start_idx + num_channels; ++i) {
-                    if (items[i].revents & ZMQ_POLLIN) {
-                        have_command = true;
-                        break;
-                    }
-                }
-            }
-            if (have_command) {
-                uint64_t start_time = microsecs();
-                uint64_t now = start_time;
-#ifdef KEEPSTATS
-                AutoStat stats(avg_cmd_processing);
-#endif
-                int count = 0;
-                while (have_command && (long)(now - start_time) < internals->cycle_delay / 2) {
-                    have_command = false;
-                    std::list<CommandSocketInfo *>::iterator csi_iter =
-                        internals->channel_sockets.begin();
-                    unsigned int i = internals->CMD_SYNC_ITEM;
-                    while (i <= CommandSocketInfo::lastIndex() &&
-                           (long)(now - start_time) < internals->cycle_delay / 2) {
-                        zmq::socket_t *sock = 0;
-                        CommandSocketInfo *info = 0;
-                        if (i == internals->CMD_SYNC_ITEM) {
-                            sock = &command_sync;
-                        }
-                        else {
-                            if (csi_iter == internals->channel_sockets.end()) {
-                                break;
-                            }
-                            info = *csi_iter++;
-                            sock = info->sock;
-                        }
-                        { int rc = zmq::poll(&items[i], 1, 0); }
-                        if (!(items[i].revents & ZMQ_POLLIN)) {
-                            ++i;
-                            continue;
-                        }
-                        have_command = true;
-
-                        zmq::message_t msg;
-                        char *buf = 0;
-                        size_t len = 0;
-                        MessageHeader mh;
-                        uint32_t default_id = mh.getId(); // save the msgid to following check
-                        if (safeRecv(*sock, &buf, &len, false, 0, mh)) {
-                            ++count;
-                            if (false && len > 10) {
-                                FileLogger fl(program_name);
-                                fl.f() << "Processing thread received command ";
-                                if (buf) {
-                                    fl.f() << buf << " ";
-                                }
-                                else {
-                                    fl.f() << "NULL";
-                                }
-                                fl.f() << "\n";
-                            }
-                            if (!buf) {
-                                continue;
-                            }
-                            IODCommand *command = parseCommandString(buf);
-                            if (command) {
-                                bool ok = false;
-                                try {
-                                    ok = (*command)();
-                                }
-                                catch (const std::exception &e) {
-                                    FileLogger fl(program_name);
-                                    fl.f() << "command execution threw an exception " << e.what()
-                                           << "\n";
-                                }
-                                delete[] buf;
-
-                                if (mh.needsReply() || mh.getId() == default_id) {
-                                    char *response =
-                                        strdup((ok) ? command->result() : command->error());
-                                    MessageHeader rh(mh);
-                                    rh.source = mh.dest;
-                                    rh.dest = mh.source;
-                                    rh.start_time = microsecs();
-                                    safeSend(*sock, response, strlen(response), rh);
-                                    free(response);
-                                }
-                                else {
-                                    //char *response = strdup(command->result());
-                                    //safeSend(*sock, response, strlen(response));
-                                    //free(response);
-                                }
-                            }
-                            else {
-                                if (mh.needsReply() || mh.getId() == default_id) {
-                                    char *response = new char[len + 40];
-                                    snprintf(response, len + 40, "Unrecognised command: %s", buf);
-                                    MessageHeader rh(mh);
-                                    rh.source = mh.dest;
-                                    rh.dest = mh.source;
-                                    rh.start_time = microsecs();
-                                    safeSend(*sock, response, strlen(response), rh);
-                                    delete[] response;
-                                }
-                                else {
-                                    /*
-                                        char *response = new char[len+40];
-                                        snprintf(response, len+40, "Unrecognised command: %s", buf);
-                                        safeSend(*sock, response, strlen(response));
-                                        delete[] response;
-                                    */
-                                }
-                                delete[] buf;
-                            }
-                            delete command;
-                        }
-                        ++i;
-                    }
-                    usleep(0);
-                    now = microsecs();
-                }
-            }
+            handle_command(items, dynamic_poll_start_idx, num_channels, command_sync);
         }
 
         if (items[internals->SCHEDULER_ITEM].revents & ZMQ_POLLIN) {
-#ifdef KEEPSTATS
-            if (!scheduler_delay.running()) {
-                scheduler_delay.start();
-            }
+          handle_scheduler(
+#if KEEPSTATS
+              scheduler_delay,
 #endif
-            if (status == e_waiting && processing_state == eIdle) {
-                size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
-                if (len) {
-                    status = e_handling_sched;
-#ifdef KEEPSTATS
-                    scheduler_delay.stop();
-                    avg_scheduler_time.start();
-#endif
-                }
-                else {
-                    char buf[100];
-                    snprintf(buf, 100, "WARNING: scheduler sync returned zero length message");
-                    MessageLog::instance()->add(buf);
-                }
-            }
-            else if (status == e_waiting_sched) {
-                size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
-                if (len) {
-                    safeSend(sched_sync, "bye", 3);
-                    status = e_waiting;
-#ifdef KEEPSTATS
-                    avg_scheduler_time.update();
-#endif
-                }
-                else {
-                    char buf[100];
-                    snprintf(buf, 100, "WARNING: scheduler sync returned zero length message");
-                    MessageLog::instance()->add(buf);
-                }
-            }
+              sched_sync,
+              buf,
+              status,
+              processing_state
+              );
         }
         if (status == e_handling_sched) {
             size_t len = 0;
@@ -908,91 +690,20 @@ void ProcessingThread::operator()() {
         }
 
         if (machine.activationRequested()) {
-            DBG_PROCESSING << " activation requested\n";
+            DBG_PROCESSING << " activation requested\n"
+              << "status: " << status
+              << " have devices: " << !IOComponent::devices.empty()
+              << " update_status " << static_cast<int>(update_state)
+              << "\n";
         }
 
         if (status == e_waiting && machines_have_work &&
-            curr_t - last_checked_machines >= machine_check_delay) {
-
-            if (processing_state == eIdle) {
-                processing_state = ePollingMachines;
-            }
-            const int num_loops = 1;
-            for (int i = 0; i < num_loops; ++i) {
-                if (processing_state == ePollingMachines) {
-#ifdef KEEPSTATS
-                    avg_clockwork_time.start();
-#endif
-                    std::set<MachineInstance *> to_process;
-                    {
-                        boost::recursive_mutex::scoped_lock lock(runnable_mutex);
-                        std::set<MachineInstance *>::iterator iter = runnable.begin();
-                        while (iter != runnable.end()) {
-                            MachineInstance *mi = *iter;
-                            if (mi->executingCommand() || !mi->pendingEvents().empty() ||
-                                mi->hasMail()) {
-                                to_process.insert(mi);
-                                if (!mi->queuedForStableStateTest()) {
-                                    iter = runnable.erase(iter);
-                                }
-                                else {
-                                    iter++;
-                                }
-                            }
-                            else {
-                                iter++;
-                            }
-                        }
-                    }
-
-                    if (!to_process.empty()) {
-                        DBG_SCHEDULER << "processing " << to_process.size() << " machines\n";
-                        MachineInstance::processAll(to_process, 150000,
-                                                    MachineInstance::NO_BUILTINS);
-                    }
-                    processing_state = eStableStates;
-                }
-                if (processing_state == eStableStates) {
-                    std::set<MachineInstance *> to_process;
-                    {
-                        boost::recursive_mutex::scoped_lock lock(runnable_mutex);
-                        std::set<MachineInstance *>::iterator iter = runnable.begin();
-                        while (iter != runnable.end()) {
-                            MachineInstance *mi = *iter;
-                            if (mi->executingCommand() || !mi->pendingEvents().empty()) {
-                                iter++;
-                                continue;
-                            }
-                            if (mi->queuedForStableStateTest()) {
-                                to_process.insert(mi);
-                                iter = runnable.erase(iter);
-                            }
-                            else {
-                                iter++;
-                            }
-                        }
-                    }
-
-                    if (!to_process.empty()) {
-                        DBG_SCHEDULER << "processing stable states\n";
-                        MachineInstance::checkStableStates(to_process, 150000);
-                    }
-                    if (i < num_loops - 1) {
-                        processing_state = ePollingMachines;
-                    }
-                    else {
-                        processing_state = eIdle;
-                        last_checked_machines = curr_t; // check complete
-#ifdef KEEPSTATS
-                        avg_clockwork_time.update();
-#endif
-                    }
-                }
-            }
+               curr_t - last_checked_machines >= machine_check_delay) {
+            handle_machines(last_checked_machines, machine_check_delay, processing_state, curr_t);
         }
         // send a message to the ethercat thread requesting activation
         // or deactivation of the master
-        if (status == e_waiting && !IOComponent::devices.empty() && update_state == s_update_idle &&
+        if (status == e_waiting && !IOComponent::devices.empty() && update_state == UpdateStates::s_update_idle &&
             (machine.activationRequested() || machine.deactivationRequested())) {
             DBG_INITIALISATION << "activation/deactivation requested\n";
             uint32_t size = 0;
@@ -1015,7 +726,7 @@ void ProcessingThread::operator()() {
                         ++stage;
                     }
                     }
-                    update_state = s_update_sent;
+                    update_state = UpdateStates::s_update_sent;
                     break;
                 }
                 catch (const zmq::error_t &err) {
@@ -1034,94 +745,19 @@ void ProcessingThread::operator()() {
         else if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty() &&
                  (IOComponent::updatesWaiting() ||
                   IOComponent::getHardwareState() != IOComponent::s_operational)) {
+            handle_hardware(
 #ifdef KEEPSTATS
-            avg_update_time.start();
+                    avg_update_time,
 #endif
-            if (update_state == s_update_idle) {
-                IOUpdate *upd = 0;
-                if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
-                    DBG_INITIALISATION << "Sending defaults to EtherCAT\n";
-                    upd = IOComponent::getDefaults();
-                    assert(upd);
-#if VERBOSE_DEBUG
-                    display(std::cout, upd->data());
-                    std::cout << ":";
-                    display(std::cout, upd->mask());
-                    std::cout << "\n";
-#endif
-                }
-                else {
-                    upd = IOComponent::getUpdates();
-                }
-                MEMCHECK();
-                if (upd) {
-                    uint32_t size = upd->size();
-                    uint8_t stage = 1;
-                    while (true) {
-                        try {
-                            switch (stage) {
-                            case 1: {
-                                zmq::message_t iomsg(4);
-                                memcpy(iomsg.data(), (void *)&size, 4);
-                                ecat_out.send(iomsg, ZMQ_SNDMORE);
-                                ++stage;
-                            }
-                            case 2: {
-                                uint8_t packet_type = 2;
-                                if (IOComponent::getHardwareState() != IOComponent::s_operational) {
-                                    packet_type = 1;
-                                }
-                                zmq::message_t iomsg(1);
-                                memcpy(iomsg.data(), (void *)&packet_type, 1);
-                                ecat_out.send(iomsg, ZMQ_SNDMORE);
-                                ++stage;
-                            }
-                            case 3: {
-                                zmq::message_t iomsg(size);
-                                memcpy(iomsg.data(), (void *)upd->data(), size);
-                                ecat_out.send(iomsg, ZMQ_SNDMORE);
-#if VERBOSE_DEBUG
-                                DBG_ETHERCAT << "sending to EtherCAT: "; display(upd->data()); std::cout << "\n";
-#endif
-                                ++stage;
-                            }
-                            case 4: {
-                                zmq::message_t iomsg(size);
-                                memcpy(iomsg.data(), (void *)upd->mask(), size);
-#if VERBOSE_DEBUG
-                                DBG_ETHERCAT << "using mask: "; display(std::cout, upd->mask()); std::cout << "\n";
-#endif
-                                ecat_out.send(iomsg);
-                                ++stage;
-                            }
-                            default:;
-                            }
-                            break;
-                        }
-                        catch (const zmq::error_t &err) {
-                            if (zmq_errno() == EINTR) {
-                                DBG_PROCESSING << "interrupted when sending update ("
-                                               << (unsigned int)stage << ")\n";
-                                continue;
-                            }
-                            else {
-                                std::cerr << zmq_strerror(zmq_errno());
-                            }
-                            assert(false);
-                        }
-                    }
-                    MEMCHECK();
-                    delete upd;
-                    update_state = s_update_sent;
-                    IOComponent::updatesSent(true);
-                }
-            }
+                    update_state,
+                    ecat_out
+                );
         }
-        if (update_state == s_update_sent) {
+        if (update_state == UpdateStates::s_update_sent) {
             char buf[10];
             try {
                 if (ecat_out.recv(buf, 10, ZMQ_DONTWAIT)) {
-                    update_state = s_update_idle;
+                    update_state = UpdateStates::s_update_idle;
                     if (machine.activationRequested()) {
                         if (strncmp(buf, "ok", 2) == 0) {
                             machine.requestActivation(false);
