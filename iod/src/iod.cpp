@@ -189,8 +189,11 @@ bool setupEtherCatThread() {
                                   << " from bus slave at position " << position.iValue << "\n";
                     }
                     else {
-                        DBG_INITIALISATION << "using config file product code " << std::hex << "0x" << pc
-                                  << std::dec << " for position " << position.iValue << "\n";
+                        DBG_INITIALISATION << "using config file product code "
+                                  << std::hex << "0x" << pc << std::dec
+                                  << ":"
+                                  << std::hex << "0x" << rn << std::dec
+                                  << " for position " << position.iValue << "\n";
                     }
                     if (revision_no == SymbolTable::Null) {
                         rn = (long)slaves[position.iValue].revision_number;
@@ -219,10 +222,16 @@ bool setupEtherCatThread() {
                     }
                     else {
                         DBG_INITIALISATION << "checking for " << *dev << "\n";
-                        DeviceInfo *di = nullptr;
-                        assert(collected_configurations.size() <= 1);
-                        if (collected_configurations.size() == 1) {
-                             di = *collected_configurations.begin();
+                        DeviceInfo *di = 0;
+                        std::list<DeviceInfo *>::iterator iter = collected_configurations.begin();
+                        while (iter != collected_configurations.end()) {
+                            DeviceInfo *item = *iter++;
+                            if (*dev == *item) {
+                                DBG_INITIALISATION << " using item " << *item << "\n";
+                                di = item;
+                                break;
+                            }
+                            DBG_INITIALISATION << "no match with " << *item << "\n";
                         }
                         if (di) {
                             slave_configuration[position.iValue] = di;
@@ -243,7 +252,7 @@ bool setupEtherCatThread() {
                             module->num_entries = di->config.num_entries;
                             auto res = ECInterface::instance()->addModule(module, true);
                             if (res) {
-                                std::cerr << "iod: Added module " << module->name 
+                                std::cerr << "iod: Added module " << module->name
                                         << " at position " << module->position
                                         << " num entries: " << module->num_entries
                                         << "\n";
@@ -272,12 +281,12 @@ bool setupEtherCatThread() {
         while (fi != xml_files.end()) {
             const std::string &fname = *fi++;
             parser.init();
-            std::cout << "attempting to load devices from " << fname << "\n";
+            DBG_INITIALISATION << "attempting to load devices from " << fname << "\n";
             if (!parser.loadDeviceConfigurationXML(fname.c_str())) {
                 std::cerr << "Warning: failed to load module configuration from " << fname << "\n";
             }
         }
-        std::cout << "Collected " << collected_configurations.size() << " configurations\n\n";
+        DBG_INITIALISATION << "Collected " << collected_configurations.size() << " configurations\n\n";
 #endif
 
         ECInterface::instance()->configureModules();
@@ -339,6 +348,7 @@ int main(int argc, char const *argv[]) {
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
 
+    DBG_INITIALISATION << "main starting\n";
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
@@ -346,6 +356,7 @@ int main(int argc, char const *argv[]) {
     MessageLog::setMaxMemory(10000);
     Scheduler::instance();
 
+    DBG_INITIALISATION << "-------- Creating Command Interface ---------\n";
     ControlSystemMachine machine;
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
@@ -367,7 +378,7 @@ int main(int argc, char const *argv[]) {
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_INITIALISATION);
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_MESSAGING);
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_ACTIONS);
-    //std::cout << DebugExtra::instance()->DEBUG_PREDICATES << "\n";
+    //DBG_INITIALISATION << DebugExtra::instance()->DEBUG_PREDICATES << "\n";
     //assert (!LogState::instance()->includes(DebugExtra::instance()->DEBUG_PREDICATES));
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_SCHEDULER);
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_PROPERTIES);
@@ -399,7 +410,7 @@ int main(int argc, char const *argv[]) {
         return load_result;
     }
     if (dependency_graph()) {
-        std::cout << "writing dependency graph to " << dependency_graph() << "\n";
+        DBG_INITIALISATION << "writing dependency graph to " << dependency_graph() << "\n";
         std::ofstream graph(dependency_graph());
         if (graph) {
             graph << "digraph G {\n";
@@ -484,7 +495,7 @@ int main(int argc, char const *argv[]) {
                 std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
             }
             else {
-                std::cout << "Set ethercat thread cpu affinity to " << ecat_cpu << "\n";
+                DBG_INITIALISATION << "Set ethercat thread cpu affinity to " << ecat_cpu << "\n";
             }
         }
     }
@@ -514,7 +525,7 @@ int main(int argc, char const *argv[]) {
                 std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
             }
             else {
-                std::cout << "Set processing thread cpu affinity to " << processing_cpu << "\n";
+                DBG_INITIALISATION << "Set processing thread cpu affinity to " << processing_cpu << "\n";
             }
         }
     }
