@@ -24,6 +24,7 @@
 #include "value.h"
 #include <list>
 #include <string>
+#include <value.h>
 
 class MachineInstance;
 class Value;
