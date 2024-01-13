@@ -1,3 +1,12 @@
+#include "ProcessingThread.h"
+#include "MachineInstance.h"
+#include "Channel.h"
+#include "IOComponent.h"
+#include "ControlSystemMachine.h"
+#include <boost/thread/recursive_mutex.hpp>
+
+extern bool program_done;
+
 void ProcessingThread:: wait_for_work(
     zmq::pollitem_t items[],
     ControlSystemMachine * machine,
@@ -21,16 +30,16 @@ void ProcessingThread:: wait_for_work(
     uint64_t & last_checked_cycle_time,
     uint64_t & last_checked_plugins,
     uint64_t & last_checked_machines,
-    uint64_t & last_sample_poll
+    uint64_t & last_sample_poll,
+    const std::list<CommandSocketInfo*> &channels
     ){
         while (!program_done) {
 
             // add the channel sockets to our poll info
             {
-                std::list<CommandSocketInfo *>::iterator csi_iter =
-                    internals->channel_sockets.begin();
+                auto csi_iter = channels.begin();
                 int idx = dynamic_poll_start_idx;
-                while (csi_iter != internals->channel_sockets.end()) {
+                while (csi_iter != channels.end()) {
                     CommandSocketInfo *info = *csi_iter++;
                     items[idx].socket = (void *)(*info->sock);
                     items[idx].fd = 0;

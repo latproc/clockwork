@@ -5,7 +5,7 @@
 #include "ClientInterface.h"
 #include "clockwork.h"
 #include <bits/stdint-uintn.h>
-#include <boost/thread/mutex.hpp>
+#include <boost/thread/recursive_mutex.hpp>
 #include <set>
 #include <zmq.hpp>
 
@@ -84,9 +84,12 @@ class ProcessingThread : public ClockworkProcessManager {
     void handle_plugin_machines(ProcessingStates polling_states,
         uint64_t curr_t, uint64_t last_checked_plugins);
     void handle_command(zmq::pollitem_t fixed_items[],
+        unsigned int command_channel_index,
         int dynamic_poll_start_idx,
         unsigned int num_channels,
-        zmq::socket_t &command_sync
+        zmq::socket_t &command_sync,
+        const std::list<CommandSocketInfo*> & channels,
+        long cycle_delay
     );
     void handle_scheduler(
 #ifdef KEEPSTATS
@@ -133,7 +136,8 @@ class ProcessingThread : public ClockworkProcessManager {
     uint64_t & last_checked_cycle_time,
     uint64_t & last_checked_plugins,
     uint64_t & last_checked_machines,
-    uint64_t & last_sample_poll
+    uint64_t & last_sample_poll,
+    const std::list<CommandSocketInfo*> &channels
     );
     HardwareActivation &activate_hardware;
     IODCommandThread &command_interface;

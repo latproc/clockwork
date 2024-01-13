@@ -65,8 +65,6 @@ extern void handle_io_sampling(uint64_t clock);
 //#define KEEPSTATS
 
 #define VERBOSE_DEBUG 0
-#define MEMCHECK()
-//static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 unsigned int CommandSocketInfo::last_idx = 5;
 
@@ -197,7 +195,6 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                                    zmq::socket_t &ecat_out) {
     int res = 0;
     while (!program_done) {
-        MEMCHECK();
         try {
             long len = 0;
             char buf[10];
@@ -222,7 +219,6 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                 uint8_t stage = 1;
                 //  Process all parts of the message
                 while (true) {
-                    MEMCHECK();
                     try {
                         switch (stage) {
                         case 1: { // global clock
@@ -496,7 +492,6 @@ void ProcessingThread::operator()() {
     const int MAX_UNCONTROLLED_POLLS = 5;
     int io_unsafe_polls_remaining = MAX_UNCONTROLLED_POLLS;
     while (!program_done) {
-        MEMCHECK();
         if (IOComponent::getHardwareState() == IOComponent::s_hardware_preinit) {
             IOLockHelper io_lock;
             // attempt to initialise the hardware interface. If this
@@ -553,7 +548,6 @@ void ProcessingThread::operator()() {
         uint64_t last_sample_poll = 0;
         bool machines_have_work = false;
         unsigned int num_channels = 0;
-        MEMCHECK();
         curr_t = nowMicrosecs();
         internals->process_manager.SetTime(curr_t);
         //TBD add a guard here to detect/prevent rapid cycling
@@ -584,7 +578,8 @@ void ProcessingThread::operator()() {
             last_checked_cycle_time,
             last_checked_plugins,
             last_checked_machines,
-            last_sample_poll
+            last_sample_poll,
+            internals->channel_sockets
         );
 
 #ifdef KEEPSTATS
@@ -669,7 +664,7 @@ void ProcessingThread::operator()() {
         }
 
         if (status == e_waiting && systems_waiting > 0) {
-            handle_command(items, dynamic_poll_start_idx, num_channels, command_sync);
+            handle_command(items,internals->CMD_SYNC_ITEM, dynamic_poll_start_idx, num_channels, command_sync, internals->channel_sockets, internals->cycle_delay);
         }
 
         if (items[internals->SCHEDULER_ITEM].revents & ZMQ_POLLIN) {
