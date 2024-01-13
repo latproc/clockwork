@@ -1,3 +1,9 @@
+#include <zmq.hpp>
+#include "AutoStats.h"
+#include "MessageLog.h"
+#include "MessagingInterface.h"
+#include "ProcessingThread.h"
+
 void ProcessingThread::handle_scheduler(
 #ifdef KEEPSTATS
     AutoStatStorage &scheduler_delay,

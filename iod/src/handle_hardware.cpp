@@ -1,3 +1,9 @@
+#include "DebugExtra.h"
+#include "Logger.h"
+#include "AutoStats.h"
+#include "IOComponent.h"
+#include "ProcessingThread.h"
+
 void ProcessingThread::handle_hardware(
 #ifdef KEEPSTATS
     AutoStatStorage &avg_update_time,
@@ -24,7 +30,6 @@ void ProcessingThread::handle_hardware(
                 else {
                     upd = IOComponent::getUpdates();
                 }
-                MEMCHECK();
                 if (upd) {
                     uint32_t size = upd->size();
                     uint8_t stage = 1;
@@ -81,7 +86,6 @@ void ProcessingThread::handle_hardware(
                             assert(false);
                         }
                     }
-                    MEMCHECK();
                     delete upd;
                     update_state = UpdateStates::s_update_sent;
                     IOComponent::updatesSent(true);

@@ -1,12 +1,19 @@
+#include <zmq.hpp>
+#include "Channel.h"
+#include "ProcessingThread.h"
+#include "Logger.h"
 
 void ProcessingThread::handle_command(zmq::pollitem_t items[],
+        unsigned int command_channel_index,
         int dynamic_poll_start_idx,
         unsigned int num_channels,
-        zmq::socket_t &command_sync
+        zmq::socket_t &command_sync,
+        const std::list<CommandSocketInfo*> & channels,
+        long cycle_delay
     ) {
     // check the command interface and any command channels for activity
     bool have_command = false;
-    if (items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
+    if (items[command_channel_index].revents & ZMQ_POLLIN) {
         have_command = true;
     }
     else {
@@ -25,20 +32,19 @@ void ProcessingThread::handle_command(zmq::pollitem_t items[],
         AutoStat stats(avg_cmd_processing);
 #endif
         int count = 0;
-        while (have_command && (long)(now - start_time) < internals->cycle_delay / 2) {
+        while (have_command && (long)(now - start_time) < cycle_delay / 2) {
             have_command = false;
-            std::list<CommandSocketInfo *>::iterator csi_iter =
-                internals->channel_sockets.begin();
-            unsigned int i = internals->CMD_SYNC_ITEM;
+            auto csi_iter = channels.begin();
+            unsigned int i = command_channel_index;
             while (i <= CommandSocketInfo::lastIndex() &&
-                   (long)(now - start_time) < internals->cycle_delay / 2) {
+                   (long)(now - start_time) < cycle_delay / 2) {
                 zmq::socket_t *sock = 0;
                 CommandSocketInfo *info = 0;
-                if (i == internals->CMD_SYNC_ITEM) {
+                if (i == command_channel_index) {
                     sock = &command_sync;
                 }
                 else {
-                    if (csi_iter == internals->channel_sockets.end()) {
+                    if (csi_iter == channels.end()) {
                         break;
                     }
                     info = *csi_iter++;
