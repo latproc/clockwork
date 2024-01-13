@@ -23,12 +23,15 @@
 
 #include <list>
 #include <string>
+#include <value.h>
 
 class MachineInstance;
 class Value;
 
 extern std::list<std::string> error_messages;
 extern int num_errors;
+
+class MachineInstance;
 
 int loadOptions(int argc, char const *argv[], std::list<std::string> &files);
 int loadConfig(std::list<std::string> &files);
