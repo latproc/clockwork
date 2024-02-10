@@ -23,7 +23,7 @@
 
 #include <list>
 #include <string>
-#include <value.h>
+#include "value.h"
 
 extern std::list<std::string> error_messages;
 extern int num_errors;
