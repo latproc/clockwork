@@ -23,7 +23,7 @@
 
 #include <list>
 #include <string>
-#include <value.h>
+#include "value.h"
 
 class MachineInstance;
 class Value;
