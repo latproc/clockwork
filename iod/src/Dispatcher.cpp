@@ -80,6 +80,9 @@ Dispatcher::Dispatcher()
 }
 
 Dispatcher::~Dispatcher() {
+    if (!instance()->finished) { stop(); }
+    //if (socket) { delete socket; }
+    delete dispatch_thread;
 }
 
 
