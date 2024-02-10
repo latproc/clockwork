@@ -79,10 +79,8 @@ Dispatcher::Dispatcher()
       self(*MessagingInterface::getContext(), ZMQ_REP), owner_thread(0) {}
 
 Dispatcher::~Dispatcher() {
-    if (!instance()->finished) {
-        stop();
-    }
-    //if (socket) { delete socket; }
+    if (!instance()->finished) { stop(); }
+    // if (socket) { delete socket; }
     delete dispatch_thread;
 }
 
