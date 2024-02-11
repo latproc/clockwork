@@ -35,14 +35,14 @@
 #include <stdio.h>
 #include <utility>
 
-static bool stringToLong(const std::string &s, long &x);
+static bool stringToLong(const std::string &s, int64_t &x);
 static bool stringToFloat(const std::string &s, double &x);
 
 uint64_t microsecs() { return Clock::clock(); }
 
 static const double ZERO_DISTANCE = 1.0E-8;
 
-void simple_deltat(std::ostream &out, uint64_t dt) {
+void simple_deltat(std::ostream &out, int64_t dt) {
     if (dt > 60000000) {
         out << std::setprecision(3) << (float)dt / 60000000.0f << "m";
     }
@@ -66,7 +66,7 @@ Value::Value(Kind k) : kind(k), cached_machine(0), cached_value(0), token_id(0),
 Value::Value(bool v)
     : kind(t_bool), bValue(v), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
 
-Value::Value(long v)
+Value::Value(int64_t v)
     : kind(t_integer), iValue(v), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
 
 Value::Value(int v)
@@ -75,7 +75,7 @@ Value::Value(int v)
 Value::Value(unsigned int v)
     : kind(t_integer), iValue(v), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
 
-Value::Value(unsigned long v)
+Value::Value(uint64_t v)
     : kind(t_integer), iValue(v), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
 
 Value::Value(float v)
@@ -256,12 +256,12 @@ Value &Value::operator=(int val) {
     return *this;
 }
 
-Value &Value::operator=(long val) {
+Value &Value::operator=(int64_t val) {
     *this = Value(val);
     return *this;
 }
 
-Value &Value::operator=(unsigned long val) {
+Value &Value::operator=(uint64_t val) {
     *this = Value(val);
     return *this;
 }
@@ -286,22 +286,22 @@ Value &Value::operator=(std::string val) {
     return *this;
 }
 
-long Value::trunc() const {
+int64_t Value::trunc() const {
     if (kind == t_integer) {
         return iValue;
     }
     if (kind == t_float) {
-        return (long)::trunc(fValue);
+        return (int64_t)::trunc(fValue);
     }
     return 0;
 };
 
-long Value::round(int digits) const {
+int64_t Value::round(int digits) const {
     if (kind == t_integer) {
         return iValue;
     }
     if (kind == t_float) {
-        return (long)::round(fValue);
+        return (int64_t)::round(fValue);
     }
     return 0;
 }
@@ -407,7 +407,7 @@ bool Value::operator>=(const Value &other) const {
         }
 
         if (a == t_integer || b == t_integer) {
-            long x, y;
+            int64_t x, y;
             if (asInteger(x) && other.asInteger(y)) {
                 return x >= y;
             }
@@ -463,7 +463,7 @@ bool Value::operator<=(const Value &other) const {
         }
 
         if (a == t_integer || b == t_integer) {
-            long x, y;
+            int64_t x, y;
             if (asInteger(x) && other.asInteger(y)) {
                 return x <= y;
             }
@@ -524,7 +524,7 @@ bool Value::operator==(const Value &other) const {
         }
 
         if (a == t_integer || b == t_integer) {
-            long x, y;
+            int64_t x, y;
             if (asInteger(x) && other.asInteger(y)) {
                 return x == y;
             }
@@ -587,7 +587,7 @@ bool Value::operator!=(const Value &other) const {
             }
         }
         if (a == t_integer || b == t_integer) {
-            long x, y;
+            int64_t x, y;
             if (asInteger(x) && other.asInteger(y)) {
                 return x != y;
             }
@@ -680,7 +680,7 @@ bool Value::operator!() const {
     return true;
 }
 
-static bool stringToLong(const std::string &s, long &x) {
+static bool stringToLong(const std::string &s, int64_t &x) {
     const char *str = s.c_str();
     char *end;
     x = strtol(str, &end, 10);
@@ -697,7 +697,7 @@ static bool stringToLong(const std::string &s, long &x) {
         }
 
         char buf[200];
-        snprintf(buf, 200, "str to long parsed %ld chars but did not hit the end of string '%s'",
+        snprintf(buf, 200, "str to int64_t parsed %ld chars but did not hit the end of string '%s'",
                  end - str, str);
         MessageLog::instance()->add(buf);
         DBG_PREDICATES << buf << "'\n";
@@ -940,7 +940,7 @@ struct Modulus : public ValueOperation {
                 return a.iValue % b.iValue;
             }
             else if (a.kind == Value::t_float) {
-                return (long)trunc(a.fValue) % b.iValue;
+                return (int64_t)trunc(a.fValue) % b.iValue;
             }
             else {
                 return 0;
@@ -987,7 +987,7 @@ using namespace ValueOperations;
 struct TypeFix {
     Value operator()(const Value &a, ValueOperation *op, const Value &b) {
         if (a.kind != b.kind) {
-            long x;
+            int64_t x;
             double x_float;
             if ((a.kind == Value::t_integer || a.kind == Value::t_float) &&
                 (b.kind == Value::t_string || b.kind == Value::t_symbol)) {
@@ -1086,7 +1086,7 @@ Value Value::operator-(void) const {
         break;
     case t_symbol:
     case t_string:
-        long x;
+        int64_t x;
         if (stringToLong(sValue, x)) {
             return -x;
         }
@@ -1232,7 +1232,7 @@ Value &Value::operator%=(const Value &other) {
             iValue = 0;
         }
         else {
-            iValue = ((long)fValue) % other.iValue;
+            iValue = ((int64_t)fValue) % other.iValue;
         }
         kind = t_integer; // modulus returns an integer result
         break;
@@ -1517,7 +1517,7 @@ bool Value::asBoolean(bool &x) const {
     }
 }
 
-bool Value::asInteger(long &x) const {
+bool Value::asInteger(int64_t &x) const {
     if (kind == t_integer) {
         x = iValue;
         return true;
