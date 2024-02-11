@@ -30,7 +30,7 @@ class DynamicValue;
 class Value;
 
 uint64_t microsecs();
-void simple_deltat(std::ostream &out, uint64_t dt);
+void simple_deltat(std::ostream &out, int64_t dt);
 
 class DynamicValueBase {
   public:
@@ -83,10 +83,10 @@ class Value {
     Value();
     Value(Kind k);
     Value(bool v);
-    Value(long v);
+    Value(int64_t v);
     Value(int v);
     Value(unsigned int v);
-    Value(unsigned long v);
+    Value(uint64_t v);
     Value(float v);
     Value(double v);
     Value(const char *str, Kind k = t_symbol);
@@ -99,12 +99,12 @@ class Value {
     std::string quoted() const;
     bool isNull() const;
     bool asFloat(double &val) const;
-    bool asInteger(long &val) const;
+    bool asInteger(int64_t &val) const;
     bool asBoolean(bool &val) const;
-    long trunc() const;
-    long round(int digits = 0) const;
+    int64_t trunc() const;
+    int64_t round(int digits = 0) const;
     double toFloat() const;
-    explicit operator long() const { return iValue; }
+    explicit operator int64_t() const { return iValue; }
     explicit operator int() const { return (int)iValue; }
     explicit operator float() const { return (float)fValue; }
     explicit operator double() const { return fValue; }
@@ -116,7 +116,7 @@ class Value {
 
     Kind kind;
     bool bValue;
-    long iValue;
+    int64_t iValue;
     double fValue;
     std::string sValue; // used for strings and for symbols
     MachineInstance *cached_machine;
@@ -135,8 +135,8 @@ class Value {
     Value &operator=(const Value &orig);
     Value &operator=(bool);
     Value &operator=(int);
-    Value &operator=(long);
-    Value &operator=(unsigned long);
+    Value &operator=(int64_t);
+    Value &operator=(uint64_t);
     Value &operator=(const char *);
     Value &operator=(std::string);
     Value &operator=(float);
