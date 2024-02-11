@@ -514,7 +514,6 @@ void ECInterface::checkSDOUpdates() {
             case SDOEntry::WRITE:
                 assert(false); // this should not be active
                 DBG_ETHERCAT_CALLS << "ecrt_sdo_request_write\n";
-                DBG_ETHERCAT << "SDO entry updates- trigger write\n";
                 readValue(sdo, entry->getSize(), entry->getOffset());
                 ecrt_sdo_request_write(sdo); // trigger first read
                 sdo_entry_state = e_Busy_Update;
@@ -1314,6 +1313,18 @@ void ECInterface::init() {
         }
         }
     */
+
+#if 0
+    int res = 0;
+        DBG_ETHERCAT_CALLS << "ecrt_master\n";
+    if ((res = ecrt_master(master, &master_info)) < 0) {
+        std::cerr << "Error " << res << " getting master info\n";
+        master_into_time = 0; // master info information is invalid
+    }
+    else {
+        master_info_time = microsecs();
+    }
+#endif
 
     char buf[200];
     DBG_ETHERCAT_CALLS << "ecrt_master_create_domain\n";
