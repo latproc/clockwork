@@ -31,6 +31,7 @@
 #include "Message.h"
 #include "filtering.h"
 #include <boost/thread/mutex.hpp>
+#include <vector>
 
 struct IOAddress {
     unsigned int module_position;
@@ -63,6 +64,13 @@ struct MQTTTopic {
     bool publisher = false;
     MQTTTopic(const char *t, const char *m) : topic(t), message(m) {}
     MQTTTopic(std::string &&t, std::string &&m) : topic(std::move(t)), message(std::move(m)) {}
+};
+
+struct Update {
+    std::vector<uint8_t> incoming_process_data;
+    std::vector<uint8_t> incoming_process_mask;
+    uint32_t incoming_data_size;
+    uint64_t global_clock = 0;
 };
 
 class IOUpdate {
@@ -98,7 +106,8 @@ class IOComponent : public Transmitter {
                                   unsigned int bit_len = 1, bool is_signed = false);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
-    static void processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data,
+    static void processAll(const Update & update, std::set<IOComponent *> &updatedMachines);
+    static void processAll(uint64_t clock, size_t data_size, const uint8_t *mask, const uint8_t *data,
                            std::set<IOComponent *> &updatedMachines);
     static void setupIOMap();
     static int getMinIOOffset();

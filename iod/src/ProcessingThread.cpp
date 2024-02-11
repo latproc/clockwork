@@ -22,7 +22,9 @@
 #include "PolledMessageHandler.h"
 #include "boost/filesystem/operations.hpp"
 #include "boost/filesystem/path.hpp"
+#include <algorithm>
 #include <assert.h>
+#include <bits/stdint-uintn.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <zmq.hpp>
@@ -72,6 +74,7 @@ class ProcessingThreadInternals {
   public:
     int sequence;
     long cycle_delay;
+    Update update;
 
     static const int ECAT_ITEM = 0;       // ethercat data incoming
     static const int CMD_ITEM = 1;        // client interface time sync
@@ -167,11 +170,6 @@ bool ProcessingThread::checkAndUpdateCycleDelay() {
     }
 */
 
-static uint8_t *incoming_process_data = 0;
-static uint8_t *incoming_process_mask = 0;
-static uint32_t incoming_data_size;
-static uint64_t global_clock = 0;
-
 #if VERBOSE_DEBUG
 static void display(std::ostream & out, uint8_t *p) {
     int max = IOComponent::getMaxIOOffset();
@@ -189,7 +187,7 @@ class IOLockHelper {
     ~IOLockHelper() { IOComponent::unlock(); }
 };
 
-int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int num_items,
+int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int num_items,
                                    zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr,
                                    zmq::socket_t &dispatcher, zmq::socket_t &scheduler,
                                    zmq::socket_t &ecat_out) {
@@ -197,21 +195,16 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
     while (!program_done) {
         try {
             long len = 0;
-            char buf[10];
+            int item_count = 0;
             res = zmq::poll(&items[0], num_items, poll_wait);
-            if (!res) {
-                return res;
-            }
-#if 0
             for (int i = 0; i < num_items; i++) {
-                if (items[i].revents && POLL_IN) {
-                    NB_MSG << "Item: " << i << " ";
+                if (items[i].revents & ZMQ_POLLIN) {
+                    ++item_count;
                 }
             }
-            NB_MSG << "\n";
-#endif
+            if (!item_count) { return 0; }
             if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
-                IOLockHelper io_lock;
+                Update update;
                 // the EtherCAT message carries a mask and data
 
                 int64_t more;
@@ -227,8 +220,8 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
                             DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == sizeof(global_clock));
-                            memcpy(&global_clock, message.data(), msglen);
+                            assert(msglen == sizeof(update.global_clock));
+                            memcpy(&update.global_clock, message.data(), msglen);
                             ++stage;
                         }
                         case 2: { // data size
@@ -237,13 +230,15 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
                             DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == sizeof(incoming_data_size));
-                            memcpy(&incoming_data_size, message.data(), msglen);
-                            len = incoming_data_size;
+                            assert(msglen == sizeof(update.incoming_data_size));
+                            memcpy(&update.incoming_data_size, message.data(), msglen);
+                            len = update.incoming_data_size;
                             if (len == 0) {
                                 stage = 4;
                                 break;
                             }
+                            update.incoming_process_data.resize(update.incoming_data_size);
+                            update.incoming_process_mask.resize(update.incoming_data_size);
                             ++stage;
                         }
                         case 3: { // data
@@ -253,14 +248,11 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
                             DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == incoming_data_size);
-                            if (!incoming_process_data) {
-                                incoming_process_data = new uint8_t[msglen];
-                            }
-                            memcpy(incoming_process_data, message.data(), msglen);
+                            assert(msglen == update.incoming_data_size);
+                            memcpy(&update.incoming_process_data[0], message.data(), msglen);
 #if VERBOSE_DEBUG
                             DBG_PROCESSING << std::flush << "got data: ";
-                            display(std::cout, incoming_process_data);
+                            display(std::cout, update.incoming_process_data);
                             DBG_PROCESSING << "\n" << std::flush;
 #endif
                             ++stage;
@@ -272,14 +264,11 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
                             DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == incoming_data_size);
-                            if (!incoming_process_mask) {
-                                incoming_process_mask = new uint8_t[msglen];
-                            }
-                            memcpy(incoming_process_mask, message.data(), msglen);
+                            assert(msglen == update.incoming_data_size);
+                            memcpy(&update.incoming_process_mask[0], message.data(), msglen);
 #if VERBOSE_DEBUG
                             std::cout << "got mask: ";
-                            display(std::cout, incoming_process_mask);
+                            display(std::cout, update.incoming_process_mask);
                             std::cout << "\n";
 #endif
                             ++stage;
@@ -303,6 +292,10 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                                    << ")\n";
                         }
                     }
+                }
+                {
+                    IOLockHelper io_lock;
+                    internals->update = update;
                 }
                 break;
             }
@@ -352,9 +345,11 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     IOLockHelper io_lock;
     static unsigned long total_mp_time = 0;
     static unsigned long mp_count = 0;
-    uint8_t *mask_p = incoming_process_mask;
-    int n = incoming_data_size;
-    while (n && *mask_p == 0) {
+    int mask_p = 0;
+    uint32_t n = internals->update.incoming_data_size;
+    assert(internals->update.incoming_process_data.size() >= n);
+    assert(internals->update.incoming_process_mask.size() >= n);
+    while (n && internals->update.incoming_process_mask[mask_p] == 0) {
         ++mask_p;
         --n;
     }
@@ -367,8 +362,7 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
 #ifdef KEEPSTATS
             AutoStat stats(avg_io_time);
 #endif
-            IOComponent::processAll(global_clock, incoming_data_size, incoming_process_mask,
-                                    incoming_process_data, io_work_queue);
+            IOComponent::processAll(internals->update, io_work_queue);
         }
         else {
             std::cout << "Processing received EtherCAT data but machine is not ready\n";
@@ -376,7 +370,7 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     }
     if (curr_t - last_sample_poll >= 10000) {
         last_sample_poll = curr_t;
-        handle_io_sampling(global_clock); // devices that need a regular poll
+        handle_io_sampling(internals->update.global_clock); // devices that need a regular poll
     }
 }
 
@@ -497,14 +491,8 @@ void ProcessingThread::operator()() {
             // attempt to initialise the hardware interface. If this
             // works we move the IOComponent module's state along
             // so that IOComponents can be linked
-            if (incoming_process_data) {
-                delete incoming_process_data;
-                incoming_process_data = 0;
-            }
-            if (incoming_process_mask) {
-                delete incoming_process_mask;
-                incoming_process_mask = 0;
-            }
+            internals->update.incoming_process_data.clear();
+            internals->update.incoming_process_mask.clear();
             if (activate_hardware.initialiseHardware()) {
                 IOComponent::setHardwareState(IOComponent::s_hardware_init);
             }
