@@ -26,8 +26,13 @@
 #include "IODCommand.h"
 #ifndef EC_SIMULATOR
 #include "value.h"
+
 #include <ecrt.h>
 #include <map>
+#include <set>
+#include <string>
+#include <time.h>
+#include <vector>
 
 /*  the entry details structure is used to gather extra data about
     an entry in a module that the Etherlab master structures doesn't
@@ -99,10 +104,6 @@ typedef struct ECPDOEntryReg {
 } ec_pdo_entry_reg_t;
 
 #endif // EC_SIMULATOR
-
-#include <string>
-#include <time.h>
-#include <vector>
 
 class MachineInstance;
 
@@ -201,6 +202,8 @@ class ECInterface {
     uint32_t reference_time;
 #ifndef EC_SIMULATOR
     static std::vector<ECModule *> modules;
+    std::set<ECModule*> online_modules;
+    std::set<ECModule *> operational_modules;
 #ifdef USE_SDO
     std::list<std::pair<SDOEntry *, Value>> initialisation_entries;
     std::list<std::pair<SDOEntry *, Value>>::iterator current_init_entry;
