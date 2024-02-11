@@ -106,7 +106,8 @@ class IOComponent : public Transmitter {
                                   unsigned int bit_len = 1, bool is_signed = false);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
-    static void processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data,
+    static void processAll(const Update & update, std::set<IOComponent *> &updatedMachines);
+    static void processAll(uint64_t clock, uint64_t data_size, const uint8_t *mask, const uint8_t *data,
                            std::set<IOComponent *> &updatedMachines);
     static void setupIOMap();
     static int getMinIOOffset();
