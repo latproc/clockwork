@@ -316,7 +316,11 @@ uint8_t *IOComponent::getUpdateData() {
     return update_data;
 }
 
-void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, uint8_t *data,
+void IOComponent::processAll(const Update & update, std::set<IOComponent *> &updated_machines) {
+    processAll(update.global_clock, update.incoming_data_size, &update.incoming_process_mask[0], & update.incoming_process_data[0], updated_machines);
+}
+
+void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *mask, const uint8_t *data,
                              std::set<IOComponent *> &updated_machines) {
     io_clock = clock;
     // receive process data updates and mask to yield updated components
@@ -356,8 +360,8 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
     }
 
     // step through the incoming mask and update bits in process data
-    uint8_t *p = data;
-    uint8_t *m = mask;
+    const uint8_t *p = data;
+    const uint8_t *m = mask;
     uint8_t *q = io_process_data;
     IOComponent *just_added = 0;
     for (unsigned int i = 0; i < process_data_size; ++i) {
