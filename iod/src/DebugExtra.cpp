@@ -39,4 +39,7 @@ DebugExtra::DebugExtra() {
     DEBUG_CHANNELS = LogState::instance()->define("DEBUG_CHANNELS");
     DEBUG_ETHERCAT = LogState::instance()->define("DEBUG_ETHERCAT");
     DEBUG_PROCESSING = LogState::instance()->define("DEBUG_PROCESSING");
+    DEBUG_ETHERCAT_CALLS = LogState::instance()->define("DEBUG_ETHERCAT_CALLS");
+    DEBUG_ETHERCAT_SDO = LogState::instance()->define("DEBUG_ETHERCAT_SDO");
+    DEBUG_ETHERCAT_PACKETS = LogState::instance()->define("DEBUG_ETHERCAT_PACKETS");
 }
