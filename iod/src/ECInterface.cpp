@@ -373,7 +373,6 @@ ec_sdo_request_t *SDOEntry::prepareRequest(ECModule *module) {
                                                     module->vendor_id, module->product_code);
     assert(x);
     ec_slave_config_state_t s;
-    DBG_ETHERCAT_CALLS << "ecrt_slave_config_state\n";
     ecrt_slave_config_state(x, &s);
     // the request field size must be big enough to hold the offset
     // the EtherLab interface only provides a byte-sized interface to SDO so we convert
@@ -793,12 +792,14 @@ void ECInterface::configureModules() {
             }
 #endif
 
-            DBG_ETHERCAT << "---- adding pdo assignments for sm " << i << " " << m->syncs[i].n_pdos
-                         << " items\n";
+            DBG_ETHERCAT <<  "---- adding pdo assignments for sm " << i << " " << m->syncs[i].n_pdos << " items\n";
             for (unsigned int j = 0; j < m->syncs[i].n_pdos; ++j) {
-                DBG_ETHERCAT_CALLS << "ecrt_slave_config_pdo_assign_add" << std::hex
-                                   << m->syncs[i].index << " " << m->syncs[i].pdos[j].index
-                                   << std::dec << "\n";
+                DBG_ETHERCAT_CALLS << "ecrt_slave_config_pdo_assign_add"
+                    << std::hex
+                    << m->syncs[i].index << " "
+                    << m->syncs[i].pdos[j].index
+                    << std::dec
+                    << "\n";
                 int res = ecrt_slave_config_pdo_assign_add(m->slave_config, m->syncs[i].index,
                                                            m->syncs[i].pdos[j].index);
                 if (res < 0) {
