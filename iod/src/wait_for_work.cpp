@@ -3,6 +3,7 @@
 #include "Channel.h"
 #include "IOComponent.h"
 #include "ControlSystemMachine.h"
+#include "value.h"
 #include <boost/thread/recursive_mutex.hpp>
 
 extern bool program_done;
@@ -64,6 +65,7 @@ void ProcessingThread:: wait_for_work(
                     last_runnable_count = runnable_count;
                 }
             }
+            curr_t = microsecs();
             if (machines_have_work || IOComponent::updatesWaiting() || !io_work_queue.empty()) {
                 poll_wait = 1;
             }
