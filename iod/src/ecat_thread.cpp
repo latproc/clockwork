@@ -473,11 +473,11 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
         if (driver_state == s_driver_init) {
             if (packet_type == DEFAULT_DATA) {
-                DBG_MSG << "received initial values from clockwork; size: " << len
+                DBG_ETHERCAT << "received initial values from clockwork; size: " << len
                         << " packet: " << (int)packet_type << "\n";
             }
             else {
-                DBG_MSG << "received process values from clockwork; size: " << len
+                DBG_ETHERCAT << "received process values from clockwork; size: " << len
                         << " packet: " << (int)packet_type << "\n";
             }
         }
