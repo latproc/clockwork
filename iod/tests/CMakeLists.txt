@@ -77,6 +77,25 @@ target_link_libraries(test_msg_encoding gmock_main cw_interpreter cw_client ${Ze
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_msg_encoding COMMAND test_msg_encoding)
 
+add_executable(test_cs_holder test_cs_holder.cpp )
+set_target_properties (test_cs_holder PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_cs_holder gmock_main cw_client cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_cs_holder COMMAND test_cs_holder)
+
+add_executable(test_disable_action iod_mock.h test_disable_action.cpp )
+set_target_properties (test_cs_holder PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_disable_action gmock_main cw_interpreter cw_client
+  ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_disable_action COMMAND test_disable_action)
+
+add_executable(test_sync_remote_states_action iod_mock.h test_sync_remote_states_action.cpp)
+target_link_libraries(test_sync_remote_states_action gmock_main cw_interpreter cw_client 
+        ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_sync_remote_states_action COMMAND test_sync_remote_states_action)
+
 add_executable(test_expressions test_expressions.cpp )
 set_target_properties (test_expressions PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(test_expressions gmock_main cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
