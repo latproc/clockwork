@@ -1914,7 +1914,7 @@ ec_pdo_info_t *c_pdos = 0;
 ec_sync_info_t *c_syncs = 0;
 EntryDetails *c_entry_details = 0;
 
-cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool reconfigure) {
+cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave_info_t &slave, bool reconfigure) {
     unsigned int i, j, k, pdo_pos = 0, entry_pos = 0;
 
     const unsigned int estimated_max_entries = 128;
@@ -2014,7 +2014,12 @@ cJSON *generateSlaveCStruct(ec_master_t *m, const ec_slave_info_t &slave, bool r
                             DBG_ETHERCAT_CALLS << "ecrt_master_get_pdo_entry\n";
                             ecrt_master_get_pdo_entry(m, slave.position, i, j, k, &entry);
                             char entry_name[40];
-                            snprintf(entry_name, 20, "entry-%X-%X", entry.index, entry.subindex);
+                            if (xml_module && entry_pos < xml_module->num_entries) {
+                                snprintf(entry_name, 40, "%s", xml_module->entry_details[entry_pos].name.c_str());
+                            }
+                            else {
+                                snprintf(entry_name, 40, "entry-%X-%X", entry.index, entry.subindex);
+                            }
                             DBG_ETHERCAT << " entry: " << k
                                 << "{"
                                 << entry_pos << ", "
@@ -2115,7 +2120,7 @@ char *collectSlaveConfig(bool reconfigure) {
     res = ecrt_master(ECInterface::master, &master_info);
     while (res >= 0 && pos < master_info.slave_count) {
         ECModule *module = ECInterface::findModule(pos);
-        if (!module) {
+        {
             ec_slave_info_t slave_info;
             memset(&slave_info, 0, sizeof(ec_slave_info_t));
             DBG_ETHERCAT_CALLS << "ecrt_master_get_slave\n";
@@ -2125,10 +2130,7 @@ char *collectSlaveConfig(bool reconfigure) {
                 << "pos: " << slave_info.position << ", "
                 << "syncs: " << slave_info.sync_count << ", "
                 << "sdos: " << slave_info.sdo_count << ")\n";
-            cJSON_AddItemToArray(root, generateSlaveCStruct(ECInterface::master, slave_info, true));
-        }
-        else {
-            DBG_ETHERCAT << "Skipped scanning of module at position " << pos << " already loaded\n";
+            cJSON_AddItemToArray(root, generateSlaveCStruct(ECInterface::master, module, slave_info, true));
         }
         ++pos;
     }
