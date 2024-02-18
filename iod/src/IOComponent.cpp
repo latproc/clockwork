@@ -65,6 +65,8 @@
 #define fromU16(m) EC_READ_U16(m)
 #define toU32(m, v) EC_WRITE_U32(m, v)
 #define fromU32(m) EC_READ_U32(m)
+#define toU64(m) EC_WRITE_U64(m, v)
+#define fromU64(m) EC_READ_U64(m)
 #endif
 
 std::list<IOComponent *> IOComponent::processing_queue;
@@ -469,7 +471,7 @@ void IOComponent::processAll(uint64_t clock, size_t data_size, uint8_t *mask, ui
             iter = updatedComponentsOut.begin();
             while (iter != updatedComponentsOut.end()) {
                 IOComponent *ioc = *iter++;
-                if (ioc->pending_value == (uint32_t)ioc->address.value) {
+                if (ioc->pending_value == ioc->address.value) {
                     //std::cout << "output request for " << ioc->io_name << " cleared as hardware value matches\n";
                     updatedComponentsOut.erase(ioc);
                 }
@@ -550,12 +552,14 @@ unsigned char mem[1000];
 #define EC_READ_U8(offset) 0
 #define EC_READ_U16(offset) 0
 #define EC_READ_U32(offset) 0
+#define EC_READ_U64(offset) 0
 #define EC_WRITE_U8(offset, val) 0
 #define EC_WRITE_U16(offset, val) 0
 #define EC_WRITE_U32(offset, val) 0
+#define EC_WRITE_U64(offset, val) 0
 #endif
 
-int32_t IOComponent::filter(int32_t val) { return val; }
+int64_t IOComponent::filter(int64_t val) { return val; }
 
 class InputFilterSettings {
   public:
@@ -822,7 +826,7 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
     }
 }
 
-int32_t AnalogueInput::filter(int32_t raw) {
+int64_t AnalogueInput::filter(int64_t raw) {
     if ((long)(read_time - config->last_time) <
         ((config->throttle) ? (*config->throttle * 1000L) : 10000L)) {
         return raw;
@@ -837,7 +841,7 @@ int32_t AnalogueInput::filter(int32_t raw) {
         config->last_sent = raw;
     }
     else if (!config->filter_type || (config->filter_type && *config->filter_type == 1)) {
-        int32_t mean = (bufferAverage(config->positions, *config->filter_len) + 0.5f);
+        int64_t mean = (bufferAverage(config->positions, *config->filter_len) + 0.5f);
         long delta = abs(mean - config->last_sent);
         if (delta >= *config->tolerance) {
             config->last_sent = mean;
@@ -1005,7 +1009,7 @@ void Counter::setupProperties(MachineInstance *m) {
     }
 }
 
-int32_t Counter::filter(int32_t val) {
+int64_t Counter::filter(int64_t val) {
     double scaled_val = (double)val / (double)*internals->input_scale;
     addSample(internals->positions, (long)read_time, scaled_val);
 
@@ -1014,28 +1018,28 @@ int32_t Counter::filter(int32_t val) {
         internals->last_sent = val;
     }
     else if (internals->filter_type && *internals->filter_type == 1) {
-        int32_t mean = (internals->positions.average(internals->buffer_len) + 0.5f);
+        int64_t mean = (internals->positions.average(internals->buffer_len) + 0.5f);
         if (internals->tolerance) {
             internals->noise_tolerance = *internals->tolerance;
         }
-        if ((uint32_t)abs(mean - internals->last_sent) >= internals->noise_tolerance) {
+        if ((uint64_t)abs(mean - internals->last_sent) >= internals->noise_tolerance) {
             internals->last_sent = mean;
         }
     }
     else if (internals->filter_type && *internals->filter_type == 2) {
         long res = (long)internals->filter();
-        internals->last_sent = (int32_t)(res / internals->filter_len * 2);
+        internals->last_sent = (int64_t)(res / internals->filter_len * 2);
     }
 #endif
     if (*internals->tolerance > 1) {
-        int32_t mean = (bufferAverage(internals->positions, *internals->filter_len) + 0.5f);
-        long delta = (uint32_t)abs(mean - internals->last_sent);
+        int64_t mean = (bufferAverage(internals->positions, *internals->filter_len) + 0.5f);
+        long delta = (uint64_t)abs(mean - internals->last_sent);
         if (delta >= *internals->tolerance) {
             internals->last_sent = mean;
         }
     }
     else {
-        internals->last_sent = (*internals->input_scale == 1) ? val : (uint32_t)(scaled_val + 0.5);
+        internals->last_sent = (*internals->input_scale == 1) ? val : (uint64_t)(scaled_val + 0.5);
     }
     internals->update(read_time);
 
@@ -1066,7 +1070,7 @@ CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positio
     start_t = microsecs();
 }
 
-int32_t CounterRate::filter(int32_t val) {
+int64_t CounterRate::filter(int64_t val) {
 #if 0
     /*  as for the AnalogueInput, note that these 'IO' properties do not
         cause value change notifications throughout clockwork
@@ -1094,10 +1098,10 @@ int32_t CounterRate::filter(int32_t val) {
 class PID_Settings {
   public:
     bool property_changed;
-    uint32_t max_forward;
-    uint32_t max_reverse;
+    uint64_t max_forward;
+    uint64_t max_reverse;
     float Kp;
-    uint32_t set_point;
+    uint64_t set_point;
 
     float estimated_speed;
     float Pe;      // used for process error: SetPoint - EstimatedSpeed;
@@ -1107,13 +1111,13 @@ class PID_Settings {
     uint64_t measure_time;
     uint64_t last_time;
     float last_power;
-    uint32_t slow_speed;
-    uint32_t full_speed;
-    uint32_t stopping_time;
-    uint32_t stopping_distance;
-    uint32_t tolerance;
-    uint32_t min_update_time;
-    uint32_t deceleration_allowance;
+    uint64_t slow_speed;
+    uint64_t full_speed;
+    uint64_t stopping_time;
+    uint64_t stopping_distance;
+    uint64_t tolerance;
+    uint64_t min_update_time;
+    uint64_t deceleration_allowance;
     float deceleration_rate;
 
     PID_Settings()
@@ -1124,7 +1128,7 @@ class PID_Settings {
           deceleration_rate(0.8f) {}
 };
 
-int32_t PIDController::filter(int32_t raw) { return raw; }
+int64_t PIDController::filter(int64_t raw) { return raw; }
 
 PIDController::PIDController(IOAddress addr) : Output(addr), config(0) {
     config = new PID_Settings();
@@ -1508,7 +1512,7 @@ void IOComponent::markChange() {
     bitpos = bitpos % 8;
 
     if (address.bitlen == 1) {
-        int32_t value = (*offset & (1 << bitpos)) ? 1 : 0;
+        int64_t value = (*offset & (1 << bitpos)) ? 1 : 0;
 
         // only outputs will have an e_on or e_off event queued,
         // if they do, set the bit accordingly, ignoring the previous value
@@ -1564,7 +1568,7 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
     bitpos = bitpos % 8;
 
     if (address.bitlen == 1) {
-        int32_t value = (*offset & (1 << bitpos)) ? 1 : 0;
+        int64_t value = (*offset & (1 << bitpos)) ? 1 : 0;
 
         const char *evt;
         if (address.value != value) { // TBD is this test necessary?
@@ -1603,7 +1607,7 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
         //std::cout << io_name << " object of size " << address.bitlen << " val: ";
         //display(offset, address.bitlen/8);
         //std::cout << " bit pos: " << bitpos << " ";
-        int32_t val = 0;
+        int64_t val = 0;
         if (address.bitlen < 8) {
             uint8_t bitmask = 0x8 >> bitpos;
             val = 0;
@@ -1633,6 +1637,9 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
         else if (address.bitlen == 32) {
             val = fromU32(offset);
         }
+        else if (address.bitlen == 64) {
+            val = fromU64(offset);
+        }
         else {
             std::cout << " unusual bitlen: " << address.bitlen << "\n";
             val = 0;
@@ -1653,10 +1660,10 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             address.value = val;
         }
         else if (hardware_state == s_hardware_init ||
-                 (hardware_state == s_operational && raw_value != (uint32_t)val)) {
+                 (hardware_state == s_operational && raw_value != val)) {
             //std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
             raw_value = val;
-            int32_t new_val = filter(val);
+            int64_t new_val = filter(val);
             if (hardware_state == s_operational) { //&& address.value != new_val) {
                 address.value = new_val;
             }
@@ -1697,6 +1704,28 @@ void IOComponent::setValue(uint32_t new_value) {
 }
 
 void IOComponent::setValue(int32_t new_value) {
+    assert(address.is_signed);
+    pending_value = new_value;
+    last = microsecs();
+    last_event = e_change;
+    updatesSent(false);
+    updatedComponentsOut.insert(this);
+    ++outputs_waiting;
+    markChange();
+}
+
+void IOComponent::setValue(uint64_t new_value) {
+    assert(!address.is_signed);
+    pending_value = new_value;
+    last = microsecs();
+    last_event = e_change;
+    updatesSent(false);
+    updatedComponentsOut.insert(this);
+    ++outputs_waiting;
+    markChange();
+}
+
+void IOComponent::setValue(int64_t new_value) {
     assert(address.is_signed);
     pending_value = new_value;
     last = microsecs();
