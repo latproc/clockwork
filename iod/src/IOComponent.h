@@ -270,6 +270,13 @@ class Counter : public IOComponent {
     CounterInternals *internals;
 };
 
+class DigitalValue : public IOComponent {
+  public:
+    DigitalValue(IOAddress addr);
+    const char *type() override { return "DigitalValue"; }
+    int64_t filter(int64_t val) override;
+};
+
 class CounterRate : public IOComponent {
   public:
     CounterRate(IOAddress addr);

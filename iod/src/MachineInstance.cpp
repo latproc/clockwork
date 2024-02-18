@@ -397,6 +397,9 @@ bool MachineInstance::uses(MachineInstance *other) {
     if (other->_type == "COUNTER") {
         return true;
     }
+    if (other->_type == "DIGITALVALUE") {
+        return true;
+    }
     if (other->_type == "COUNTERRATE") {
         return true;
     }
@@ -416,6 +419,9 @@ bool MachineInstance::uses(MachineInstance *other) {
         return true;
     }
     if (_type == "COUNTER") {
+        return true;
+    }
+    if (_type == "DIGITALVALUE") {
         return true;
     }
     if (_type == "COUNTERRATE") {
@@ -3470,7 +3476,8 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                             ((newsm->name == "POINT" || newsm->name == "ANALOGINPUT" ||
                               newsm->name == "COUNTER" || newsm->name == "INPUTBIT" ||
                               newsm->name == "OUTPUTBIT" || newsm->name == "INPUTREGISTER" ||
-                              newsm->name == "OUTPUTREGISTER") &&
+                              newsm->name == "OUTPUTREGISTER" || newsm->name == "DIGITALVALUE"
+                              ) &&
                              newsm->parameters.size() >= 2 && newsm->parameters.size() <= 3) ||
                             (newsm->name == "COUNTERRATE" &&
                              (newsm->parameters.size() == 3 || newsm->parameters.size() == 1))) {
