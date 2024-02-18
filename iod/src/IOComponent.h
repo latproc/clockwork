@@ -37,7 +37,7 @@ struct IOAddress {
     unsigned int module_position;
     unsigned int io_offset;
     int io_bitpos;
-    int32_t value;
+    int64_t value;
     unsigned int bitlen;
     unsigned int entry_position;
     bool is_signed;
@@ -69,7 +69,7 @@ struct MQTTTopic {
 struct Update {
     std::vector<uint8_t> incoming_process_data;
     std::vector<uint8_t> incoming_process_mask;
-    uint32_t incoming_data_size;
+    uint64_t incoming_data_size;
     uint64_t global_clock = 0;
 };
 
@@ -153,7 +153,7 @@ class IOComponent : public Transmitter {
     virtual void turnOff();
     bool isOn();
     bool isOff();
-    int32_t value() {
+    int64_t value() {
         if (address.bitlen == 1) {
             if (isOn()) {
                 return 1;
@@ -168,10 +168,12 @@ class IOComponent : public Transmitter {
     }
     void setValue(uint32_t new_value);
     void setValue(int32_t new_value);
+    void setValue(uint64_t new_value);
+    void setValue(int64_t new_value);
     virtual const char *type() { return "IOComponent"; }
     std::ostream &operator<<(std::ostream &out) const;
     IOAddress address;
-    uint32_t pending_value;
+    int64_t pending_value;
     uint64_t read_time; // the last read time
     static uint64_t ioClock() { return io_clock; }
 
@@ -184,7 +186,7 @@ class IOComponent : public Transmitter {
     virtual void setupProperties(
         MachineInstance *m); // link properties in the component to the MachineInstance properties
 
-    virtual int32_t filter(int32_t);
+    virtual int64_t filter(int64_t);
 
     void setName(std::string &&new_name) { io_name = std::move(new_name); }
     std::string io_name;
@@ -210,7 +212,7 @@ class IOComponent : public Transmitter {
     static uint64_t io_clock;
     int getStatus();
     int io_index; // the index of the first bit in this component's address space
-    uint32_t raw_value;
+    int64_t raw_value;
     static unsigned int outputs_waiting; // this many outputs are waiting to change
     static size_t process_data_size;
     static uint8_t *io_process_data;
@@ -250,7 +252,7 @@ class AnalogueInput : public IOComponent {
     virtual const char *type() { return "AnalogueInput"; }
     void setupProperties(
         MachineInstance *m); // link properties in the component to the MachineInstance properties
-    virtual int32_t filter(int32_t raw);
+    virtual int64_t filter(int64_t raw);
     void update(); // clockwork uses this to notify of updates
     InputFilterSettings *config;
 };
@@ -261,7 +263,7 @@ class Counter : public IOComponent {
     Counter(IOAddress addr);
     virtual const char *type() { return "Counter"; }
     void update(); // clockwork uses this to notify of updates
-    virtual int32_t filter(int32_t raw);
+    virtual int64_t filter(int64_t raw);
     virtual void setupProperties(
         MachineInstance *m); // link properties in the component to the MachineInstance properties
   private:
@@ -272,8 +274,8 @@ class CounterRate : public IOComponent {
   public:
     CounterRate(IOAddress addr);
     virtual const char *type() { return "CounterRate"; }
-    virtual int32_t filter(int32_t raw);
-    int32_t position;
+    virtual int64_t filter(int64_t raw);
+    int64_t position;
 
   private:
     uint64_t start_t;
@@ -296,7 +298,7 @@ class PIDController : public Output {
     //  AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
     virtual const char *type() { return "SpeedController"; }
     void handleChange(std::list<Package *> &work_queue);
-    virtual int32_t filter(int32_t raw);
+    virtual int64_t filter(int64_t raw);
     void update(); // clockwork uses this to notify of updates
     PID_Settings *config;
 };

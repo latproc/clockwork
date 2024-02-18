@@ -75,7 +75,7 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
             std::string res = device->getStateString();
             if (device->address.bitlen > 1) {
                 char buf[10];
-                snprintf(buf, 9, "(%d)", device->value());
+                snprintf(buf, 9, "(%ld)", device->value());
                 res += buf;
             }
             result_str = res;
