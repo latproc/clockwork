@@ -278,239 +278,356 @@ int load_preset_modbus_mappings() {
     return 0; // no error
 }
 
+MachineClass *makeSettingsClass(const char *host_name) {
+    MachineClass *result = new MachineClass("SYSTEMSETTINGS");
+    result->addState("ready");
+    result->default_state = State("ready");
+    result->initial_state = State("ready");
+    result->disableAutomaticStateChanges();
+    result->setProperty("INFO", "Clockwork host");
+    result->setProperty("HOST", host_name);
+    result->setProperty("VERSION", "0.9");
+    result->setProperty("CYCLE_DELAY", 2000);
+    result->setProperty("POLLING_DELAY", 2000);
+    return result;
+}
+
+MachineClass * makeClockworkClass() {
+    MachineClass *result = new MachineClass("CLOCKWORK");
+    result->addState("ready");
+    result->default_state = State("ready");
+    result->initial_state = State("ready");
+    result->disableAutomaticStateChanges();
+    result->setProperty("PROTOCOL", "CLOCKWORK");
+    result->setProperty("HOST", "localhost");
+    result->setProperty("PORT", 5600);
+    return result;
+}
+
+MachineClass *makePointMachineClass() {
+    auto result = new MachineClass("POINT");
+    result->parameters.push_back(Parameter("module"));
+    result->parameters.push_back(Parameter("offset"));
+    result->addState("on", true);
+    result->addState("off", true);
+    result->default_state = State("off");
+    result->initial_state = State("off");
+    result->disableAutomaticStateChanges();
+    return result;
+}
+
+MachineClass *makeStatusFlagMachineClass() {
+    auto result = new MachineClass("STATUS_FLAG");
+    result->parameters.push_back(Parameter("module"));
+    result->parameters.push_back(Parameter("offset"));
+    result->parameters.push_back(Parameter("entry"));
+    result->addState("on");
+    result->addState("off");
+    result->default_state = State("off");
+    result->initial_state = State("off");
+    result->disableAutomaticStateChanges();
+    return result;
+}
+
+MachineClass *makeAnalogueInMachineClass() {
+    MachineClass *result = new MachineClass("ANALOGINPUT");
+    result->parameters.push_back(Parameter("module"));
+    result->parameters.push_back(Parameter("offset"));
+    result->parameters.push_back(Parameter("filter_settings"));
+    result->addState("stable");
+    result->addState("unstable");
+    result->default_state = State("stable");
+    result->initial_state = State("stable");
+    result->disableAutomaticStateChanges();
+    result->setProperty("IOTIME", Value(0));
+    result->setProperty("VALUE", Value(0));
+    result->setProperty("Position", Value(0));
+    result->setProperty("Velocity", Value(0.0));
+    result->setProperty("Acceleration", Value(0.0));
+    return result;
+}
+
+MachineClass *makeCounterMachineClass() {
+    MachineClass *result = new MachineClass("COUNTER");
+    result->parameters.push_back(Parameter("module"));
+    result->parameters.push_back(Parameter("offset"));
+    result->addState("stable");
+    result->addState("unstable");
+    result->addState("off");
+    result->default_state = State("off");
+    result->initial_state = State("off");
+    result->disableAutomaticStateChanges();
+    result->setProperty("IOTIME", Value(0));
+    result->setProperty("VALUE", Value(0));
+    result->setProperty("Position", Value(0));
+    result->setProperty("Velocity", Value(0));
+    return result;
+}
+
+MachineClass *makeRateEstimatorMachineClass() {
+    MachineClass *result = new MachineClass("RATEESTIMATOR");
+    result->parameters.push_back(Parameter("position_input"));
+    result->parameters.push_back(Parameter("settings"));
+    result->addState("stable");
+    result->addState("unstable");
+    result->addState("off");
+    result->default_state = State("off");
+    result->initial_state = State("off");
+    result->disableAutomaticStateChanges();
+    result->setProperty("VALUE", Value(0));
+    result->setProperty("position", Value(0));
+    return result;
+}
+
+MachineClass *makeCounterRateMachineClass() {
+    MachineClass *result = new MachineClass("COUNTERRATE");
+    result->parameters.push_back(Parameter("position_output"));
+    result->parameters.push_back(Parameter("module"));
+    result->parameters.push_back(Parameter("offset"));
+    result->addState("stable");
+    result->addState("unstable");
+    result->addState("off");
+    result->default_state = State("off");
+    result->initial_state = State("off");
+    result->disableAutomaticStateChanges();
+    result->setProperty("VALUE", Value(0));
+    result->setProperty("position", Value(0));
+    return result;
+}
+
+MachineClass *makeAnalogueOutputMachineClass() {
+    MachineClass *result = new MachineClass("ANALOGOUTPUT");
+    result->parameters.push_back(Parameter("module"));
+    result->parameters.push_back(Parameter("offset"));
+    result->addState("stable");
+    result->addState("unstable");
+    result->default_state = State("stable");
+    result->initial_state = State("stable");
+    result->setProperty("VALUE", Value(0));
+    return result;
+}
+
+MachineClass *makeListMachineClass() {
+    MachineClass *result = new MachineClass("LIST");
+    result->addState("empty");
+    result->addState("nonempty");
+    result->default_state = State("empty");
+    result->initial_state = State("empty");
+    result->setProperty("VALUE", Value(0));
+    return result;
+}
+
+MachineClass *makeSpeedControllerMachineClass() {
+    MachineClass *result = new MachineClass("SPEEDCONTROLLER");
+    result->parameters.push_back(Parameter("module"));
+    result->parameters.push_back(Parameter("offset"));
+    result->parameters.push_back(Parameter("settings"));
+    result->parameters.push_back(Parameter("position"));
+    result->parameters.push_back(Parameter("speed"));
+    result->addState("stable");
+    result->addState("unstable");
+    result->default_state = State("stable");
+    result->initial_state = State("stable");
+    result->setProperty("VALUE", Value(0));
+    return result;
+}
+
+MachineClass *makeReferenceMachineClass() {
+    MachineClass *result = new MachineClass("REFERENCE");
+    result->addState("ASSIGNED");
+    result->addState("EMPTY");
+    result->default_state = State("EMPTY");
+    result->initial_state = State("EMPTY");
+    return result;
+}
+
+MachineClass *makeModuleMachineClass() {
+    MachineClass *result = new MachineClass("MODULE");
+    result->disableAutomaticStateChanges();
+    result->addState("PREOP");
+    result->addState("BOOT");
+    result->addState("SAFEOP");
+    result->addState("OP");
+#ifdef EC_SIMULATOR
+    result->transitions.push_back(Transition(State("INIT"), State("OP"), Message("turnOn")));
+    result->transitions.push_back(
+        Transition(State("INIT"), State("PREOP"), Message("powerUp")));
+    result->transitions.push_back(Transition(State("PREOP"), State("OP"), Message("turnOn")));
+    result->transitions.push_back(
+        Transition(State("OP"), State("PREOP"), Message("turnOff")));
+#endif
+    return result;
+}
+
+MachineClass *makePublisherMachineClass() {
+    MachineClass *result = new MachineClass("MQTTPUBLISHER");
+    result->parameters.push_back(Parameter("broker"));
+    result->parameters.push_back(Parameter("topic"));
+    result->parameters.push_back(Parameter("message"));
+    return result;
+}
+
+MachineClass *makeSubscriberMachineClass() {
+    MachineClass *result = new MachineClass("MQTTSUBSCRIBER");
+    result->parameters.push_back(Parameter("broker"));
+    result->parameters.push_back(Parameter("topic"));
+    result->setOption("message", 0); //TODO: exported code cannot handle string messages
+    return result;
+}
+
+MachineClass *makeBrokerMachineClass() {
+    MachineClass *result = new MachineClass("MQTTBROKER");
+    result->parameters.push_back(Parameter("host"));
+    result->parameters.push_back(Parameter("port"));
+    result->disableAutomaticStateChanges();
+    return result;
+}
+
+MachineClass *makeConditionMachineClass() {
+    MachineClass *result = new MachineClass("CONDITION");
+    result->addState("true");
+    result->addState("false");
+    result->default_state = State("false");
+    return result;
+}
+
+MachineClass *makeFlagMachineClass() {
+    MachineClass *result = new MachineClass("FLAG");
+    result->addState("on");
+    result->addState("off");
+    result->default_state = State("off");
+    result->initial_state = State("off");
+    result->disableAutomaticStateChanges();
+    result->transitions.push_back(Transition(State("off"), State("on"), Message("turnOn")));
+    result->transitions.push_back(Transition(State("on"), State("off"), Message("turnOff")));
+    return result;
+}
+
+MachineClass *makeVariableMachineClass() {
+    MachineClass *result = new MachineClass("VARIABLE");
+    result->addState("ready");
+    result->initial_state = State("ready");
+    result->disableAutomaticStateChanges();
+    result->parameters.push_back(Parameter("VAL_PARAM1"));
+    result->setOption("VALUE", "VAL_PARAM1");
+    return result;
+}
+
+MachineClass *makeConstantMachineClass() {
+    MachineClass *result = new MachineClass("CONSTANT");
+    result->addState("ready");
+    result->initial_state = State("ready");
+    result->disableAutomaticStateChanges();
+    result->parameters.push_back(Parameter("VAL_PARAM1"));
+    result->setOption("VALUE", "VAL_PARAM1");
+    return result;
+}
+
+MachineClass *makeExternalMachineClass() {
+    MachineClass *result = new MachineClass("EXTERNAL");
+    result->setOption("HOST", "localhost");
+    result->setOption("PORT", 5600);
+    result->setOption("PROTOCOL", "ZMQ");
+    return result;
+}
+
+#ifndef EC_SIMULATOR
+MachineClass *makeEtherCatWorkingCounterMachineClass() {
+    MachineClass *result = new MachineClass("ETHERCAT_WORKINGCOUNTER");
+    result->addState("ZERO");
+    result->addState("INCOMPLETE");
+    result->addState("COMPLETE");
+    result->initial_state = State("ZERO");
+    result->disableAutomaticStateChanges();
+    result->setProperty("VALUE", Value(0));
+    return result;
+}
+
+MachineClass *makeEtherCatLinkStatusMachineClass() {
+    MachineClass *result = new MachineClass("ETHERCAT_LINKSTATUS");
+    result->addState("DOWN");
+    result->addState("UP");
+    result->initial_state = State("DOWN");
+    result->disableAutomaticStateChanges();
+    return result;
+}
+
+MachineClass *makeEtherCatBusMachineClass() {
+    MachineClass *result = new MachineClass("ETHERCAT_BUS");
+    {
+        State *init = result->findMutableState("INIT");
+        if (!init) {
+            init = new State("INIT");
+            result->states.push_back(init);
+        }
+        init->setEnterFunction(ECInterface::setup);
+    }
+    result->addState("DISCONNECTED");
+    result->addState("CONNECTED");
+    result->addState("CONFIG");
+    result->addState("ACTIVE");
+    result->addState("ERROR");
+    result->initial_state = State("INIT");
+    result->setProperty("tolerance", Value(10));
+    result->disableAutomaticStateChanges();
+    MachineCommandTemplate *mc = new MachineCommandTemplate("activate", "");
+    result->receives.insert(std::make_pair(Message("activate"), mc));
+    mc = new MachineCommandTemplate("deactivate", "");
+    result->receives.insert(std::make_pair(Message("deactivate"), mc));
+    //  result->transitions.push_back(Transition(State("CONFIG"), State("ACTIVE"), Message("activate")));
+    //  result->transitions.push_back(Transition(State("ACTIVE"), State("CONFIG"), Message("deactivate")));
+    return result;
+}
+
+MachineClass *makeSdoEntryMachineClass() {
+    MachineClass *mc_sdo = new MachineClass("SDOENTRY");
+    mc_sdo->addState("ready");
+    mc_sdo->initial_state = State("ready");
+    mc_sdo->disableAutomaticStateChanges();
+    mc_sdo->parameters.push_back(Parameter("MODULE"));
+    mc_sdo->parameters.push_back(Parameter("INDEX"));
+    mc_sdo->parameters.push_back(Parameter("SUBINDEX"));
+    mc_sdo->parameters.push_back(Parameter("SIZE"));
+    mc_sdo->parameters.push_back(Parameter("OFFSET"));
+    mc_sdo->setOption("VALUE", 0);
+    return mc_sdo;
+}
+
+#endif
+
 void predefine_special_machines() {
     char host_name[100];
     int err = gethostname(host_name, 100);
     if (err == -1) {
         strcpy(host_name, "localhost");
     }
-    MachineClass *settings_class = new MachineClass("SYSTEMSETTINGS");
-    settings_class->addState("ready");
-    settings_class->default_state = State("ready");
-    settings_class->initial_state = State("ready");
-    settings_class->disableAutomaticStateChanges();
-    settings_class->setProperty("INFO", "Clockwork host");
-    settings_class->setProperty("HOST", host_name);
-    settings_class->setProperty("VERSION", "0.9");
-    settings_class->setProperty("CYCLE_DELAY", 2000);
-    settings_class->setProperty("POLLING_DELAY", 2000);
 
-    MachineClass *cw_class = new MachineClass("CLOCKWORK");
-    cw_class->addState("ready");
-    cw_class->default_state = State("ready");
-    cw_class->initial_state = State("ready");
-    cw_class->disableAutomaticStateChanges();
-    cw_class->setProperty("PROTOCOL", "CLOCKWORK");
-    cw_class->setProperty("HOST", "localhost");
-    cw_class->setProperty("PORT", 5600);
+    auto settings_class = makeSettingsClass(host_name);
+    auto cw_class = makeClockworkClass();
+    auto point_class = makePointMachineClass();
+    auto flag_class = makeStatusFlagMachineClass();
+    auto ain_class = makeAnalogueInMachineClass();
+    auto cnt_class = makeCounterMachineClass();
+    auto re_class = makeRateEstimatorMachineClass();
+    auto cr_class = makeCounterRateMachineClass();
+    auto aout_class = makeAnalogueOutputMachineClass();
+    auto list_class = makeListMachineClass();
+    auto ref_class = makeReferenceMachineClass();
 
-    MachineClass *point_class = new MachineClass("POINT");
-    point_class->parameters.push_back(Parameter("module"));
-    point_class->parameters.push_back(Parameter("offset"));
-    point_class->addState("on", true);
-    point_class->addState("off", true);
-    point_class->default_state = State("off");
-    point_class->initial_state = State("off");
-    point_class->disableAutomaticStateChanges();
-
-    point_class = new MachineClass("STATUS_FLAG");
-    point_class->parameters.push_back(Parameter("module"));
-    point_class->parameters.push_back(Parameter("offset"));
-    point_class->parameters.push_back(Parameter("entry"));
-    point_class->addState("on");
-    point_class->addState("off");
-    point_class->default_state = State("off");
-    point_class->initial_state = State("off");
-    point_class->disableAutomaticStateChanges();
-
-    MachineClass *ain_class = new MachineClass("ANALOGINPUT");
-    ain_class->parameters.push_back(Parameter("module"));
-    ain_class->parameters.push_back(Parameter("offset"));
-    ain_class->parameters.push_back(Parameter("filter_settings"));
-    ain_class->addState("stable");
-    ain_class->addState("unstable");
-    ain_class->default_state = State("stable");
-    ain_class->initial_state = State("stable");
-    ain_class->disableAutomaticStateChanges();
-    ain_class->setProperty("IOTIME", Value(0));
-    ain_class->setProperty("VALUE", Value(0));
-    ain_class->setProperty("Position", Value(0));
-    ain_class->setProperty("Velocity", Value(0.0));
-    ain_class->setProperty("Acceleration", Value(0.0));
-
-    MachineClass *cnt_class = new MachineClass("COUNTER");
-    cnt_class->parameters.push_back(Parameter("module"));
-    cnt_class->parameters.push_back(Parameter("offset"));
-    cnt_class->addState("stable");
-    cnt_class->addState("unstable");
-    cnt_class->addState("off");
-    cnt_class->default_state = State("off");
-    cnt_class->initial_state = State("off");
-    cnt_class->disableAutomaticStateChanges();
-    cnt_class->setProperty("IOTIME", Value(0));
-    cnt_class->setProperty("VALUE", Value(0));
-    cnt_class->setProperty("Position", Value(0));
-    cnt_class->setProperty("Velocity", Value(0));
-
-    MachineClass *re_class = new MachineClass("RATEESTIMATOR");
-    re_class->parameters.push_back(Parameter("position_input"));
-    re_class->parameters.push_back(Parameter("settings"));
-    re_class->addState("stable");
-    re_class->addState("unstable");
-    re_class->addState("off");
-    re_class->default_state = State("off");
-    re_class->initial_state = State("off");
-    re_class->disableAutomaticStateChanges();
-    re_class->setProperty("VALUE", Value(0));
-    re_class->setProperty("position", Value(0));
-
-    MachineClass *cr_class = new MachineClass("COUNTERRATE");
-    cr_class->parameters.push_back(Parameter("position_output"));
-    cr_class->parameters.push_back(Parameter("module"));
-    cr_class->parameters.push_back(Parameter("offset"));
-    cr_class->addState("stable");
-    cr_class->addState("unstable");
-    cr_class->addState("off");
-    cr_class->default_state = State("off");
-    cr_class->initial_state = State("off");
-    cr_class->disableAutomaticStateChanges();
-    cr_class->setProperty("VALUE", Value(0));
-    cr_class->setProperty("position", Value(0));
-
-    MachineClass *aout_class = new MachineClass("ANALOGOUTPUT");
-    aout_class->parameters.push_back(Parameter("module"));
-    aout_class->parameters.push_back(Parameter("offset"));
-    aout_class->addState("stable");
-    aout_class->addState("unstable");
-    aout_class->default_state = State("stable");
-    aout_class->initial_state = State("stable");
-    aout_class->setProperty("VALUE", Value(0));
-
-#if 0
-    MachineClass *pid_class = new MachineClass("SPEEDCONTROLLER");
-    pid_class->parameters.push_back(Parameter("module"));
-    pid_class->parameters.push_back(Parameter("offset"));
-    pid_class->parameters.push_back(Parameter("settings"));
-    pid_class->parameters.push_back(Parameter("position"));
-    pid_class->parameters.push_back(Parameter("speed"));
-    pid_class->addState("stable");
-    pid_class->addState("unstable");
-    pid_class->default_state = State("stable");
-    pid_class->initial_state = State("stable");
-    pid_class->setProperty("VALUE", Value(0));
-#endif
-
-    MachineClass *list_class = new MachineClass("LIST");
-    list_class->addState("empty");
-    list_class->addState("nonempty");
-    list_class->default_state = State("empty");
-    list_class->initial_state = State("empty");
-    //list_class->disableAutomaticStateChanges();
-    list_class->setProperty("VALUE", Value(0));
-
-    MachineClass *ref_class = new MachineClass("REFERENCE");
-    ref_class->addState("ASSIGNED");
-    ref_class->addState("EMPTY");
-    ref_class->default_state = State("EMPTY");
-    ref_class->initial_state = State("EMPTY");
-    //ref_class->disableAutomaticStateChanges();
-
-    MachineClass *module_class = new MachineClass("MODULE");
-    module_class->disableAutomaticStateChanges();
-    module_class->addState("PREOP");
-    module_class->addState("BOOT");
-    module_class->addState("SAFEOP");
-    module_class->addState("OP");
-#ifdef EC_SIMULATOR
-    module_class->transitions.push_back(Transition(State("INIT"), State("OP"), Message("turnOn")));
-    module_class->transitions.push_back(
-        Transition(State("INIT"), State("PREOP"), Message("powerUp")));
-    module_class->transitions.push_back(Transition(State("PREOP"), State("OP"), Message("turnOn")));
-    module_class->transitions.push_back(
-        Transition(State("OP"), State("PREOP"), Message("turnOff")));
-#endif
-
-    MachineClass *publisher_class = new MachineClass("MQTTPUBLISHER");
-    publisher_class->parameters.push_back(Parameter("broker"));
-    publisher_class->parameters.push_back(Parameter("topic"));
-    publisher_class->parameters.push_back(Parameter("message"));
-
-    MachineClass *subscriber_class = new MachineClass("MQTTSUBSCRIBER");
-    subscriber_class->parameters.push_back(Parameter("broker"));
-    subscriber_class->parameters.push_back(Parameter("topic"));
-    subscriber_class->setOption("message", 0); //TODO: exported code cannot handle string messages
-
-    MachineClass *broker_class = new MachineClass("MQTTBROKER");
-    broker_class->parameters.push_back(Parameter("host"));
-    broker_class->parameters.push_back(Parameter("port"));
-    broker_class->disableAutomaticStateChanges();
-
-    MachineClass *cond = new MachineClass("CONDITION");
-    cond->addState("true");
-    cond->addState("false");
-    cond->default_state = State("false");
-
-    MachineClass *flag = new MachineClass("FLAG");
-    flag->addState("on");
-    flag->addState("off");
-    flag->default_state = State("off");
-    flag->initial_state = State("off");
-    flag->disableAutomaticStateChanges();
-    flag->transitions.push_back(Transition(State("off"), State("on"), Message("turnOn")));
-    flag->transitions.push_back(Transition(State("on"), State("off"), Message("turnOff")));
-
-    MachineClass *mc_variable = new MachineClass("VARIABLE");
-    mc_variable->addState("ready");
-    mc_variable->initial_state = State("ready");
-    mc_variable->disableAutomaticStateChanges();
-    mc_variable->parameters.push_back(Parameter("VAL_PARAM1"));
-    mc_variable->setOption("VALUE", "VAL_PARAM1");
-
-    MachineClass *mc_constant = new MachineClass("CONSTANT");
-    mc_constant->addState("ready");
-    mc_constant->initial_state = State("ready");
-    mc_constant->disableAutomaticStateChanges();
-    mc_constant->parameters.push_back(Parameter("VAL_PARAM1"));
-    mc_constant->setOption("VALUE", "VAL_PARAM1");
+    auto module_class = makeModuleMachineClass();
+    auto publisher_class = makePublisherMachineClass();
+    auto subscriber_class = makeSubscriberMachineClass();
+    auto broker_class = makeBrokerMachineClass();
+    auto condition_class = makeConditionMachineClass();
+    auto flag = makeFlagMachineClass();
+    auto mc_variable = makeVariableMachineClass();
+    auto mc_constant = makeConstantMachineClass();
+    auto mc_external = makeExternalMachineClass();
 
 #ifndef EC_SIMULATOR
-    MachineClass *mcwc = new MachineClass("ETHERCAT_WORKINGCOUNTER");
-    mcwc->addState("ZERO");
-    mcwc->addState("INCOMPLETE");
-    mcwc->addState("COMPLETE");
-    mcwc->initial_state = State("ZERO");
-    mcwc->disableAutomaticStateChanges();
-    mcwc->setProperty("VALUE", Value(0));
-
-    MachineClass *mcls = new MachineClass("ETHERCAT_LINKSTATUS");
-    mcls->addState("DOWN");
-    mcls->addState("UP");
-    mcls->initial_state = State("DOWN");
-    mcls->disableAutomaticStateChanges();
-
-    MachineClass *mcec = new MachineClass("ETHERCAT_BUS");
-    {
-        State *init = mcec->findMutableState("INIT");
-        if (!init) {
-            init = new State("INIT");
-            mcec->states.push_back(init);
-        }
-        init->setEnterFunction(ECInterface::setup);
-    }
-    mcec->addState("DISCONNECTED");
-    mcec->addState("CONNECTED");
-    mcec->addState("CONFIG");
-    mcec->addState("ACTIVE");
-    mcec->addState("ERROR");
-    mcec->initial_state = State("INIT");
-    mcec->setProperty("tolerance", Value(10));
-    mcec->disableAutomaticStateChanges();
-    MachineCommandTemplate *mc = new MachineCommandTemplate("activate", "");
-    mcec->receives.insert(std::make_pair(Message("activate"), mc));
-    mc = new MachineCommandTemplate("deactivate", "");
-    mcec->receives.insert(std::make_pair(Message("deactivate"), mc));
-    //  mcec->transitions.push_back(Transition(State("CONFIG"), State("ACTIVE"), Message("activate")));
-    //  mcec->transitions.push_back(Transition(State("ACTIVE"), State("CONFIG"), Message("deactivate")));
+    auto mcwc = makeEtherCatWorkingCounterMachineClass();
+    auto mcls = makeEtherCatLinkStatusMachineClass();
+    auto mcec = makeEtherCatBusMachineClass();
 
     MachineInstance *miwc =
         MachineInstanceFactory::create("ETHERCAT_WC", "ETHERCAT_WORKINGCOUNTER");
@@ -532,25 +649,11 @@ void predefine_special_machines() {
     miec->addLocal("link", mils);
     miec->setDefinitionLocation("Internal", 0);
     machines["ETHERCAT"] = miec;
-#endif
 
 #ifdef USE_SDO
-    MachineClass *mc_sdo = new MachineClass("SDOENTRY");
-    mc_sdo->addState("ready");
-    mc_sdo->initial_state = State("ready");
-    mc_sdo->disableAutomaticStateChanges();
-    mc_sdo->parameters.push_back(Parameter("MODULE"));
-    mc_sdo->parameters.push_back(Parameter("INDEX"));
-    mc_sdo->parameters.push_back(Parameter("SUBINDEX"));
-    mc_sdo->parameters.push_back(Parameter("SIZE"));
-    mc_sdo->parameters.push_back(Parameter("OFFSET"));
-    mc_sdo->setOption("VALUE", 0);
+    auto mc_sdo = makeSdoEntryMachineClass();
 #endif //USE_SDO
-
-    MachineClass *mc_external = new MachineClass("EXTERNAL");
-    mc_external->setOption("HOST", "localhost");
-    mc_external->setOption("PORT", 5600);
-    mc_external->setOption("PROTOCOL", "ZMQ");
+#endif
 
     MachineInstance *settings = MachineInstanceFactory::create("SYSTEM", "SYSTEMSETTINGS");
     machines["SYSTEM"] = settings;

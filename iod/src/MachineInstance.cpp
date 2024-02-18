@@ -149,7 +149,6 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::s
         MachineClass *cls = MachineClass::find(type.c_str());
         ChannelDefinition *defn = dynamic_cast<ChannelDefinition *>(cls);
         if (defn) {
-            MachineInstance *found = MachineInstance::find(name.get());
             Channel *chn = new Channel(name.get(), type);
             chn->properties.add(defn->getProperties()); // load default properties
             chn->setDefinition(defn);
@@ -416,7 +415,7 @@ bool MachineInstance::uses(MachineInstance *other) {
     if (_type == "ANALOGINPUT") {
         return true;
     }
-    if (other->_type == "COUNTER") {
+    if (_type == "COUNTER") {
         return true;
     }
     if (_type == "COUNTERRATE") {
@@ -2913,6 +2912,8 @@ void MachineInstance::setInitialState(bool resume) {
 
 void MachineInstance::publish() { ++published; }
 
+// Prior to enabling or disabling a machine, use sortDependentMachines to try
+// to enable local machines in the dependency order.
 void sortDependentMachines(MachineInstance *m, std::list<MachineInstance *> &sorted) {
     // enable related machines first (locals and (iff this is a list) parameters
     std::set<MachineInstance *> related_machines;
@@ -2939,7 +2940,6 @@ void sortDependentMachines(MachineInstance *m, std::list<MachineInstance *> &sor
             std::list<MachineInstance *>::iterator oi = sorted.begin();
             while (oi != sorted.end()) {
                 MachineInstance *b = *oi;
-                //DBG_MSG << "CHECKING if " << a->getName() << " uses " << b->getName() << "\n";
                 if (!a->uses(b)) {
                     break;
                 }
@@ -2959,6 +2959,7 @@ void sortDependentMachines(MachineInstance *m, std::list<MachineInstance *> &sor
 void MachineInstance::unpublish() { --published; }
 
 void MachineInstance::enable() {
+    // Enabling a machine that is already enabled should wake it up.
     if (is_enabled && _type != "LIST" && _type != "REFERENCE") {
         setNeedsCheck();
         return;
