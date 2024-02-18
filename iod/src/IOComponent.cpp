@@ -982,6 +982,21 @@ int64_t CounterInternals::default_filter_len = 8;
 int64_t CounterInternals::default_position_history = 20;
 int64_t CounterInternals::default_speed_tolerance = 10;
 int64_t CounterInternals::default_input_scale = 1;
+DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {
+}
+
+int64_t DigitalValue::filter(int64_t val) {
+   std::list<MachineInstance *>::iterator owners_iter = owners.begin();
+   while (owners_iter != owners.end()) {
+       MachineInstance *o = *owners_iter++;
+       if (o) {
+           o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
+           o->setValue("VALUE", val);
+       }
+   }
+   return val;
+}
+
 
 Counter::Counter(IOAddress addr) : IOComponent(addr), internals(0) {
     internals = new CounterInternals;
