@@ -69,7 +69,7 @@ struct MQTTTopic {
 struct Update {
     std::vector<uint8_t> incoming_process_data;
     std::vector<uint8_t> incoming_process_mask;
-    uint64_t incoming_data_size;
+    uint32_t incoming_data_size;
     uint64_t global_clock = 0;
 };
 
