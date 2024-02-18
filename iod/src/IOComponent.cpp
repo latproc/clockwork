@@ -104,7 +104,7 @@ static uint64_t last_sample = 0; // retains a timestamp for the last sample
 
 // as long as there has been a sufficient delay, run the filter for each
 // of the nominated components.
-
+// This is called regularly from the processing thread
 void handle_io_sampling(uint64_t io_clock) {
     uint64_t now = microsecs();
     if (now - last_sample < 1000) {
@@ -120,7 +120,7 @@ void handle_io_sampling(uint64_t io_clock) {
 }
 
 #if VERBOSE_DEBUG
-static void display(uint8_t *p, unsigned int count = 0);
+static void display(const uint8_t *p, unsigned int count = 0);
 #endif
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
@@ -292,7 +292,7 @@ IOComponent *IOComponent::lookup_device(const std::string &name) {
 }
 
 #if VERBOSE_DEBUG
-static void display(uint8_t *p, unsigned int count) {
+static void display(const uint8_t *p, unsigned int count) {
     int max = IOComponent::getMaxIOOffset();
     int min = IOComponent::getMinIOOffset();
     if (count == 0)
@@ -966,10 +966,8 @@ class CounterInternals {
         double res = 0;
         for (unsigned int i = 0; i < 9; ++i) {
             double f = (double)getBufferValue(positions, i);
-            //printf(" %.3f,%.3f ",f, f*c[i]);
             res += f * c[i];
         }
-        //printf(" %.3f\n",res);
 
         return res;
     }
@@ -1063,7 +1061,7 @@ int64_t Counter::filter(int64_t val) {
     internals->update(read_time);
 
 #if 1
-    /*  most machines reading sensor values will be prompted when teh
+    /*  most machines reading sensor values will be prompted when the
         sensor value changes, depending on whether this filter yields a
         changed value. Some systems such as plugins that operate on
         their own clock may wish to ignore the filtered value and

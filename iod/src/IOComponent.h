@@ -233,26 +233,26 @@ class Output : public IOComponent {
   public:
     Output(IOAddress addr) : IOComponent(addr) { direction_ = DirOutput; }
     //  Output(unsigned int offset, int bitpos, unsigned int bitlen = 1) : IOComponent(offset, bitpos, bitlen) { }
-    virtual const char *type() { return "Output"; }
-    virtual void turnOn();
-    virtual void turnOff();
+    const char *type() override { return "Output"; }
+    void turnOn() override;
+    void turnOff() override;
 };
 
 class Input : public IOComponent {
   public:
     Input(IOAddress addr) : IOComponent(addr) { direction_ = DirInput; }
     //  Input(unsigned int offset, int bitpos, unsigned int bitlen = 1) : IOComponent(offset, bitpos, bitlen) { }
-    virtual const char *type() { return "Input"; }
+    const char *type() override { return "Input"; }
 };
 
 class InputFilterSettings;
 class AnalogueInput : public IOComponent {
   public:
     AnalogueInput(IOAddress addr);
-    virtual const char *type() { return "AnalogueInput"; }
+    const char *type() override { return "AnalogueInput"; }
     void setupProperties(
         MachineInstance *m); // link properties in the component to the MachineInstance properties
-    virtual int64_t filter(int64_t raw);
+    int64_t filter(int64_t raw) override;
     void update(); // clockwork uses this to notify of updates
     InputFilterSettings *config;
 };
@@ -261,11 +261,11 @@ class CounterInternals;
 class Counter : public IOComponent {
   public:
     Counter(IOAddress addr);
-    virtual const char *type() { return "Counter"; }
+    const char *type() override { return "Counter"; }
     void update(); // clockwork uses this to notify of updates
-    virtual int64_t filter(int64_t raw);
-    virtual void setupProperties(
-        MachineInstance *m); // link properties in the component to the MachineInstance properties
+    int64_t filter(int64_t raw) override;
+    void setupProperties(
+        MachineInstance *m) override; // link properties in the component to the MachineInstance properties
   private:
     CounterInternals *internals;
 };
@@ -280,8 +280,8 @@ class DigitalValue : public IOComponent {
 class CounterRate : public IOComponent {
   public:
     CounterRate(IOAddress addr);
-    virtual const char *type() { return "CounterRate"; }
-    virtual int64_t filter(int64_t raw);
+    const char *type() override { return "CounterRate"; }
+    int64_t filter(int64_t raw) override;
     int64_t position;
 
   private:
@@ -294,7 +294,7 @@ class AnalogueOutput : public Output {
   public:
     AnalogueOutput(IOAddress addr) : Output(addr) { direction_ = DirOutput; }
     //  AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
-    virtual const char *type() { return "AnalogueOutput"; }
+    const char *type() override { return "AnalogueOutput"; }
 };
 
 class PID_Settings;
@@ -303,9 +303,9 @@ class PIDController : public Output {
     PIDController(IOAddress addr);
     ~PIDController();
     //  AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
-    virtual const char *type() { return "SpeedController"; }
+    const char *type() override { return "SpeedController"; }
     void handleChange(std::list<Package *> &work_queue);
-    virtual int64_t filter(int64_t raw);
+    int64_t filter(int64_t raw) override;
     void update(); // clockwork uses this to notify of updates
     PID_Settings *config;
 };
@@ -314,7 +314,7 @@ class MQTTPublisher : public IOComponent {
   public:
     MQTTPublisher(IOAddress addr) : IOComponent(addr) {}
     //MQTTPublisher(unsigned int offset, int bitpos, unsigned int bitlen = 1) : IOComponent(offset, bitpos, bitlen) { }
-    virtual const char *type() { return "Output"; }
+    const char *type() override { return "Output"; }
 };
 class MQTTSubscriber : public IOComponent {
   public:

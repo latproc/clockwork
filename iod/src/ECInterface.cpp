@@ -1010,10 +1010,10 @@ bool ECInterface::activate() {
     while (res >= 0 && pos < master_info.slave_count) {
         ECModule *module = ECInterface::findModule(pos);
         if (module) {
-            DBG_ETHERCAT << pos << " " << module->name << "\n";
+            DBG_ETHERCAT_CALLS << pos << " " << module->name << "\n";
         }
         else {
-            DBG_ETHERCAT << pos << " " << "no module\n";
+            DBG_ETHERCAT_CALLS << pos << " " << "no module\n";
         }
         ++pos;
     }
