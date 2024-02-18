@@ -910,8 +910,8 @@ class CounterInternals {
         *position_history;          // the amount of position history to use in determining movement
     const int64_t *speed_tolerance; // the tolerance used in determining movement
     const int64_t *input_scale;     // input readings are divided by this amount
-    int32_t last_sent;  // this is the value to send unless the read value moves away from the mean
-    int32_t prev_sent;  // this is the value to send unless the read value moves away from the mean
+    int64_t last_sent;  // this is the value to send unless the read value moves away from the mean
+    int64_t prev_sent;  // this is the value to send unless the read value moves away from the mean
     uint64_t last_time; // the last time we calculated speed;_
     static int64_t default_tolerance;
     static int64_t default_filter_len;
