@@ -347,6 +347,19 @@ MachineClass *makeAnalogueInMachineClass() {
     return result;
 }
 
+MachineClass *makeDigitalValueMachineClass() {
+    auto result = new MachineClass("DIGITALVALUE");
+    result->parameters.push_back(Parameter("module"));
+    result->parameters.push_back(Parameter("offset"));
+    result->addState("idle");
+    result->default_state = State("idle");
+    result->initial_state = State("idle");
+    result->disableAutomaticStateChanges();
+    result->setProperty("IOTIME", Value(0));
+    result->setProperty("VALUE", Value(0));
+    return result;
+}
+
 MachineClass *makeCounterMachineClass() {
     MachineClass *result = new MachineClass("COUNTER");
     result->parameters.push_back(Parameter("module"));
@@ -608,6 +621,7 @@ void predefine_special_machines() {
     auto flag_class = makeStatusFlagMachineClass();
     auto ain_class = makeAnalogueInMachineClass();
     auto cnt_class = makeCounterMachineClass();
+    auto dv_class = makeDigitalValueMachineClass();
     auto re_class = makeRateEstimatorMachineClass();
     auto cr_class = makeCounterRateMachineClass();
     auto aout_class = makeAnalogueOutputMachineClass();
