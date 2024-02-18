@@ -975,6 +975,21 @@ class CounterInternals {
     }
 };
 
+DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {
+}
+
+int64_t DigitalValue::filter(int64_t val) {
+   std::list<MachineInstance *>::iterator owners_iter = owners.begin();
+   while (owners_iter != owners.end()) {
+       MachineInstance *o = *owners_iter++;
+       if (o) {
+           o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
+           o->setValue("VALUE", val);
+       }
+   }
+   return val;
+}
+
 long CounterInternals::default_tolerance = 1;
 long CounterInternals::default_filter_len = 8;
 long CounterInternals::default_position_history = 20;

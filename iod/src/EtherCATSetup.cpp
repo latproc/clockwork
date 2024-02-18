@@ -128,8 +128,8 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
             char error_buf[error_buf_size];
             MachineInstance *m = *iter++;
             if ((m->_type == "POINT" || m->_type == "ANALOGINPUT" || m->_type == "COUNTERRATE" ||
-                 m->_type == "COUNTER" || m->_type == "STATUS_FLAG" ||
-                 m->_type == "ANALOGOUTPUT") &&
+                 m->_type == "COUNTER" || m->_type == "STATUS_FLAG" || m->_type == "DIGITALVALUE"
+                 || m->_type == "ANALOGOUTPUT") &&
                 m->parameters.size() > 1) {
                 output_points.push_back(m);
                 // points should have two parameters, the name of the io module and the bit offset
@@ -297,6 +297,16 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                             in->addOwner(m);
                             in->setupProperties(m);
                             m->setNeedsThrottle(true);
+                        }
+                        else if (m->_type == "DIGITALVALUE") {
+                            auto dv = new DigitalValue(addr);
+                            char *nm = strdup(m->getName().c_str());
+                            IOComponent::devices[nm] = dv;
+                            free(nm);
+                            dv->setName(m->getName().c_str());
+                            m->io_interface = dv;
+                            dv->addDependent(m);
+                            dv->addOwner(m);
                         }
                         else {
                             AnalogueInput *in = new AnalogueInput(addr);
