@@ -344,6 +344,7 @@ int main(int argc, char const *argv[]) {
         ignore.insert("DAC");
         ignore.insert("DIGITALIN");
         ignore.insert("DIGITALIO");
+        ignore.insert("DIGITALVALUE");
         ignore.insert("ETHERNET");
         ignore.insert("JTAG");
         ignore.insert("LIST");
