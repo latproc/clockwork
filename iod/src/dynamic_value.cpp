@@ -772,7 +772,7 @@ const Value &MinValue::operator()() {
         return last_result;
     }
 
-    Value min(LONG_MAX);
+    Value min(INT64_MAX);
     bool unassigned = true;
     if (!property.empty()) {
         for (unsigned int i = 0; i < machine_list->parameters.size(); ++i) {
@@ -832,7 +832,7 @@ const Value &MaxValue::operator()() {
         return last_result;
     }
 
-    Value max(LONG_MIN);
+    Value max(INT64_MIN);
     bool unassigned = true;
     if (!property.empty()) {
         for (unsigned int i = 0; i < machine_list->parameters.size(); ++i) {
@@ -952,7 +952,7 @@ const Value &SizeValue::operator()() {
 #endif
 
     last_process_time = currentTime();
-    last_result = (long)machine_list->parameters.size();
+    last_result = (int64_t)machine_list->parameters.size();
     return last_result;
 }
 
@@ -1108,7 +1108,7 @@ Value &ItemAtPosValue::operator()(MachineInstance *mi) {
 
     last_process_time = currentTime();
     if (machine_list->parameters.size()) {
-        long idx = -1;
+        int64_t idx = -1;
         if (index.kind == Value::t_symbol) {
             if (!mi->getValue(index.sValue).asInteger(idx)) {
                 MessageLog::instance()->add("non-numeric index when evaluating ITEM AT pos");
@@ -1169,7 +1169,7 @@ const Value &BitsetValue::operator()() {
 #endif
 
     last_process_time = currentTime();
-    unsigned long val = 0;
+    uint64_t val = 0;
     for (unsigned int i = 0; i < machine_list->parameters.size(); ++i) {
         MachineInstance *entry = machine_list->parameters[i].machine;
         val *= 2;
@@ -1368,7 +1368,7 @@ Value &CastValue::operator()(MachineInstance *mi) {
         last_result = val.asString();
     }
     else if (kind == "NUMBER") {
-        long lValue = 0;
+        int64_t lValue = 0;
         if (val.asInteger(lValue)) {
             last_result = lValue;
         }

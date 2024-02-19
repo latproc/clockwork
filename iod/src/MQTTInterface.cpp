@@ -56,7 +56,7 @@ void my_message_callback(struct mosquitto *mosq, void *obj,
             MachineInstance *m = (*pos).second;
             m->setValue("topic", Value(message->topic, Value::t_string));
             char *tmp = 0;
-            long val = strtol(payload, &tmp, 10);
+            int64_t val = strtol(payload, &tmp, 10);
             if (tmp && *tmp == 0) {
                 m->setValue("message", val);
             }

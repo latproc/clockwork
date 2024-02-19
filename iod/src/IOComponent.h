@@ -32,6 +32,7 @@
 #include "filtering.h"
 #include <boost/thread/mutex.hpp>
 #include <vector>
+#include <stdint.h>
 
 struct IOAddress {
     unsigned int module_position;
@@ -251,7 +252,7 @@ class AnalogueInput : public IOComponent {
     AnalogueInput(IOAddress addr);
     const char *type() override { return "AnalogueInput"; }
     void setupProperties(
-        MachineInstance *m); // link properties in the component to the MachineInstance properties
+        MachineInstance *m) override; // link properties in the component to the MachineInstance properties
     int64_t filter(int64_t raw) override;
     void update(); // clockwork uses this to notify of updates
     InputFilterSettings *config;
@@ -304,7 +305,7 @@ class PIDController : public Output {
     ~PIDController();
     //  AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
     const char *type() override { return "SpeedController"; }
-    void handleChange(std::list<Package *> &work_queue);
+    void handleChange(std::list<Package *> &work_queue) override;
     int64_t filter(int64_t raw) override;
     void update(); // clockwork uses this to notify of updates
     PID_Settings *config;

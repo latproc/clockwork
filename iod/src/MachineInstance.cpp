@@ -635,7 +635,7 @@ class MachineTimerValue : public DynamicValue {
         }
         if (machine_instance->enabled()) {
             uint64_t now = microsecs();
-            long msecs = (long)(now - machine_instance->start_time) / 1000;
+            int64_t msecs = (now - machine_instance->start_time) / 1000;
             last_result = msecs;
         }
         return last_result;
@@ -1513,7 +1513,7 @@ void MachineInstance::setProperties(const SymbolTable &props) {
         const std::pair<std::string, Value> &p = *iter;
         properties.push_back(p);
         if (p.first == "POLLING_DELAY") {
-            long pd;
+            int64_t pd;
             if (p.second.asInteger(pd)) {
                 idle_time = pd;
             }
@@ -3047,7 +3047,7 @@ void MachineInstance::disable() {
     const Value &val = properties.lookup("default");
     if (val != SymbolTable::Null) {
         if (val.kind == Value::t_integer) {
-            long i_val = 0;
+            int64_t i_val = 0;
             if (val.asInteger(i_val)) {
                 setValue("VALUE", i_val);
                 if (io_interface) {
@@ -3422,7 +3422,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
             properties.add(option.first, option.second, SymbolTable::NO_REPLACE);
         }
         if (option.first == "POLLING_DELAY") {
-            long pd;
+            int64_t pd;
             if (option.second.asInteger(pd)) {
                 idle_time = pd;
             }
@@ -4157,7 +4157,7 @@ void MachineInstance::sendModbusUpdate(const std::string &property_name, const V
             }
         }
         else if (new_value.kind == Value::t_integer) {
-            long intVal;
+            int64_t intVal;
             if (ma.length() == 1 || ma.length() == 2) {
                 if (new_value.asInteger(intVal)) {
                     ma.update(this, (int)intVal);
@@ -4259,7 +4259,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         bool was_changed = false;
 
         if (property_val.token_id == ClockworkToken::POLLING_DELAY) {
-            long new_delay = 0;
+            int64_t new_delay = 0;
             if (new_value.asInteger(new_delay)) {
                 idle_time = new_delay;
             }
@@ -4355,7 +4355,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             if (property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
             char buf[100];
             errno = 0;
-            long value = 0; // TBD deal with sign
+            int64_t value = 0; // TBD deal with sign
             if (new_value.asInteger(value)) {
                 //snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value);
                 if (io_interface->address.is_signed) {
@@ -4637,7 +4637,7 @@ void MachineInstance::setupModbusInterface() {
     bool self_coil = false;
     bool self_reg = false;
     bool self_rwreg = false;
-    long str_length = 0;
+    int64_t str_length = 0;
 
     // workout the export type for this machine
     ModbusExport::Type export_type = ModbusExport::none;
@@ -5062,7 +5062,7 @@ int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, in
         }
         else {
             const Value &v = getValue("VALUE");
-            long intVal;
+            int64_t intVal;
             if (v.asInteger(intVal)) {
                 return (int)intVal;
             }

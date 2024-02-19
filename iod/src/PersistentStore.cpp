@@ -66,7 +66,7 @@ void PersistentStore::load() {
             char *endp;
             i_value = strtol(value_str.c_str(), &endp, 10);
             if (*endp == 0) {
-                insert(name, property, i_value);
+                insert(name, property, (uint64_t) i_value);
             }
             else {
                 d_value = strtod(value_str.c_str(), &endp);

@@ -21,7 +21,7 @@ extern char *yytext;
 %}
 
 %union {
-	long iVal;
+	uint64_t iVal;
 	double fVal;
 	const char *sVal;
 	const char *symbol;

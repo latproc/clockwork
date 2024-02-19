@@ -24,6 +24,7 @@
 #include "ExportState.h"
 #include "symboltable.h"
 #include <list>
+#include <stdint.h>
 
 class MachineInstance;
 
@@ -67,7 +68,7 @@ struct ExprNode {
     ExprNode(const Value &a, const Value *name = NULL);
     ExprNode(Value *a, const Value *name = NULL);
     ExprNode(Value &a, const Value *name = NULL);
-    ExprNode(long a, const Value *name = NULL);
+    ExprNode(int64_t a, const Value *name = NULL);
     ExprNode(float a, const Value *name = NULL);
     ExprNode(double a, const Value *name = NULL);
     ExprNode(bool a, const Value *name = NULL);

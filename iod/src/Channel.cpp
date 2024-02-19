@@ -102,7 +102,7 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
             MachineInstance *m = MachineInstance::find(command->param(1).asString().c_str());
             if (!m->isShadow()) {
                 if (command->numParams() == 4 &&
-                    command->param(3) == (long)channel->getAuthority()) {
+                    command->param(3) == channel->getAuthority()) {
                     // do nothing, this is an echo of a command we sent
                     {
                         FileLogger fl(program_name);
@@ -247,7 +247,7 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
                 Value v = m->getValue(s);
                 if (v != SymbolTable::Null) {
                     char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v,
-                                                               (long)definition()->getAuthority());
+                                                               definition()->getAuthority());
                     //NB_MSG  << channel_name << " prepared command" << cmd << "\n";
                     messages.push_back(cmd);
                     //std::string response;
@@ -644,7 +644,7 @@ void Channel::setPort(unsigned int new_port) {
 unsigned int Channel::getPort() const {
     if (port == 0) {
         const Value &port_v = properties.find("port");
-        long port_num;
+        int64_t port_num;
         if (port_v.asInteger(port_num)) {
             return port_num;
         }
@@ -806,7 +806,7 @@ void Channel::startClient() {
         port = 5555;
     }
     else {
-        long remote_port;
+        int64_t remote_port;
         if (port_val.asInteger(remote_port)) {
             port = (int)remote_port;
         }
@@ -953,7 +953,7 @@ void Channel::operator()() {
             }
         }
 
-        long port = 0;
+        int64_t port = 0;
         if (!port_val.asInteger(port)) {
             if (definition_->options.find("port") != definition_->options.end()) {
                 const Value item = definition_->options.at("port");
@@ -1639,7 +1639,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                 if (!m->getStateMachine()->property_names.count(key.asString())) {
                     return; //ignore properties no in the interface definition
                 }
-                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val, (long)auth);
+                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val, auth);
             }
             else {
                 //NB_MSG << "using authority " << getAuthority()
@@ -1651,7 +1651,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                 }
 
                 cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val,
-                                                     (long)definition()->getAuthority());
+                                                     definition()->getAuthority());
             }
         }
         else { // publishers do not use the authority system

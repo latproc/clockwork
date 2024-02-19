@@ -182,17 +182,17 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         using namespace boost::posix_time;
         Value &res = keywords->find(name);
         if (strcmp("NOW", name) == 0) {
-            unsigned long msecs = (microsecs() + 500) / 1000;
+            uint64_t msecs = (microsecs() + 500) / 1000;
             res = msecs;
             return res;
         }
         else if (strcmp("CLOCK", name) == 0) {
             Value &clock = keywords->find(name);
-            clock = (long)microsecs();
+            clock = (uint64_t)microsecs();
             return clock;
         }
         else if (strcmp("RANDOM", name) == 0) {
-            unsigned long val = random();
+            uint64_t val = random();
             res = val;
             return res;
         }

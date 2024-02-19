@@ -684,7 +684,7 @@ int main(int argc, char const *argv[]) {
                     }
                     module = new MQTTModule(m->getName().c_str());
                     module->host = m->parameters[0].val.asString();
-                    long port;
+                    int64_t port;
                     if (m->parameters[1].val.asInteger(port)) {
                         module->port = (int)port;
                         MQTTInterface::instance()->addModule(module, false);

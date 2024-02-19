@@ -35,6 +35,7 @@
 #include "options.h"
 #include <fstream>
 #include <list>
+#include <sstream>
 #include <stdlib.h>
 #include <iostream>
 
@@ -74,9 +75,8 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
             ok = true;
             std::string res = device->getStateString();
             if (device->address.bitlen > 1) {
-                char buf[10];
-                snprintf(buf, 9, "(%ld)", device->value());
-                res += buf;
+                std::stringstream buf(res);
+                buf << "(" << device->value() << ")";
             }
             result_str = res;
         }
@@ -102,7 +102,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
         ds = params[1].asString();
         state_name = params[3].asString();
         if (params.size() == 5) {
-            long res;
+            int64_t res;
             if (params[4].asInteger(res)) {
                 auth = res;
             }
@@ -112,7 +112,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
         ds = params[1].asString();
         state_name = params[2].asString();
         if (params.size() == 4) {
-            long res;
+            int64_t res;
             if (params[3].asInteger(res)) {
                 auth = res;
             }
@@ -444,7 +444,7 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
                 DBG_PROPERTIES << "setting property " << params[1] << "." << params[2] << " to "
                                << params[3] << "\n";
             }
-            long authority = 0;
+            int64_t authority = 0;
             bool use_authority = false;
             if (params.size() == 5 && params[4].asInteger(authority)) {
                 use_authority = true;
@@ -455,7 +455,7 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
                 return false;
             }
             if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
-                long x;
+                int64_t x;
                 char *p;
                 x = strtol(params[3].asString().c_str(), &p, 10);
                 if (use_authority)
@@ -883,7 +883,7 @@ bool IODCommandShowMessages::run(std::vector<Value> &params) {
     }
 
     bool use_json = params.size() >= 2 && params[1].asString() == "JSON";
-    long num = 0;
+    int64_t num = 0;
     unsigned int idx = 1;
     if (params.size() > idx && params[idx].asString() == "JSON") {
         use_json = true;
@@ -1087,7 +1087,7 @@ bool IODCommandModbus::run(std::vector<Value> &params) {
         std::cout << error_str << " " << params[1] << "\n";
         return false;
     }
-    long group, address;
+    int64_t group, address;
     if (!params[1].asInteger(group) || !params[2].asInteger(address)) {
         std::stringstream ss;
         ss << "malformed modbus command: " << params[0] << " " << params[1] << " " << params[2]
@@ -1116,7 +1116,7 @@ bool IODCommandModbus::run(std::vector<Value> &params) {
                                                 (params[3].bValue) ? 1 : 0);
             }
             else if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
-                long val;
+                int64_t val;
                 if (params[3].asInteger(val)) {
                     found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()),
                                                     (int)val);
@@ -1324,7 +1324,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
             cJSON *obj = cJSON_CreateObject();
             cJSON_AddStringToObject(obj, "name", m->getName().c_str());
             cJSON_AddStringToObject(obj, "address", m->parameters[1].val.asString().c_str());
-            long val;
+            int64_t val;
             if (m->parameters.size() > 2 && m->parameters[2].val.asInteger(val)) {
                 cJSON_AddNumberToObject(obj, "length", val);
             }
@@ -1414,7 +1414,7 @@ bool IODCommandChannel::run(std::vector<Value> &params) {
             chn = Channel::findByType(ch_name.asString());
             if (!chn) {
                 std::cout << "no channel found, creating one\n";
-                long port = 0;
+                int64_t port = 0;
 
                 //Value portval = (defn->properties.exists("port")) ? defn->properties.lookup("port") : SymbolTable::Null;
                 Value portval = defn->getValue("port");
@@ -1548,7 +1548,7 @@ bool IODCommandSDO::run(std::vector<Value> &params) {
         Value entry_name = params[1];
         Value new_value = params[2];
         SDOEntry *entry = SDOEntry::find(entry_name.sValue);
-        long value;
+        int64_t value;
         if (entry && new_value.asInteger(value)) {
 #if 0
                 size_t len = entry->getSize();

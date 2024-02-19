@@ -250,7 +250,7 @@ Value MessageEncoding::valueFromJSONObject(cJSON *obj, cJSON *cjType) {
     }
     else if (obj->type == cJSON_Number) {
         if (obj->valueNumber.kind == cJSON_Number_int_t) {
-            res = obj->valueNumber.val._int;
+            res = static_cast<uint64_t>(obj->valueNumber.val._int);
         }
         else {
             res = obj->valueNumber.val._double;

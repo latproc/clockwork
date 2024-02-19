@@ -298,14 +298,14 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
     MachineInstance *target) // setup timer events that trigger the supplied machine
 {
     const long MIN_TIMER = -100000;
-    long scheduled_time = MIN_TIMER;
-    long current_time = 0;
+    int64_t scheduled_time = MIN_TIMER;
+    int64_t current_time = 0;
     MachineInstance *timed_machine = 0; // the machine that the timer is on if not SELF
     // timer usage can be of the form TIMER >= value or TIMER <= value
     // in the first case, the predicate is initially false and eventually becomes true
     // in the second case, the reverse is true and in this case, we need to keep testing
     // until the predicate finally becomes false
-    bool rescheduleWhenTrue = false; // the predicate is false initially
+    // bool rescheduleWhenTrue = false; // the predicate is false initially
 
     // below, we check the clauses of this predicate and if we find a timer test
     // we set the above variables. At the end of the method, we actually set the timer
@@ -322,10 +322,10 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             }
             else if (op == opLE) {
                 ++scheduled_time;
-                rescheduleWhenTrue = true;
+                // rescheduleWhenTrue = true;
             }
             else if (op == opLT) {
-                rescheduleWhenTrue = true;
+                // rescheduleWhenTrue = true;
             }
         }
         else {
@@ -348,10 +348,10 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
                 }
                 else if (op == opLE) {
                     ++scheduled_time;
-                    rescheduleWhenTrue = true;
+                    // rescheduleWhenTrue = true;
                 }
                 else if (op == opLT) {
-                    rescheduleWhenTrue = true;
+                    // rescheduleWhenTrue = true;
                 }
             }
         }
@@ -368,13 +368,13 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             current_time = target->getTimerVal()->iValue;
             if (op == opGT) {
                 ++scheduled_time;
-                rescheduleWhenTrue = true;
+                // rescheduleWhenTrue = true;
             }
             else if (op == opLE) {
                 ++scheduled_time;
             }
             else if (op == opGE) {
-                rescheduleWhenTrue = true;
+                // rescheduleWhenTrue = true;
             }
         }
         else {
@@ -396,13 +396,13 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
                 current_time = timed_machine->getTimerVal()->iValue;
                 if (op == opGT) {
                     ++scheduled_time;
-                    rescheduleWhenTrue = true;
+                    // rescheduleWhenTrue = true;
                 }
                 else if (op == opLE) {
                     ++scheduled_time;
                 }
                 else if (op == opGE) {
-                    rescheduleWhenTrue = true;
+                    // rescheduleWhenTrue = true;
                 }
             }
         }
@@ -1045,7 +1045,7 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     case opBitXOr:
         return lhs ^ rhs;
     case opInteger: {
-        long val;
+        int64_t val;
         if (rhs.asInteger(val)) {
             return val;
         }
@@ -1183,7 +1183,7 @@ ExprNode::ExprNode(Value &a, const Value *name) : tmpval(a), val(0), node(name),
         max_count = count_instances;
     }
 }
-ExprNode::ExprNode(long a, const Value *name) : tmpval(a), val(0), node(name), kind(t_int) {
+ExprNode::ExprNode(int64_t a, const Value *name) : tmpval(a), val(0), node(name), kind(t_int) {
     val = &tmpval;
     ++count_instances;
     if (count_instances > max_count) {

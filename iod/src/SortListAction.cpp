@@ -69,7 +69,7 @@ class NumericValueSorter {
         if (a.val.kind != Value::t_integer || b.val.kind != Value::t_integer) {
             return true;
         }
-        long a_i, b_i;
+        int64_t a_i, b_i;
         if (!a.val.asInteger(a_i) || !b.val.asInteger(b_i)) {
             return true;
         }
@@ -117,7 +117,7 @@ class PropertyValueNumericSorter {
         if (!b.machine) {
             return false;
         }
-        long a_val, b_val;
+        int64_t a_val, b_val;
         if (!a.machine->getValue(property).asInteger(a_val)) {
             return true;
         }
@@ -149,7 +149,7 @@ Action::Status SortListAction::run() {
 
             bool use_integer_sort = true;
 
-            long val;
+            int64_t val;
             // if the given property of any item in the list is not an integer, use a string sort
             for (unsigned int i = 0; i < list_machine->parameters.size(); ++i) {
                 MachineInstance *entry = list_machine->parameters[i].machine;

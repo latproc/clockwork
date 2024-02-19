@@ -126,7 +126,7 @@ bool loadActiveData(PersistentStore &store, const char *initial_settings) {
                     case cJSON_Number:
                         if (json_val->valueNumber.kind == cJSON_Number_int_t) {
                             store.insert(machine.asString(), property.asString(),
-                                         json_val->valueNumber.val._int);
+                                         (uint64_t)json_val->valueNumber.val._int);
                         }
                         else {
                             store.insert(machine.asString(), property.asString(),

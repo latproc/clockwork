@@ -235,7 +235,7 @@ void Dispatcher::idle() {
                                 Value host = remote->properties.lookup("HOST");
                                 Value port_val = remote->properties.lookup("PORT");
                                 Value protocol = mi->properties.lookup("PROTOCOL");
-                                long port;
+                                int64_t port;
                                 if (port_val.asInteger(port)) {
                                     if (protocol == "RAW") {
                                         MessagingInterface *mif = MessagingInterface::create(

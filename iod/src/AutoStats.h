@@ -7,7 +7,7 @@ class AutoStatStorage {
   public:
     // auto stats are linked to system properties
     AutoStatStorage(const char *time_name, const char *rate_name, unsigned int reset_every = 100);
-    const long *setupPropertyRef(const char *machine_name, const char *property_name);
+    const int64_t *setupPropertyRef(const char *machine_name, const char *property_name);
     void reset();
     void update(uint64_t now, uint64_t duration);
     bool running();
@@ -21,8 +21,8 @@ class AutoStatStorage {
     uint32_t total_polls;
     uint64_t total_time;
     uint64_t total_delays;
-    const long *rate_property;
-    const long *time_property;
+    const int64_t *rate_property;
+    const int64_t *time_property;
     unsigned int reset_point;
 };
 

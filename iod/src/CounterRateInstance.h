@@ -14,7 +14,7 @@ class CounterRateInstance : public MachineInstance {
     ~CounterRateInstance();
     virtual bool setValue(const std::string &property, const Value &new_value,
                           uint64_t authority = 0) override;
-    long filter(long val) override;
+    int64_t filter(int64_t val) override;
     virtual void idle() override;
     //virtual bool hasWork();
     CounterRateFilterSettings *getSettings() { return settings; }

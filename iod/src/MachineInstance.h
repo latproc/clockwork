@@ -330,7 +330,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     bool queuedForStableStateTest();
 
-    virtual long filter(long val) { return val; }
+    virtual int64_t filter(int64_t val) { return val; }
 
     void publish();
     void unpublish();

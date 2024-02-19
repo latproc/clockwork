@@ -24,7 +24,7 @@
 #include "boost/filesystem/path.hpp"
 #include <algorithm>
 #include <assert.h>
-#include <bits/stdint-uintn.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <zmq.hpp>

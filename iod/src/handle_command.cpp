@@ -31,7 +31,6 @@ void ProcessingThread::handle_command(zmq::pollitem_t items[],
 #ifdef KEEPSTATS
         AutoStat stats(avg_cmd_processing);
 #endif
-        int count = 0;
         while (have_command && (long)(now - start_time) < cycle_delay / 2) {
             have_command = false;
             auto csi_iter = channels.begin();
@@ -50,7 +49,7 @@ void ProcessingThread::handle_command(zmq::pollitem_t items[],
                     info = *csi_iter++;
                     sock = info->sock;
                 }
-                { int rc = zmq::poll(&items[i], 1, 0); }
+                zmq::poll(&items[i], 1, 0);
                 if (!(items[i].revents & ZMQ_POLLIN)) {
                     ++i;
                     continue;
@@ -63,7 +62,6 @@ void ProcessingThread::handle_command(zmq::pollitem_t items[],
                 MessageHeader mh;
                 uint32_t default_id = mh.getId(); // save the msgid to following check
                 if (safeRecv(*sock, &buf, &len, false, 0, mh)) {
-                    ++count;
                     if (false && len > 10) {
                         FileLogger fl(program_name);
                         fl.f() << "Processing thread received command ";

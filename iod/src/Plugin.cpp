@@ -19,7 +19,7 @@ void log_message_3(cwpi_Scope, const char *m1, const char *m2, const char *m3) {
     MessageLog::instance()->add(m1, m2, m3);
 }
 
-int getIntValue(cwpi_Scope s, const char *property_name, const long **res) {
+int getIntValue(cwpi_Scope s, const char *property_name, const int64_t **res) {
     MachineInstance *scope = static_cast<MachineInstance *>(s);
     if (!scope) {
         MessageLog::instance()->add("getIntValue was passed a null instance from a plugin");
@@ -45,7 +45,7 @@ char *getStringValue(cwpi_Scope s, const char *property_name) {
     return res;
 }
 
-void setIntValue(cwpi_Scope s, const char *property_name, long new_value) {
+void setIntValue(cwpi_Scope s, const char *property_name, int64_t new_value) {
     MachineInstance *scope = static_cast<MachineInstance *>(s);
     if (!scope) {
         return;

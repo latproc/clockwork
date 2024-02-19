@@ -169,7 +169,7 @@ Action::Status IncludeAction::run() {
                 }
             }
             bool found = false;
-            long pos = -1; // indicates a search to insert before a given item
+            int64_t pos = -1; // indicates a search to insert before a given item
             if (position.kind == Value::t_string || position.kind == Value::t_symbol) {
                 const Value &pos_v = owner->getValue(position.asString());
                 if (pos_v == SymbolTable::Null || !pos_v.asInteger(pos)) {

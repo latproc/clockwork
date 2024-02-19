@@ -1360,7 +1360,7 @@ void load_properties_file(const std::string &filename, bool only_persistent) {
                 std::map<std::string, Value> &list((*found).second);
                 PersistentStore::PropertyPair node;
                 BOOST_FOREACH (node, list) {
-                    long v;
+                    int64_t v;
                     double d;
                     DBG_INITIALISATION << name << " initialising " << node.first << " to "
                                        << node.second << " " << node.second.kind << "\n";
