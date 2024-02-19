@@ -5,8 +5,8 @@
 
 class CounterRateFilterSettings {
   public:
-    long position;
-    long velocity;
+    int64_t position;
+    int64_t velocity;
     bool property_changed;
     // analogue filter fields
     uint32_t noise_tolerance; // filter out changes with +/- this range

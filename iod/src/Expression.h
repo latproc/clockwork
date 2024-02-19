@@ -24,6 +24,7 @@
 #include "ExportState.h"
 #include "symboltable.h"
 #include <list>
+#include <stdint.h>
 
 class MachineInstance;
 

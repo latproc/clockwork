@@ -102,7 +102,7 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
             MachineInstance *m = MachineInstance::find(command->param(1).asString().c_str());
             if (!m->isShadow()) {
                 if (command->numParams() == 4 &&
-                    command->param(3) == (int64_t)channel->getAuthority()) {
+                    command->param(3) == channel->getAuthority()) {
                     // do nothing, this is an echo of a command we sent
                     {
                         FileLogger fl(program_name);
@@ -245,7 +245,7 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
                 Value v = m->getValue(s);
                 if (v != SymbolTable::Null) {
                     char *cmd = MessageEncoding::encodeCommand(
-                        "PROPERTY", m->getName(), s, v, (int64_t)definition()->getAuthority());
+                        "PROPERTY", m->getName(), s, v, definition()->getAuthority());
                     //NB_MSG  << channel_name << " prepared command" << cmd << "\n";
                     messages.push_back(cmd);
                     //std::string response;
@@ -1650,8 +1650,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                 if (!m->getStateMachine()->property_names.count(key.asString())) {
                     return; //ignore properties no in the interface definition
                 }
-                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val,
-                                                     (int64_t)auth);
+                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val, auth);
             }
             else {
                 //NB_MSG << "using authority " << getAuthority()
@@ -1663,7 +1662,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                 }
 
                 cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val,
-                                                     (int64_t)definition()->getAuthority());
+                                                     definition()->getAuthority());
             }
         }
         else { // publishers do not use the authority system

@@ -635,7 +635,7 @@ class MachineTimerValue : public DynamicValue {
         }
         if (machine_instance->enabled()) {
             uint64_t now = microsecs();
-            uint64_t msecs = (uint64_t)(now - machine_instance->start_time) / 1000;
+            int64_t msecs = (now - machine_instance->start_time) / 1000;
             last_result = msecs;
         }
         return last_result;
