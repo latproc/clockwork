@@ -772,7 +772,7 @@ const Value &MinValue::operator()() {
         return last_result;
     }
 
-    Value min((int64_t)LONG_MAX);
+    Value min(INT64_MAX);
     bool unassigned = true;
     if (!property.empty()) {
         for (unsigned int i = 0; i < machine_list->parameters.size(); ++i) {
@@ -832,7 +832,7 @@ const Value &MaxValue::operator()() {
         return last_result;
     }
 
-    Value max((uint64_t)LONG_MIN);
+    Value max(INT64_MIN);
     bool unassigned = true;
     if (!property.empty()) {
         for (unsigned int i = 0; i < machine_list->parameters.size(); ++i) {

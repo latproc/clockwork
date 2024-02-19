@@ -299,13 +299,13 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
 {
     const long MIN_TIMER = -100000;
     int64_t scheduled_time = MIN_TIMER;
-    long current_time = 0;
+    int64_t current_time = 0;
     MachineInstance *timed_machine = 0; // the machine that the timer is on if not SELF
     // timer usage can be of the form TIMER >= value or TIMER <= value
     // in the first case, the predicate is initially false and eventually becomes true
     // in the second case, the reverse is true and in this case, we need to keep testing
     // until the predicate finally becomes false
-    //bool rescheduleWhenTrue = false; // the predicate is false initially
+    // bool rescheduleWhenTrue = false; // the predicate is false initially
 
     // below, we check the clauses of this predicate and if we find a timer test
     // we set the above variables. At the end of the method, we actually set the timer
@@ -322,10 +322,10 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             }
             else if (op == opLE) {
                 ++scheduled_time;
-                //rescheduleWhenTrue = true;
+                // rescheduleWhenTrue = true;
             }
             else if (op == opLT) {
-                //rescheduleWhenTrue = true;
+                // rescheduleWhenTrue = true;
             }
         }
         else {
@@ -348,10 +348,10 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
                 }
                 else if (op == opLE) {
                     ++scheduled_time;
-                    //rescheduleWhenTrue = true;
+                    // rescheduleWhenTrue = true;
                 }
                 else if (op == opLT) {
-                    //rescheduleWhenTrue = true;
+                    // rescheduleWhenTrue = true;
                 }
             }
         }
@@ -368,13 +368,13 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             current_time = target->getTimerVal()->iValue;
             if (op == opGT) {
                 ++scheduled_time;
-                //rescheduleWhenTrue = true;
+                // rescheduleWhenTrue = true;
             }
             else if (op == opLE) {
                 ++scheduled_time;
             }
             else if (op == opGE) {
-                //rescheduleWhenTrue = true;
+                // rescheduleWhenTrue = true;
             }
         }
         else {
@@ -396,13 +396,13 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
                 current_time = timed_machine->getTimerVal()->iValue;
                 if (op == opGT) {
                     ++scheduled_time;
-                    //rescheduleWhenTrue = true;
+                    // rescheduleWhenTrue = true;
                 }
                 else if (op == opLE) {
                     ++scheduled_time;
                 }
                 else if (op == opGE) {
-                    //rescheduleWhenTrue = true;
+                    // rescheduleWhenTrue = true;
                 }
             }
         }

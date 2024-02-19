@@ -145,7 +145,7 @@ bool RateEstimatorInstance::setValue(const std::string &property, const Value &u
     }
 }
 
-long RateEstimatorInstance::filter(long val) {
+int64_t RateEstimatorInstance::filter(int64_t val) {
     if (settings->readings.length() < 2) {
         return 0;
     }

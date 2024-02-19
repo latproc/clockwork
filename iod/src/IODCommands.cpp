@@ -36,6 +36,7 @@
 #include <fstream>
 #include <iostream>
 #include <list>
+#include <sstream>
 #include <stdlib.h>
 
 #ifndef EC_SIMULATOR
@@ -74,14 +75,8 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
             ok = true;
             std::string res = device->getStateString();
             if (device->address.bitlen > 1) {
-
-                char buf[10];
-                const char *fmt = "(%ld)";
-                if (sizeof(long long) == sizeof(uint64_t)) {
-                    fmt = "(%lld)";
-                }
-                snprintf(buf, 9, fmt, device->value());
-                res += buf;
+                std::stringstream buf(res);
+                buf << "(" << device->value() << ")";
             }
             result_str = res;
         }

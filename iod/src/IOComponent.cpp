@@ -975,11 +975,6 @@ class CounterInternals {
     }
 };
 
-int64_t CounterInternals::default_tolerance = 1;
-int64_t CounterInternals::default_filter_len = 8;
-int64_t CounterInternals::default_position_history = 20;
-int64_t CounterInternals::default_speed_tolerance = 10;
-int64_t CounterInternals::default_input_scale = 1;
 DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {
 }
 
@@ -995,6 +990,11 @@ int64_t DigitalValue::filter(int64_t val) {
    return val;
 }
 
+int64_t CounterInternals::default_tolerance = 1;
+int64_t CounterInternals::default_filter_len = 8;
+int64_t CounterInternals::default_position_history = 20;
+int64_t CounterInternals::default_speed_tolerance = 10;
+int64_t CounterInternals::default_input_scale = 1;
 
 Counter::Counter(IOAddress addr) : IOComponent(addr), internals(0) {
     internals = new CounterInternals;
@@ -1005,7 +1005,6 @@ void Counter::setupProperties(MachineInstance *m) {
     const Value &v = m->getValue("tolerance");
     if (v.kind == Value::t_integer) {
         internals->tolerance = &v.iValue;
-        std::cout << "Counter tolerance: " << *internals->tolerance << "\n";
     }
     const Value &v3 = m->getValue("filter_len");
     if (v3.kind == Value::t_integer) {
@@ -1014,17 +1013,14 @@ void Counter::setupProperties(MachineInstance *m) {
     const Value &v4 = m->getValue("speed_tolerance");
     if (v4.kind == Value::t_integer) {
         internals->speed_tolerance = &v4.iValue;
-        std::cout << "Counter speed tolerance: " << *internals->speed_tolerance << "\n";
     }
     const Value &v5 = m->getValue("position_history");
     if (v5.kind == Value::t_integer) {
         internals->position_history = &v5.iValue;
-        std::cout << "Counter position history: " << *internals->position_history << "\n";
     }
     const Value &v6 = m->getValue("input_scale");
     if (v6.kind == Value::t_integer) {
         internals->input_scale = &v6.iValue;
-        std::cout << "Counter input scale: " << *internals->input_scale << "\n";
     }
 }
 

@@ -1,4 +1,3 @@
-#define EC_SIMULATOR
 #include "iod_mock.h"
 #include "gtest/gtest.h"
 #include <DisableAction.h>

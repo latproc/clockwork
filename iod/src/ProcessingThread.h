@@ -4,6 +4,7 @@
 #include "AutoStats.h"
 #include "ClientInterface.h"
 #include "clockwork.h"
+#include <stdint.h>
 #include <boost/thread/recursive_mutex.hpp>
 #include <set>
 #include <stdint.h>
