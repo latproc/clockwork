@@ -275,7 +275,7 @@ if(USE_SOEM)
 add_executable(cw_ecat src/cw.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw_ecat PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR;SOEM_ETHERCAT" )
 target_link_directories(cw_ecat PRIVATE "${CW_ETHERCAT_DIR}")
-target_link_libraries(cw_ecat cw_interpreter cw_client ${CW_ETHERCAT_LIB} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
+target_link_libraries(cw_ecat cw_interpreter cw_client dl ${CW_ETHERCAT_LIB} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 endif()
 
 if(USE_ETHERCAT_SOURCE)
