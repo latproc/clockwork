@@ -316,6 +316,7 @@ WITHIN              return WITHIN;
 [ \t]+        ;       /* ignore whitespace */
 
 \'              /*' ignore single quotes */
+\015            /* ignore carriage returns */
 .               { printf("found char %d (%c)\n", *yytext, *yytext); yyerror("Unknown character"); } 
 
 %%

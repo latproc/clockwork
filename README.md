@@ -143,3 +143,18 @@ You may also like to install libmodbus and edit the makefile to build:
 
   modbusd : a modbus interface to iod
 
+### Part D - Building a Docker image
+
+* pull the latproc project from git
+
+  git clone git://github.com/latproc/latproc.git latproc
+
+* build the docker image:
+
+  cd latproc
+  docker build -t latproc .
+
+* run cw in a container:
+
+  cd tests
+  docker run -it --rm --user $UID:$GID -v ${PWD}:/app -w /app  cw cw run_tests.cw arith.cw bitset.cw anyon.cw prop.lpc test_set_prop.cw
