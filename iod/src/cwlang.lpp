@@ -346,7 +346,8 @@ JSON               return JSON;
 [ \t]+        ;       /* ignore whitespace */
 
 \'              /*' ignore single quotes */
-.               { printf("found char %d (%c)\n", *yytext, *yytext); yyerror("Unknown character"); }
+\015            /* ignore carriage returns */
+.               { printf("found char %d (%c)\n", *yytext, *yytext); yyerror("Unknown character"); } 
 
 %%
 int yywrap(void) {

@@ -2,12 +2,12 @@ ZMQ_VERSION=4.3.3
 
 echo /usr/local/lib > /etc/ld.so.conf.d/custom.conf ; ldconfig
 
-apt-add-repository ppa:mosquitto-dev/mosquitto-ppa
 apt-get update
 
-apt-get install bison build-essential \
+apt-get install -y \
+	wget bison build-essential \
 	subversion git flex libboost-all-dev autoconf libtool pkg-config vim screen \
-	libreadline-dev libmosquitto-dev
+	libreadline-dev libmosquitto-dev cmake
 err=$?
 if [ $? -ne 0 ]; then
 	echo "Error installing packages. please resolve before continuing"
