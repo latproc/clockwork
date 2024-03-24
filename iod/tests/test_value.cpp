@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include <symboltable.h>
 #include <value.h>
+#include <cJSON.h>
 
 namespace {
 
@@ -33,6 +34,60 @@ TEST(Value, SymbolTableNullIsNull) {
     Value val;
     EXPECT_TRUE(val.isNull());
     EXPECT_EQ(val, SymbolTable::Null);
+}
+
+TEST(Value, CanConstructWithJSON) {
+    Value v(cJSON_CreateNull());
+    EXPECT_EQ(v.asString(), std::string("null"));
+}
+
+TEST(Value, CanAssignJSON) {
+    Value v;
+    v = cJSON_CreateNull();
+    EXPECT_EQ(v.asString(), std::string("null"));
+}
+
+TEST(Value, CanAssignJSONValue) {
+    Value v;
+    Value w(cJSON_CreateNull());
+    v = w;
+    EXPECT_EQ(v.asString(), std::string("null"));
+}
+
+TEST(Value, CanGetStringFromJSONObject) {
+    Value v(cJSON_CreateObject());
+    cJSON_AddItemToObject(v.json, "greeting", cJSON_CreateString("hello"));
+    Value result = v.getFromJSON("greeting");
+    EXPECT_EQ(result.asString(), std::string("hello"));
+}
+
+#include <cmath>
+TEST(Value, CanGetFloatFromJSONObject) {
+    Value v(cJSON_CreateObject());
+    cJSON_AddItemToObject(v.json, "Pi", cJSON_CreateDouble(M_PI));
+    Value result = v.getFromJSON("Pi");
+    EXPECT_EQ(result, M_PI);
+}
+
+TEST(Value, CanGetIntFromJSONObject) {
+    Value v(cJSON_CreateObject());
+    cJSON_AddItemToObject(v.json, "answer", cJSON_CreateNumber(42));
+    Value result = v.getFromJSON("answer");
+    EXPECT_EQ(result, 42);
+}
+
+TEST(Value, CanGetTrueFromJSONObject) {
+    Value v(cJSON_CreateObject());
+    cJSON_AddItemToObject(v.json, "truth", cJSON_CreateTrue());
+    Value result = v.getFromJSON("truth");
+    EXPECT_EQ(result, true);
+}
+
+TEST(Value, CanGetFalseFromJSONObject) {
+    Value v(cJSON_CreateObject());
+    cJSON_AddItemToObject(v.json, "false", cJSON_CreateFalse());
+    Value result = v.getFromJSON("false");
+    EXPECT_EQ(result, false);
 }
 
 TEST_F(ValueTest, Integer) {
