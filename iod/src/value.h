@@ -28,6 +28,7 @@
 class MachineInstance;
 class DynamicValue;
 class Value;
+struct cJSON;
 
 uint64_t microsecs();
 void simple_deltat(std::ostream &out, int64_t dt);
@@ -74,7 +75,8 @@ class Value {
         t_bool,
         t_symbol,
         t_dynamic,
-        t_float /*, t_list, t_map */
+        t_float,
+        t_json /*, t_list, t_map */
     };
 
     typedef std::list<Value *> List;
@@ -89,6 +91,7 @@ class Value {
     Value(uint64_t v);
     Value(float v);
     Value(double v);
+    Value(cJSON *v);       // take ownership of the JSON
     Value(const char *str, Kind k = t_symbol);
     Value(std::string str, Kind k = t_symbol);
     Value(const Value &other);
@@ -113,11 +116,15 @@ class Value {
 
     void toString(); // convert the value to a string from a symbol
     void toSymbol(); // convert the value to a symbol from a string
+    // Lookup a property and return it as a cJSON object.
+    // The caller does not own the returned value.
+    cJSON *getFromJSON(const std::string &key);
 
     Kind kind;
     bool bValue;
     int64_t iValue;
     double fValue;
+    cJSON *json;
     std::string sValue; // used for strings and for symbols
     MachineInstance *cached_machine;
 
@@ -141,6 +148,7 @@ class Value {
     Value &operator=(std::string);
     Value &operator=(float);
     Value &operator=(double);
+    Value &operator=(cJSON *);
 
     bool operator>=(const Value &other) const;
     bool operator<=(const Value &other) const;
