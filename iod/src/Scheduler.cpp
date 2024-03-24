@@ -204,6 +204,7 @@ ScheduledItem::~ScheduledItem() {
     if (trigger) {
         trigger->release();
     }
+    if (package) { delete package; }
     trigger = 0;
 }
 
@@ -219,6 +220,9 @@ std::ostream &ScheduledItem::operator<<(std::ostream &out) const {
     }
     else if (trigger) {
         out << *trigger;
+    }
+    else {
+        out << "empty ScheduledItem";
     }
     return out;
 }
@@ -389,8 +393,6 @@ void Scheduler::idle() {
             state = e_running;
         }
 
-        int items_found = 0;
-        //is_ready = ready();
         while (state == e_running && is_ready) {
             watch_dog->poll();
             ScheduledItem *item = 0;
@@ -410,28 +412,26 @@ void Scheduler::idle() {
                     item->trigger->fire();
                 }
                 delete item;
-                ++items_found;
             }
             else if (item->package) {
                 DBG_SCHEDULER << "Scheduler activating package on "
                               << item->package->receiver->getName() << "\n";
                 item->package->receiver->handle(*item->package->message, item->package->transmitter);
-                delete item->package;
                 delete item;
-                ++items_found;
             }
             else if (item->action) {
                 DBG_SCHEDULER << "Scheduler activating pushing action to  "
                               << item->action->getOwner()->getName() << "\n";
                 item->action->getOwner()->push(item->action);
                 delete item;
-                ++items_found;
+            }
+            else {
+                assert(0 == "Scheduler could not process item");
+                delete item;
             }
             last_poll = microsecs();
             is_ready = ready(last_poll);
         }
-        //if (items_found)
-        //  MachineInstance::forceIdleCheck();
         if (state == e_running) {
             DBG_SCHEDULER << "scheduler done\n";
             safeSend(sync, "done", 4);
