@@ -1597,6 +1597,13 @@ bool Value::asBoolean(bool &x) const {
     }
 }
 
+bool Value::asInteger(long &x) const {
+    int64_t tmp;
+    auto result = asInteger(tmp);
+    x = tmp;
+    return result;
+}
+
 bool Value::asInteger(int64_t &x) const {
     if (kind == t_integer) {
         x = iValue;
