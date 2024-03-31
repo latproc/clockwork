@@ -1,8 +1,10 @@
 #ifndef __buffer_monitor_h__
 #define __buffer_monitor_h__
 
+#include "modbus_helpers.h"
 #include "monitor.h"
 #include "options.h"
+#include <set>
 #include <string>
 
 /* Modbus interface */
@@ -57,7 +59,7 @@ template <class T> class BufferMonitor {
         if (size) {
             if (options.verbose && initial_read) {
                 //std::cout << name << " initial read. size: " << size << "\n";
-                displayAscii(upd_data, buflen);
+                displayAscii(std::cout, upd_data, buflen);
                 std::cout << "\n";
             }
             T *p = upd_data, *q = cmp_data; //, *msk = dbg_mask;
@@ -78,7 +80,7 @@ template <class T> class BufferMonitor {
             if (!initial_read && memcmp(cmp_data, last_data, size * sizeof(T)) != 0) {
                 if (options.verbose) {
                     std::cout << "\n";
-                    display(upd_data, (buflen < 120) ? buflen : 120);
+                    display(std::cout, upd_data, (buflen < 120) ? buflen : 120);
                     std::cout << "\n";
                     //std::cout << " "; display(dbg_mask, buflen); std::cout << "\n";
                 }
