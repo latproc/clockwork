@@ -7,6 +7,7 @@
 #include "plc_interface.h"
 #include "src/buffer_monitor.h"
 #include "src/cw_interface.h"
+#include "src/modbus_helpers.h"
 #include "src/options.h"
 #include "symboltable.h"
 #include <Logger.h>
@@ -55,7 +56,10 @@ void ModbusClientThread::performUpdates() {
         std::list<std::pair<int, bool>>::iterator iter = bit_changes.begin();
         while (iter != bit_changes.end()) {
             std::pair<int, bool> item = *iter;
-            setBit(item.first, item.second);
+            int err_code = setBit(item.first, item.second);
+            if (err_code != 0) {
+                std::cerr << "setBit failed: " << show_modbus_error(err_code)<< "\n";
+            }
             iter = bit_changes.erase(iter);
         }
     }
@@ -75,7 +79,10 @@ void ModbusClientThread::performUpdates() {
             }
             else if (item.first != last + 1) {
                 //flush
-                setRegisters(start, vals, n);
+                int err_code = setRegisters(start, vals, n);
+                if (err_code != 0) {
+                    std::cerr << "setBit failed: " << show_modbus_error(err_code)<< "\n";
+                }
                 start = item.first;
                 n = 0;
             }
@@ -88,7 +95,10 @@ void ModbusClientThread::performUpdates() {
             iter = register_changes.erase(iter);
         }
         if (n) {
-            setRegisters(start, vals, n);
+            int err_code = setRegisters(start, vals, n);
+            if (err_code != 0) {
+                std::cerr << "setBit failed: " << show_modbus_error(err_code)<< "\n";
+            }
         }
         free(vals);
     }
@@ -113,7 +123,7 @@ ModbusClientThread::ModbusClientThread(const ModbusSettings &modbus_settings,
 
     ctx = openConnection();
     if (!ctx) {
-        std::cerr << "failed to create modbus context\n";
+        std::cerr << "failed to create modbus context - could not open connection\n";
         exit(1);
     }
     modbus_set_debug(ctx, FALSE);
@@ -150,8 +160,9 @@ modbus_t *ModbusClientThread::openConnection() {
             std::cerr << "Unable to create the libmodbus context\n";
         }
         else if (modbus_connect(ctx) == -1) {
+            int saved_errno = errno;
             std::cerr << "Connection to " << settings.device_name << ":" << settings.settings
-                      << " failed: " << modbus_strerror(errno) << ":" << errno << "\n";
+                      << " failed: " << show_modbus_error(saved_errno) << "\n";
             modbus_free(ctx);
             ctx = 0;
         }
@@ -198,7 +209,8 @@ modbus_t *ModbusClientThread::openConnection() {
     uint32_t secs, usecs;
     int rc = modbus_get_response_timeout(ctx, &secs, &usecs);
     if (rc == -1) {
-        perror("modbus_get_response_timeout");
+        int saved_errno = errno;
+        std::cerr << "modbus_get_response_timeout failed: " << show_modbus_error(saved_errno) << "\n";
         modbus_free(ctx);
         ctx = 0;
         sendStatus("disconnected");
@@ -258,80 +270,98 @@ void ModbusClientThread::close_connection() {
     ctx = 0;
 }
 
-bool ModbusClientThread::check_error(const char *msg, int entry, int *retry) {
-    std::cerr << "ERROR: " << msg << entry << " retry: " << *retry << "\n";
-    usleep(250);
-    if (errno == EAGAIN || errno == EINTR) {
-        fprintf(stderr, "%s %s (errno: %d), entry %d retrying %d\n", msg, modbus_strerror(errno),
-                errno, entry, *retry);
+bool ModbusClientThread::check_error(int rc, const char *msg, int entry, int *retry) {
+    std::cerr << "ERROR: " << msg <<  " " << entry << " retry: " << *retry << "\n";
+    usleep(250); // TODO: Remove this sleep
+    auto err_str = show_modbus_error(rc);
+    if (rc == EAGAIN || rc == EINTR) {
+        fprintf(stderr, "%s %s, entry %d retrying %d\n", msg, err_str.c_str(), entry,
+                *retry);
         return true;
     }
-    else if (errno == EBADF || errno == ECONNRESET || errno == EPIPE) {
-        fprintf(stderr, "%s %s (errno: %d), entry %d disconnecting %d\n", msg,
-                modbus_strerror(errno), errno, entry, *retry);
+    else if (rc == EBADF || rc == ECONNRESET || rc == EPIPE) {
+        fprintf(stderr, "%s %s, entry %d disconnecting %d\n", msg, err_str.c_str(), entry,
+                *retry);
         if (connected)
             close_connection();
         return false;
     }
+    else if (rc >= MODBUS_ENOBASE) {
+        fprintf(stderr, "%s %s, entry %d retrying\n", msg, err_str.c_str(), entry);
+        return true;
+    }
     else {
-        fprintf(stderr, "%s %s (errno: %d), entry %d reconnecting %d\n", msg,
-                modbus_strerror(errno), errno, entry, *retry);
-        if (connected)
+        fprintf(stderr, "%s %s, entry %d reconnecting %d\n", msg, err_str.c_str(), entry,
+                *retry);
+        if (connected) {
             close_connection();
-        return false;
+        }
+        assert(ctx == nullptr);
+        ctx = openConnection();
+        return ctx != nullptr;
     }
     return true;
 }
 
-bool ModbusClientThread::setBit(int addr, bool which) {
+int ModbusClientThread::setBit(int addr, bool which) {
     std::cerr << "set bit " << addr << " to " << which << "\n";
     boost::mutex::scoped_lock lock(update_mutex);
     int rc = 0;
-    int retries = 3;
+    int retries = 3; // TODO: Make this a setting
     while ((rc = modbus_write_bit(ctx, addr, (which) ? 1 : 0)) == -1) {
-        perror("modbus_write_bit");
-        check_error("modbus_write_bit", addr, &retries);
-        if (!connected)
-            return false;
-        if (--retries > 0)
-            continue;
-        return false;
+        int saved_errno = errno;
+        std::cerr << "modbus_write_bit failed: " << show_modbus_error(saved_errno) << "\n";
+        if (check_error(saved_errno, "modbus_write_bit", addr, &retries)) {
+            if (!connected) { return saved_errno; }
+            if (--retries > 0)
+                continue;
+            }
+        else  {
+            return saved_errno;
+        }
     }
-    return true;
+    return 0;
 }
 
-bool ModbusClientThread::setRegister(int addr, uint16_t val) {
+// Attempt to set the given register. If an error occurs, retry up to 3 times.
+int ModbusClientThread::setRegister(int addr, uint16_t val) {
     if (!connected)
-        return false;
+        return ENXIO;
     if (options.verbose)
         std::cerr << "set register " << addr << " to " << val << "\n";
     boost::mutex::scoped_lock lock(update_mutex);
     int rc = 0;
-    int retries = 3;
+    int retries = 3; // TODO: Make this a setting
     if (settings.support_single_register_write)
         rc = modbus_write_register(ctx, addr, val);
     else
         rc = modbus_write_registers(ctx, addr, 1, &val);
     while (rc == -1) {
-        perror("modbus_write_register");
-        check_error("modbus_write_register", addr, &retries);
-        if (!connected)
-            return false;
-        if (--retries > 0) {
-            if (settings.support_single_register_write)
-                rc = modbus_write_register(ctx, addr, val);
-            else
-                rc = modbus_write_registers(ctx, addr, 1, &val);
-            continue;
+        int saved_errno = errno;
+        std::cerr << "modbus_write_register failed: " << show_modbus_error(saved_errno) << "\n";
+        if (check_error(saved_errno, "modbus_write_register(s) ", addr, &retries)) {
+            if (!connected) { return saved_errno; }
+            if (--retries > 0) {
+                if (settings.support_single_register_write)
+                    rc = modbus_write_register(ctx, addr, val);
+                else
+                    rc = modbus_write_registers(ctx, addr, 1, &val);
+                continue;
+            }
+            else {
+                return saved_errno;
+            }
         }
-        return false;
+        else {
+            return saved_errno;
+        }
     }
-    return true;
+    return 0;
 }
 
-bool ModbusClientThread::setRegisters(int addr, uint16_t *val, unsigned int n) {
-    if (!connected)
-        return false;
+// Attempt to set the given registers. If an error occurs, retry up to 3 times.
+int ModbusClientThread::setRegisters(int addr, uint16_t *val, unsigned int n) {
+    if (!connected) { return ENXIO; }
     if (options.verbose) {
         std::cerr << "set register " << addr << " to ";
         for (unsigned int i = 0; i < n; ++i)
@@ -340,21 +370,26 @@ bool ModbusClientThread::setRegisters(int addr, uint16_t *val, unsigned int n) {
     }
     boost::mutex::scoped_lock lock(update_mutex);
     int rc = 0;
-    int retries = 3;
+    int retries = 3; // TODO: Make this a setting
     rc = modbus_write_registers(ctx, addr, n, val);
-    while (rc == -1) {
-        perror("modbus_write_registers");
-        check_error("modbus_write_registers", addr, &retries);
-        if (!connected)
-            return false;
-        if (--retries > 0) {
-            usleep(5000);
-            rc = modbus_write_registers(ctx, addr, n, val);
-            continue;
+    while ((rc = modbus_write_registers(ctx, addr, n, val)) == -1) {
+        int saved_errno = errno;
+        std::cerr << "modbus_write_registers: " << show_modbus_error(saved_errno) << "\n";
+        if (check_error(saved_errno, "modbus_write_registers ", addr, &retries)) {
+            if (!connected) { return saved_errno; }
+            if (--retries > 0) {
+                usleep(250); // TODO: Remove this sleep
+                continue;
+            }
+            else {
+                return saved_errno;
+            }
         }
-        return false;
+        else {
+            return saved_errno;
+        }
     }
-    return true;
+    return 0;
 }
 
 void ModbusClientThread::operator()() {
