@@ -68,33 +68,33 @@ Options::~Options() {
     delete settings_rtu;
 }
 
-const char *Options::channelName() {
+const char *Options::channelName() const {
     return channel_name.c_str();
 }
 
-const ModbusSettings *Options::settings() {
+const ModbusSettings *Options::settings() const {
     if (mt == mt_TCP) return settings_tcp;
     if (mt == mt_RTU) return settings_rtu;
     return nullptr;
 }
 
-const SerialSettings *Options::serial(){
+const SerialSettings *Options::serial() const {
     return serial_;
 }
 
-bool Options::valid() {
+bool Options::valid() const {
     return valid_options;
 }
 
-const char *Options::configFileName() {
+const char *Options::configFileName() const {
     return config_filename;
 }
 
-const char *Options::simulatorName() {
+const char *Options::simulatorName() const {
     return sim_name;
 }
 
-uint64_t Options::getTimeout() {
+uint64_t Options::getTimeout() const {
     return timeout_secs * 1000000 + timeout_usecs;
 }
 
