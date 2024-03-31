@@ -3,6 +3,28 @@
 #include <stdlib.h>
 #include <string.h>
 #include <string>
+#include <sstream>
+#include <modbus.h>
+
+std::string show_modbus_error(int rc) {
+    std::stringstream result;
+    if (rc >= MODBUS_ENOBASE) {
+        if (rc < MODBUS_ENOBASE + MODBUS_EXCEPTION_MAX) {
+            result << modbus_strerror(rc);
+            rc = rc - MODBUS_ENOBASE;
+        }
+        else {
+            rc = rc - MODBUS_ENOBASE - MODBUS_EXCEPTION_MAX;
+            result << "device error:";
+        }
+    }
+    else {
+        result << strerror(rc);
+    }
+    result << " (" << rc << " == 0x" << std::hex << rc << std::dec << ")";
+    return result.str();
+}
+
 
 int getSettings(const char *str, SerialSettings &settings) {
     int result = 0;
