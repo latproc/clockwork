@@ -1,10 +1,10 @@
 #include "modbus_helpers.h"
+#include <modbus.h>
+#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <string>
-#include <sstream>
-#include <modbus.h>
 
 std::string show_modbus_error(int rc) {
     std::stringstream result;
@@ -24,7 +24,6 @@ std::string show_modbus_error(int rc) {
     result << " (" << rc << " == 0x" << std::hex << rc << std::dec << ")";
     return result.str();
 }
-
 
 int getSettings(const char *str, SerialSettings &settings) {
     int result = 0;

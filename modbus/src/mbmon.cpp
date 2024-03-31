@@ -530,7 +530,7 @@ int main(int argc, const char *argv[]) {
 
             exception_count = 0;
         }
-        catch (const std::exception & ex) {
+        catch (const std::exception &ex) {
             std::cerr << "polling connections: " << ex.what() << "\n";
             {
                 FileLogger fl(program_name);
@@ -596,7 +596,7 @@ int main(int argc, const char *argv[]) {
                 }
                 //sendStateUpdate(&iosh_cmd, &m, *(m.value->getWordData()) );
             }
-            catch (const std::exception & ex) {
+            catch (const std::exception &ex) {
                 std::cerr << "Exception when processing STATE command: " << ex.what() << "\n";
             }
         }
@@ -660,7 +660,7 @@ int main(int argc, const char *argv[]) {
                 }
                 //sendPropertyUpdate(&iosh_cmd, &m);	// dont' send the property value back
             }
-            catch (const std::exception & ex) {
+            catch (const std::exception &ex) {
                 std::cerr << "Exception when processing PROPERTY command: " << ex.what() << "\n";
             }
         }
