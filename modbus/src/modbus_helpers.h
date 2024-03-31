@@ -29,6 +29,7 @@ struct ModbusSettings {
     std::string settings;    // serial port settings string or port name
     SerialSettings serial;   // decoded version of serial port settings
     std::set<int> devices;   // there can be several devices on one serial bus
+    int device_id;           // TODO: Add support for multiple devices
 };
 
 int getSettings(const char *str, SerialSettings &settings);

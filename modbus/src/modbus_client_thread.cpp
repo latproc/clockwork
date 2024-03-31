@@ -166,6 +166,12 @@ modbus_t *ModbusClientThread::openConnection() {
             modbus_free(ctx);
             ctx = 0;
         }
+        else if (modbus_set_slave(ctx, settings.device_id) == -1) {
+            std::cerr << "modbus_set_slave: " << modbus_strerror(errno) << "\n";
+            modbus_free(ctx);
+            ctx = 0;
+        }
+#if 0
         if (modbus_rtu_get_serial_mode(ctx) != MODBUS_RTU_RS485) {
             std::cerr << "setting RTU 485 mode\n";
             if (modbus_rtu_set_serial_mode(ctx, MODBUS_RTU_RS485) == -1) {
@@ -175,6 +181,7 @@ modbus_t *ModbusClientThread::openConnection() {
         else {
             std::cerr << "defaulting to RTU 485 mode\n";
         }
+#endif
     }
     else if (settings.mt == mt_RTU) {
         int device_id = *settings.devices.begin();
