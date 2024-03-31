@@ -52,6 +52,7 @@ Options::Options()
     settings_tcp->settings = "1502";
     settings_tcp->support_single_register_write = true;
     settings_tcp->support_multi_register_write = true;
+    settings_tcp->device_id = 1;
 
     settings_rtu->mt = mt_RTU;
     settings_rtu->device_name = "/dev/ttyUSB0";
@@ -167,8 +168,14 @@ bool Options::parseArgs(int argc, const char *argv[]) {
         else if (strcmp(argv[arg], "--device_id") == 0 && arg + 1 < argc) {
             int device_id;
             if (strToInt(argv[++arg], device_id)) {
-                settings_rtu->devices.insert(device_id);
-                mt = mt_RTU;
+                if (mt == mt_RTU) {
+                    settings_rtu->devices.insert(device_id);
+                    settings_rtu->device_id = device_id;
+                }
+                else {
+                    settings_tcp->devices.insert(device_id);
+                    settings_tcp->device_id = device_id;
+                }
             }
         }
         else if (strcmp(argv[arg], "--timeout") == 0 && arg + 1 < argc) {
