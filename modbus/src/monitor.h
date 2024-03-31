@@ -45,8 +45,9 @@ template<class T>void display(T *p, size_t len) {
 template<class T>void displayAscii(T *p, size_t len) {
 	size_t min = 0;
 	if (len>120) len=120;
-	for (size_t i=min; i<len; ++i) 
-	std::cout << std::setw(2*sizeof(T)) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
+	for (size_t i=min; i<len; ++i) {
+  	std::cout << std::setw(2*sizeof(T)) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
+  }
 	std::cout << "\n";
 	for (size_t i=min; i<len; ++i) {
 		uint8_t buf[sizeof(T)];

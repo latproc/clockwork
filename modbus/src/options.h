@@ -20,14 +20,14 @@ public:
 	Options();
 	~Options();
 	bool parseArgs(int argc, const char *argv[]); // false if the options are invalid
-	bool valid(); // are the user selected options valid?
+	bool valid() const; // are the user selected options valid?
 	void usage(const char *prog);
-	const ModbusSettings *settings();
-	const SerialSettings *serial();
-	const char *channelName();
-    const char *configFileName();
-    const char *simulatorName();
-    uint64_t getTimeout();
+	const ModbusSettings *settings() const;
+	const SerialSettings *serial() const;
+	const char *channelName() const;
+    const char *configFileName() const;
+    const char *simulatorName() const;
+    uint64_t getTimeout() const;
     uint64_t setTimeout(uint64_t timeout_usec);
 
 private:

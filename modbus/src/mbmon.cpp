@@ -25,6 +25,7 @@
 #include <sys/time.h>
 #include <Logger.h>
 #include "options.h"
+#include "modbus_client_thread.h"
 
 bool iod_connected = false;
 bool update_status = true;
@@ -144,7 +145,7 @@ void sendStateUpdate(zmq::socket_t *sock, ModbusMonitor *mm, bool which) {
 
 void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
 	std::list<Value> cmd;
-	long value = 0;
+	int16_t value = 0;
 	cmd.push_back("PROPERTY");
 	char buf[100];
 	snprintf(buf, 100, "%s", mm->name().c_str());
@@ -195,42 +196,6 @@ void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
 
 }
 
-void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint8_t *buffer_addr) {
-	if (changes.size()) {
-		if (options.verbose) std::cerr << changes.size() << " changes\n";
-		std::set<ModbusMonitor*>::iterator iter = changes.begin();
-		while (iter != changes.end()) {
-			ModbusMonitor *mm = *iter++;
-			// note: the monitor address is in the global range grp<<16 + offset
-			// this method is only using the addresses in the local range
-			uint8_t *val = buffer_addr + ( (mm->address() & 0xffff));
-			if (options.verbose) std::cerr << mm->name() << " ";
-			mm->set( val, options.verbose );
-			
-			if (sock &&	(mm->group() == 0 || mm->group() == 1) && mm->length()==1) {
-				sendStateUpdate(sock, mm, (bool)*val);
-			}
-		}
-	}
-}
-
-void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor*> &changes, uint16_t *buffer_addr) {
-	if (changes.size()) {
-		if (options.verbose) std::cerr << changes.size() << " changes\n";
-		std::set<ModbusMonitor*>::iterator iter = changes.begin();
-		while (iter != changes.end()) {
-			ModbusMonitor *mm = *iter++;
-			uint16_t *val = buffer_addr + ( (mm->address() & 0xffff)) ;
-			if (options.verbose) std::cerr << mm->name() << " ";
-			mm->set( val, options.verbose );
-			if (mm->readOnly() && sock) { // INPUTREGISTER
-				sendPropertyUpdate(sock, mm);
-			}
-		}
-	}
-}
-
-#include "modbus_client_thread.cpp"
 ModbusClientThread *mb = 0;
 
 class SetupDisconnectMonitor : public EventResponder {
@@ -485,7 +450,7 @@ int main(int argc, const char *argv[]) {
 	if (options.configFileName()) {
 		// standalone execution
 
-		ModbusClientThread modbus_interface(*ms, mc);
+		ModbusClientThread modbus_interface(*ms, mc, options, update_status);
 		mb = &modbus_interface;
 		boost::thread monitor_modbus(boost::ref(modbus_interface));
 
@@ -510,7 +475,7 @@ int main(int argc, const char *argv[]) {
 	subscription_manager.monit_setup->addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
 	subscription_manager.setupConnections();
 
-	ModbusClientThread modbus_interface(*ms, mc, local_commands);
+	ModbusClientThread modbus_interface(*ms, mc, options, update_status, local_commands);
 	mb = &modbus_interface;
 	boost::thread monitor_modbus(boost::ref(modbus_interface));
 
