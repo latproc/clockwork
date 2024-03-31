@@ -88,7 +88,7 @@ std::pair<int, int> PLCInterface::decode(const char *address) {
             return std::make_pair(mapping.group(), address_offset);
         }
     }
-    catch (std::exception ex) {
+    catch (const std::exception & ex) {
         std::cerr << "No entry: " << address << "\n";
     }
     return std::make_pair(-1, -1);
