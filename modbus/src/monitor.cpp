@@ -168,7 +168,7 @@ ModbusMonitor *ModbusMonitor::lookupAddress(unsigned int adr) {
         ModbusMonitor *mm = addresses.at(adr);
         return mm;
     }
-    catch (std::exception ex) {
+    catch (const std::exception & ex) {
         //std::cout << "no device for address " << adr << "\n";
         return 0;
     }
