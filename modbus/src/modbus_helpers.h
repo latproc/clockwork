@@ -4,6 +4,8 @@
 #include "options.h"
 #include <set>
 
+std::string show_modbus_error(int rc);
+
 class SerialSettings {
   public:
     unsigned int baud;
