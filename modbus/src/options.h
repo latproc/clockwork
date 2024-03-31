@@ -29,6 +29,7 @@ class Options {
     const char *simulatorName() const;
     uint64_t getTimeout() const;
     uint64_t setTimeout(uint64_t timeout_usec);
+    int getDeviceId() const;
 
   private:
     ModbusType mt;
