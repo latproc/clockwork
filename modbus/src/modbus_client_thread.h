@@ -78,12 +78,12 @@ class ModbusClientThread {
 
     void close_connection();
 
-    bool check_error(const char *msg, int entry, int *retry);
-    bool setBit(int addr, bool which);
+    bool check_error(int rc, const char *msg, int entry, int *retry);
+    int setBit(int addr, bool which);
 
-    bool setRegister(int addr, uint16_t val);
+    int setRegister(int addr, uint16_t val);
 
-    bool setRegisters(int addr, uint16_t *val, unsigned int n);
+    int setRegisters(int addr, uint16_t *val, unsigned int n);
 
     template <typename T>
     bool collect_selected_updates(BufferMonitor<T> &bm, unsigned int grp, T *dest,
@@ -109,10 +109,11 @@ class ModbusClientThread {
                 int retry = 2;
                 while ((usleep(5000),
                         rc = read_fn(ctx, offset, item.second.length(), dest + offset)) == -1) {
+                    int saved_errno = errno;
                     if (options.verbose)
                         std::cerr << "called: read_fn(ctx, " << offset << ", "
                                   << item.second.length() << ", " << dest + offset << "))\n";
-                    check_error(fn_name, offset, &retry);
+                    check_error(saved_errno, fn_name, offset, &retry);
                     if (!connected)
                         return false;
                     if (--retry > 0)
