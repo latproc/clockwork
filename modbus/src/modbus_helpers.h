@@ -2,9 +2,42 @@
 #define __modbus_helpers_h__
 
 #include "options.h"
+#include <iomanip>
+#include <ostream>
 #include <set>
 
+// Modbus errors are based on MODBUS_ENOBASE. Display the standard error string
+// if the code is less than MODBUS_ENOBASE, the modbus error string if the code
+// is within the modbus range and otherwise display the error as a   'device
+// error'
 std::string show_modbus_error(int rc);
+
+template <typename T> void display(std::ostream &out, T *p, size_t len) {
+    size_t min = 0;
+    if (len > 120)
+        len = 120;
+    for (size_t i = min; i < len; ++i) {
+        out << std::setw(2 * sizeof(T)) << std::setfill('0') << std::hex << (unsigned int)p[i]
+            << std::dec;
+    }
+}
+
+template <typename T> void displayAscii(std::ostream &out, T *p, size_t len) {
+    size_t min = 0;
+    if (len > 120)
+        len = 120;
+    display(out, p, len);
+    out << "\n";
+    for (size_t i = min; i < len; ++i) {
+        uint8_t buf[sizeof(T)];
+        memcpy(buf, p + i, sizeof(T));
+
+        for (size_t j = 0; j < sizeof(T); ++j) {
+            out << '.' << ((isprint(buf[j]) ? (char)buf[j] : '.'));
+        }
+    }
+    out << "\n";
+}
 
 class SerialSettings {
   public:

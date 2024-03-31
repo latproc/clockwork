@@ -3,6 +3,7 @@
 // Created by Martin on 4/08/2015.
 
 #include "monitor.h"
+#include "modbus_helpers.h"
 #include <fstream>
 #include <iomanip>
 #include <iostream>
@@ -44,6 +45,9 @@ void ModbusMonitor::setRaw(uint32_t new_value, bool display) {
     if (value->length == 2) {
         uint32_t *val = (uint32_t *)value->getWordData();
         *val = new_value;
+    }
+    else {
+        std::cerr << "Warning: ignoring 32-bit value for " << *this << "\n";
     }
 }
 
@@ -168,7 +172,7 @@ ModbusMonitor *ModbusMonitor::lookupAddress(unsigned int adr) {
         ModbusMonitor *mm = addresses.at(adr);
         return mm;
     }
-    catch (const std::exception & ex) {
+    catch (const std::exception &ex) {
         //std::cout << "no device for address " << adr << "\n";
         return 0;
     }
@@ -181,7 +185,7 @@ ModbusMonitor *ModbusMonitor::lookup(unsigned int grp, unsigned int adr) {
 void ModbusMonitor::set(uint8_t *new_value, bool display_value) {
     /*if (length>2) displayAscii(data, length); else*/
     if (display_value) {
-        display(new_value, value->length);
+        display(std::cout, new_value, value->length);
         std::cout << "\n";
     }
     //std::cout << " setting " << *this << "\n";
@@ -192,7 +196,7 @@ void ModbusMonitor::set(uint8_t *new_value, bool display_value) {
 void ModbusMonitor::set(uint16_t *new_value, bool display_value) {
     /*if (length>2) displayAscii(data, length); else*/
     if (display_value) {
-        display((uint8_t *)new_value, value->length * sizeof(uint16_t));
+        display(std::cout, (uint8_t *)new_value, value->length * sizeof(uint16_t));
         std::cout << "\n";
     }
     //std::cout << " setting " << *this << "\n";
