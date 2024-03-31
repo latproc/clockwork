@@ -8,7 +8,7 @@ build:
 build/CMakeFiles:	CMakeLists.txt build
 	(cd build; MODBUS_DIR=.. cmake .. )
 
-build/mbmon:	build/CMakeFiles src/*.cpp
+build/mbmon:	build/CMakeFiles src/*.h src/*.cpp
 	(cd build; make )
 
 test:
