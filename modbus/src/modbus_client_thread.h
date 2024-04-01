@@ -33,7 +33,6 @@ class ModbusClientThread {
     boost::mutex work_mutex;
 
   public:
-    uint8_t *tab_rq_bits;
     uint8_t *tab_rp_bits;
     uint8_t *tab_ro_bits;
     uint16_t *tab_rq_registers;
