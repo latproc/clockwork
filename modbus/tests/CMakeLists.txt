@@ -41,6 +41,8 @@ FIND_PACKAGE(ZMQ 4.2 REQUIRED)
 include_directories("/usr/local/include")
 include_directories("/opt/local/include")
 include_directories("${MODBUS_INCLUDE_DIR}")
+include_directories("${PROJECT_SOURCE_DIR}/../")
+include_directories("${ZMQ_INCLUDE_DIRS}")
 
 add_executable(test_options src/test_options.cpp 
   ${PROJECT_SOURCE_DIR}/src/options.cpp ${PROJECT_SOURCE_DIR}/src/modbus_helpers.cpp
@@ -51,7 +53,6 @@ include_directories("${PROJECT_SOURCE_DIR}/src")
 TARGET_LINK_LIBRARIES(test_options ${MODBUS_LIBRARIES})
 add_test(NAME test_options COMMAND test_options)
 
-
 add_executable(test_modbus_helpers src/test_modbus_helpers.cpp 
   ${PROJECT_SOURCE_DIR}/src/modbus_helpers.cpp)
 target_link_libraries(test_modbus_helpers gmock_main ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} )
@@ -59,5 +60,17 @@ TARGET_LINK_LIBRARIES(test_modbus_helpers ${MODBUS_LIBRARIES})
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 include_directories("${PROJECT_SOURCE_DIR}/src")
 add_test(NAME test_modbus_helpers COMMAND test_modbus_helpers)
+
+add_executable(test_cw_interface src/test_cw_interface.cpp 
+  ${PROJECT_SOURCE_DIR}/src/cw_interface.cpp
+  ${PROJECT_SOURCE_DIR}/src/monitor.cpp
+  ${PROJECT_SOURCE_DIR}/src/modbus_helpers.cpp
+  ${PROJECT_SOURCE_DIR}/src/options.cpp
+)
+target_link_libraries(test_cw_interface gmock_main ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} )
+TARGET_LINK_LIBRARIES(test_cw_interface ${MODBUS_LIBRARIES})
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+include_directories("${PROJECT_SOURCE_DIR}/src")
+add_test(NAME test_cw_interface COMMAND test_cw_interface)
 
 endif()
