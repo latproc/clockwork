@@ -1,11 +1,11 @@
-#include "src/cw_interface.h"
-#include "src/monitor.h"
-#include "src/options.h"
+#include "cw_interface.h"
+#include "monitor.h"
+#include "options.h"
 #include <iostream>
-#include <zmq.hpp>
 
-void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor *> &changes, uint8_t *buffer_addr,
-                    const Options &options) {
+void sendChanges(std::set<ModbusMonitor *> &changes, uint8_t *buffer_addr,
+                    const Options &options,
+                    std::function<void(ModbusMonitor *, bool)> send_state_update) {
     if (changes.size()) {
         if (options.verbose)
             std::cerr << changes.size() << " changes\n";
@@ -19,15 +19,16 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor *> &changes, uin
                 std::cerr << mm->name() << " ";
             mm->set(val, options.verbose);
 
-            if (sock && (mm->group() == 0 || mm->group() == 1) && mm->length() == 1) {
-                sendStateUpdate(sock, mm, (bool)*val);
+            if ((mm->group() == 0 || mm->group() == 1) && mm->length() == 1) {
+                send_state_update(mm, (bool)*val);
             }
         }
     }
 }
 
-void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor *> &changes, uint16_t *buffer_addr,
-                    const Options &options) {
+void sendChanges(std::set<ModbusMonitor *> &changes, uint16_t *buffer_addr,
+                    const Options &options,
+                    std::function<void(ModbusMonitor *)> send_property_update) {
     if (changes.size()) {
         if (options.verbose)
             std::cerr << changes.size() << " changes\n";
@@ -38,9 +39,10 @@ void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor *> &changes, uin
             if (options.verbose)
                 std::cerr << mm->name() << " ";
             mm->set(val, options.verbose);
-            if (mm->readOnly() && sock) { // INPUTREGISTER
-                sendPropertyUpdate(sock, mm);
+            if (mm->readOnly()) { // INPUTREGISTER
+                send_property_update(mm);
             }
         }
     }
 }
+
