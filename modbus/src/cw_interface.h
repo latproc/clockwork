@@ -1,18 +1,18 @@
-#include "src/options.h"
+#include "options.h"
 #include <cstdint>
+#include <functional>
 #include <set>
-
-namespace zmq {
-class socket_t;
-}
+#include <zmq.hpp>
 
 class ModbusMonitor;
 
-void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor *> &changes, uint8_t *buffer_addr,
-                    const Options &options);
+void sendChanges(std::set<ModbusMonitor *> &changes, uint8_t *buffer_addr,
+                    const Options &options,
+                    std::function<void(ModbusMonitor *, bool)> send_state_update);
 
-void displayChanges(zmq::socket_t *sock, std::set<ModbusMonitor *> &changes, uint16_t *buffer_addr,
-                    const Options &options);
+void sendChanges(std::set<ModbusMonitor *> &changes, uint16_t *buffer_addr,
+                    const Options &options,
+                    std::function<void(ModbusMonitor *)> send_property_update);
 
 void sendStatus(const char *s);
 void sendStateUpdate(zmq::socket_t *sock, ModbusMonitor *mm, bool which);

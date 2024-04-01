@@ -226,9 +226,7 @@ bool MonitorConfiguration::load(const char *fname) {
                 format = "WORD";
             char *rest = 0;
             address = strtol(code.c_str() + 2, &rest, 10);
-            ModbusMonitor *m = new ModbusMonitor(name, group, address, len, format);
-            monitors.insert(make_pair(name, *m));
-            delete m;
+            monitors.emplace(make_pair(name, ModbusMonitor(name, group, address, len, format)));
         }
         else if (!in.eof())
             return false;

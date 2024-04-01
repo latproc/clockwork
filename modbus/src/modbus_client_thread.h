@@ -84,6 +84,21 @@ class ModbusClientThread {
 
     int setRegisters(int addr, uint16_t *val, unsigned int n);
 
+    struct ChangesOrError {
+        int error = 0;
+        std::set<ModbusMonitor *> changes;
+    };
+
+    ChangesOrError
+    collect_bit_changes(BufferMonitor<uint8_t> &bm, unsigned int grp, uint8_t *dest,
+                        std::map<std::string, ModbusMonitor> &entries, const char *fn_name,
+                        int (*read_fn)(modbus_t *ctx, int addr, int nb, uint8_t *dest));
+
+    ChangesOrError
+    collect_word_changes(BufferMonitor<uint16_t> &bm, unsigned int grp, uint16_t *dest,
+                         std::map<std::string, ModbusMonitor> &entries, const char *fn_name,
+                         int (*read_fn)(modbus_t *ctx, int addr, int nb, uint16_t *dest));
+
     bool collect_selected_updates(BufferMonitor<uint8_t> &bm, unsigned int grp, uint8_t *dest,
                                   std::map<std::string, ModbusMonitor> &entries,
                                   const char *fn_name,
