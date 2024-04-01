@@ -84,55 +84,15 @@ class ModbusClientThread {
 
     int setRegisters(int addr, uint16_t *val, unsigned int n);
 
-    template <typename T>
-    bool collect_selected_updates(BufferMonitor<T> &bm, unsigned int grp, T *dest,
+    bool collect_selected_updates(BufferMonitor<uint8_t> &bm, unsigned int grp, uint8_t *dest,
                                   std::map<std::string, ModbusMonitor> &entries,
                                   const char *fn_name,
-                                  int (*read_fn)(modbus_t *ctx, int addr, int nb, T *dest)) {
+                                  int (*read_fn)(modbus_t *ctx, int addr, int nb, uint8_t *dest));
 
-        if (entries.empty())
-            return true;
-        int rc = 0;
-        int min = 100000;
-        int max = 0;
-        std::map<std::string, ModbusMonitor>::const_iterator iter = entries.begin();
-        while (iter != entries.end()) {
-            const std::pair<std::string, ModbusMonitor> &item = *iter++;
-            if (item.second.group() == grp) {
-                int offset = item.second.address();
-                int end = offset + item.second.length() - 1;
-                if (offset < min)
-                    min = offset;
-                if (end > max)
-                    max = end;
-                int retry = 2;
-                while ((usleep(5000),
-                        rc = read_fn(ctx, offset, item.second.length(), dest + offset)) == -1) {
-                    int saved_errno = errno;
-                    if (options.verbose)
-                        std::cerr << "called: read_fn(ctx, " << offset << ", "
-                                  << item.second.length() << ", " << dest + offset << "))\n";
-                    check_error(saved_errno, fn_name, offset, &retry);
-                    if (!connected)
-                        return false;
-                    if (--retry > 0)
-                        continue;
-                    else
-                        break;
-                }
-            }
-        }
-        if (!connected) {
-            std::cerr << "Lost connection\n";
-            return false;
-        }
-        if (min > max)
-            return true;
-        std::set<ModbusMonitor *> changes;
-        bm.check((max - min + 1), dest + min, (grp << 16) + min, changes);
-        displayChanges(cmd_interface, changes, dest, options);
-        return true;
-    }
+    bool collect_selected_updates(BufferMonitor<uint16_t> &bm, unsigned int grp, uint16_t *dest,
+                                  std::map<std::string, ModbusMonitor> &entries,
+                                  const char *fn_name,
+                                  int (*read_fn)(modbus_t *ctx, int addr, int nb, uint16_t *dest));
 
     void operator()();
 };

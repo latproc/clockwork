@@ -428,27 +428,22 @@ void ModbusClientThread::operator()() {
             if (update_status) {
                 sendStatus("initialising");
             }
-            if (!collect_selected_updates<uint8_t>(robits_monitor, 1, tab_ro_bits, mc.monitors,
-                                                   "modbus_read_input_bits",
-                                                   modbus_read_input_bits)) {
+            if (!collect_selected_updates(robits_monitor, 1, tab_ro_bits, mc.monitors,
+                                          "modbus_read_input_bits", modbus_read_input_bits)) {
                 std::cerr << "modbus_read_input_bits failed\n";
-                //goto modbus_loop_end;
             }
-            if (!collect_selected_updates<uint8_t>(bits_monitor, 0, tab_rp_bits, mc.monitors,
-                                                   "modbus_read_bits", modbus_read_bits)) {
+            if (!collect_selected_updates(bits_monitor, 0, tab_rp_bits, mc.monitors,
+                                          "modbus_read_bits", modbus_read_bits)) {
                 std::cerr << "modbus_read_bits failed\n";
-                //goto modbus_loop_end;
             }
-            if (!collect_selected_updates<uint16_t>(regs_monitor, 3, tab_rq_registers, mc.monitors,
-                                                    "modbus_read_input registers",
-                                                    modbus_read_input_registers)) {
+            if (!collect_selected_updates(regs_monitor, 3, tab_rq_registers, mc.monitors,
+                                          "modbus_read_input registers",
+                                          modbus_read_input_registers)) {
                 std::cerr << "modbus_read_input_registers failed\n";
-                //goto modbus_loop_end;
             }
             if (!collect_selected_updates(holdings_monitor, 4, tab_rw_rq_registers, mc.monitors,
                                           "modbus_read_registers", modbus_read_registers)) {
                 std::cerr << "modbus_read_registers failed\n";
-                //goto modbus_loop_end;
             }
             if (update_status) {
                 sendStatus("active");
@@ -456,7 +451,95 @@ void ModbusClientThread::operator()() {
             }
         }
 
-        //modbus_loop_end:
-        usleep(100000);
+        usleep(100000); // TODO: Make this a setting
     }
+}
+
+struct ChangesOrError {
+    int error = 0;
+    std::set<ModbusMonitor *> changes;
+};
+
+template <typename T>
+ChangesOrError
+collect_selected_updates(ModbusClientThread &client, modbus_t *ctx, const Options &options,
+                         BufferMonitor<T> &bm, unsigned int grp, T *dest,
+                         std::map<std::string, ModbusMonitor> &entries, const char *fn_name,
+                         int (*read_fn)(modbus_t *ctx, int addr, int nb, T *dest)) {
+
+    ChangesOrError result;
+    if (entries.empty()) {
+        return result;
+    }
+    int rc = 0;
+    int min = 100000;
+    int max = 0;
+    std::map<std::string, ModbusMonitor>::const_iterator iter = entries.begin();
+    while (iter != entries.end()) {
+        const std::pair<std::string, ModbusMonitor> &item = *iter++;
+        if (item.second.group() == grp) {
+            int offset = item.second.address();
+            int end = offset + item.second.length() - 1;
+            if (offset < min)
+                min = offset;
+            if (end > max)
+                max = end;
+            int retry = 2;
+            while ((usleep(5000), rc = read_fn(ctx, offset, item.second.length(), dest + offset)) ==
+                   -1) {
+                int saved_errno = errno;
+                if (options.verbose)
+                    std::cerr << "called: read_fn(ctx, " << offset << ", " << item.second.length()
+                              << ", " << dest + offset << "))\n";
+                client.check_error(saved_errno, fn_name, offset, &retry);
+                if (!client.connected) {
+                    result.error = saved_errno;
+                }
+                if (--retry > 0)
+                    continue;
+                else
+                    break;
+            }
+        }
+    }
+    if (!client.connected) {
+        std::cerr << "Lost connection\n";
+        result.error = ENXIO;
+        return result;
+    }
+    if (min > max) {
+        return result; // No changes to report
+    }
+    bm.check((max - min + 1), dest + min, (grp << 16) + min, result.changes);
+    return result;
+}
+
+bool ModbusClientThread::collect_selected_updates(
+    BufferMonitor<uint8_t> &bm, unsigned int grp, uint8_t *dest,
+    std::map<std::string, ModbusMonitor> &entries, const char *fn_name,
+    int (*read_fn)(modbus_t *ctx, int addr, int nb, uint8_t *dest)) {
+    auto result = ::collect_selected_updates<uint8_t>(*this, ctx, options, bm, grp, dest, entries,
+                                                      fn_name, read_fn);
+    if (result.error) {
+        std::cerr << "Error collecting group " << grp
+                  << " updates: " << show_modbus_error(result.error) << "\n";
+        return false;
+    }
+    displayChanges(cmd_interface, result.changes, dest, options);
+    return true;
+}
+
+bool ModbusClientThread::collect_selected_updates(
+    BufferMonitor<uint16_t> &bm, unsigned int grp, uint16_t *dest,
+    std::map<std::string, ModbusMonitor> &entries, const char *fn_name,
+    int (*read_fn)(modbus_t *ctx, int addr, int nb, uint16_t *dest)) {
+    auto result = ::collect_selected_updates<uint16_t>(*this, ctx, options, bm, grp, dest, entries,
+                                                       fn_name, read_fn);
+    if (result.error) {
+        std::cerr << "Error collecting group " << grp
+                  << " updates: " << show_modbus_error(result.error) << "\n";
+        return false;
+    }
+    displayChanges(cmd_interface, result.changes, dest, options);
+    return true;
 }
