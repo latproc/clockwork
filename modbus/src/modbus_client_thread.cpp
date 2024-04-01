@@ -455,19 +455,14 @@ void ModbusClientThread::operator()() {
     }
 }
 
-struct ChangesOrError {
-    int error = 0;
-    std::set<ModbusMonitor *> changes;
-};
-
 template <typename T>
-ChangesOrError
+ModbusClientThread::ChangesOrError
 collect_selected_updates(ModbusClientThread &client, modbus_t *ctx, const Options &options,
                          BufferMonitor<T> &bm, unsigned int grp, T *dest,
                          std::map<std::string, ModbusMonitor> &entries, const char *fn_name,
                          int (*read_fn)(modbus_t *ctx, int addr, int nb, T *dest)) {
 
-    ChangesOrError result;
+    ModbusClientThread::ChangesOrError result;
     if (entries.empty()) {
         return result;
     }
@@ -514,6 +509,22 @@ collect_selected_updates(ModbusClientThread &client, modbus_t *ctx, const Option
     return result;
 }
 
+ModbusClientThread::ChangesOrError ModbusClientThread::collect_bit_changes(
+    BufferMonitor<uint8_t> &bm, unsigned int grp, uint8_t *dest,
+    std::map<std::string, ModbusMonitor> &entries, const char *fn_name,
+    int (*read_fn)(modbus_t *ctx, int addr, int nb, uint8_t *dest)) {
+    return ::collect_selected_updates<uint8_t>(*this, ctx, options, bm, grp, dest, entries, fn_name,
+                                               read_fn);
+}
+
+ModbusClientThread::ChangesOrError ModbusClientThread::collect_word_changes(
+    BufferMonitor<uint16_t> &bm, unsigned int grp, uint16_t *dest,
+    std::map<std::string, ModbusMonitor> &entries, const char *fn_name,
+    int (*read_fn)(modbus_t *ctx, int addr, int nb, uint16_t *dest)) {
+    return ::collect_selected_updates<uint16_t>(*this, ctx, options, bm, grp, dest, entries,
+                                                fn_name, read_fn);
+}
+
 bool ModbusClientThread::collect_selected_updates(
     BufferMonitor<uint8_t> &bm, unsigned int grp, uint8_t *dest,
     std::map<std::string, ModbusMonitor> &entries, const char *fn_name,
@@ -525,7 +536,9 @@ bool ModbusClientThread::collect_selected_updates(
                   << " updates: " << show_modbus_error(result.error) << "\n";
         return false;
     }
-    displayChanges(cmd_interface, result.changes, dest, options);
+    sendChanges(result.changes, dest, options, [&](ModbusMonitor *mm, bool which) {
+        sendStateUpdate(cmd_interface, mm, which);
+    });
     return true;
 }
 
@@ -540,6 +553,7 @@ bool ModbusClientThread::collect_selected_updates(
                   << " updates: " << show_modbus_error(result.error) << "\n";
         return false;
     }
-    displayChanges(cmd_interface, result.changes, dest, options);
+    sendChanges(result.changes, dest, options,
+                   [&](ModbusMonitor *mm) { sendPropertyUpdate(cmd_interface, mm); });
     return true;
 }
