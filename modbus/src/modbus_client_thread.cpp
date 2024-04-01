@@ -114,9 +114,9 @@ void ModbusClientThread::refresh() {
 ModbusClientThread::ModbusClientThread(const ModbusSettings &modbus_settings,
                                        MonitorConfiguration &modbus_config, const Options &options,
                                        bool &update_status, const char *sock_name)
-    : ctx(0), tab_rq_bits(0), tab_rp_bits(0), tab_ro_bits(0), tab_rq_registers(0),
-      tab_rw_rq_registers(0), options(options), update_status(update_status), finished(false),
-      connected(false), bits_monitor("coils", options), robits_monitor("discrete", options),
+    : ctx(0), tab_rp_bits(0), tab_ro_bits(0), tab_rq_registers(0), tab_rw_rq_registers(0),
+      options(options), update_status(update_status), finished(false), connected(false),
+      bits_monitor("coils", options), robits_monitor("discrete", options),
       regs_monitor("registers", options), holdings_monitor("holdings", options), mc(modbus_config),
       settings(modbus_settings), cmd_interface(0), iod_cmd_socket_name(sock_name) {
     boost::mutex::scoped_lock lock(update_mutex);
@@ -130,9 +130,6 @@ ModbusClientThread::ModbusClientThread(const ModbusSettings &modbus_settings,
 
     /* Allocate and initialize the different memory spaces */
     int nb = 10000;
-
-    tab_rq_bits = (uint8_t *)malloc(nb * sizeof(uint8_t));
-    memset(tab_rq_bits, 0, nb * sizeof(uint8_t));
 
     tab_rp_bits = (uint8_t *)malloc(nb * sizeof(uint8_t));
     memset(tab_rp_bits, 0, nb * sizeof(uint8_t));
@@ -252,7 +249,6 @@ modbus_t *ModbusClientThread::openConnection() {
 }
 
 ModbusClientThread::~ModbusClientThread() {
-    free(tab_rq_bits);
     free(tab_rp_bits);
     free(tab_ro_bits);
     free(tab_rq_registers);
