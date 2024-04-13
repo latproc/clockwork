@@ -111,6 +111,11 @@ target_link_libraries(test_symboltable gmock_main cw_client ${ZeroMQ_LIBRARY} ${
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_symboltable COMMAND test_symboltable)
 
+add_executable(test_json_value test_json_value.cpp )
+target_link_libraries(test_json_value gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} dl pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_json_value COMMAND test_json_value)
+
 #add_executable(test_ecat_xml test_ecat_xml.cpp ${PROJECT_SOURCE_DIR}/src/ethercat_xml_parser.cpp )
 #set_target_properties (test_ecat_xml PROPERTIES COMPILE_DEFINITIONS EC_SIMULATOR )
 #add_custom_command(
