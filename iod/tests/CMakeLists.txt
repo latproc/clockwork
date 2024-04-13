@@ -138,4 +138,9 @@ set_target_properties (test_exec_command PROPERTIES COMPILE_DEFINITIONS "EC_SIMU
 target_link_libraries(test_exec_command gmock_main cw_interpreter cw_client dl ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
 add_test(NAME test_exec_command COMMAND test_exec_command)
 
+add_executable(test_json_value test_json_value.cpp )
+target_link_libraries(test_json_value gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} dl pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_json_value COMMAND test_json_value)
+
 endif()
