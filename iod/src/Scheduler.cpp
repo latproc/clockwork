@@ -434,9 +434,6 @@ void Scheduler::idle() {
             last_poll = microsecs();
             is_ready = ready(last_poll);
         }
-        if (items_found) {
-            //  MachineInstance::forceIdleCheck();
-        }
         if (state == e_running) {
             DBG_SCHEDULER << "scheduler done\n";
             safeSend(sync, "done", 4);
