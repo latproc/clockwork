@@ -190,15 +190,95 @@ TEST(Value, AssignJSON) {
     EXPECT_EQ(val.kind, Value::t_json) << "A JSON object is an object";
 }
 
+cJSON *apply(const std::string &str, cJSON *json) {
+    namespace ctx = boost::context;
+
+    std::istringstream is(str);
+    std::string token;
+    Parser::TokenType kind = Parser::TokenType::expr;
+    bool done = false;
+    // execute parser in new fiber and process tokens in the main function
+    ctx::fiber source{[&is, &token, &kind, &done](ctx::fiber &&sink) {
+        Parser p(is, [&sink, &token, &kind](char token_, Parser::TokenType token_type) {
+            token = token_;
+            kind = token_type;
+            sink = std::move(sink).resume();
+        });
+        p.run();
+        done = true;
+        return std::move(sink); // resume the main fiber
+    }};
+
+    source = std::move(source).resume();
+    cJSON *tmp = json;
+    while (!done) {
+        std::cerr << "parsed: " << kind << ": " << token << "\n";
+        switch (kind) {
+            case Parser::TokenType::root:
+                break;
+            case Parser::TokenType::introducer:
+                break;
+            case Parser::TokenType::var:
+                if (tmp && tmp->type == cJSON_Object) {
+                    tmp = cJSON_GetObjectItem(tmp, token.c_str());
+                }
+                else {
+                    throw std::runtime_error("not an object");
+                }
+                break;
+            case Parser::TokenType::subs_begin:
+                break;
+            case Parser::TokenType::key:
+                if (tmp && tmp->type == cJSON_Object) {
+                    tmp = cJSON_GetObjectItem(tmp, token.c_str());
+                }
+                else {
+                    throw std::runtime_error("not an object");
+                }
+                break;
+            case Parser::TokenType::subs_end:
+                break;
+            case Parser::TokenType::index:
+                if (tmp && tmp->type == cJSON_Array) {
+                    tmp = cJSON_GetArrayItem(tmp, std::stoi(token));
+                }
+                else {
+                    throw std::runtime_error("not an array");
+                }
+                break;
+            case Parser::TokenType::wildcard:
+                if (tmp && tmp->type == cJSON_Array) {
+                    tmp = cJSON_GetArrayItem(tmp, 0);
+                }
+                else {
+                    throw std::runtime_error("not an array");
+                }
+                break;
+            default:
+                throw std::runtime_error("unexpected token");
+        }
+        source = std::move(source).resume(); // resume the parser
+    }
+
+    cJSON *result = nullptr;
+    if (tmp) {
+        auto str = cJSON_Print(tmp);
+        std::cerr << "result: " << str << "\n";
+        result = cJSON_Parse(str);
+        free(str);
+    }
+    else {
+        std::cerr << "Expression did not match\n";
+    }
+    return result;
+}
+
 class JsonExpr {
 public:
     JsonExpr(const char *str) : expr(str) {}
     JsonExpr(const std::string & str) : expr{str} {}
     cJSON *apply(cJSON *json) const {
-        auto str = cJSON_Print(json);
-        auto result = cJSON_Parse(str);
-        free(str);
-        return result;
+        return ::apply(expr, json);
     }
 private:
     std::string expr;
@@ -236,4 +316,37 @@ TEST(JsonExpr, SelectObjectMember) {
     cJSON_Delete(json);
     cJSON_Delete(doc);
 }
+
+TEST(JsonExpr, SelectInvalidObjectMember) {
+    auto expr_str = "$.c";
+    JsonExpr expr(expr_str);
+    auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
+    auto doc = cJSON_Parse(json_str);
+    cJSON *json = expr.apply(doc);
+    EXPECT_EQ(json, nullptr);
+    cJSON_Delete(doc);
+}
+
+TEST(JsonExpr, SelectArrayElement) {
+    auto expr_str = "$[1]";
+    JsonExpr expr(expr_str);
+    auto json_str = R"JSON([1, "hello"])JSON";
+    auto doc = cJSON_Parse(json_str);
+    cJSON *json = expr.apply(doc);
+    EXPECT_NE(json, nullptr);
+    EXPECT_EQ(json->type, cJSON_String);
+    cJSON_Delete(json);
+    cJSON_Delete(doc);
+}
+
+TEST(JsonExpr, SelectInvalidArrayElement) {
+    auto expr_str = "$[2]";
+    JsonExpr expr(expr_str);
+    auto json_str = R"JSON([1, "hello"])JSON";
+    auto doc = cJSON_Parse(json_str);
+    cJSON *json = expr.apply(doc);
+    EXPECT_EQ(json, nullptr);
+    cJSON_Delete(doc);
+}
+
 } // namespace
