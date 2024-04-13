@@ -45,6 +45,10 @@ TEST(Value, CanAssignJSON) {
     Value v;
     v = cJSON_CreateNull();
     EXPECT_EQ(v.asString(), std::string("null"));
+
+    auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
+    v = cJSON_Parse(json_str);
+    EXPECT_EQ(v.kind, Value::t_json);
 }
 
 TEST(Value, CanAssignJSONValue) {
