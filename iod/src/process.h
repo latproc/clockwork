@@ -42,7 +42,7 @@ public:
     size_t num_waiting() { return all_procs.size(); }
 
 private:
-    std::deque<Proc> all_procs; 
+    std::deque<Proc> all_procs;
     std::deque<Proc*> runnable; // round robin scheduler
     bool done = false;
 
