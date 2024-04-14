@@ -38,3 +38,5 @@ class Parser {
     void var();
     void key();
 };
+
+std::ostream & operator<<(std::ostream & out, Parser::TokenType kind);
