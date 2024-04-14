@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 2.8)
 project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
@@ -88,6 +88,8 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/watchdog.h
 	${CLOCKWORK_DIR}/Message.h
 	${CLOCKWORK_DIR}/Receiver.h
+    ${CLOCKWORK_DIR}/json_expr_parser.h
+    ${CLOCKWORK_DIR}/json_expression.h
     )
 
 add_library (cw_client
@@ -109,6 +111,8 @@ add_library (cw_client
 	${CLOCKWORK_DIR}/rate.cpp
 	${CLOCKWORK_DIR}/Message.cpp
 	${CLOCKWORK_DIR}/watchdog.cpp
+    ${CLOCKWORK_DIR}/json_expr_parser.cpp
+    ${CLOCKWORK_DIR}/json_expression.cpp
 	${HEADER_FILES}
 )
 
@@ -208,6 +212,7 @@ set (Clockwork_Headers
 	src/ResetAction.h src/LoadPropertiesAction.h
     src/split_string.h src/read_file.h src/copy_environment.h
     src/exec_command.h src/debug_malloc.h
+    src/json_expr_parser.h src/json_expression.h
 )
 if (USE_ETHERCAT)
 	LIST (APPEND Clockwork_Headers "src/EtherCATthread.h")
@@ -244,6 +249,7 @@ set (Clockwork_SRCS
 	src/ResetAction.cpp src/LoadPropertiesAction.cpp
     src/split_string.c src/read_file.c src/copy_environment.c
     src/exec_command.c src/debug_malloc.c
+    src/json_expr_parser.cpp
 	)
 if (USE_ETHERCAT)
 if (USE_SOEM)
