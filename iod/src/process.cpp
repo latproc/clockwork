@@ -1,5 +1,4 @@
 #include <process.h>
-#include <iostream>
 
 namespace Process {
 
@@ -9,7 +8,7 @@ Proc *proc = nullptr;
 class Scheduler;
 namespace ctx = boost::context;
 
-Scheduler::Scheduler() : 
+Scheduler::Scheduler() :
     sch([&](ctx::fiber && main) {
         while (!done) {
             if (runnable.empty()) {
