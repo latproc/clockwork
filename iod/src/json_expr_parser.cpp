@@ -46,6 +46,10 @@ std::ostream & Parser::display(std::ostream & out, Parser::TokenType kind) {
          case TokenType::wildcard: out << "wildcard"; break;
      };
      return out;
+} 
+
+std::ostream & operator<<(std::ostream & out, Parser::TokenType kind) {
+    return Parser::display(out, kind);
 }
 
 void Parser::root() {
