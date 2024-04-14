@@ -10,131 +10,7 @@
 #include <json_expression.h>
 #include <vector>
 #include <deque>
-
-namespace Process {
-
-struct  Proc {
-    static size_t next_id; // Unique identifier for an instance of a Proc
-    size_t id = next_id++;
-    boost::context::fiber f;
-    bool ready = true;
-    Proc(boost::context::fiber && f_) : f(std::move(f_)) {}
-    bool operator==(const Proc &other) const { return id == other.id; }
-};
-
-size_t Proc::next_id = 0;
-Proc *proc = nullptr;
-
-class Scheduler;
-namespace ctx = boost::context;
-
-class Scheduler {
-public:
-    using Task = boost::context::fiber;
-    Scheduler();
-
-    void run(std::deque<Proc> &procs, bool &done) {
-        sch = std::move(sch).resume(); // start the scheduler
-    }
-    void add(Proc && p) {
-        all_procs.push_back(std::move(p));
-        runnable.push_back(&all_procs.back());
-    }
-    void start() { run(all_procs, done); }
-    bool finished() { return all_procs.empty(); }
-    void stop() { done = true; }
-    void next() { sch = std::move(sch).resume(); }
-    void activate(Proc *p);
-    void join(); // Block the caller until all procs are finished.
-
-private:
-    std::deque<Proc> all_procs; 
-    std::deque<Proc*> runnable; // round robin scheduler
-    bool done = false;
-
-    ctx::fiber sch;
-};
-
-Scheduler::Scheduler() : 
-    sch([&](ctx::fiber && main) {
-        while (!done) {
-            if (runnable.empty()) {
-                main = std::move(main).resume(); // resume main
-                continue;
-            }
-            // TODO: Use a circular buffer for the runnable queue.
-            proc = runnable.front();
-            runnable.pop_front();
-            if (proc->ready && proc->f) {
-                proc->f = std::move(proc->f).resume();
-            }
-            if (proc->f) {
-                runnable.push_back(proc);
-            }
-            else {
-                auto found = std::find(all_procs.begin(), all_procs.end(), *proc);
-                if (found != all_procs.end()) {
-                    all_procs.erase(found);
-                }
-            }
-            main = std::move(main).resume(); // resume main
-        }
-        return std::move(main);
-    })
-{
-}
-void Scheduler::activate(Proc *p) {
-    // Some procs may have been added or have become ready.
-    for (auto & proc : all_procs) {
-        if (*p == proc) {
-            assert(proc.ready);
-            runnable.push_front(&proc); // Signalled procs run immediately
-            next();
-            return;
-        }
-    }
-    assert("Attempt to activate an unknown proc" && false);
-}
-
-void Scheduler::join() {
-    while (!finished()) {
-        next();
-    }
-}
-
-class Signal {
-public:
-    Signal(Scheduler &scheduler_) : scheduler(scheduler_) {}
-    void wait(Scheduler::Task && sink);
-    void send();
-    bool awaited();
-private:
-    std::deque<Proc*> procs; // Procs waiting for this signal
-    Scheduler &scheduler;
-};
-
-void Signal::wait(Scheduler::Task && sink) {
-    if (proc) {
-        procs.push_back(proc);
-        proc->ready = false;
-        sink = std::move(sink).resume();
-    }
-}
-
-void Signal::send() {
-    if (!procs.empty()) {
-        auto proc = procs.front();
-        procs.pop_front();
-        proc->ready = true;
-        scheduler.activate(proc);
-    }
-}
-
-bool Signal::awaited() {
-    return !procs.empty();
-}
-
-} // namespace Process
+#include <process.h>
 
 TEST(Scheduler, SchedulerRunsOneTask) {
     Process::Scheduler scheduler;
@@ -234,7 +110,7 @@ TEST(Scheduler, TasksCanWaitForSignals) {
         if (up_counter == down_counter) {
             counters_match.send();
         }
-        scheduler.next();
+        scheduler.resume();
     }
     EXPECT_EQ(up_counter, down_counter);
 }
