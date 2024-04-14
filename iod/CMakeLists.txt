@@ -89,6 +89,7 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/Receiver.h
     ${CLOCKWORK_DIR}/json_expr_parser.h
     ${CLOCKWORK_DIR}/json_expression.h
+    ${CLOCKWORK_DIR}/process.h
     )
 
 add_library (cw_client
@@ -112,6 +113,7 @@ add_library (cw_client
 	${CLOCKWORK_DIR}/watchdog.cpp
     ${CLOCKWORK_DIR}/json_expr_parser.cpp
     ${CLOCKWORK_DIR}/json_expression.cpp
+    ${CLOCKWORK_DIR}/process.cpp
 	${HEADER_FILES}
 )
 
@@ -209,7 +211,7 @@ set (Clockwork_Headers
     src/ExportState.h
 	src/AutoStats.h src/Configuration.h
 	src/ResetAction.h src/LoadPropertiesAction.h
-    src/json_expr_parser.h src/json_expression.h
+    src/json_expr_parser.h src/json_expression.h src/process.h
 )
 if (USE_ETHERCAT)
 	LIST (APPEND Clockwork_Headers "src/EtherCATthread.h")
@@ -244,7 +246,7 @@ set (Clockwork_SRCS
     src/ExportState.cpp
 	src/HandleRequestAction.cpp src/AutoStats.cpp src/Configuration.cpp
 	src/ResetAction.cpp src/LoadPropertiesAction.cpp
-    src/json_expr_parser.cpp
+    src/json_expr_parser.cpp src/json_expression.cpp src/process.cpp
 	)
 if (USE_ETHERCAT)
 if (USE_SOEM)
