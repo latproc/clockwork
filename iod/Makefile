@@ -11,12 +11,12 @@ all:
 release:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make -j 3
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make $(JOBS)
 
 release-install:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make -j 5 install
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make $(JOBS) install
 
 debug:
 	[ -d "build" ] || mkdir build
