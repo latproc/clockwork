@@ -1894,9 +1894,7 @@ IGNORE ERRORS {
 		++num_errors;
 	}
 	else {
-		size_t len = strlen($3);
-		error_message_name = (char *)malloc(strlen($3)+1);
-		strncpy(error_message_name, $3, len+1);
+        error_message_name = strdup($3);
 	}
 }
 | ON TIMEOUT SYMBOL error_clause {
@@ -1908,9 +1906,7 @@ IGNORE ERRORS {
 		++num_errors;
 	}
 	else {
-		size_t len = strlen($3);
-		timeout_message_name = (char *)malloc(strlen($3)+1);
-		strncpy(timeout_message_name, $3, len+1);
+		timeout_message_name = strdup($3);
 	}
 }
 | ;

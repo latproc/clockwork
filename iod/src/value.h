@@ -102,7 +102,6 @@ class Value {
     std::string quoted() const;
     bool isNull() const;
     bool asFloat(double &val) const;
-    bool asInteger(long &val) const;
     bool asInteger(int64_t &val) const;
     bool asBoolean(bool &val) const;
     int64_t trunc() const;

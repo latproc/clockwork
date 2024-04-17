@@ -1,6 +1,7 @@
 #pragma once
 #include <ostream>
 #include <sstream>
+#include <functional>
 
 // A JSON expression is an expression that can be applied to a JSON
 // document to extract a value or a subdocument.
