@@ -443,6 +443,9 @@ void predefine_special_machines() {
     MachineClass *broker_class = new MachineClass("MQTTBROKER");
     broker_class->parameters.push_back(Parameter("host"));
     broker_class->parameters.push_back(Parameter("port"));
+    // optional parameters:
+    // broker_class->parameters.push_back(Parameter("username"));
+    // broker_class->parameters.push_back(Parameter("password"));
     broker_class->disableAutomaticStateChanges();
 
     MachineClass *cond = new MachineClass("CONDITION");
@@ -690,10 +693,11 @@ void semantic_analysis() {
             }
             else if (((sm_name == "POINT" || sm_name == "INPUTBIT" || sm_name == "OUTPUTBIT" ||
                        sm_name == "INPUTREGISTER" || sm_name == "OUTPUTREGISTER") &&
-                      num_sm_params >= 2 && num_sm_params <= 3) ||
-                     (sm_name == "COUNTERRATE" && (num_sm_params == 3 || num_sm_params == 1))
+                      num_sm_params >= 2 && num_sm_params <= 3)
+                || (sm_name == "MQTTBROKER" && (num_sm_params == 2 || num_sm_params == 4))
+                || (sm_name == "COUNTERRATE" && (num_sm_params == 3 || num_sm_params == 1))
 #ifdef USE_SDO
-                     || (sm_name == "SDOENTRY" && (num_sm_params == 4 || num_sm_params == 5))
+                || (sm_name == "SDOENTRY" && (num_sm_params == 4 || num_sm_params == 5))
 #endif //USE_SDO
             ) {
             }

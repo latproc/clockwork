@@ -25,6 +25,7 @@
 #include "symboltable.h"
 #include <mosquitto.h>
 #include <sys/types.h>
+#include <boost/optional.hpp>
 
 class MachineInstance;
 
@@ -41,6 +42,8 @@ class MQTTModule : public Transmitter {
     struct mosquitto *mosq;
     std::string host;
     int port;
+    boost::optional<std::string> username;
+    boost::optional<std::string> password;
     SymbolTable pubs;
     SymbolTable subs;
     std::map<std::string, MachineInstance *> handlers;
@@ -59,11 +62,9 @@ class MQTTModule : public Transmitter {
 
     int mid_sent;
     int last_mid;
-    bool connected;
-    char *username;
-    char *password;
-    bool disconnect_sent;
-    bool quiet;
+    bool connected = false;
+    bool disconnect_sent = false;
+    bool quiet = false;
 
   protected:
     MQTTModule(const MQTTModule &other);
