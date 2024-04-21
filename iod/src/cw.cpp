@@ -676,7 +676,7 @@ int main(int argc, char const *argv[]) {
             while (iter != machines.end()) {
                 MachineInstance *m = (*iter).second;
                 iter++;
-                if (m->_type == "MQTTBROKER" && m->parameters.size() == 2) {
+                if (m->_type == "MQTTBROKER" && (m->parameters.size() == 2 || m->parameters.size() == 4)){
                     MQTTModule *module = MQTTInterface::instance()->findModule(m->getName());
                     if (module) {
                         std::cerr << "MQTT Broker " << m->getName() << " is already registered\n";
@@ -685,6 +685,10 @@ int main(int argc, char const *argv[]) {
                     module = new MQTTModule(m->getName().c_str());
                     module->host = m->parameters[0].val.asString();
                     int64_t port;
+                    if (m->parameters.size() == 4) {
+                        module->username = m->parameters[2].val.asString();
+                        module->password = m->parameters[3].val.asString();
+                    }
                     if (m->parameters[1].val.asInteger(port)) {
                         module->port = (int)port;
                         MQTTInterface::instance()->addModule(module, false);

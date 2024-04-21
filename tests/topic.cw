@@ -1,5 +1,18 @@
+/*
 
-M2 MQTTBROKER "127.0.0.1", 1883;
+Prepare a password file using mosquitto_passwd
+    mosquitto_passwd -c /etc/mosquitto/passwd user
+
+and add a configuration file: with the following content:
+ 
+listener                 1883 0.0.0.0
+per_listener_settings    false
+allow_anonymous          false
+use_identity_as_username false
+password_file            mqtt_passwd
+*/
+
+M2 MQTTBROKER "127.0.0.1", 1883, "user", "testing";
 
 Switch POINT (tab:test) M2, "Mega1/dig/7", "off";
 Light POINT (tab:test) M2, "Mega1/dig/3";

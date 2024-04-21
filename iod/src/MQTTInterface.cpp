@@ -94,15 +94,22 @@ void my_message_callback(struct mosquitto *mosq, void *obj,
 void my_connect_callback(struct mosquitto *mosq, void *obj, int result) {
     MQTTModule *device = (MQTTModule *)obj;
 
-    if (result) {
-        device->last_error_str = mosquitto_connack_string(result);
+    std::cerr << "Connected to MQTT broker\n";
+    if (result != MOSQ_ERR_SUCCESS) {
+        std::cerr << "Connection Error: " << mosquitto_strerror(result) << "\n";
+        device->last_error_str = mosquitto_strerror(result);
         device->last_error = result;
+        device->connected = false;
+    }
+    else {
+        device->connected = true;
     }
 }
 
 void my_disconnect_callback(struct mosquitto *mosq, void *obj, int rc) {
     MQTTModule *device = (MQTTModule *)obj;
     device->connected = false;
+    std::cerr << "Disconnected: " << mosquitto_strerror(rc) << "\n";
 }
 
 void my_publish_callback(struct mosquitto *mosq, void *obj, int mid) {
@@ -125,9 +132,7 @@ void my_subscribe_callback(struct mosquitto *mosq, void *obj, int mid) {}
 MQTTModule::MQTTModule(const char *name) : Transmitter(name) {
     mid_sent = 0;
     last_mid = -1;
-    connected = true;
-    username = NULL;
-    password = NULL;
+    connected = false;
     disconnect_sent = false;
     quiet = false;
 
@@ -160,9 +165,22 @@ bool MQTTModule::online() {
 }
 
 bool MQTTModule::connect() {
-    mosquitto_connect(mosq, host.c_str(), port, 10);
+    if (username && password) {
+        auto result = mosquitto_username_pw_set(mosq, username->c_str(), password->c_str());
+        if (result != MOSQ_ERR_SUCCESS) {
+            last_error = result;
+            last_error_str = "Error: Could not set username and password.";
+            return false;
+        }
+    }
+    auto result = mosquitto_connect(mosq, host.c_str(), port, 10);
+    if (result != MOSQ_ERR_SUCCESS) {
+        last_error = result;
+        last_error_str = "Error: Could not connect to broker.";
+        return false;
+    }
     connected = true;
-    return connected;
+    return true;
 }
 
 void MQTTModule::disconnect() {
@@ -179,20 +197,20 @@ bool MQTTModule::publish(const std::string &topic, const std::string &message, M
         last_error = rc;
         switch (rc) {
         case MOSQ_ERR_INVAL:
-            last_error_str = "Error: Invalid input. Does your topic contain '+' or '#'?\n";
+            last_error_str = "Error: Invalid input. Does your topic contain '+' or '#'?";
             status = STATUS_ERROR;
             break;
         case MOSQ_ERR_NOMEM:
-            last_error_str = "Error: Out of memory when trying to publish message.\n";
+            last_error_str = "Error: Out of memory when trying to publish message.";
             break;
         case MOSQ_ERR_NO_CONN:
-            last_error_str = "Error: Client not connected when trying to publish.\n";
+            last_error_str = "Error: Client not connected when trying to publish.";
             break;
         case MOSQ_ERR_PROTOCOL:
-            last_error_str = "Error: Protocol error when communicating with broker.\n";
+            last_error_str = "Error: Protocol error when communicating with broker.";
             break;
         case MOSQ_ERR_PAYLOAD_SIZE:
-            last_error_str = "Error: Message payload is too large.\n";
+            last_error_str = "Error: Message payload is too large.";
             break;
         }
         return false;
@@ -213,17 +231,17 @@ bool MQTTModule::subscribe(const std::string &topic, MachineInstance *m) {
         last_error = rc;
         switch (rc) {
         case MOSQ_ERR_INVAL:
-            last_error_str = "Error: Invalid input. Does your topic contain '+' or '#'?\n";
+            last_error_str = "Error: Invalid input. Does your topic contain '+' or '#'?";
             status = STATUS_ERROR;
             break;
         case MOSQ_ERR_NOMEM:
-            last_error_str = "Error: Out of memory when trying to publish message.\n";
+            last_error_str = "Error: Out of memory when trying to publish message.";
             break;
         case MOSQ_ERR_NO_CONN:
-            last_error_str = "Error: Client not connected when trying to publish.\n";
+            last_error_str = "Error: Client not connected when trying to publish.";
             break;
         case MOSQ_ERR_PROTOCOL:
-            last_error_str = "Error: Protocol error when communicating with broker.\n";
+            last_error_str = "Error: Protocol error when communicating with broker.";
             break;
         }
         return false;
@@ -349,10 +367,14 @@ void MQTTInterface::collectState() {
     std::list<MQTTModule *>::iterator iter = modules.begin();
     while (iter != modules.end()) {
         MQTTModule *module = *iter++;
-        int rc = mosquitto_loop(module->mosq, -1, 1);
-        if (rc != MOSQ_ERR_SUCCESS) {
-            std::cout << "Error: " << rc << " polling mosquitto\n";
-            module->connect();
+        if (module->connected) {
+            int rc = mosquitto_loop(module->mosq, -1, 1);
+            if (rc != MOSQ_ERR_SUCCESS) {
+                std::cerr << "Error: " << mosquitto_strerror(rc) << " polling mosquitto\n";
+            }
+        }
+        else if (!module->connect()) {
+            std::cerr << "Error: " << mosquitto_strerror(module->last_error)  << ": " << module->last_error_str << "\n";
         }
     }
 }
