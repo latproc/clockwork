@@ -55,6 +55,7 @@
 #include "IODCommand.h"
 #include "IODCommands.h"
 #include "Logger.h"
+#include "MQTTInterface.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
@@ -454,6 +455,9 @@ int main(int argc, char const *argv[]) {
     }
 
     DBG_INITIALISATION << "-------- Initialising ---------\n";
+
+    MQTTInterface::instance()->init();
+    MQTTInterface::instance()->start();
 
     DBG_INITIALISATION << "-------- Starting EtherCAT Interface ---------\n";
     EtherCATThread ethercat;
