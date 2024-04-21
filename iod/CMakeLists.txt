@@ -10,6 +10,7 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
   # By default support EtherLab builds with EoE enabled
   # this can be overridden in the LocalCMakeLists.txt file
   set (SUPPORT_EOE true)
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEC_EOE")
 endif()
 
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
