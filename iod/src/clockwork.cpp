@@ -489,6 +489,9 @@ MachineClass *makeBrokerMachineClass() {
     MachineClass *result = new MachineClass("MQTTBROKER");
     result->parameters.push_back(Parameter("host"));
     result->parameters.push_back(Parameter("port"));
+    // TODO: Express the idea of optional parameters
+    //result->parameters.push_back(Parameter("username"));
+    //result->parameters.push_back(Parameter("password"));
     result->disableAutomaticStateChanges();
     return result;
 }
@@ -808,7 +811,7 @@ void semantic_analysis() {
                      (sm_name == "MQTTBROKER" && (num_sm_params == 2 || num_sm_params == 4)) ||
                      (sm_name == "COUNTERRATE" && (num_sm_params == 3 || num_sm_params == 1))
 #ifdef USE_SDO
-                     || (sm_name == "SDOENTRY" && (num_sm_params == 4 || num_sm_params == 5))
+                || (sm_name == "SDOENTRY" && (num_sm_params == 4 || num_sm_params == 5))
 #endif //USE_SDO
             ) {
             }
