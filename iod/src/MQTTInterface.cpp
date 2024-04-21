@@ -564,3 +564,4 @@ bool MQTTInterface::stop() {
     }
     return true;
 }
+
