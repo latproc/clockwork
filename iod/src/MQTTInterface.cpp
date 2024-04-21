@@ -23,6 +23,7 @@
 #include "IOComponent.h"
 #include "Logger.h"
 #include "MachineInstance.h"
+#include "MessageLog.h"
 #include <boost/thread/condition.hpp>
 #include <errno.h>
 #include <iomanip>
@@ -49,7 +50,9 @@ void my_message_callback(struct mosquitto *mosq, void *obj,
         char *payload = new char[message->payloadlen + 1];
         memcpy(payload, message->payload, message->payloadlen);
         payload[message->payloadlen] = 0;
-        std::cout << message->topic << ": " << payload << "\n";
+        std::stringstream ss;
+        ss  << message->topic << ": " << payload;
+        MessageLog::instance()->add(ss.str());
         std::map<std::string, MachineInstance *>::iterator pos =
             device->handlers.find(message->topic);
         if (pos != device->handlers.end()) {
@@ -94,10 +97,12 @@ void my_message_callback(struct mosquitto *mosq, void *obj,
 void my_connect_callback(struct mosquitto *mosq, void *obj, int result) {
     MQTTModule *device = (MQTTModule *)obj;
 
-    std::cerr << "Connected to MQTT broker\n";
+    MessageLog::instance()->add("Connected to MQTT broker");
     if (result != MOSQ_ERR_SUCCESS) {
-        std::cerr << "Connection Error: " << mosquitto_strerror(result) << "\n";
-        device->last_error_str = mosquitto_strerror(result);
+        std::stringstream ss;
+        ss << "Connection Error: " << mosquitto_connack_string(result);
+        MessageLog::instance()->add(ss.str());
+        device->last_error_str = mosquitto_connack_string(result);
         device->last_error = result;
         device->connected = false;
     }
@@ -109,7 +114,9 @@ void my_connect_callback(struct mosquitto *mosq, void *obj, int result) {
 void my_disconnect_callback(struct mosquitto *mosq, void *obj, int rc) {
     MQTTModule *device = (MQTTModule *)obj;
     device->connected = false;
-    std::cerr << "Disconnected: " << mosquitto_strerror(rc) << "\n";
+    if (rc != 0) {
+        MessageLog::instance()->add("Unexpected disconnect: " + std::string(mosquitto_strerror(rc)));
+    }
 }
 
 void my_publish_callback(struct mosquitto *mosq, void *obj, int mid) {
@@ -119,12 +126,12 @@ void my_publish_callback(struct mosquitto *mosq, void *obj, int mid) {
 void my_subscribe_callback(struct mosquitto *mosq, void *obj, int mid, int qos_count,
                            const int *granted_qos) {
     MQTTModule *device = (MQTTModule *)obj;
-
-    std::cout << "Subscribed (mid: " << mid << "): " << granted_qos[0];
+    std::stringstream ss;
+    ss << "Subscribed (mid: " << mid << "): " << granted_qos[0];
     for (int i = 1; i < qos_count; i++) {
-        std::cout << ", " << granted_qos[i];
+        ss << ", " << granted_qos[i];
     }
-    std::cout << "\n";
+    MessageLog::instance()->add(ss.str());
 }
 
 void my_subscribe_callback(struct mosquitto *mosq, void *obj, int mid) {}
@@ -140,14 +147,10 @@ MQTTModule::MQTTModule(const char *name) : Transmitter(name) {
     if (!mosq) {
         switch (errno) {
         case ENOMEM:
-            if (!quiet) {
-                fprintf(stderr, "Error: Out of memory.\n");
-            }
+            MessageLog::instance()->add("MQTT initialisation error: out of memory.");
             break;
         case EINVAL:
-            if (!quiet) {
-                fprintf(stderr, "Error: Invalid id.\n");
-            }
+            MessageLog::instance()->add("MQTT initialisation error: invalid input.");
             break;
         }
     }
@@ -170,6 +173,7 @@ bool MQTTModule::connect() {
         if (result != MOSQ_ERR_SUCCESS) {
             last_error = result;
             last_error_str = "Error: Could not set username and password.";
+            MessageLog::instance()->add(last_error_str);
             return false;
         }
     }
@@ -177,6 +181,7 @@ bool MQTTModule::connect() {
     if (result != MOSQ_ERR_SUCCESS) {
         last_error = result;
         last_error_str = "Error: Could not connect to broker.";
+        MessageLog::instance()->add(last_error_str);
         return false;
     }
     connected = true;
@@ -213,6 +218,7 @@ bool MQTTModule::publish(const std::string &topic, const std::string &message, M
             last_error_str = "Error: Message payload is too large.";
             break;
         }
+        if (rc != MOSQ_ERR_SUCCESS) { MessageLog::instance()->add(last_error_str); }
         return false;
     }
     m->setValue("topic", Value(topic.c_str(), Value::t_string));
@@ -231,19 +237,22 @@ bool MQTTModule::subscribe(const std::string &topic, MachineInstance *m) {
         last_error = rc;
         switch (rc) {
         case MOSQ_ERR_INVAL:
-            last_error_str = "Error: Invalid input. Does your topic contain '+' or '#'?";
+            last_error_str = "MQTT Error: Invalid input. Does your topic contain '+' or '#'?";
             status = STATUS_ERROR;
             break;
         case MOSQ_ERR_NOMEM:
-            last_error_str = "Error: Out of memory when trying to publish message.";
+            last_error_str = "MQTT Error: Out of memory when trying to subscribe";
             break;
         case MOSQ_ERR_NO_CONN:
-            last_error_str = "Error: Client not connected when trying to publish.";
+            last_error_str = "MQTT Error: Client not connected when trying to subscribe";
             break;
         case MOSQ_ERR_PROTOCOL:
-            last_error_str = "Error: Protocol error when communicating with broker.";
+            last_error_str = "MQTT Error: Protocol error when communicating with broker.";
             break;
+        case MOSQ_ERR_PAYLOAD_SIZE:
+            last_error_str = "MQTT Error: invalid payload size when communicating with broker.";
         }
+        if (rc != MOSQ_ERR_SUCCESS) { MessageLog::instance()->add(last_error_str); }
         return false;
     }
     handlers[topic] = m;
@@ -370,11 +379,15 @@ void MQTTInterface::collectState() {
         if (module->connected) {
             int rc = mosquitto_loop(module->mosq, -1, 1);
             if (rc != MOSQ_ERR_SUCCESS) {
-                std::cerr << "Error: " << mosquitto_strerror(rc) << " polling mosquitto\n";
+                std::stringstream ss;
+                ss << "Error: " << mosquitto_strerror(rc) << " polling mosquitto";
+                MessageLog::instance()->add(ss.str());
             }
         }
         else if (!module->connect()) {
-            std::cerr << "Error: " << mosquitto_strerror(module->last_error)  << ": " << module->last_error_str << "\n";
+            std::stringstream ss;
+            ss << "Error: " << mosquitto_strerror(module->last_error)  << ": " << module->last_error_str;
+            MessageLog::instance()->add(ss.str());
         }
     }
 }
@@ -399,7 +412,9 @@ void setup_mqtt(const std::map<std::string, MachineInstance *> &machines) {
                 if (m->_type == "MQTTBROKER" && (m->parameters.size() == 2 || m->parameters.size() == 4)){
                     MQTTModule *module = MQTTInterface::instance()->findModule(m->getName());
                     if (module) {
-                        std::cerr << "MQTT Broker " << m->getName() << " is already registered\n";
+                        std::stringstream ss;
+                        ss << "MQTT Broker " << m->getName() << " is already registered";
+                        MessageLog::instance()->add(ss.str());
                         continue;
                     }
                     module = new MQTTModule(m->getName().c_str());
@@ -460,8 +475,9 @@ void setup_mqtt(const std::map<std::string, MachineInstance *> &machines) {
                         MQTTModule *module =
                             MQTTInterface::instance()->findModule(m->parameters[0].real_name);
                         if (!module) {
-                            std::cerr << "No MQTT Broker called " << m->parameters[0].real_name
-                                      << "\n";
+                            std::stringstream ss;
+                            ss << "No MQTT Broker called " << m->parameters[0].real_name;
+                            MessageLog::instance()->add(ss.str());
                             continue;
                         }
                         std::string topic = m->parameters[1].val.asString();
@@ -478,7 +494,7 @@ void setup_mqtt(const std::map<std::string, MachineInstance *> &machines) {
                             }
                         }
                         else {
-                            std::cerr << "Error defining instance " << m->getName() << "\n";
+                            MessageLog::instance()->add("Error defining instance " + m->getName());
                         }
                     }
                 }
