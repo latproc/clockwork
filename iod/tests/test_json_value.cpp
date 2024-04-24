@@ -13,6 +13,13 @@
 
 namespace {
 
+struct parser_exception : public std::runtime_error {
+    boost::context::fiber f;
+    parser_exception(boost::context::fiber&& f_,std::string const& what) :
+        std::runtime_error{what},
+        f{ std::move(f_) } { }
+};
+
 std::string parse(const std::string &str) {
     namespace ctx = boost::context;
 
@@ -41,6 +48,7 @@ std::string parse(const std::string &str) {
         catch (const std::runtime_error &ex) {
             std::cerr << ex.what() << "\n";
             done = true;
+			throw parser_exception(std::move(source), ex.what());
         }
     }
     return result;
@@ -60,6 +68,14 @@ TEST(Parser, CanParseArray) {
 
 TEST(Parser, CanParseComplexExpr) {
     EXPECT_EQ(parse("$.a[1][0].b.c[2]"), "$.a[1][0].b.c[2]");
+}
+
+TEST(Parser, CanParseComplexExprWithSpaces) {
+    EXPECT_EQ(parse("$.a [1] [0] .b .c [2]"), "$.a[1][0].b.c[2]");
+}
+
+TEST(Parser, CanUseStringIdentifiers) {
+    EXPECT_EQ((parse("$.name")), "$.name");
 }
 
 TEST(Value, AssignJSON) {

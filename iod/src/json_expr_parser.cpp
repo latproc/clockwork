@@ -2,6 +2,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <boost/context/fiber.hpp>
 #include "json_expr_parser.h"
 
 // Boost.Context reference: https://www.boost.org/doc/libs/1_84_0/libs/context/doc/html/context/ff.html
@@ -79,6 +80,9 @@ void Parser::member() {
                 cb(next, TokenType::introducer);
                 scan();
                 var();
+            }
+            if (!is.eof() && next != '[' && next != '.') {
+                throw std::runtime_error("syntax error");
             }
         }
     }
