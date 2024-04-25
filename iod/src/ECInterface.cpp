@@ -93,16 +93,17 @@ Statistic update_to_recv("Update to receive");
 #endif
 
 namespace {
-std::string compare_modules(const ECModule &a, const ECModule &b) {
-    std::stringstream ss;
-    ss << "a.alias: " << a.alias << " b.alias: " << b.alias << "\n";
-    ss << "a.position: " << a.position << " b.position: " << b.position << "\n";
-    ss << "a.revision_no: " << a.revision_no << " b.revision_no: " << b.revision_no << "\n";
-    ss << "a.sync_count: " << a.sync_count << " b.sync_count: " << b.sync_count << "\n";
-    ss << "a.num_entries: " << a.num_entries << " b.num_entries: " << b.num_entries << "\n";
-    return ss.str();
+
+    std::string compare_modules(const ECModule & a, const ECModule &b) {
+        std::stringstream ss;
+        ss << "a.alias: " << a.alias << " b.alias: " << b.alias << "\n";
+        ss << "a.position: " << a.position << " b.position: " << b.position << "\n";
+        ss << "a.revision_no: " << a.revision_no << " b.revision_no: " << b.revision_no << "\n";
+        ss << "a.sync_count: " << a.sync_count << " b.sync_count: " << b.sync_count << "\n";
+        ss << "a.num_entries: " << a.num_entries << " b.num_entries: " << b.num_entries << "\n";
+        return ss.str();
+    }
 }
-} // namespace
 
 ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), num_entries(0), entry_details(0) {
     offsets = new unsigned int[64];
@@ -251,8 +252,8 @@ void SDOEntry::resolveSDOModules() {
         if (entry->getModule()) {
             // this occurs when an entry has been automatically setup in the code
             // (only done for EL2535 modules as a temporary measure to be removed)
-            DBG_ETHERCAT << "Module already linked to SDO entry " << entry->getName()
-                         << "- replacing old entry\n";
+            DBG_ETHERCAT << "Module already linked to SDO entry "
+                    << entry->getName() << "- replacing old entry\n";
             iter = new_sdo_entries.erase(iter);
             continue;
         }
@@ -920,7 +921,6 @@ void ECInterface::configureModules() {
     }
 }
 
-// Add or replace a module in the modules list
 tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool reset_io) {
 
     if (module) {
@@ -2282,6 +2282,29 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
     }
     if (c_entries) {
         delete[] c_entries;
+#warning removed what i think is dead code
+#if 0
+    if (reconfigure) {
+                DBG_ETHERCAT << "defining module " << slave.name << " sync_count: "
+                                << (int)slave.sync_count << " num entries: " << total_entries << "\n";
+        ECModule *module = new ECModule();
+        module->name = slave.name;
+        module->alias = 0;
+        module->position = slave.position;
+        module->vendor_id = slave.vendor_id;
+        module->product_code = slave.product_code;
+        module->syncs = c_syncs;
+        module->pdos = c_pdos;
+        module->pdo_entries = c_entries;
+        module->sync_count = slave.sync_count;
+        module->entry_details = c_entry_details;
+        module->num_entries = total_entries;
+        auto res = ECInterface::instance()->addModule(module, reconfigure);
+        if (!res) {
+            delete module; // module may be already registered
+            std::cerr << "Failed to add module " << slave.name << " " << res.error() << "\n";
+        }
+#endif
     }
     if (c_pdos) {
         delete[] c_pdos;

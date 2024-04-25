@@ -397,7 +397,8 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                     DBG_ETHERCAT << xmlTextReaderConstValue(reader) << "\n";
                 }
                 DBG_ETHERCAT << " ProductCode: " << attributes["ProductCode"] << " "
-                             << " RevisionNo: " << attributes["RevisionNo"] << " " << "\n";
+                    << " RevisionNo: " << attributes["RevisionNo"] << " "
+                    << "\n";
             }
             if (kind == XML_READER_TYPE_END_ELEMENT && typeKey == name) {
                 enter(in_device);
