@@ -170,7 +170,6 @@ int main(int , char **) {
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
-    Dispatcher::instance();
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");
 
