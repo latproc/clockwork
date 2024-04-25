@@ -2146,7 +2146,7 @@ char *collectSlaveConfig(bool reconfigure) {
                 << "pos: " << slave_info.position << ", "
                 << "syncs: " << slave_info.sync_count << ", "
                 << "sdos: " << slave_info.sdo_count << ")\n";
-            cJSON_AddItemToArray(root, generateSlaveCStruct(ECInterface::master, module, slave_info, true));
+            cJSON_AddItemToArray(root, generateSlaveCStruct(ECInterface::master, module, slave_info, reconfigure));
         }
         ++pos;
     }
