@@ -24,6 +24,7 @@
 #include "Statistic.h"
 #include "Statistics.h"
 #include "cJSON.h"
+#include "tl/expected.hpp"
 #include <boost/thread/condition.hpp>
 #include <errno.h>
 #include <fstream>
@@ -89,6 +90,18 @@ static std::list<SDOEntry *> new_sdo_entries;
 Statistic recv_to_update("Receive to update");
 Statistic update_to_recv("Update to receive");
 #endif
+
+namespace {
+    std::string compare_modules(const ECModule & a, const ECModule &b) {
+        std::stringstream ss;
+        ss << "a.alias: " << a.alias << " b.alias: " << b.alias << "\n";
+        ss << "a.position: " << a.position << " b.position: " << b.position << "\n";
+        ss << "a.revision_no: " << a.revision_no << " b.revision_no: " << b.revision_no << "\n";
+        ss << "a.sync_count: " << a.sync_count << " b.sync_count: " << b.sync_count << "\n";
+        ss << "a.num_entries: " << a.num_entries << " b.num_entries: " << b.num_entries << "\n";
+        return ss.str();
+    }
+}
 
 ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), num_entries(0), entry_details(0) {
     offsets = new unsigned int[64];
@@ -231,7 +244,8 @@ void SDOEntry::resolveSDOModules() {
         if (entry->getModule()) {
             // this occurs when an entry has been automatically setup in the code
             // (only done for EL2535 modules as a temporary measure to be removed)
-            DBG_ETHERCAT << "Module already linked to SDO entry " << entry->getName() << "- replacing old entry\n";
+            DBG_ETHERCAT << "Module already linked to SDO entry " 
+                    << entry->getName() << "- replacing old entry\n";
             iter = new_sdo_entries.erase(iter);
             continue;
         }
@@ -760,7 +774,7 @@ void ECInterface::configureModules() {
             }
 #endif
 
-                        DBG_ETHERCAT <<  "---- adding pdo assignments for sm " << i << " " << m->syncs[i].n_pdos << " items\n";
+            DBG_ETHERCAT <<  "---- adding pdo assignments for sm " << i << " " << m->syncs[i].n_pdos << " items\n";
             for (unsigned int j = 0; j < m->syncs[i].n_pdos; ++j) {
                 DBG_ETHERCAT << "ecrt_slave_config_pdo_assign_add"
                     << std::hex
@@ -890,17 +904,23 @@ void ECInterface::configureModules() {
     }
 }
 
-bool ECInterface::addModule(ECModule *module, bool reset_io) {
+tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool reset_io) {
 
     if (module) {
         boost::recursive_mutex::scoped_lock lock(modules_mutex);
-        DBG_ETHERCAT << "adding module " << module->name << " to io\n";
+        DBG_ETHERCAT << "adding module " << module->name << " pos: " << module->position << " to io\n";
         std::vector<ECModule *>::iterator iter = modules.begin();
         while (iter != modules.end()) {
             ECModule *m = *iter++;
+            if (m == module) {
+                return tl::make_unexpected<std::string>("already added");
+            }
             if (m->alias == module->alias && m->position == module->position) {
-                DBG_ETHERCAT << "module not added; another exists at " << module->position << "\n";
-                return false;
+                std::stringstream ss;
+                ss << "similar module at " << module->position << " not replaced"
+                   << "\ncompare:\n" << compare_modules(*m, *module);
+                DBG_ETHERCAT << ss.str() << "\n";
+                return tl::make_unexpected<std::string>(ss.str());
             }
         }
         modules.push_back(module);
@@ -2078,9 +2098,10 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
         module->sync_count = slave.sync_count;
         module->entry_details = c_entry_details;
         module->num_entries = total_entries;
-        if (!ECInterface::instance()->addModule(module, reconfigure)) {
+        auto res = ECInterface::instance()->addModule(module, reconfigure);
+        if (!res) {
             delete module; // module may be already registered
-            std::cerr << "failed to add module " << slave.name << "\n";
+            std::cerr << "Failed to add module " << slave.name << " " << res.error() << "\n";
         }
     }
     else {

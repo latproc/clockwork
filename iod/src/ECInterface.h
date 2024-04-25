@@ -24,10 +24,12 @@
 #include <sys/types.h>
 
 #include "IODCommand.h"
+#include "tl/expected.hpp"  
 #ifndef EC_SIMULATOR
 #include "value.h"
 #include <ecrt.h>
 #include <map>
+#include <string>
 
 /*  the entry details structure is used to gather extra data about
     an entry in a module that the Etherlab master structures doesn't
@@ -151,7 +153,7 @@ class ECInterface {
     bool deactivate(); // deactivate the master
     void configureModules();
     void registerModules();
-    bool addModule(ECModule *m, bool reset_io);
+    tl::expected<bool, std::string> addModule(ECModule *m, bool reset_io);
     bool online();
     bool operational();
     static ECModule *findModule(unsigned int position);

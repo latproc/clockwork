@@ -46,7 +46,6 @@
 #endif
 
 #define __MAIN__
-//#include "latprocc.h"
 #include "Channel.h"
 #include "ClientInterface.h"
 #include "DebugExtra.h"
@@ -242,15 +241,20 @@ bool setupEtherCatThread() {
                             module->sync_count = di->config.num_syncs;
                             module->entry_details = di->config.c_entry_details;
                             module->num_entries = di->config.num_entries;
-                            if (!ECInterface::instance()->addModule(module, true)) {
+                            auto res = ECInterface::instance()->addModule(module, true);
+                            if (res) {
+                                std::cerr << "iod: Added module " << module->name 
+                                        << " at position " << module->position << "\n";
+                            }
+                            else {
                                 delete module; // module may be already registered
-                                std::cerr << "failed to add module " << module->name << "\n";
+                                std::cerr << "addModule: " << module->name << " " << res.error() << "\n";
                             }
                         }
                         else {
                             std::cout << "error: found " << collected_configurations.size()
                                       << " for slave at position " << position
-                                      << " when earching xml file for device " << std::hex
+                                      << " when searching xml file for device " << std::hex
                                       << pc.iValue << "/" << rn.iValue << std::dec << ":"
                                       << sm.sValue << "\n";
                         }
