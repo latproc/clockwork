@@ -363,14 +363,14 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
             }
             if (kind == XML_READER_TYPE_TEXT && matched_device) {
                 if (matched_device) {
-                    DBG_ETHERCAT << "MATCHED Type: ";
+                    DBG_ETHERCAT << "MATCHED Type:\n";
                 }
                 if (xmlTextReaderHasValue(reader)) {
-                    DBG_ETHERCAT << xmlTextReaderConstValue(reader);
+                    DBG_ETHERCAT << xmlTextReaderConstValue(reader) << "\n";
                 }
-                DBG_ETHERCAT << " ProductCode: " << attributes["ProductCode"] << " ";
-                DBG_ETHERCAT << " RevisionNo: " << attributes["RevisionNo"] << " ";
-                DBG_ETHERCAT << "\n";
+                DBG_ETHERCAT << " ProductCode: " << attributes["ProductCode"] << " "
+                    << " RevisionNo: " << attributes["RevisionNo"] << " "
+                    << "\n";
             }
             if (kind == XML_READER_TYPE_END_ELEMENT && typeKey == name) {
                 enter(in_device);
