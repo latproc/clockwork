@@ -260,6 +260,26 @@ bool setupEtherCatThread() {
                         }
                     }
                 }
+                else {
+                    const ec_slave_info_t &slave(slave_arr[position.iValue]);
+                    ECModule *module = new ECModule();
+
+                    module->name = slave.name;
+                    module->alias = slave.alias;
+                    module->position = slave.position;
+                    module->vendor_id = slave.vendor_id;
+                    module->product_code = slave.product_code;
+                    module->revision_no = slave.revision_number;
+                    auto res = ECInterface::instance()->addModule(module, true);
+                    if (res) {
+                        std::cerr << "iod: Added module " << module->name 
+                            << " at position " << module->position << "\n";
+                    }
+                    else {
+                        delete module; // module may be already registered
+                        std::cerr << "addModule: " << module->name << " " << res.error() << "\n";
+                    }
+                }
             }
         }
 #if 0
@@ -276,12 +296,12 @@ bool setupEtherCatThread() {
         std::cout << "Collected " << collected_configurations.size() << " configurations\n\n";
 #endif
 
-        char *slave_config = collectSlaveConfig(true);
+        ECInterface::instance()->configureModules();
+        ECInterface::instance()->registerModules();
+        char *slave_config = collectSlaveConfig(false);
         if (slave_config) {
             free(slave_config);
         }
-        ECInterface::instance()->configureModules();
-        ECInterface::instance()->registerModules();
     }
 #endif
     generateIOComponentModules(slave_configuration);
