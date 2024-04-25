@@ -6,7 +6,7 @@ endif
 
 all:
 	[ -d "build" ] || mkdir build
-	cd build && cmake .. && make $(JOBS) install
+	cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && make $(JOBS)
 
 release:
 	[ -d "build" ] || mkdir build
@@ -32,7 +32,7 @@ xcode:
 
 test:
 	[ -d "build" ] || mkdir build
-	cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DRUN_TESTS=ON .. && make $(JOBS) && make test
+	cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DRUN_TESTS=ON .. && make $(JOBS) install && make test
 
 style:
 ifdef ASTYLE
