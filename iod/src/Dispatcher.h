@@ -50,6 +50,7 @@ class Dispatcher {
     static void start();
     void idle();
     void stop();
+    void reset();
 
   private:
     Dispatcher();
@@ -60,7 +61,6 @@ class Dispatcher {
     ReceiverList all_receivers;
     static Dispatcher *instance_;
     std::list<Package *> to_deliver;
-    zmq::socket_t *socket;
     bool started;
     bool finished;
     DispatchThread *dispatch_thread;
