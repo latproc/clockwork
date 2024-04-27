@@ -1997,7 +1997,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
                 total_pdos += pdo_count;
                 assert(total_pdos < estimated_max_pdos);
                 cJSON *json_pdos = cJSON_CreateArray();
-                if (isEL2535 && pdo_count == 2) {
+                if (isEL2535 && i == 3 && pdo_count == 2) {
                     std::cerr << "******* detected EL2535 with 2 pdos (need 4)\n";
                     std::flush(std::cerr);
                     // assert(false); // TODO: what is the above comment about?
