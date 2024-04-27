@@ -611,7 +611,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                               << (int)e->subindex << ", " << (int)e->bit_length << "\n";
 
                     EntryDetails *ed = &current_device->config.c_entry_details[n];
-                    ed->name = (e->index != 0) 
+                    ed->name = (e->index != 0)
                         ? (current_pdo_name + " " + entry_name(entry_attributes["Name"]))
                         : "Gap";
                     ed->entry_index = n;
