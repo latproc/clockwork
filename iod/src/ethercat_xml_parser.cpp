@@ -289,7 +289,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                             intFromHex((const char *)attributes["ModuleIdent"].c_str() + 2);
                         rn = intFromHex((const char *)attributes["RevisionNo"].c_str() + 2);
 
-                        // check whether this device matches on the user is looking for
+                        // check whether this device matches the one the user is looking for
                         for (unsigned int i = 0; i < xml_configured.size(); ++i) {
                             DeviceInfo *info;
                             if ((info = xml_configured[i]) &&
