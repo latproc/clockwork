@@ -13,6 +13,38 @@
 #include <libxml/xmlreader.h>
 #include <map>
 
+std::ostream & operator <<(std::ostream &out, const EntryDetails &details) {
+    out << "name: " << details.name
+        << ", index: " << std::hex << details.entry_index
+        << ", sm_index: " << details.sm_index
+        << ", pdo_index: " << details.pdo_index
+        << std::dec;
+    return out;
+}
+
+std::ostream & operator <<(std::ostream &out, const ec_pdo_entry_info_t &entry) {
+    out << "index: " << std::hex << entry.index << std::dec << " "
+        << "subindex: " << (int)entry.subindex << " "
+        << "bitlen: " << (int)entry.bit_length;
+    return out;
+}
+
+std::ostream & operator <<(std::ostream &out, const ConfigurationDetails &details) {
+    return details.operator<<(out);
+}
+
+std::ostream &ConfigurationDetails::operator<<(std::ostream &out) const
+{
+     out << "num_syncs: " << num_syncs << " "
+         << "num_entries: " << num_entries << " "
+         << "entry_details:\n" << *c_entry_details
+         << "\n";
+     for (unsigned int i=0; i<num_entries; ++i) {
+         out << c_entries[i] << "\n";
+     }
+     return out;
+}
+
 using namespace std;
 
 //Statistics *statistics = NULL;

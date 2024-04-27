@@ -26,7 +26,12 @@ struct ConfigurationDetails {
     ConfigurationDetails();
     ~ConfigurationDetails();
     void init();
+
+    std::ostream &operator<<(std::ostream &out) const;
 };
+
+std::ostream & operator <<(std::ostream &out, const EntryDetails &details);
+std::ostream & operator <<(std::ostream &out, const ConfigurationDetails &details);
 
 /*  The AltSm structure supports collecting the AlternativeSmMapping items from the
     VendorSpecific/TwinCAT section of the configuration.
@@ -88,6 +93,7 @@ struct DeviceInfo {
         if (selected_alt_sm >= -1) {
             out << "/" << selected_alt_sm_name;
         }
+        out << "\n" << config << "\n";
         return out;
     }
 };
@@ -104,6 +110,10 @@ class DeviceConfigurator {
 class EtherCATXMLParser {
   public:
     std::vector<DeviceInfo *> xml_configured;
+    struct MatchResult {
+        bool matched = false;
+    };
+    std::vector<MatchResult> matched_devices;
 
     enum ParserState {
         skipping,
