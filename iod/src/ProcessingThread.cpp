@@ -112,7 +112,6 @@ ProcessingThread::~ProcessingThread() { delete internals; }
 void ProcessingThread::stop() {
     program_done = true;
     MessagingInterface::abort();
-    exit(0);
 }
 
 CommandSocketInfo *ProcessingThread::addCommandChannel(CommandSocketInfo *csi) {

@@ -34,6 +34,15 @@
 #include <list>
 #include <pthread.h>
 #include <zmq.hpp>
+#include <functional>
+
+namespace {
+    struct Cleanup {
+        std::function<void()> cleanup;
+        Cleanup(std::function<void()> && cleanup) : cleanup(std::move(cleanup)) {}
+        ~Cleanup() { cleanup(); }
+    };
+}
 
 Dispatcher *Dispatcher::instance_ = NULL;
 static boost::mutex dispatcher_mutex;
@@ -65,18 +74,14 @@ void DispatchThread::operator()() {
 }
 
 Dispatcher::Dispatcher()
-    : socket(0), started(false), finished(false), dispatch_thread(0), thread_ref(0),
+    : started(false), finished(false), dispatch_thread(0), thread_ref(0),
       sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting_cw),
       self(*MessagingInterface::getContext(), ZMQ_REP), owner_thread(0) {
-    dispatch_thread = new DispatchThread;
-    thread_ref = new boost::thread(boost::ref(*dispatch_thread));
 }
 
 Dispatcher::~Dispatcher() {
-    if (socket) {
-        delete socket;
-    }
 }
+
 
 Dispatcher *Dispatcher::instance() {
     if (!instance_) {
@@ -86,9 +91,18 @@ Dispatcher *Dispatcher::instance() {
     return instance_;
 }
 void Dispatcher::start() {
+    auto dispatcher = Dispatcher::instance();
+    if (dispatcher->dispatch_thread) { return; }
+    dispatcher->dispatch_thread = new DispatchThread;
+    dispatcher->thread_ref = new boost::thread(boost::ref(*dispatcher->dispatch_thread));
     while (!Dispatcher::instance()->started) {
         usleep(20);
     }
+}
+
+void Dispatcher::reset() {
+    finished = false;
+    started = false;
 }
 
 void Dispatcher::stop() {
@@ -99,7 +113,12 @@ void Dispatcher::stop() {
     to_self.send("exit", 4);
 
     if (thread_ref) {
-        thread_ref->join();
+        delete thread_ref;
+        thread_ref = nullptr;
+    }
+    if (dispatch_thread) {
+        delete dispatch_thread;
+        dispatch_thread = nullptr;
     }
 }
 
@@ -132,6 +151,13 @@ bool Dispatcher::wait() {
                 break;
             }
         }
+        if (items[0].revents & ZMQ_POLLIN) {
+            char buf[11];
+            size_t response_len;
+            safeRecv(self, buf, 10, true, response_len, 0); // wait for an ok to start from cw
+            buf[response_len] = 0;
+            DBG_DISPATCHER << "received " << buf << " from self\n";
+        }
         if (items[1].revents & ZMQ_POLLIN) {
             if (!finished) {
                 return true;
@@ -142,26 +168,34 @@ bool Dispatcher::wait() {
 }
 
 void Dispatcher::idle() {
-    // this sync socket is used to request access to shared resources from
-    // the driver
+    // request access to shared resources from // the driver
     sync.bind("inproc://dispatcher_sync");
 
-    self.bind("inproc://dispatcher_self"); // receive notifications (see stop)
+    // receive notifications (see stop)
+    self.bind("inproc://dispatcher_self"); 
+
+    Cleanup cleanup([&]() {
+        //sync.close();
+        //self.close();
+        self.unbind("inproc://dispatcher_self");
+        sync.unbind("inproc://dispatcher_sync");
+    });
+    started = true;
 
     // the clockwork driver calls our start() method and that blocks until
     // we get to this point. Note that this thread will then
     // block until it gets a sync-start from the driver.
-    started = true;
-    DBG_DISPATCHER << "Dispatcher started\n";
-
     char buf[11];
     size_t response_len = 0;
     if (!wait()) {
+        std::cout << "dispatcher stopped immediately\n";
         return; // stopped before being started
     }
     safeRecv(sync, buf, 10, true, response_len, 0); // wait for an ok to start from cw
     buf[response_len] = 0;
+
     DBG_DISPATCHER << "Dispatcher got sync start: " << buf << "\n";
+
 
     /*  this module waits for a start from clockwork and then starts looking for input on its
         command socket and its message socket (e_waiting). When either a command or message is detected
@@ -298,13 +332,11 @@ void Dispatcher::idle() {
                         }
                     }
                     else {
-                        std::cout << "Warning: sending " << m << " to all receivers\n";
                         ReceiverList::iterator iter = all_receivers.begin();
                         while (iter != all_receivers.end()) {
                             Receiver *r = *iter++;
                             if (r->receives(m, from)) {
                                 r->enqueue(*p);
-                                //MachineInstance::forceIdleCheck();
                             }
                         }
                     }
@@ -316,7 +348,6 @@ void Dispatcher::idle() {
                 break;
             }
             safeRecv(sync, buf, 10, true, response_len, 0); // wait for ack from cw
-            DBG_DISPATCHER << "Dispatcher done\n";
             status = e_waiting;
         }
     }
