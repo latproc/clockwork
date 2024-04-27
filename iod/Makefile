@@ -8,7 +8,6 @@ all:
 	[ -d "build" ] || mkdir build
 	cd build && cmake .. && make $(JOBS) install
 
-
 release:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
@@ -32,8 +31,8 @@ xcode:
 	cd xcode && cmake -G Xcode .. && xcodebuild -parallelizeTargets $(JOBS)
 
 test:
-	[ -d ".test" ] || mkdir .test
-	cd .test && cmake -DCMAKE_BUILD_TYPE=Debug -DRUN_TESTS=ON .. && make $(JOBS) && make test
+	[ -d "build" ] || mkdir build
+	cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DRUN_TESTS=ON .. && make $(JOBS) && make test
 
 style:
 ifdef ASTYLE
