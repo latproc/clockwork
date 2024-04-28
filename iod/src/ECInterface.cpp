@@ -921,6 +921,7 @@ void ECInterface::configureModules() {
     }
 }
 
+// Add or replace a module in the modules list
 tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool reset_io) {
 
     if (module) {
