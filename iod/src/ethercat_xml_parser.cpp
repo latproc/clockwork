@@ -37,8 +37,8 @@ std::ostream &ConfigurationDetails::operator<<(std::ostream &out) const
 {
      out << "num_syncs: " << num_syncs << " "
          << "num_entries: " << num_entries << " "
-         << "entry_details:\n" << *c_entry_details
-         << "\n";
+         << "entry_details:\n";
+     if (c_entry_details) {  out <<  *c_entry_details << "\n"; }
      for (unsigned int i=0; i<num_entries; ++i) {
          out << c_entries[i] << "\n";
      }

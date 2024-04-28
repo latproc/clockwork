@@ -1,4 +1,5 @@
 #include "DebugExtra.h"
+#include "ECInterface.h"
 #include "gtest/gtest.h"
 #include <ethercat_xml_parser.h>
 #include <list>

@@ -147,7 +147,7 @@ class ECInterface {
     const ec_master_state_t *getMasterState() { return &master_state; }
 
 #ifndef EC_SIMULATOR
-    void listSlaves(std::list<ec_slave_info_t> &slaves);
+    std::vector<ec_slave_info_t> listSlaves();
     bool prepare();
     bool activate();   // attempt to activate the master
     bool deactivate(); // deactivate the master
@@ -224,6 +224,7 @@ class ECInterface {
 };
 
 #ifdef USE_ETHERCAT
+void collectEtherCatModules();
 char *collectSlaveConfig(bool reconfigure);
 #endif
 

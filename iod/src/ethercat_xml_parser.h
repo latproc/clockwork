@@ -13,11 +13,11 @@
 #include <map>
 
 struct ConfigurationDetails {
-    EntryDetails *c_entry_details;
-    ec_pdo_entry_info_t *c_entries;
-    ec_sync_info_t *c_syncs;
-    unsigned int num_syncs;
-    unsigned int num_entries;
+    EntryDetails *c_entry_details = 0;
+    ec_pdo_entry_info_t *c_entries = 0;
+    ec_sync_info_t *c_syncs = 0;
+    unsigned int num_syncs = 0;
+    unsigned int num_entries = 0;
 
     static const unsigned int estimated_max_entries = 128;
     static const unsigned int estimated_max_pdos = 32;
