@@ -222,7 +222,7 @@ bool setupEtherCatThread() {
                     }
                     else {
                         DBG_INITIALISATION << "checking for " << *dev << "\n";
-                        DeviceInfo *di = 0;
+                        DeviceInfo *di = nullptr;
                         std::list<DeviceInfo *>::iterator iter = collected_configurations.begin();
                         while (iter != collected_configurations.end()) {
                             DeviceInfo *item = *iter++;
@@ -252,7 +252,7 @@ bool setupEtherCatThread() {
                             module->num_entries = di->config.num_entries;
                             auto res = ECInterface::instance()->addModule(module, true);
                             if (res) {
-                                std::cerr << "iod: Added module " << module->name
+                                DBG_INITIALISATION << "iod: Added module " << module->name
                                         << " at position " << module->position
                                         << " num entries: " << module->num_entries
                                         << "\n";
