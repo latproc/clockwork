@@ -349,6 +349,10 @@ std::ostream &ECModule::operator<<(std::ostream &out) const {
     return out;
 }
 
+std::ostream &operator<<(std::ostream & out, const ECModule &module) {
+    return module.operator<<(out);
+}
+
 #ifdef USE_SDO
 ec_sdo_request_t *SDOEntry::prepareRequest(ECModule *module) {
     assert(module);
@@ -661,13 +665,10 @@ ECModule *ECInterface::findModule(unsigned int pos) {
     if (pos < 0 || (unsigned int)pos >= modules.size()) {
         return 0;
     }
-    for (unsigned int i = 0; i < modules.size(); ++i) {
-        ECModule *m = modules.at(i);
-        if (m->position == pos) {
-            return m;
-        }
-    }
-    return 0;
+    auto module = modules.at(pos);
+    assert(module);
+    assert(module->position == pos);
+    return module;
 }
 
 void ECInterface::registerModules() {
@@ -688,7 +689,13 @@ void ECInterface::registerModules() {
         for (unsigned int i = 0; i < m->sync_count; ++i) {
             for (unsigned int j = 0; j < m->syncs[i].n_pdos; ++j) {
                 for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
-                                        DBG_ETHERCAT << "ecrt_config_reg_pdo_entry_pos\n";
+                    DBG_ETHERCAT << "ecrt_config_reg_pdo_entry_pos\n";
+                    if (std::string(m->name).substr(0, 6) == "EL2535" && i == 3 && m->syncs[i].n_pdos == 2) {
+                        std::stringstream ss;
+                        ss << "******* Warning: Configureing EL2535 with 2 pdos (need 4)";
+                        MessageLog::instance()->add(ss.str());
+                        std::cerr << ss.str() << "\n";
+                    }
                     int res = ecrt_slave_config_reg_pdo_entry_pos(
                         m->slave_config,
                         m->syncs[i].index, j, k, domain1, &(m->bit_positions[module_offset_idx]));
@@ -724,12 +731,18 @@ void ECInterface::configureModules() {
     boost::recursive_mutex::scoped_lock lock(modules_mutex);
     for (unsigned int mi = 0; mi < modules.size(); ++mi) {
         ECModule *m = findModule(mi);
+        if (!m) { std::cout << __FUNCTION__ << " missing ECModule at position " << mi << "\n"; }
         assert(m);
 
         if (!m->ecrtMasterSlaveConfig(master)) {
             std::cerr << "Failed to get slave configuration.\n";
             return;
         }
+
+        if (m->sync_count == 0) {
+             std::cerr << "Warning: configuring module " << m->position << " with no sync managers\n";
+        }
+
         assert(m->slave_config);
         DBG_ETHERCAT << "\n\nConfiguring module" << m->position << ": " << m->name << "\n";
         unsigned int module_offset_idx = 0;
@@ -826,7 +839,7 @@ void ECInterface::configureModules() {
                                   << " " << m->entry_details[module_offset_idx].name << "\n";
                     }
 #if 0
-                                        DBG_ETHERCAT << "ecrt_slave_config_reg_pdo_entry_pos\n";
+                    DBG_ETHERCAT << "ecrt_slave_config_reg_pdo_entry_pos\n";
                     res = ecrt_slave_config_reg_pdo_entry_pos(
                                     m->slave_config,
                                     //m->syncs[i].pdos[j].entries[k].index,
@@ -904,39 +917,57 @@ void ECInterface::configureModules() {
     }
 }
 
+// Add or replace a module in the modules list
 tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool reset_io) {
 
     if (module) {
         boost::recursive_mutex::scoped_lock lock(modules_mutex);
         DBG_ETHERCAT << "adding module " << module->name << " pos: " << module->position << " to io\n";
-        std::vector<ECModule *>::iterator iter = modules.begin();
-        while (iter != modules.end()) {
-            ECModule *m = *iter++;
-            if (m == module) {
-                return tl::make_unexpected<std::string>("already added");
-            }
+        if (modules.size() == module->position) {
+            modules.push_back(module);
+        }
+        else if (modules.size() > module->position) {
+            auto m = modules.at(module->position);
             if (m->alias == module->alias && m->position == module->position) {
-                std::stringstream ss;
-                ss << "similar module at " << module->position << " not replaced"
-                   << "\ncompare:\n" << compare_modules(*m, *module);
-                DBG_ETHERCAT << ss.str() << "\n";
-                return tl::make_unexpected<std::string>(ss.str());
+                if (reset_io) {
+                    modules.at(module->position) = module;
+                    std::stringstream ss;
+                    ss << "similar module at " << module->position << " replaced"
+                       << "\ncompare old,new:\n" << compare_modules(*m, *module);
+                    DBG_ETHERCAT << ss.str() << "\n";
+                    std::cout << ss.str() << "\n";
+                    std::cout << *module << "\n";
+                    delete m;
+                }
+                else {
+                    std::stringstream ss;
+                    ss  << "Error: replacing module at position " << module->position
+                        << " with a different type/release of module\n";
+                    return tl::make_unexpected<std::string>(ss.str());
+                }
             }
         }
-        modules.push_back(module);
+        else {
+            std::stringstream ss;
+            ss  << "Error: adding module " << module->position << " out of order\n";
+            return tl::make_unexpected<std::string>(ss.str());
+        }
     }
-
+    else {
+        return tl::make_unexpected<std::string>(std::string(__FUNCTION__) + " null module cannot be added");
+    }
     return true;
 }
 
-void ECInterface::listSlaves(std::list<ec_slave_info_t> &slaves) {
+std::vector<ec_slave_info_t> ECInterface::listSlaves() {
     if (!master) {
-        return;
+        return {};
     }
+    std::vector<ec_slave_info_t> slaves;
     unsigned int pos = 0;
     int res = 0;
     ec_master_info_t master_info;
-        DBG_ETHERCAT << "ecrt_master\n";
+    DBG_ETHERCAT << "ecrt_master\n";
     res = ecrt_master(master, &master_info);
     while (res >= 0 && pos < master_info.slave_count) {
         ec_slave_info_t slave_info;
@@ -952,10 +983,153 @@ void ECInterface::listSlaves(std::list<ec_slave_info_t> &slaves) {
         }
         ++pos;
     }
+    return slaves;
+}
+
+void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
+    ec_pdo_entry_info_t *c_entries = 0;
+    ec_pdo_info_t *c_pdos = 0;
+    ec_sync_info_t *c_syncs = 0;
+    EntryDetails *c_entry_details = 0;
+
+    std::cerr << "----------- Adding " << slave.name << " ---------\n";
+
+    unsigned int total_entries = 0, total_pdos = 0, total_syncs = 0;
+    if (slave.sync_count) {
+        unsigned int i, j, k, pdo_pos = 0, entry_pos = 0;
+        const unsigned int estimated_max_entries = 128;
+        const unsigned int estimated_max_pdos = 32;
+        const unsigned int estimated_max_syncs = 32;
+        // add pdo entries for this slave
+        // note the assumptions here about the maximum number of entries, pdos and syncs we expect
+        const int c_entries_size = sizeof(ec_pdo_entry_info_t) * estimated_max_entries;
+        c_entries = new ec_pdo_entry_info_t[c_entries_size];
+        memset(c_entries, 0, c_entries_size);
+
+        c_entry_details = new EntryDetails[estimated_max_entries];
+
+        const int c_pdos_size = sizeof(ec_pdo_info_t) * estimated_max_pdos;
+        c_pdos = new ec_pdo_info_t[c_pdos_size];
+        memset(c_pdos, 0, c_pdos_size);
+
+        const int c_syncs_size = sizeof(ec_sync_info_t) * estimated_max_syncs;
+        c_syncs = new ec_sync_info_t[c_syncs_size];
+        memset(c_syncs, 0, c_syncs_size);
+
+        total_syncs += slave.sync_count;
+        assert(total_syncs < estimated_max_syncs);
+        for (i = 0; i < slave.sync_count; i++) {
+            DBG_ETHERCAT << "ecrt_master_get_sync_manager\n";
+            assert(ecrt_master_get_sync_manager(m, slave.position, i, &c_syncs[i]) == 0);
+
+            // Copy pdo entries to c_pdos
+            if (!c_syncs[i].n_pdos) {
+                c_syncs[i].pdos = 0;
+            }
+            else {
+                ec_pdo_info_t pdo = {};
+                unsigned int pdo_count = c_syncs[i].n_pdos;
+                c_syncs[i].pdos = c_pdos + pdo_pos;
+                total_pdos += pdo_count;
+                assert(total_pdos < estimated_max_pdos);
+                if (std::string(slave.name).substr(0, 6) == "EL2535" && i == 3 && pdo_count == 2) {
+                    std::cerr << "******* detected EL2535 with 2 pdos (need 4)\n";
+                    std::flush(std::cerr);
+                }
+                for (j = 0; j < pdo_count; j++) {
+                    DBG_ETHERCAT << "ecrt_master_get_pdo(..., sm: " << i << ", pdo: " << j << ")" << "\n";
+                    ecrt_master_get_pdo(m, slave.position, i, j, &pdo);
+                    c_pdos[j + pdo_pos].index = pdo.index;
+                    c_pdos[j + pdo_pos].n_entries = (unsigned int)pdo.n_entries;
+                    if (!pdo.n_entries) {
+                        c_pdos[j + pdo_pos].entries = 0;
+                    }
+                    else {
+                        char pdo_name[40];
+                        char index_str[40];
+                        snprintf(pdo_name, 40, "pdo-%04X", pdo.index);
+                        snprintf(index_str, 40, "0x%04X (%d)", c_syncs[i].index, c_syncs[i].index);
+                        c_pdos[j + pdo_pos].entries = c_entries + entry_pos;
+                        total_entries += pdo.n_entries;
+                        assert(total_entries < estimated_max_entries);
+                        ec_pdo_entry_info_t entry = {};
+                        for (k = 0; k < pdo.n_entries; k++) {
+                            DBG_ETHERCAT << "ecrt_master_get_pdo_entry\n";
+                            ecrt_master_get_pdo_entry(m, slave.position, i, j, k, &entry);
+                            char entry_name[100];
+                            snprintf(entry_name, 100, "entry-%X-%X", entry.index, entry.subindex);
+
+                            DBG_ETHERCAT << " entry: " << k
+                                << "{"
+                                << entry_pos << ", "
+                                << std::hex << (int)entry.index << ", "
+                                << std::dec
+                                << (int)entry.subindex << ", "
+                                << (int)entry.bit_length << ", "
+                                << entry_name
+                                << "}";
+                            c_entries[entry_pos].index = entry.index;
+                            c_entries[entry_pos].subindex = entry.subindex;
+                            c_entries[entry_pos].bit_length = entry.bit_length;
+                            c_entry_details[entry_pos].name = pdo_name;
+                            c_entry_details[entry_pos].name += " ";
+                            c_entry_details[entry_pos].name += entry_name;
+                            c_entry_details[entry_pos].entry_index = entry_pos;
+                            c_entry_details[entry_pos].pdo_index = j + pdo_pos;
+                            c_entry_details[entry_pos].sm_index = i;
+
+                            ++entry_pos;
+                        }
+                    }
+                }
+            }
+            pdo_pos += c_syncs[i].n_pdos;
+        }
+        c_syncs[slave.sync_count].index = 0xff;
+    }
+    else {
+        c_syncs = 0;
+        c_pdos = 0;
+        c_entries = 0;
+    }
+    DBG_ETHERCAT << "ECInterface adding module " << slave.name << "\n";
+    ECModule *module = new ECModule();
+    module->name = slave.name;
+    module->alias = 0;
+    module->position = slave.position;
+    module->vendor_id = slave.vendor_id;
+    module->product_code = slave.product_code;
+    module->syncs = c_syncs;
+    module->pdos = c_pdos;
+    module->pdo_entries = c_entries;
+    module->sync_count = slave.sync_count;
+    module->entry_details = c_entry_details;
+    module->num_entries = total_entries;
+    auto res = ECInterface::instance()->addModule(module, true);
+    if (!res) {
+        delete module; // module may be already registered
+        std::cerr << "Failed to add module " << slave.name << " " << res.error() << "\n";
+    }
+};
+
+
+void collectEtherCatModules() {
+    unsigned int pos = 0;
+    int res = 0;
+    auto slaves = ECInterface::instance()->listSlaves();
+    assert(slaves.size() > 0);
+    std::stringstream ss;
+    for (const ec_slave_info_t & slave : slaves) {
+        ss << "Adding slave " << std::hex << std::setw(8) << slave.product_code
+                << " " << std::setw(8) << slave.revision_number << " at position " << std::dec << pos << "\n";
+        addEtherCatSlave(ECInterface::master, slave);
+    }
+    std::cout << ss.str() << "\n";
 }
 
 bool ECInterface::prepare() {
     DBG_ETHERCAT << "Preparing IO...";
+    assert(false);
     return false;
 }
 
@@ -1127,18 +1301,6 @@ void ECInterface::init() {
         }
         }
     */
-
-#if 0
-    int res = 0;
-        DBG_ETHERCAT << "ecrt_master\n";
-    if ((res = ecrt_master(master, &master_info)) < 0) {
-        std::cerr << "Error " << res << " getting master info\n";
-        master_into_time = 0; // master info information is invalid
-    }
-    else {
-        master_info_time = microsecs();
-    }
-#endif
 
     char buf[200];
     DBG_ETHERCAT << "ecrt_master_create_domain\n";
@@ -1942,18 +2104,18 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
     cJSON_AddStringToObject(root, "tab", "Modules");
     cJSON_AddStringToObject(root, "class", "MODULE");
     cJSON_AddNumberToObject(root, "error_flag", slave.error_flag);
-    char *name = strdup(slave.name);
-    int name_len = strlen(name);
+    bool isEL2535 = false;
+    {
+    std::string name(slave.name);
+    int name_len = name.length();
     for (int i = 0; i < name_len; ++i) {
         name[i] &= 127;
     }
-    cJSON_AddStringToObject(root, "name", name);
-    // TBD HACK
-    bool isEL2535 = false;
-    if (strncmp(name, "EL2535", 6) == 0) {
+    cJSON_AddStringToObject(root, "name", name.c_str());
+    if (name.substr(6) == "EL2535") {
         isEL2535 = true;
     }
-    free(name);
+    }
 
     if (slave.sync_count) {
         // add pdo entries for this slave
@@ -2083,45 +2245,16 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
         c_pdos = 0;
         c_entries = 0;
     }
-    if (reconfigure) {
-                DBG_ETHERCAT << "defining module " << slave.name << " sync_count: " 
-                                << (int)slave.sync_count << " num entries: " << total_entries << "\n";
-        ECModule *module = new ECModule();
-        module->name = slave.name;
-        module->alias = 0;
-        module->position = slave.position;
-        module->vendor_id = slave.vendor_id;
-        module->product_code = slave.product_code;
-        module->syncs = c_syncs;
-        module->pdos = c_pdos;
-        module->pdo_entries = c_entries;
-        module->sync_count = slave.sync_count;
-        module->entry_details = c_entry_details;
-        module->num_entries = total_entries;
-        auto res = ECInterface::instance()->addModule(module, reconfigure);
-        if (!res) {
-            delete module; // module may be already registered
-            std::cerr << "Failed to add module " << slave.name << " " << res.error() << "\n";
-        }
+    if (c_entries) {
+        delete[] c_entries;
     }
-    else {
-        if (c_entries) {
-            delete[] c_entries;
-        }
-        if (c_pdos) {
-            delete[] c_pdos;
-        }
-        if (c_syncs) {
-            delete[] c_syncs;
-        }
-        delete[] c_entry_details;
+    if (c_pdos) {
+        delete[] c_pdos;
     }
-
-    //std::stringstream result;
-    //result << "slave: " << slave.position << "\t"
-    //  << "syncs: " << i << " pdos: " << pdo_pos << " entries: " << entry_pos << "\n";
-    //result << cJSON_Print(root);
-    //return result.str();
+    if (c_syncs) {
+        delete[] c_syncs;
+    }
+    delete[] c_entry_details;
 
     return root;
 }
@@ -2142,7 +2275,7 @@ char *collectSlaveConfig(bool reconfigure) {
             DBG_ETHERCAT << "ecrt_master_get_slave\n";
             res = ecrt_master_get_slave(ECInterface::master, pos, &slave_info);
 
-            DBG_ETHERCAT << "generating slave struct for: "
+            DBG_ETHERCAT << "generating JSON slave description for: "
                 << "pos: " << slave_info.position << ", "
                 << "syncs: " << slave_info.sync_count << ", "
                 << "sdos: " << slave_info.sdo_count << ")\n";

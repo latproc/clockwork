@@ -154,12 +154,13 @@ bool setupEtherCatThread() {
         ClockworkDeviceConfigurator configurator;
         EtherCATXMLParser parser(configurator);
 
-        std::list<ec_slave_info_t> slaves;
-        ECInterface::instance()->listSlaves(slaves);
-        std::vector<ec_slave_info_t> slave_arr;
-        std::copy(slaves.begin(), slaves.end(), std::back_inserter(slave_arr));
-        std::cout << "found " << slave_arr.size() << " slaves on the bus\n";
+        // Populate the list of ECModules from the bus. This guarantees that
+        // the positions in the list match the position of the module on the bus.
+        collectEtherCatModules();
+        std::vector<ec_slave_info_t> slaves = ECInterface::instance()->listSlaves();
 
+        // Search for XML configurations in all modules and replace previous
+        // modules.
         std::list<MachineInstance *>::iterator iter = MachineInstance::begin();
         std::set<std::string> xml_files;
         while (iter != MachineInstance::end()) {
@@ -181,7 +182,7 @@ bool setupEtherCatThread() {
                     Value sm(selected_sm);
                     if (product_code == SymbolTable::Null) {
                         // find product code of the device at this position
-                        const ec_slave_info_t &slave(slave_arr[position.iValue]);
+                        const ec_slave_info_t &slave(slaves[position.iValue]);
                         pc = (long)slave.product_code;
                         std::cout << "setting product code for position " << position.iValue
                                   << " to " << std::hex << "0x" << pc << std::dec
@@ -192,9 +193,9 @@ bool setupEtherCatThread() {
                                   << std::dec << " for position " << position.iValue << "\n";
                     }
                     if (revision_no == SymbolTable::Null) {
-                        rn = (long)slave_arr[position.iValue].revision_number;
+                        rn = (long)slaves[position.iValue].revision_number;
                         // find product code of the device at this position
-                        const ec_slave_info_t &slave(slave_arr[position.iValue]);
+                        const ec_slave_info_t &slave(slaves[position.iValue]);
                         std::cout << "setting product code for position " << position.iValue
                                   << " to " << std::hex << "0x" << rn << std::dec << "\n";
                     }
@@ -202,31 +203,30 @@ bool setupEtherCatThread() {
                         sm = Value("", Value::t_string);
                     }
 
+                    // Due to limitations of the parser, we reset and reparse for every module.
+                    // TODO: Identify modules to be configured and load them all from a single
+                    //       pass through the XML.
                     parser.xml_configured.clear();
                     DeviceInfo *dev = new DeviceInfo(pc.iValue, rn.iValue, sm.sValue.c_str());
                     parser.xml_configured.push_back(dev);
                     parser.init();
                     if (!parser.loadDeviceConfigurationXML(xml_filename.sValue.c_str())) {
-                        std::cerr << "Warning: failed to load module configuration from "
-                                  << xml_filename << "\n";
+                        std::stringstream ss;
+                        ss << "Warning: failed to load module configuration from "
+                                             << xml_filename << "\n";
+                        MessageLog::instance()->add(ss.str());
+                        NB_MSG << ss.str() << "\n";
                     }
                     else {
                         std::cout << "checking for " << *dev << "\n";
-                        DeviceInfo *di = 0;
-                        std::list<DeviceInfo *>::iterator iter = collected_configurations.begin();
-                        while (iter != collected_configurations.end()) {
-                            DeviceInfo *item = *iter++;
-                            if (*dev == *item) {
-                                std::cout << " using item " << *item << "\n";
-                                di = item;
-                                break;
-                            }
-                            std::cout << "no match with " << *item << "\n";
+                        DeviceInfo *di = nullptr;
+                        assert(collected_configurations.size() <= 1);
+                        if (collected_configurations.size() == 1) {
+                             di = *collected_configurations.begin();
                         }
-                        //if (collected_configurations.size() == 1) {
                         if (di) {
                             slave_configuration[position.iValue] = di;
-                            const ec_slave_info_t &slave(slave_arr[position.iValue]);
+                            const ec_slave_info_t &slave(slaves[position.iValue]);
                             ECModule *module = new ECModule();
 
                             module->name = slave.name;
@@ -244,12 +244,16 @@ bool setupEtherCatThread() {
                             auto res = ECInterface::instance()->addModule(module, true);
                             if (res) {
                                 std::cerr << "iod: Added module " << module->name 
-                                        << " at position " << module->position << "\n";
+                                        << " at position " << module->position
+                                        << " num entries: " << module->num_entries
+                                        << "\n";
                             }
                             else {
                                 delete module; // module may be already registered
                                 std::cerr << "addModule: " << module->name << " " << res.error() << "\n";
                             }
+                            delete di;
+                            collected_configurations.clear();
                         }
                         else {
                             std::cout << "error: found " << collected_configurations.size()
@@ -258,26 +262,6 @@ bool setupEtherCatThread() {
                                       << pc.iValue << "/" << rn.iValue << std::dec << ":"
                                       << sm.sValue << "\n";
                         }
-                    }
-                }
-                else {
-                    const ec_slave_info_t &slave(slave_arr[position.iValue]);
-                    ECModule *module = new ECModule();
-
-                    module->name = slave.name;
-                    module->alias = slave.alias;
-                    module->position = slave.position;
-                    module->vendor_id = slave.vendor_id;
-                    module->product_code = slave.product_code;
-                    module->revision_no = slave.revision_number;
-                    auto res = ECInterface::instance()->addModule(module, true);
-                    if (res) {
-                        std::cerr << "iod: Added module " << module->name 
-                            << " at position " << module->position << "\n";
-                    }
-                    else {
-                        delete module; // module may be already registered
-                        std::cerr << "addModule: " << module->name << " " << res.error() << "\n";
                     }
                 }
             }
