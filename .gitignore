@@ -93,6 +93,7 @@ plugins/*.c
 plugins/*.so*
 ethercat
 ec_tool
+setup/
 
 #built tools
 iod/cw
