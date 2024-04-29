@@ -1634,8 +1634,18 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             val = fromU32(offset);
         }
         else {
-            std::cout << " unsupported bitlen: " << address.bitlen << "\n";
+            std::cout << " unusual bitlen: " << address.bitlen << "\n";
             val = 0;
+            uint32_t bitlen = address.bitlen;
+            while (bitlen > 8) {
+                ++offset;
+                bitlen -= 8;
+            }
+            bitpos += bitlen;
+            if (bitpos > 8) {
+                ++offset;
+                bitpos -= 8;
+            }
         }
         if (regular_polls.count(this)) {
             // this device is polled on a regular clock, do not process here
