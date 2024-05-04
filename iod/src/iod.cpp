@@ -121,13 +121,13 @@ std::map<unsigned int, DeviceInfo *> slave_configuration;
 class ClockworkDeviceConfigurator : public DeviceConfigurator {
   public:
     bool configure(DeviceInfo *dev) {
-        std::cout << "collected configuration for device " << std::hex << " 0x" << dev->product_code
+        DBG_INITIALISATION << "collected configuration for device " << std::hex << " 0x" << dev->product_code
                   << " " << std::hex << " 0x" << dev->revision_no << "\n";
         std::list<DeviceInfo *>::iterator iter = collected_configurations.begin();
         while (iter != collected_configurations.end()) {
             const DeviceInfo *di = *iter++;
             if (*dev == *di) {
-                std::cout << " using item already found\n";
+                DBG_INITIALISATION << " using item already found\n";
                 return true;
             }
         }
@@ -138,7 +138,7 @@ class ClockworkDeviceConfigurator : public DeviceConfigurator {
 
 bool setupEtherCatThread() {
     if (!ECInterface::instance()->initialised) {
-        std::cout << "Cannect setup the EtherCAT thread until the interface is initialised\n";
+        DBG_INITIALISATION << "Cannect setup the EtherCAT thread until the interface is initialised\n";
         return false;
     }
 #ifndef EC_SIMULATOR
@@ -174,7 +174,7 @@ bool setupEtherCatThread() {
                 const Value &product_code = m->getValue("ProductCode");
                 const Value &revision_no = m->getValue("RevisionNo");
                 if (xml_filename != SymbolTable::Null) {
-                    std::cout << "using xml configuration file " << xml_filename << " for "
+                    DBG_INITIALISATION << "using xml configuration file " << xml_filename << " for "
                               << m->getName() << " at position " << position << "\n";
                     xml_files.insert(xml_filename.sValue);
                     Value pc(product_code);
@@ -184,19 +184,19 @@ bool setupEtherCatThread() {
                         // find product code of the device at this position
                         const ec_slave_info_t &slave(slaves[position.iValue]);
                         pc = (long)slave.product_code;
-                        std::cout << "setting product code for position " << position.iValue
+                        DBG_INITIALISATION << "setting product code for position " << position.iValue
                                   << " to " << std::hex << "0x" << pc << std::dec
                                   << " from bus slave at position " << position.iValue << "\n";
                     }
                     else {
-                        std::cout << "using config file product code " << std::hex << "0x" << pc
+                        DBG_INITIALISATION << "using config file product code " << std::hex << "0x" << pc
                                   << std::dec << " for position " << position.iValue << "\n";
                     }
                     if (revision_no == SymbolTable::Null) {
                         rn = (long)slaves[position.iValue].revision_number;
                         // find product code of the device at this position
                         const ec_slave_info_t &slave(slaves[position.iValue]);
-                        std::cout << "setting product code for position " << position.iValue
+                        DBG_INITIALISATION << "setting product code for position " << position.iValue
                                   << " to " << std::hex << "0x" << rn << std::dec << "\n";
                     }
                     if (sm == SymbolTable::Null) {
@@ -218,7 +218,7 @@ bool setupEtherCatThread() {
                         NB_MSG << ss.str() << "\n";
                     }
                     else {
-                        std::cout << "checking for " << *dev << "\n";
+                        DBG_INITIALISATION << "checking for " << *dev << "\n";
                         DeviceInfo *di = nullptr;
                         assert(collected_configurations.size() <= 1);
                         if (collected_configurations.size() == 1) {
@@ -256,7 +256,7 @@ bool setupEtherCatThread() {
                             collected_configurations.clear();
                         }
                         else {
-                            std::cout << "error: found " << collected_configurations.size()
+                            DBG_INITIALISATION << "error: found " << collected_configurations.size()
                                       << " for slave at position " << position
                                       << " when searching xml file for device " << std::hex
                                       << pc.iValue << "/" << rn.iValue << std::dec << ":"
@@ -339,7 +339,6 @@ int main(int argc, char const *argv[]) {
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
 
-    std::cout << "main starting\n";
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
@@ -347,7 +346,6 @@ int main(int argc, char const *argv[]) {
     MessageLog::setMaxMemory(10000);
     Scheduler::instance();
 
-    std::cout << "-------- Creating Command Interface ---------\n";
     ControlSystemMachine machine;
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
