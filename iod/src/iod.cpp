@@ -348,7 +348,6 @@ int main(int argc, char const *argv[]) {
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
 
-    DBG_INITIALISATION << "main starting\n";
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
@@ -356,7 +355,6 @@ int main(int argc, char const *argv[]) {
     MessageLog::setMaxMemory(10000);
     Scheduler::instance();
 
-    DBG_INITIALISATION << "-------- Creating Command Interface ---------\n";
     ControlSystemMachine machine;
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
