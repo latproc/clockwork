@@ -731,16 +731,16 @@ void ECInterface::configureModules() {
     boost::recursive_mutex::scoped_lock lock(modules_mutex);
     for (unsigned int mi = 0; mi < modules.size(); ++mi) {
         ECModule *m = findModule(mi);
-        if (!m) { std::cout << __FUNCTION__ << " missing ECModule at position " << mi << "\n"; }
+        if (!m) { DBG_ETHERCAT << __FUNCTION__ << " missing ECModule at position " << mi << "\n"; }
         assert(m);
 
         if (!m->ecrtMasterSlaveConfig(master)) {
-            std::cerr << "Failed to get slave configuration.\n";
+            DBG_ETHERCAT << "Failed to get slave configuration.\n";
             return;
         }
 
         if (m->sync_count == 0) {
-             std::cerr << "Warning: configuring module " << m->position << " with no sync managers\n";
+             DBG_ETHERCAT << "Warning: configuring module " << m->position << " with no sync managers\n";
         }
 
         assert(m->slave_config);
@@ -935,8 +935,6 @@ tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool re
                     ss << "similar module at " << module->position << " replaced"
                        << "\ncompare old,new:\n" << compare_modules(*m, *module);
                     DBG_ETHERCAT << ss.str() << "\n";
-                    std::cout << ss.str() << "\n";
-                    std::cout << *module << "\n";
                     delete m;
                 }
                 else {
@@ -1124,7 +1122,7 @@ void collectEtherCatModules() {
                 << " " << std::setw(8) << slave.revision_number << " at position " << std::dec << pos << "\n";
         addEtherCatSlave(ECInterface::master, slave);
     }
-    std::cout << ss.str() << "\n";
+    DBG_ETHERCAT << ss.str() << "\n";
 }
 
 bool ECInterface::prepare() {
