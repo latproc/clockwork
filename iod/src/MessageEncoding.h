@@ -21,7 +21,6 @@
 #ifndef __clockwork__MessageEncoding__
 #define __clockwork__MessageEncoding__
 
-#include "MessageEncoding.h"
 #include "cJSON.h"
 #include "symboltable.h"
 #include "value.h"

@@ -196,7 +196,7 @@ Value eval(Predicate *p, MachineInstance *m) {
             res = ~r;
             break;
         case opInteger: {
-            long val;
+            int64_t val;
             if (r.asInteger(val)) {
                 res = val;
             }

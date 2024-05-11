@@ -565,37 +565,37 @@ class InputFilterSettings {
     double prev_sent;    // this is previous value of last_sent
     uint64_t last_time;  // the last time we calculated speed;_
     uint16_t buffer_len; // the maximum length of the circular buffer
-    const long
+    const int64_t
         *tolerance; // some filters use a tolerance settable by the user in the "tolerance" property
     double *filter_c_coeff; // the Butterworth filter uses these coefficients
     double *filter_d_coeff; // the Butterworth filter uses these coefficients
-    const long *
+    const int64_t *
         filter_len; // the user can adjust the filter length of some filters via a "filter_len" property
-    const long *filter_type; // the user can select the filter using a "filter" property
-    const long *calc_dt;
-    const long *calc_d2t;
-    const long *calc_stddev;
-    const long *position_history; // the amount of position history to use in determining movement
-    const long *speed_tolerance;  // the tolerance used in determining movement
+    const int64_t *filter_type; // the user can select the filter using a "filter" property
+    const int64_t *calc_dt;
+    const int64_t *calc_d2t;
+    const int64_t *calc_stddev;
+    const int64_t *position_history; // the amount of position history to use in determining movement
+    const int64_t *speed_tolerance;  // the tolerance used in determining movement
     unsigned int butterworth_len; // the number of coefficients in the Butterworth filter
     double speed;                 // the current estimated speed
     double speed_scale;           // the current estimated speed
     double accel;
     double accel_scale;
-    static long default_tolerance;        // a default value for filter_len
-    static long default_filter_len;       // a default value for filter_len
-    static long default_speed_filter_len; // a default value for speed_filter_len
-    static long default_calc_dt;
-    static long default_calc_d2t;
-    static long default_calc_stddev;
-    static long default_position_history; // a default value for position_history
-    static long default_speed_tolerance;  // a default value for speed_tolerance
+    static int64_t default_tolerance;        // a default value for filter_len
+    static int64_t default_filter_len;       // a default value for filter_len
+    static int64_t default_speed_filter_len; // a default value for speed_filter_len
+    static int64_t default_calc_dt;
+    static int64_t default_calc_d2t;
+    static int64_t default_calc_stddev;
+    static int64_t default_position_history; // a default value for position_history
+    static int64_t default_speed_tolerance;  // a default value for speed_tolerance
     FloatBuffer speeds;
     int rate_len;
     ButterworthFilter *input_bwf;
     ButterworthFilter *vel_bwf;
     ButterworthFilter *accel_bwf;
-    const long *throttle;
+    const int64_t *throttle;
 
     InputFilterSettings()
         : property_changed(true), positions(0), last_sent(0.0), prev_sent(0.0), last_time(0),
@@ -653,7 +653,7 @@ class InputFilterSettings {
             speed = 0.0;
             speeds.append(speed);
         }
-        else if ((long)(read_time - last_time) >= ((throttle) ? (*throttle * 1000L) : 10000L)) {
+        else if ((int64_t)(read_time - last_time) >= ((throttle) ? (*throttle * 1000L) : 10000L)) {
             double dt = ((double)(read_time - last_time)) / 1000000.0;
             //speed = (getBufferValue(positions,0) - getBufferValue(positions,1)) / dt;
             //rate_len = findMovement(positions, 20, *position_history);
@@ -702,14 +702,14 @@ class InputFilterSettings {
     }
 };
 
-long InputFilterSettings::default_tolerance = 8;         // a default value for filter_len
-long InputFilterSettings::default_filter_len = 12;       // a default value for filter_len
-long InputFilterSettings::default_speed_filter_len = 4;  // a default value for speed_filter_len
-long InputFilterSettings::default_position_history = 20; // a default value for position_history
-long InputFilterSettings::default_speed_tolerance = 20;  // a default value for speed_tolerance
-long InputFilterSettings::default_calc_dt = 0;           // calculate first deriv
-long InputFilterSettings::default_calc_d2t = 0;          // calculate second deriv
-long InputFilterSettings::default_calc_stddev = 0;       // don't calculate stddev
+int64_t InputFilterSettings::default_tolerance = 8;         // a default value for filter_len
+int64_t InputFilterSettings::default_filter_len = 12;       // a default value for filter_len
+int64_t InputFilterSettings::default_speed_filter_len = 4;  // a default value for speed_filter_len
+int64_t InputFilterSettings::default_position_history = 20; // a default value for position_history
+int64_t InputFilterSettings::default_speed_tolerance = 20;  // a default value for speed_tolerance
+int64_t InputFilterSettings::default_calc_dt = 0;           // calculate first deriv
+int64_t InputFilterSettings::default_calc_d2t = 0;          // calculate second deriv
+int64_t InputFilterSettings::default_calc_stddev = 0;       // don't calculate stddev
 
 AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) {
     config = new InputFilterSettings();
@@ -866,10 +866,10 @@ int32_t AnalogueInput::filter(int32_t raw) {
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
+        o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
-        o->properties.add("raw", (long)raw, SymbolTable::ST_REPLACE);
-        o->properties.add("VALUE", (long)config->last_sent, SymbolTable::ST_REPLACE);
+        o->properties.add("raw", raw, SymbolTable::ST_REPLACE);
+        o->properties.add("VALUE", config->last_sent, SymbolTable::ST_REPLACE);
         //double v = config->speeds.average(config->speeds.length());
         //if (fabs(v)<1.0) v = 0.0;
         if (*config->calc_stddev) {
@@ -893,22 +893,22 @@ void AnalogueInput::update() { config->property_changed = false; }
 class CounterInternals {
   public:
     CircularBuffer *positions;
-    const long
+    const int64_t
         *tolerance; // some filters use a tolerance settable by the user in the "tolerance" property
-    const long *
+    const int64_t *
         filter_len; // the user can adjust the filter length of some filters via a "filter_len" property
-    const long *position_history; // the amount of position history to use in determining movement
-    const long *speed_tolerance;  // the tolerance used in determining movement
-    const long *input_scale;      // input readings are divided by this amount
+    const int64_t *position_history; // the amount of position history to use in determining movement
+    const int64_t *speed_tolerance;  // the tolerance used in determining movement
+    const int64_t *input_scale;      // input readings are divided by this amount
     int32_t last_sent;  // this is the value to send unless the read value moves away from the mean
     int32_t prev_sent;  // this is the value to send unless the read value moves away from the mean
     uint64_t last_time; // the last time we calculated speed;_
-    static long default_tolerance;
-    static long default_filter_len;
-    static long default_position_history;
-    static long default_speed_tolerance;
-    static long default_input_scale;
-    long speed;
+    static int64_t default_tolerance;
+    static int64_t default_filter_len;
+    static int64_t default_position_history;
+    static int64_t default_speed_tolerance;
+    static int64_t default_input_scale;
+    int64_t speed;
     uint16_t buffer_len;
     FloatBuffer speeds;
     int rate_len;
@@ -935,7 +935,7 @@ class CounterInternals {
             /*
                     double dt = (double)(read_time - last_time);
                     double dv = (double)(last_sent - prev_sent);
-                    speed = (long)( dv / dt * 1000000.0) ;
+                    speed = (int64_t)( dv / dt * 1000000.0) ;
             */
             rate_len = findMovement(positions, 20, *position_history);
             if (rate_len < *position_history) {
@@ -967,11 +967,11 @@ class CounterInternals {
     }
 };
 
-long CounterInternals::default_tolerance = 1;
-long CounterInternals::default_filter_len = 8;
-long CounterInternals::default_position_history = 20;
-long CounterInternals::default_speed_tolerance = 10;
-long CounterInternals::default_input_scale = 1;
+int64_t CounterInternals::default_tolerance = 1;
+int64_t CounterInternals::default_filter_len = 8;
+int64_t CounterInternals::default_position_history = 20;
+int64_t CounterInternals::default_speed_tolerance = 10;
+int64_t CounterInternals::default_input_scale = 1;
 
 Counter::Counter(IOAddress addr) : IOComponent(addr), internals(0) {
     internals = new CounterInternals;
@@ -982,7 +982,7 @@ void Counter::setupProperties(MachineInstance *m) {
     const Value &v = m->getValue("tolerance");
     if (v.kind == Value::t_integer) {
         internals->tolerance = &v.iValue;
-        printf("Counter tolerance: %ld\n", *internals->tolerance);
+        std::cout << "Counter tolerance: " << *internals->tolerance << "\n";
     }
     const Value &v3 = m->getValue("filter_len");
     if (v3.kind == Value::t_integer) {
@@ -991,17 +991,17 @@ void Counter::setupProperties(MachineInstance *m) {
     const Value &v4 = m->getValue("speed_tolerance");
     if (v4.kind == Value::t_integer) {
         internals->speed_tolerance = &v4.iValue;
-        printf("Counter speed tolerance: %ld\n", *internals->speed_tolerance);
+        std::cout << "Counter speed tolerance: " << *internals->speed_tolerance << "\n";
     }
     const Value &v5 = m->getValue("position_history");
     if (v5.kind == Value::t_integer) {
         internals->position_history = &v5.iValue;
-        printf("Counter position history: %ld\n", *internals->position_history);
+        std::cout << "Counter position history: " << *internals->position_history << "\n";
     }
     const Value &v6 = m->getValue("input_scale");
     if (v6.kind == Value::t_integer) {
         internals->input_scale = &v6.iValue;
-        printf("Counter input scale: %ld\n", *internals->input_scale);
+        std::cout << "Counter input scale: " << *internals->input_scale << "\n";
     }
 }
 
@@ -1051,11 +1051,11 @@ int32_t Counter::filter(int32_t val) {
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
+        o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", internals->rate_len, SymbolTable::ST_REPLACE);
-        o->properties.add("VALUE", (long)scaled_val, SymbolTable::ST_REPLACE);
-        o->properties.add("Position", (long)internals->last_sent, SymbolTable::ST_REPLACE);
-        o->properties.add("Velocity", (long)internals->speeds.average(internals->speeds.length()),
+        o->properties.add("VALUE", scaled_val, SymbolTable::ST_REPLACE);
+        o->properties.add("Position", internals->last_sent, SymbolTable::ST_REPLACE);
+        o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
                           SymbolTable::ST_REPLACE);
     }
 #endif

@@ -28,7 +28,7 @@ bool CounterRateInstance::setValue(const std::string &property, const Value &upd
         if (new_value.kind == Value::t_symbol) {
             new_value = lookup(new_value.sValue.c_str());
         }
-        long val;
+        int64_t val;
         if (!new_value.asInteger(val)) {
             val = 0;
         }
@@ -64,11 +64,11 @@ bool CounterRateInstance::setValue(const std::string &property, const Value &upd
         settings->position = settings->last_sent;
         settings->velocity = filter(settings->position);
 
-        MachineInstance::setValue(property, settings->velocity);
-        MachineInstance::setValue("position", settings->position);
+        MachineInstance::setValue(property, (int64_t)settings->velocity);
+        MachineInstance::setValue("position", (int64_t)settings->position);
         MachineInstance *pos = lookup(parameters[0]);
         if (pos) {
-            pos->setValue("VALUE", settings->position);
+            pos->setValue("VALUE", (int64_t)settings->position);
         }
     }
     else {
@@ -91,7 +91,7 @@ void CounterRateInstance::idle() {
     if (!io_interface) {
         uint64_t now_t = microsecs();
         if (settings->update_t + 2000 < now_t) {
-            long new_val =
+            int64_t new_val =
                 (long)((float)settings->position +
                        settings->velocity * 2 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
             setValue("VALUE", new_val);
