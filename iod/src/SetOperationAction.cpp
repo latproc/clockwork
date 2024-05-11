@@ -216,7 +216,7 @@ class IndexTracker {
 
 Action::Status IntersectSetOperation::doOperation() {
     long num_copied = 0;
-    long to_copy;
+    int64_t to_copy;
     if (!source_a_machine) {
         status = Failed;
         return status;
@@ -473,7 +473,7 @@ SelectSetOperation::SelectSetOperation(MachineInstance *m, const SetOperationAct
 
 Action::Status SelectSetOperation::doOperation() {
     int num_copied = 0;
-    long to_copy;
+    int64_t to_copy;
     if (!source_a_machine) {
         error_str = "No source machine for copy";
         status = Failed;

@@ -41,7 +41,7 @@ TEST_F(ValueTest, Integer) {
 }
 
 TEST_F(ValueTest, asInteger) {
-    long v;
+    int64_t v;
     EXPECT_EQ(true, x.asInteger(v));
     EXPECT_EQ(X_VALUE, v);
     EXPECT_EQ(true, y.asInteger(v));

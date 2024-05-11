@@ -59,7 +59,7 @@ void my_message_callback(struct mosquitto *mosq, void *obj,
             MachineInstance *m = (*pos).second;
             m->setValue("topic", Value(message->topic, Value::t_string));
             char *tmp = 0;
-            long val = strtol(payload, &tmp, 10);
+            int64_t val = strtol(payload, &tmp, 10);
             if (tmp && *tmp == 0) {
                 m->setValue("message", val);
             }
@@ -423,7 +423,7 @@ void setup_mqtt(const std::map<std::string, MachineInstance *> &machines) {
                         module->username = m->parameters[2].val.asString();
                         module->password = m->parameters[3].val.asString();
                     }
-                    long port;
+                    int64_t port;
                     if (m->parameters[1].val.asInteger(port)) {
                         module->port = (int)port;
                         MQTTInterface::instance()->addModule(module, false);

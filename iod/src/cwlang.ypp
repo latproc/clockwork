@@ -782,7 +782,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
     if (properties.exists("TIMEOUT")) {
 		error_messages.push_back("Deprecated feature setting a timeout on a command using a TIMEOUT property");
         const Value &t = properties.lookup("TIMEOUT");
-        long timeout;
+        int64_t timeout;
         if (t.asInteger(timeout)) {
             mc->timeout = timeout;
         }

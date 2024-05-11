@@ -45,7 +45,7 @@ void RateEstimatorInstance::idle() {
         const Value &pos_v = pos_m->getValue("VALUE");
         assert(pos_v.kind == Value::t_integer);
         assert(pos_v != SymbolTable::Null);
-        long pos = pos_v.iValue;
+        int64_t pos = pos_v.iValue;
 
         /*
                 std::cout << _name
@@ -103,7 +103,7 @@ bool RateEstimatorInstance::setValue(const std::string &property, const Value &u
         else {
             settings->update_t = rate_calc_process_time;
         }
-        long val;
+        int64_t val;
         if (!new_value.asInteger(val)) {
             val = 0;
         }
@@ -136,8 +136,8 @@ bool RateEstimatorInstance::setValue(const std::string &property, const Value &u
             settings->readings.reset();
         }
 
-        MachineInstance::setValue(property, settings->velocity);
-        MachineInstance::setValue("position", settings->position);
+        MachineInstance::setValue(property, (int64_t)settings->velocity);
+        MachineInstance::setValue("position", (int64_t)settings->position);
         return true;
     }
     else {

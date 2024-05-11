@@ -61,7 +61,7 @@ void PersistentStore::load() {
             insert(name, property, Value(value_str));
         }
         else {
-            long i_value;
+            int64_t i_value;
             double d_value;
             char *endp;
             i_value = strtol(value_str.c_str(), &endp, 10);

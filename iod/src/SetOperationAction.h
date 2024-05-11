@@ -81,8 +81,8 @@ struct SetOperationAction : public Action {
     bool remove_selected;
     Value start_pos;
     Value end_pos;
-    long sp;
-    long ep;
+    int64_t sp;
+    int64_t ep;
 };
 
 struct IntersectSetOperation : public SetOperationAction {
