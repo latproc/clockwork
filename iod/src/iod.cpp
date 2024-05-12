@@ -179,7 +179,7 @@ bool setupEtherCatThread() {
                 const Value &revision_no = m->getValue("RevisionNo");
                 if (xml_filename != SymbolTable::Null) {
                     DBG_INITIALISATION << "using xml configuration file " << xml_filename << " for "
-                              << m->getName() << " at position " << position << "\n";
+                                       << m->getName() << " at position " << position << "\n";
                     xml_files.insert(xml_filename.sValue);
                     Value pc(product_code);
                     Value rn(revision_no);
@@ -188,23 +188,24 @@ bool setupEtherCatThread() {
                         // find product code of the device at this position
                         const ec_slave_info_t &slave(slaves[position.iValue]);
                         pc = (long)slave.product_code;
-                        DBG_INITIALISATION << "setting product code for position " << position.iValue
-                                  << " to " << std::hex << "0x" << pc << std::dec
-                                  << " from bus slave at position " << position.iValue << "\n";
+                        DBG_INITIALISATION << "setting product code for position "
+                                           << position.iValue << " to " << std::hex << "0x" << pc
+                                           << std::dec << " from bus slave at position "
+                                           << position.iValue << "\n";
                     }
                     else {
-                        DBG_INITIALISATION << "using config file product code "
-                                  << std::hex << "0x" << pc << std::dec
-                                  << ":"
-                                  << std::hex << "0x" << rn << std::dec
-                                  << " for position " << position.iValue << "\n";
+                        DBG_INITIALISATION << "using config file product code " << std::hex << "0x"
+                                           << pc << std::dec << ":" << std::hex << "0x" << rn
+                                           << std::dec << " for position " << position.iValue
+                                           << "\n";
                     }
                     if (revision_no == SymbolTable::Null) {
                         rn = (long)slaves[position.iValue].revision_number;
                         // find product code of the device at this position
                         const ec_slave_info_t &slave(slaves[position.iValue]);
-                        DBG_INITIALISATION << "setting product code for position " << position.iValue
-                                  << " to " << std::hex << "0x" << rn << std::dec << "\n";
+                        DBG_INITIALISATION << "setting product code for position "
+                                           << position.iValue << " to " << std::hex << "0x" << rn
+                                           << std::dec << "\n";
                     }
                     if (sm == SymbolTable::Null) {
                         sm = Value("", Value::t_string);
@@ -270,10 +271,10 @@ bool setupEtherCatThread() {
                         }
                         else {
                             DBG_INITIALISATION << "error: found " << collected_configurations.size()
-                                      << " for slave at position " << position
-                                      << " when searching xml file for device " << std::hex
-                                      << pc.iValue << "/" << rn.iValue << std::dec << ":"
-                                      << sm.sValue << "\n";
+                                               << " for slave at position " << position
+                                               << " when searching xml file for device " << std::hex
+                                               << pc.iValue << "/" << rn.iValue << std::dec << ":"
+                                               << sm.sValue << "\n";
                         }
                     }
                 }
@@ -532,7 +533,8 @@ int main(int argc, char const *argv[]) {
                 std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
             }
             else {
-                DBG_INITIALISATION << "Set processing thread cpu affinity to " << processing_cpu << "\n";
+                DBG_INITIALISATION << "Set processing thread cpu affinity to " << processing_cpu
+                                   << "\n";
             }
         }
     }

@@ -33,10 +33,6 @@
 #include <stdint.h>
 #include <string>
 #include <vector>
-#include "MQTTInterface.h"
-#include "Message.h"
-#include "filtering.h"
-#include <boost/thread/mutex.hpp>
 
 struct IOAddress {
     unsigned int module_position;

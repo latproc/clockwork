@@ -108,8 +108,7 @@ void usage(int argc, char const *argv[]) {
         << "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
         << "[-mp modbus_port] [-ps persistent_store_port] "
         << "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics\n"
-        << "[--fix-invalid true [-e ethernet_interface]"
-        << "\n";
+        << "[--fix-invalid true [-e ethernet_interface]" << "\n";
 }
 
 static void listDirectory(const std::string pathToCheck, std::list<std::string> &file_list) {
@@ -865,8 +864,7 @@ void semantic_analysis() {
                     else {
                         std::stringstream ss;
                         ss << "Error: no instance " << p_i.sValue << " ("
-                           << mi->parameters[i].real_name << ")"
-                           << " found for " << mi->getName();
+                           << mi->parameters[i].real_name << ")" << " found for " << mi->getName();
                         error_messages.push_back(ss.str());
                         MessageLog::instance()->add(ss.str().c_str());
                         ++num_errors;

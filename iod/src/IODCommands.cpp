@@ -77,8 +77,8 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
             if (device->address.bitlen > 1) {
                 std::stringstream buf(res);
                 buf << "(" << device->value() << ")";
+                result_str = buf.str();
             }
-            result_str = res;
         }
         else {
             MachineInstance *machine = MachineInstance::find(params[1].asString().c_str());

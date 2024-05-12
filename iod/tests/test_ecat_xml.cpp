@@ -9,7 +9,6 @@
 #include <utility>
 #include <value.h>
 #include <DebugExtra.h>
-#include <utility>
 
 namespace {
 std::vector<DeviceInfo *> collected_configurations;
@@ -58,6 +57,7 @@ TEST_F(EtherCatXMLTest, LoadDeviceConfigurationXML) {
 
 TEST_F(EtherCatXMLTest, FindADevice) {
     EXPECT_EQ(collected_configurations.size(), 0);
+    DeviceInfo di;
     di.product_code = 0x0000ffff;
     di.revision_no = 0x0010000;
     parser.xml_configured.push_back(&di);

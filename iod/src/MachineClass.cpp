@@ -294,8 +294,8 @@ void MachineClass::exportHandlers(std::ostream &ofs) {
                         received_message_handlers
                             << "\t if (source == m->_" << message_name
                             << " && state == " << ExportState::lookup(msg_name) << ")\n"
-                            << "\t\tMachineActions_add(obj, (enter_func)"
-                            << "cw_" << name << "_" << method_name(item.first.getText()) << ");\n";
+                            << "\t\tMachineActions_add(obj, (enter_func)" << "cw_" << name << "_"
+                            << method_name(item.first.getText()) << ");\n";
                         handled = true;
                     }
                 }
@@ -303,8 +303,8 @@ void MachineClass::exportHandlers(std::ostream &ofs) {
                     ExportState::add_message(message_name);
                     received_message_handlers
                         << "\tif (state == cw_message_" << message_name << ")\n"
-                        << "\t\tMachineActions_add(obj, (enter_func)"
-                        << "cw_" << name << "_" << method_name(item.first.getText()) << ");\n";
+                        << "\t\tMachineActions_add(obj, (enter_func)" << "cw_" << name << "_"
+                        << method_name(item.first.getText()) << ");\n";
                     handled = true;
                 }
             }
@@ -396,20 +396,16 @@ static std::string generate_name_backups(std::string var, std::string to_lookup,
     std::stringstream res;
 
     if (type == "machine") {
-        res << "\tb->l_" << var << " = "
-            << "*v->l_" << var << ";\n";
+        res << "\tb->l_" << var << " = " << "*v->l_" << var << ";\n";
     }
     else if (type == "state") {
-        res << "\tb->l_" << var << " = "
-            << "v->l_" << var << ";\n";
+        res << "\tb->l_" << var << " = " << "v->l_" << var << ";\n";
     }
     else if (type == "timer" || stringEndsWith(to_lookup, ".TIMER")) {
-        res << "\tb->l_" << var << " = "
-            << "*v->l_" << var << ";\n";
+        res << "\tb->l_" << var << " = " << "*v->l_" << var << ";\n";
     }
     else {
-        res << "\tb->l_" << var << " = "
-            << "*v->l_" << var << ";\n";
+        res << "\tb->l_" << var << " = " << "*v->l_" << var << ";\n";
     }
     return res.str();
 }
@@ -565,8 +561,7 @@ bool MachineClass::cExport(const std::string &filename) {
             ofh << ", int pin";
         }
         ofh << params.str() << ");\n"
-            << "void Init_cw_" << name << "(struct cw_" << name << " * "
-            << ", const char *name";
+            << "void Init_cw_" << name << "(struct cw_" << name << " * " << ", const char *name";
         if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
             ofh << ", int pin";
         }
@@ -877,8 +872,7 @@ bool MachineClass::cExport(const std::string &filename) {
             if (s.condition.predicate->priority != 1) { // not the DEFAULT state
                 s.condition.predicate->toCstring(desc, desc_vars);
                 when_clauses << "\tsnprintf(buf, 200, \"" << s.state_name << " [%d]: " << desc.str()
-                             << "\""
-                             << ",state_cw_" << s.state_name << desc_vars.str() << ");\n";
+                             << "\"" << ",state_cw_" << s.state_name << desc_vars.str() << ");\n";
                 when_clauses << "\tsendMQTT(0, \"/response\", buf);\n";
                 ofs << "\tif (";
                 s.condition.predicate->toC(ofs);
