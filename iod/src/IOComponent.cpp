@@ -1460,9 +1460,10 @@ void IOComponent::setupIOMap() {
     if (min_offset > max_offset) {
         min_offset = max_offset;
     }
-    std::cout << "min io offset: " << min_offset << "\n";
-    std::cout << "max io offset: " << max_offset << "\n";
-    std::cout << ((max_offset + 1) * sizeof(IOComponent *)) << " bytes reserved for index io\n";
+    std::cout << std::dec
+              << "min io offset: " << min_offset << "\n"
+              << "max io offset: " << max_offset << "\n"
+              << ((max_offset + 1) * sizeof(IOComponent *)) << " bytes reserved for index io\n";
 
     indexed_components = new std::vector<IOComponent *>((max_offset + 1) * 8);
 
