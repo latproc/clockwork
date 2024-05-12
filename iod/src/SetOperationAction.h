@@ -42,8 +42,8 @@ struct SetOperationActionTemplate : public ActionTemplate {
 
     Action *factory(MachineInstance *mi) override;
     std::ostream &operator<<(std::ostream &out) const override {
-        return out << "SetOperationAction " << src_a_name << ", src_b_name "
-                   << " to " << dest_name << " using " << property_name << "\n";
+        return out << "SetOperationAction " << src_a_name << ", src_b_name " << " to " << dest_name
+                   << " using " << property_name << "\n";
     }
 
     Value count;

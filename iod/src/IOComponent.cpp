@@ -499,7 +499,7 @@ IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos,
         boost::recursive_mutex::scoped_lock lock(io_names_mutex);
         if (io_names.find(std::string(buf)) != io_names.end()) {
             DBG_MSG << "IOComponent::add_io_entry: warning - an IO component named " << name
-                      << " already existed on module " << module_pos << "\n";
+                    << " already existed on module " << module_pos << "\n";
         }
         io_names[buf] = addr;
     }
@@ -579,11 +579,12 @@ class InputFilterSettings {
     const int64_t *calc_dt;
     const int64_t *calc_d2t;
     const int64_t *calc_stddev;
-    const int64_t *position_history; // the amount of position history to use in determining movement
-    const int64_t *speed_tolerance;  // the tolerance used in determining movement
-    unsigned int butterworth_len; // the number of coefficients in the Butterworth filter
-    double speed;                 // the current estimated speed
-    double speed_scale;           // the current estimated speed
+    const int64_t
+        *position_history;          // the amount of position history to use in determining movement
+    const int64_t *speed_tolerance; // the tolerance used in determining movement
+    unsigned int butterworth_len;   // the number of coefficients in the Butterworth filter
+    double speed;                   // the current estimated speed
+    double speed_scale;             // the current estimated speed
     double accel;
     double accel_scale;
     static int64_t default_tolerance;        // a default value for filter_len
@@ -901,9 +902,10 @@ class CounterInternals {
         *tolerance; // some filters use a tolerance settable by the user in the "tolerance" property
     const int64_t *
         filter_len; // the user can adjust the filter length of some filters via a "filter_len" property
-    const int64_t *position_history; // the amount of position history to use in determining movement
-    const int64_t *speed_tolerance;  // the tolerance used in determining movement
-    const int64_t *input_scale;      // input readings are divided by this amount
+    const int64_t
+        *position_history;          // the amount of position history to use in determining movement
+    const int64_t *speed_tolerance; // the tolerance used in determining movement
+    const int64_t *input_scale;     // input readings are divided by this amount
     int32_t last_sent;  // this is the value to send unless the read value moves away from the mean
     int32_t prev_sent;  // this is the value to send unless the read value moves away from the mean
     uint64_t last_time; // the last time we calculated speed;_
@@ -1584,8 +1586,7 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             while (owner_iter != owners.end()) {
                 ProcessingThread::activate(*owner_iter);
                 Message m(evt, Message::LEAVEMSG);
-                work_queue.push_back(
-                    new Package(this, *owner_iter++, m));
+                work_queue.push_back(new Package(this, *owner_iter++, m));
             }
 #endif
             if (value) {
@@ -1597,8 +1598,7 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             owner_iter = owners.begin();
             while (owner_iter != owners.end()) {
                 Message msg(evt, Message::ENTERMSG);
-                work_queue.push_back(
-                    new Package(this, *owner_iter++, msg));
+                work_queue.push_back(new Package(this, *owner_iter++, msg));
             }
         }
         address.value = value;

@@ -77,7 +77,7 @@ class SymbolTable {
     enum ReplaceMode { ST_REPLACE, NO_REPLACE };
 
     bool add(const char *name, const Value &val, ReplaceMode replace_mode = ST_REPLACE);
-    bool add(const std::string & name, const Value &val, ReplaceMode replace_mode = ST_REPLACE);
+    bool add(const std::string &name, const Value &val, ReplaceMode replace_mode = ST_REPLACE);
     void add(const SymbolTable &orig,
              ReplaceMode replace_mode = ST_REPLACE); // load symbols optionally with replacement
     const Value &lookup(const Value &name) const;
@@ -91,7 +91,7 @@ class SymbolTable {
 
     SymbolTableConstIterator begin() const { return st.begin(); }
     SymbolTableConstIterator end() const { return st.end(); }
-    void push_back(const std::pair<std::string, Value> & item) { st[item.first] = item.second; }
+    void push_back(const std::pair<std::string, Value> &item) { st[item.first] = item.second; }
 
     SymbolTable(const SymbolTable &orig);
     SymbolTable &operator=(const SymbolTable &orig);

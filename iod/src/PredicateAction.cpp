@@ -18,7 +18,6 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include <iostream>
 #include "PredicateAction.h"
 #include "DebugExtra.h"
 #include "Logger.h"
@@ -27,6 +26,7 @@
 #include "dynamic_value.h"
 #include "regular_expressions.h"
 #include "value.h"
+#include <iostream>
 
 void breakpoint() {}
 
@@ -91,8 +91,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
             if (prop != SymbolTable::Null) {
                 if (m->debug()) {
                     DBG_PREDICATES << "Using property " << p->entry << " to resolve search ("
-                                   << prop << ", type: " << prop.kind << ")"
-                                   << ")\n";
+                                   << prop << ", type: " << prop.kind << ")" << ")\n";
                 }
                 return prop;
             }

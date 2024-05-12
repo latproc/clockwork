@@ -2,17 +2,17 @@
 #define __ethercat_xml_parser_h__
 
 #include "Logger.h"
+#include <DebugExtra.h>
 #include <ECInterface.h>
 #include <Statistics.h>
 #include <algorithm>
 #include <assert.h>
 #include <ecrt.h>
 #include <fstream>
-#include <ostream>
 #include <iterator>
 #include <libxml/xmlreader.h>
 #include <map>
-#include <DebugExtra.h>
+#include <ostream>
 
 struct ConfigurationDetails {
     EntryDetails *c_entry_details = 0;
@@ -32,8 +32,8 @@ struct ConfigurationDetails {
     std::ostream &operator<<(std::ostream &out) const;
 };
 
-std::ostream & operator <<(std::ostream &out, const EntryDetails &details);
-std::ostream & operator <<(std::ostream &out, const ConfigurationDetails &details);
+std::ostream &operator<<(std::ostream &out, const EntryDetails &details);
+std::ostream &operator<<(std::ostream &out, const ConfigurationDetails &details);
 
 /*  The AltSm structure supports collecting the AlternativeSmMapping items from the
     VendorSpecific/TwinCAT section of the configuration.
@@ -88,8 +88,7 @@ struct DeviceInfo {
     ~DeviceInfo();
     bool operator==(const DeviceInfo &other) {
         DBG_INITIALISATION << "same product code?: " << (other.product_code == product_code)
-                << " same revision?: " << (other.revision_no == revision_no)
-                << "\n";
+                           << " same revision?: " << (other.revision_no == revision_no) << "\n";
         return other.product_code == product_code && other.revision_no == revision_no;
     }
     std::ostream &operator<<(std::ostream &out) const {

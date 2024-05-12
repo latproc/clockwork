@@ -80,8 +80,7 @@ Action::Status WaitAction::run() {
         // lookup property
         if (property_name.find('.') != std::string::npos) {
             v = owner->getValue(property_name);
-            DBG_M_PROPERTIES << "looking up property " << property_name << " "
-                             << ": " << v << "\n";
+            DBG_M_PROPERTIES << "looking up property " << property_name << " " << ": " << v << "\n";
         }
         else {
             v = owner->getValue(property_name.c_str());

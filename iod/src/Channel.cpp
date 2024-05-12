@@ -115,7 +115,7 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
                     char *msg =
                         MessageEncoding::encodeState(m->getName(), command->param(2).sValue.c_str(),
                                                      (int64_t)channel->getAuthority());
-                    delete[] * buf;
+                    delete[] *buf;
                     len = strlen(msg) + 1;
                     *buf = new char[len];
                     memcpy(*buf, msg, len);
@@ -154,14 +154,12 @@ ChannelImplementation::ChannelImplementation()
 
 ChannelImplementation::~ChannelImplementation() = default;
 
-Channel::Channel(const std::string & ch_name, const std::string & type)
+Channel::Channel(const std::string &ch_name, const std::string &type)
     : MachineInstance(ch_name.c_str(), type.c_str()), ChannelImplementation(),
-      channel_name(ch_name), internals(0),
-      port(0), mif(0), communications_manager(0), monit_subs(0), monit_pubs(0),
-      connect_responder(0), disconnect_responder(0), throttle_time(0),
-      connections(0), aborted(false), started_(false), cmd_client(0),
-      cmd_server(0), last_throttled_send(0), does_monitor(false), does_share(false),
-      does_update(false) {
+      channel_name(ch_name), internals(0), port(0), mif(0), communications_manager(0),
+      monit_subs(0), monit_pubs(0), connect_responder(0), disconnect_responder(0), throttle_time(0),
+      connections(0), aborted(false), started_(false), cmd_client(0), cmd_server(0),
+      last_throttled_send(0), does_monitor(false), does_share(false), does_update(false) {
     internals = new ChannelInternals();
     if (all == 0) {
         all = new std::map<std::string, Channel *>;
@@ -246,8 +244,8 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
                 const std::string &s = *props++;
                 Value v = m->getValue(s);
                 if (v != SymbolTable::Null) {
-                    char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v,
-                                                               (int64_t)definition()->getAuthority());
+                    char *cmd = MessageEncoding::encodeCommand(
+                        "PROPERTY", m->getName(), s, v, (int64_t)definition()->getAuthority());
                     //NB_MSG  << channel_name << " prepared command" << cmd << "\n";
                     messages.push_back(cmd);
                     //std::string response;
@@ -401,7 +399,8 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
         enableShadows();
         setNeedsCheck();
         if (isClient()) {
-            snprintf(buf, 100, "Channel %s (client); setting state to DOWNLOADING", channel_name.c_str());
+            snprintf(buf, 100, "Channel %s (client); setting state to DOWNLOADING",
+                     channel_name.c_str());
             MessageLog::instance()->add(buf);
             DBG_CHANNELS << buf << "\n";
             SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING");
@@ -435,7 +434,8 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
         mh.start_time = microsecs();
         std::string ack;
         if (isClient()) {
-            snprintf(buf, 100, "Channel %s (client); sending 'status' to partner", channel_name.c_str());
+            snprintf(buf, 100, "Channel %s (client); sending 'status' to partner",
+                     channel_name.c_str());
             MessageLog::instance()->add(buf);
             DBG_CHANNELS << buf << "\n";
 
@@ -444,7 +444,8 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
             safeSend(*cmd_client, "status", 6, mh);
         }
         else {
-            snprintf(buf, 100, "Channel %s is server; sending 'done' to partner", channel_name.c_str());
+            snprintf(buf, 100, "Channel %s is server; sending 'done' to partner",
+                     channel_name.c_str());
             MessageLog::instance()->add(buf);
             DBG_CHANNELS << buf << "\n";
 
@@ -862,7 +863,8 @@ void Channel::stopServer() {
 
 void Channel::checkStateChange(std::string event) {
     char buf[100];
-    DBG_CHANNELS << "Received " << event << " in " << current_state << " on " << channel_name << "\n";
+    DBG_CHANNELS << "Received " << event << " in " << current_state << " on " << channel_name
+                 << "\n";
 
     //if (event == "ack" && current_state != ChannelImplementation::DOWNLOADING && current_state != ChannelImplementation::UPLOADING)
     //  return;
@@ -875,7 +877,8 @@ void Channel::checkStateChange(std::string event) {
     }
     if (isClient()) {
         if (current_state == ChannelImplementation::DOWNLOADING) {
-            snprintf(buf, 100, "Channel %s (client) setting state to UPLOADING", channel_name.c_str());
+            snprintf(buf, 100, "Channel %s (client) setting state to UPLOADING",
+                     channel_name.c_str());
             MessageLog::instance()->add(buf);
             if (setState(ChannelImplementation::UPLOADING) == Action::Failed) {
             }
@@ -887,7 +890,8 @@ void Channel::checkStateChange(std::string event) {
             setState(ChannelImplementation::ACTIVE);
         }
         else {
-            DBG_CHANNELS << "Unexpected channel state " << current_state << " on " << channel_name << "\n";
+            DBG_CHANNELS << "Unexpected channel state " << current_state << " on " << channel_name
+                         << "\n";
             //assert(false);
         }
     }
@@ -914,7 +918,8 @@ void Channel::checkStateChange(std::string event) {
             setState(ChannelImplementation::ACTIVE);
         }
         else {
-            DBG_CHANNELS << "Unexpected channel state " << current_state << " on " << channel_name << "\n";
+            DBG_CHANNELS << "Unexpected channel state " << current_state << " on " << channel_name
+                         << "\n";
             //assert(false);
         }
     }
@@ -964,8 +969,8 @@ void Channel::operator()() {
             }
         }
 
-        DBG_CHANNELS << " channel " << channel_name << " starting subscription to " << host << ":" << port
-                     << "\n";
+        DBG_CHANNELS << " channel " << channel_name << " starting subscription to " << host << ":"
+                     << port << "\n";
         communications_manager = new SubscriptionManager(definition()->name.c_str(), eCHANNEL,
                                                          host.asString().c_str(), 0, (int)port);
     }
@@ -1004,7 +1009,8 @@ void Channel::operator()() {
 #endif
     usleep(500);
     char start_cmd[20];
-    DBG_CHANNELS << "channel " << channel_name << " thread waiting for start message from command server\n";
+    DBG_CHANNELS << "channel " << channel_name
+                 << " thread waiting for start message from command server\n";
     size_t start_len;
     safeRecv(*cmd_server, start_cmd, 20, true, start_len, 0);
     if (!start_len) {
@@ -1022,7 +1028,8 @@ void Channel::operator()() {
     SubscriptionManager *sm = dynamic_cast<SubscriptionManager *>(communications_manager);
     int cmd_server_idx = 0;
 
-    NB_MSG << channel_name << " connecting to remote socket " << internals->cmd_sock_info->address << "\n";
+    NB_MSG << channel_name << " connecting to remote socket " << internals->cmd_sock_info->address
+           << "\n";
     internals->command_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
     internals->command_sock->connect(internals->cmd_sock_info->address.c_str());
 
@@ -1132,7 +1139,8 @@ void Channel::operator()() {
                     NB_MSG << "CTRL got command " << data << " header " << mh << "\n";
                     char buf[100];
                     if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
-                        snprintf(buf, 100, "Channel %s received 'done' from partner", channel_name.c_str());
+                        snprintf(buf, 100, "Channel %s received 'done' from partner",
+                                 channel_name.c_str());
                         MessageLog::instance()->add(buf);
                         checkStateChange(data);
                         if (isClient() && !mh.needsReply()) {
@@ -1148,8 +1156,8 @@ void Channel::operator()() {
 
                     if (mh.needsReply()) {
                         NB_MSG << channel_name << " sending reply as requested\n";
-                        snprintf(buf, 100, "Channel %s sending 'ack' to '%s' message", channel_name.c_str(),
-                                 (data) ? data : "<empty>");
+                        snprintf(buf, 100, "Channel %s sending 'ack' to '%s' message",
+                                 channel_name.c_str(), (data) ? data : "<empty>");
                         MessageLog::instance()->add(buf);
                         mh.dest = MessageHeader::SOCK_CHAN;
                         mh.source = MessageHeader::SOCK_CTRL;
@@ -1164,8 +1172,8 @@ void Channel::operator()() {
         catch (const zmq::error_t &zex) {
             {
                 FileLogger fl(program_name);
-                fl.f() << "zmq exception in Channel " << channel_name << " " << zmq_strerror(zmq_errno())
-                       << "\n";
+                fl.f() << "zmq exception in Channel " << channel_name << " "
+                       << zmq_strerror(zmq_errno()) << "\n";
             }
         }
         catch (const std::exception &ex) {
@@ -1459,7 +1467,8 @@ static void copyJSONArrayToMap(cJSON *obj, const char *key, std::map<std::string
 }
 
 #if 0
-ChannelDefinition *ChannelDefinition::fromJSON(const char *json) {
+ChannelDefinition *ChannelDefinition::fromJSON(const char *json)
+{
     cJSON *obj = cJSON_Parse(json);
     if (!obj) {
         return 0;
@@ -1528,7 +1537,8 @@ static cJSON *MapToJSONArray(std::map<std::string, Value> &items, const char *ke
 }
 
 #if 0
-char *ChannelDefinition::toJSON() {
+char *ChannelDefinition::toJSON()
+{
     cJSON *obj = cJSON_CreateObject();
     cJSON_AddStringToObject(obj, "identifier", this->name.c_str());
     cJSON_AddStringToObject(obj, "key", this->psk.c_str());
@@ -1571,7 +1581,8 @@ void MessageHandler::handleMessage(const char *buf, size_t len) {
 }
 
 #if 0
-bool MessageHandler::receiveMessage(zmq::socket_t &sock) {
+bool MessageHandler::receiveMessage(zmq::socket_t &sock)
+{
     if (data) {
         free(data);
         data = 0;
@@ -1590,7 +1601,7 @@ bool MessageHandler::receiveMessage(zmq::socket_t &sock) {
 }
 #endif
 
-Channel *Channel::find(const std::string & channel_name) {
+Channel *Channel::find(const std::string &channel_name) {
     if (!all) {
         return 0;
     }
@@ -1601,7 +1612,7 @@ Channel *Channel::find(const std::string & channel_name) {
     return (*found).second;
 }
 
-void Channel::remove(const std::string & channel_name) {
+void Channel::remove(const std::string &channel_name) {
     if (!all) {
         return;
     }
@@ -1639,7 +1650,8 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                 if (!m->getStateMachine()->property_names.count(key.asString())) {
                     return; //ignore properties no in the interface definition
                 }
-                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val, (int64_t)auth);
+                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val,
+                                                     (int64_t)auth);
             }
             else {
                 //NB_MSG << "using authority " << getAuthority()
@@ -1686,7 +1698,8 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
     else if (mif) {
         MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
         mh.start_time = microsecs();
-        char *cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val); // send command
+        char *cmd =
+            MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val); // send command
         safeSend(*mif->getSocket(), cmd, strlen(cmd), mh);
         //mif->send(cmd);
         free(cmd);
@@ -1866,7 +1879,8 @@ bool Channel::matches(MachineInstance *machine, const std::string &channel_name)
 }
 
 #if 0
-bool Channel::patternMatches(const std::string &machine_name) {
+bool Channel::patternMatches(const std::string &machine_name)
+{
     // no match on channel_name but we still may match on pattern
     std::set<std::string>::iterator iter = monitors_patterns.begin();
     while (iter != monitors_patterns.end()) {
@@ -1892,7 +1906,8 @@ bool Channel::doesUpdate() { return does_update; }
 
 bool Channel::doesShare() { return does_share; }
 
-bool Channel::doesMonitor() {
+bool Channel::doesMonitor()
+{
     if (!does_monitor) {
         DBG_CHANNELS << channel_name << " does not monitor machines\n";
     }
@@ -1940,7 +1955,7 @@ bool Channel::filtersAllow(MachineInstance *machine) {
     */
 }
 
-Channel *Channel::findByType(const std::string & kind) {
+Channel *Channel::findByType(const std::string &kind) {
     if (!all) {
         return 0;
     }
@@ -2412,8 +2427,8 @@ void Channel::enableShadows() {
             }
             if ((isClient() && authority == machine_auth) ||
                 (definition()->authority == machine_auth)) {
-                DBG_CHANNELS << "Channel " << channel_name << " enabling shadow machine " << ms->getName()
-                             << "\n";
+                DBG_CHANNELS << "Channel " << channel_name << " enabling shadow machine "
+                             << ms->getName() << "\n";
                 if (channel_machines.count(ms) == 0) {
                     channel_machines.insert(
                         ms); // ensure the channel is linked to the shadow machine
@@ -2435,8 +2450,8 @@ void Channel::enableShadows() {
                 ms->requireAuthority(machine_auth);
             }
             if (authority == machine_auth) {
-                DBG_CHANNELS << "Channel " << channel_name << " enabling shadow machine " << ms->getName()
-                             << "\n";
+                DBG_CHANNELS << "Channel " << channel_name << " enabling shadow machine "
+                             << ms->getName() << "\n";
                 if (channel_machines.count(ms) == 0) {
                     channel_machines.insert(
                         ms); // ensure the channel is linked to the shadow machine
@@ -2460,8 +2475,8 @@ void Channel::disableShadows() {
             uint64_t machine_auth = ms->ownerChannel()->definition()->authority;
             if ((isClient() && authority == machine_auth) ||
                 (definition()->authority == machine_auth)) {
-                DBG_CHANNELS << "Channel " << channel_name << " disabling shadow machine " << ms->getName()
-                             << "\n";
+                DBG_CHANNELS << "Channel " << channel_name << " disabling shadow machine "
+                             << ms->getName() << "\n";
                 ms->disable();
             }
         }
@@ -2474,8 +2489,8 @@ void Channel::disableShadows() {
         if (ms) {
             uint64_t machine_auth = ms->ownerChannel()->definition()->authority;
             if (authority == machine_auth) {
-                DBG_CHANNELS << "Channel " << channel_name << " disabling shadow machine " << ms->getName()
-                             << "\n";
+                DBG_CHANNELS << "Channel " << channel_name << " disabling shadow machine "
+                             << ms->getName() << "\n";
                 ms->disable();
             }
         }
@@ -2490,8 +2505,8 @@ void Channel::setupShadows() {
     }
     if (!definition_) {
         char buf[150];
-        snprintf(buf, 150, "Error: channel definition %s for %s could not be found", channel_name.c_str(),
-                 _type.c_str());
+        snprintf(buf, 150, "Error: channel definition %s for %s could not be found",
+                 channel_name.c_str(), _type.c_str());
         MessageLog::instance()->add(buf);
         return;
     }
@@ -2511,7 +2526,8 @@ void Channel::setupShadows() {
         else if (m) {
             m->publish();
             // this machine is a shadow
-            DBG_CHANNELS << "Channel " << channel_name << " adding shadow machine " << m->getName() << "\n";
+            DBG_CHANNELS << "Channel " << channel_name << " adding shadow machine " << m->getName()
+                         << "\n";
             channel_machines.insert(m);
             modified();
             m->owner_channel = this;

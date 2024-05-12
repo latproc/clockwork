@@ -11,7 +11,7 @@ class MachineInterface;
 class MachineInstance;
 
 struct MachineRef {
-public:
+  public:
     static MachineRef *create(const std::string name, MachineInstance *machine,
                               MachineInterface *iface);
     MachineRef *ref() {
@@ -27,7 +27,7 @@ public:
     std::ostream &operator<<(std::ostream &out) const;
     bool operator==(const MachineRef &other);
 
-private:
+  private:
     std::string key;
     std::string name;
     std::string interface_name;

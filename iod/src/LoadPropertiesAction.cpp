@@ -9,8 +9,7 @@ Action *LoadPropertiesActionTemplate::factory(MachineInstance *mi) {
 }
 
 std::ostream &LoadPropertiesAction::operator<<(std::ostream &out) const {
-    return out << "Load Properties Action "
-               << "\n";
+    return out << "Load Properties Action " << "\n";
 }
 
 Action::Status LoadPropertiesAction::run() {

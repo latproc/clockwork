@@ -36,6 +36,7 @@
 #include "DebugExtra.h"
 #include "IODCommand.h"
 #include "IODCommands.h"
+#include "IOInterface.h"
 #include "Logger.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
@@ -45,7 +46,6 @@
 #include "clockwork.h"
 #include "options.h"
 #include "symboltable.h"
-#include "IOInterface.h"
 
 #include "Channel.h"
 #include "ControlSystemMachine.h"
@@ -175,12 +175,11 @@ static uint32_t incoming_data_size;
 static uint64_t global_clock = 0;
 
 #if VERBOSE_DEBUG
-static void display(std::ostream & out, uint8_t *p) {
+static void display(std::ostream &out, uint8_t *p) {
     int max = IOComponent::getMaxIOOffset();
     int min = IOComponent::getMinIOOffset();
     for (int i = min; i <= max; ++i) {
-        out << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
-                  << std::dec;
+        out << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
     }
 }
 #endif
@@ -300,7 +299,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                         if (zmq_errno() == EINTR) {
                             std::stringstream err;
                             err << "interrupted when sending update (" << (unsigned int)stage
-                                   << ")";
+                                << ")";
                             MessageLog::instance()->add(err.str());
                             continue;
                         }
@@ -388,36 +387,34 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
 
 ProcessingThread::ProcessingState ProcessingThread::poll_machines() {
 #ifdef KEEPSTATS
-                    avg_clockwork_time.start();
+    avg_clockwork_time.start();
 #endif
-                    std::set<MachineInstance *> to_process;
-                    {
-                        boost::recursive_mutex::scoped_lock lock(runnable_mutex);
-                        std::set<MachineInstance *>::iterator iter = runnable.begin();
-                        while (iter != runnable.end()) {
-                            MachineInstance *mi = *iter;
-                            if (mi->executingCommand() || !mi->pendingEvents().empty() ||
-                                mi->hasMail()) {
-                                to_process.insert(mi);
-                                if (!mi->queuedForStableStateTest()) {
-                                    iter = runnable.erase(iter);
-                                }
-                                else {
-                                    iter++;
-                                }
-                            }
-                            else {
-                                iter++;
-                            }
-                        }
-                    }
+    std::set<MachineInstance *> to_process;
+    {
+        boost::recursive_mutex::scoped_lock lock(runnable_mutex);
+        std::set<MachineInstance *>::iterator iter = runnable.begin();
+        while (iter != runnable.end()) {
+            MachineInstance *mi = *iter;
+            if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail()) {
+                to_process.insert(mi);
+                if (!mi->queuedForStableStateTest()) {
+                    iter = runnable.erase(iter);
+                }
+                else {
+                    iter++;
+                }
+            }
+            else {
+                iter++;
+            }
+        }
+    }
 
-                    if (!to_process.empty()) {
-                        DBG_SCHEDULER << "processing " << to_process.size() << " machines\n";
-                        MachineInstance::processAll(to_process, 150000,
-                                                    MachineInstance::NO_BUILTINS);
-                    }
-                    return eStableStates;
+    if (!to_process.empty()) {
+        DBG_SCHEDULER << "processing " << to_process.size() << " machines\n";
+        MachineInstance::processAll(to_process, 150000, MachineInstance::NO_BUILTINS);
+    }
+    return eStableStates;
 }
 
 void ProcessingThread::operator()() {
@@ -1021,8 +1018,8 @@ void ProcessingThread::operator()() {
                     }
                     case 2: {
                         auto packet_type = machine.activationRequested()
-                            ? IOInterface::MessageType::ACTIVATE_REQUEST
-                            : IOInterface::MessageType::DEACTIVATE_REQUEST;
+                                               ? IOInterface::MessageType::ACTIVATE_REQUEST
+                                               : IOInterface::MessageType::DEACTIVATE_REQUEST;
                         zmq::message_t iomsg(1);
                         memcpy(iomsg.data(), (void *)&packet_type, 1);
                         ecat_out.send(iomsg);
@@ -1095,7 +1092,9 @@ void ProcessingThread::operator()() {
                                 memcpy(iomsg.data(), (void *)upd->data(), size);
                                 ecat_out.send(iomsg, ZMQ_SNDMORE);
 #if VERBOSE_DEBUG
-                                DBG_ETHERCAT << "sending to EtherCAT: "; display(upd->data()); std::cout << "\n";
+                                DBG_ETHERCAT << "sending to EtherCAT: ";
+                                display(upd->data());
+                                std::cout << "\n";
 #endif
                                 ++stage;
                             }
@@ -1103,7 +1102,9 @@ void ProcessingThread::operator()() {
                                 zmq::message_t iomsg(size);
                                 memcpy(iomsg.data(), (void *)upd->mask(), size);
 #if VERBOSE_DEBUG
-                                DBG_ETHERCAT << "using mask: "; display(std::cout, upd->mask()); std::cout << "\n";
+                                DBG_ETHERCAT << "using mask: ";
+                                display(std::cout, upd->mask());
+                                std::cout << "\n";
 #endif
                                 ecat_out.send(iomsg);
                                 ++stage;

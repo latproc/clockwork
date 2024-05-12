@@ -18,17 +18,17 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include <fstream>
 #include "Logger.h"
 #include "boost/thread/mutex.hpp"
 #include <cassert>
+#include <fstream>
 #include <iostream>
 #include <stdio.h>
 #include <string>
 #include <sys/time.h>
 
 class Logger::Internals {
-public:
+  public:
     static Logger *logger_instance;
     Level log_level;
     std::stringstream *dummy_output = nullptr;
@@ -38,7 +38,7 @@ public:
     Internals() : log_level(None), dummy_output(0), log_stream(&std::cout) {}
 };
 
-Logger::Internals * Logger::internals = nullptr;
+Logger::Internals *Logger::internals = nullptr;
 LogState *LogState::state_instance = nullptr;
 static std::string header;
 Logger *Logger::Internals::logger_instance = nullptr;
@@ -51,7 +51,10 @@ LogState *LogState::instance() {
     return state_instance;
 }
 
-void LogState::cleanup() { delete state_instance; state_instance = nullptr; }
+void LogState::cleanup() {
+    delete state_instance;
+    state_instance = nullptr;
+}
 
 int LogState::define(std::string new_name) {
     int logid = name_map[new_name] = flag_names.size();
@@ -89,7 +92,6 @@ void LogState::erase(std::string name) {
 }
 bool LogState::includes(std::string name) { return name_map.find(name) != name_map.end(); }
 
-
 int Logger::None;
 int Logger::Debug;
 int Logger::Important;
@@ -105,9 +107,7 @@ Logger::Logger() {
     Everything = LogState::instance()->insert(LogState::instance()->define("Everything"));
 }
 
-Logger::~Logger() {
-    delete internals;
-}
+Logger::~Logger() { delete internals; }
 
 Logger *Logger::instance() {
     if (!internals->logger_instance) {
@@ -139,14 +139,13 @@ class FileLogger::Internals {
         }
         return *(std::ofstream *)f;
     }
-    Internals() : lock(mutex_),allocated(false), f(0) {}
+    Internals() : lock(mutex_), allocated(false), f(0) {}
     ~Internals() { /**f << std::flush;*/
         if (allocated) {
             delete f;
         }
     }
 };
-
 
 FileLogger::FileLogger(const char *fname) : internals(0) {
     internals = new Internals;
@@ -185,7 +184,8 @@ void FileLogger::getTimeString(char *buf, size_t buf_size) {
         localtime_r(&now_tv.tv_sec, &now_tm);
         uint32_t msec = now_tv.tv_usec;
         snprintf(buf, buf_size, "%04d-%02d-%02d %02d:%02d:%02d.%06d ", now_tm.tm_year + 1900,
-                 now_tm.tm_mon + 1, now_tm.tm_mday, now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
+                 now_tm.tm_mon + 1, now_tm.tm_mday, now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec,
+                 msec);
     }
 }
 
@@ -212,7 +212,8 @@ void Logger::getTimeString(char *buf, size_t buf_size) {
         localtime_r(&now_tv.tv_sec, &now_tm);
         uint32_t msec = now_tv.tv_usec;
         snprintf(buf, buf_size, "%04d-%02d-%02d %02d:%02d:%02d.%06d ", now_tm.tm_year + 1900,
-                 now_tm.tm_mon + 1, now_tm.tm_mday, now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec, msec);
+                 now_tm.tm_mon + 1, now_tm.tm_mday, now_tm.tm_hour, now_tm.tm_min, now_tm.tm_sec,
+                 msec);
     }
 }
 bool LogState::includes(int flag_num) { return state_flags.count(flag_num); }

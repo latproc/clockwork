@@ -21,9 +21,9 @@
 #ifndef cwlang_Logger_h
 #define cwlang_Logger_h
 
-#include <ostream>
 #include <libgen.h>
 #include <map>
+#include <ostream>
 #include <set>
 #include <sstream>
 #include <string>
@@ -38,7 +38,8 @@ class FileLogger {
     ~FileLogger();
 
     void getTimeString(char *buf, size_t buf_size);
-private:
+
+  private:
     class Internals;
     Internals *internals;
 };

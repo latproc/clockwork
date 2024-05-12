@@ -725,8 +725,8 @@ MachineInstance::~MachineInstance() {
 
 void MachineInstance::describe(std::ostream &out) {
     out << "---------------\n"
-        << _name << ": " << current_state.getName() << " "
-        << " Class: " << _type << (enabled() ? "" : " DISABLED") << (isShadow() ? " SHADOW " : " ")
+        << _name << ": " << current_state.getName() << " " << " Class: " << _type
+        << (enabled() ? "" : " DISABLED") << (isShadow() ? " SHADOW " : " ")
         << (isActive() ? "" : " PASSIVE") << "\n"
         << " instantiated at: " << definition_file << " line:" << definition_line << "\n";
     if (expected_authority) {
@@ -790,8 +790,7 @@ void MachineInstance::describe(std::ostream &out) {
             Transmitter *t = *iter++;
             MachineInstance *machine = dynamic_cast<MachineInstance *>(t);
             if (machine) {
-                out << "  " << machine->getName() << "[" << machine->getId() << "]"
-                    << ":   "
+                out << "  " << machine->getName() << "[" << machine->getId() << "]" << ":   "
                     << (machine->enabled() ? machine->getCurrent().getName() : "DISABLED");
                 if (machine->owner) {
                     out << " owner: " << (machine->owner ? machine->owner->getName() : "null");
@@ -810,8 +809,7 @@ void MachineInstance::describe(std::ostream &out) {
         while (iter != depends.end()) {
             MachineInstance *machine = *iter++;
             if (machine) {
-                out << "  " << machine->getName() << "[" << machine->getId() << "]"
-                    << ":   "
+                out << "  " << machine->getName() << "[" << machine->getId() << "]" << ":   "
                     << (machine->enabled() ? machine->getCurrent().getName() : "DISABLED");
                 if (machine->owner) {
                     out << " owner: " << (machine->owner ? machine->owner->getName() : "null");
@@ -1550,8 +1548,7 @@ MachineInstance &MachineInstance::operator=(const MachineInstance &orig) {
 }
 
 std::ostream &MachineInstance::operator<<(std::ostream &out) const {
-    out << _name << "(" << id << ")"
-        << "<" << _type << ">\n";
+    out << _name << "(" << id << ")" << "<" << _type << ">\n";
     if (properties.begin() != properties.end()) {
         out << "  Properties: " << properties << "\n";
     }
@@ -2169,24 +2166,23 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
                                             const std::string short_name, bool response_required) {
     std::map<Message, MachineCommand *>::iterator receive_handler_i =
         receives_functions.find(Message(m.getText().c_str()));
-	  DBG_MESSAGING << getName() << " " << state_machine->name  << " (" << current_state.getName() << ")"
-						<< " receiving " << m.getText() << " short name: " << short_name << "\n";
-//    if (receive_handler_i == receives_functions.end()) {
-//	  	DBG_MSG << getName() << " no handler found for " << m.getText() << "\n";
-//		}
+    DBG_MESSAGING << getName() << " " << state_machine->name << " (" << current_state.getName()
+                  << ")" << " receiving " << m.getText() << " short name: " << short_name << "\n";
+    //    if (receive_handler_i == receives_functions.end()) {
+    //      DBG_MSG << getName() << " no handler found for " << m.getText() << "\n";
+    //      }
     if (receive_handler_i != receives_functions.end()) {
 
         while (receive_handler_i != receives_functions.end() && receive_handler_i->first == m) {
 
             //if (debug()) {
-                DBG_MESSAGING << " found event receive handler: " << (*receive_handler_i).first
-                                << "\n"
-                                << "handler: " << *((*receive_handler_i).second) << "\n";
+            DBG_MESSAGING << " found event receive handler: " << (*receive_handler_i).first << "\n"
+                          << "handler: " << *((*receive_handler_i).second) << "\n";
             //}
 #ifndef EC_SIMULATOR
             if (state_machine && state_machine->name == "ETHERCAT_BUS") {
-                if (short_name == "activate" &&
-                    (current_state.getName() == "CONFIG" || current_state.getName() == "CONNECTED")) {
+                if (short_name == "activate" && (current_state.getName() == "CONFIG" ||
+                                                 current_state.getName() == "CONNECTED")) {
                     ProcessingThread::instance()->machine.requestActivation(true);
                 }
                 else if (short_name == "deactivate" && current_state.getName() == "ACTIVE") {
@@ -2195,10 +2191,11 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
                 return NULL;
             }
 #endif
-            auto & handler = receive_handler_i->second;
+            auto &handler = receive_handler_i->second;
             if (strlen(handler->getStateName().get()) > 0) {
-                DBG_M_MESSAGING << "handler has state requirement " << handler->getStateName().get() << "\n";
-                if ( current_state.getName() != handler->getStateName().get()) {
+                DBG_M_MESSAGING << "handler has state requirement " << handler->getStateName().get()
+                                << "\n";
+                if (current_state.getName() != handler->getStateName().get()) {
                     receive_handler_i++;
                     continue;
                 }
@@ -2656,10 +2653,12 @@ void MachineInstance::handle(const Message &m, Transmitter *from, bool send_rece
     ProcessingThread::activate(this);
 }
 
-void MachineInstance::sendMessageToReceiver(const Message &message, Receiver *r, bool expect_reply) {
+void MachineInstance::sendMessageToReceiver(const Message &message, Receiver *r,
+                                            bool expect_reply) {
     MachineShadowInstance *msi = dynamic_cast<MachineShadowInstance *>(r);
     if (msi) {
-        DBG_CHANNELS << _name << " sending message " << message << " to shadow " << r->getName() << "\n";
+        DBG_CHANNELS << _name << " sending message " << message << " to shadow " << r->getName()
+                     << "\n";
         std::string addressed_message = r->getName();
         addressed_message += ".";
         addressed_message += message.getText();
@@ -2696,8 +2695,7 @@ void MachineInstance::sendMessageToReceiver(const Message &message, Receiver *r,
             DBG_MSG << buf << "\n";
 #endif
             Message msg("DisabledMessageTargetException");
-            Package *p =
-                new Package(this, this, msg, false);
+            Package *p = new Package(this, this, msg, false);
             Dispatcher::instance()->deliver(p);
         }
     }
@@ -3476,8 +3474,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                             ((newsm->name == "POINT" || newsm->name == "ANALOGINPUT" ||
                               newsm->name == "COUNTER" || newsm->name == "INPUTBIT" ||
                               newsm->name == "OUTPUTBIT" || newsm->name == "INPUTREGISTER" ||
-                              newsm->name == "OUTPUTREGISTER" || newsm->name == "DIGITALVALUE"
-                              ) &&
+                              newsm->name == "OUTPUTREGISTER" || newsm->name == "DIGITALVALUE") &&
                              newsm->parameters.size() >= 2 && newsm->parameters.size() <= 3) ||
                             (newsm->name == "COUNTERRATE" &&
                              (newsm->parameters.size() == 3 || newsm->parameters.size() == 1))) {
@@ -3800,8 +3797,8 @@ const Value &MachineInstance::getValue(const std::string &property) {
         if (other) {
             const Value &v = other->getValue(prop);
             DBG_M_PROPERTIES << other->getName() << " found property " << prop
-                             << " (type: " << v.kind << ") "
-                             << " in machine " << name << " with value " << v << "\n";
+                             << " (type: " << v.kind << ") " << " in machine " << name
+                             << " with value " << v << "\n";
             return v;
         }
         else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" &&
@@ -4132,8 +4129,7 @@ void MachineInstance::sendModbusUpdate(const std::string &property_name, const V
     if (false) {
         FileLogger fl(program_name);
         fl.f() << _name << " Sending modbus update " << property_name << " " << new_value
-               << " (kind:" << new_value.kind << ")"
-               << "\n";
+               << " (kind:" << new_value.kind << ")" << "\n";
     }
 
     ModbusAddress ma = modbus_exports[property_name];

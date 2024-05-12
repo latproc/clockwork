@@ -182,7 +182,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         using namespace boost::posix_time;
         Value &res = keywords->find(name);
         if (strcmp("NOW", name) == 0) {
-            uint64_t  msecs = (microsecs() + 500) / 1000;
+            uint64_t msecs = (microsecs() + 500) / 1000;
             res = msecs;
             return res;
         }
@@ -325,7 +325,7 @@ bool SymbolTable::add(const char *name, const Value &val, ReplaceMode replace_mo
     }
 }
 
-bool SymbolTable::add(const std::string & name, const Value &val, ReplaceMode replace_mode) {
+bool SymbolTable::add(const std::string &name, const Value &val, ReplaceMode replace_mode) {
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
         st[name] = val;
         if (val.kind == Value::t_symbol) {

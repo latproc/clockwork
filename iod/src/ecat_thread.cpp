@@ -19,8 +19,8 @@
 */
 
 #include "ECInterface.h"
-#include "MessageLog.h"
 #include "IOInterface.h"
+#include "MessageLog.h"
 #include <ostream>
 #include <sstream>
 #include <stdio.h>
@@ -261,7 +261,9 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
     bool found_change = false;
 #endif
     uint8_t *upd_data = ECInterface::instance()->getUpdateData();
-    if (upd_data == nullptr) { return 0; }
+    if (upd_data == nullptr) {
+        return 0;
+    }
     while (true) {
         try {
             switch (stage) {
@@ -419,8 +421,9 @@ bool EtherCATThread::getEtherCatResponse(zmq::socket_t *sync_sock, uint64_t glob
                 }
                 last_ping = this_ping_time;
             }
-            DBG_ETHERCAT_PACKETS << "ecat_thread in state e_update got response from clockwork, len = "
-                         << len << "\n";
+            DBG_ETHERCAT_PACKETS
+                << "ecat_thread in state e_update got response from clockwork, len = " << len
+                << "\n";
             return true;
         }
         return false;
@@ -473,24 +476,26 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         if (driver_state == s_driver_init) {
             if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
                 DBG_ETHERCAT_PACKETS << "received initial values from clockwork; size: " << len
-                        << " packet: " << (int)packet_type << "\n";
+                                     << " packet: " << (int)packet_type << "\n";
             }
             else {
                 DBG_ETHERCAT_PACKETS << "received process values from clockwork; size: " << len
-                        << " packet: " << (int)packet_type << "\n";
+                                     << " packet: " << (int)packet_type << "\n";
             }
         }
         //      else {
         //          DBG_ETHERCAT << "WARNING: read packet type but driver is not in state init\n";
         //      }
-        if (packet_type == IOInterface::MessageType::DEFAULT_DATA || packet_type == IOInterface::MessageType::PROCESS_DATA) {
+        if (packet_type == IOInterface::MessageType::DEFAULT_DATA ||
+            packet_type == IOInterface::MessageType::PROCESS_DATA) {
             int64_t more = 0;
             size_t more_size = sizeof(more);
             out_sock.getsockopt(ZMQ_RCVMORE, &more, &more_size);
             assert(more);
         }
     }
-    if (packet_type == IOInterface::MessageType::DEFAULT_DATA || packet_type == IOInterface::MessageType::PROCESS_DATA) {
+    if (packet_type == IOInterface::MessageType::DEFAULT_DATA ||
+        packet_type == IOInterface::MessageType::PROCESS_DATA) {
         {
             zmq::message_t iomsg;
             recv(out_sock, iomsg);
@@ -735,7 +740,9 @@ void EtherCATThread::operator()() {
                 need_ping = false;
                 int stage = sendMultiPart(sync_sock, global_clock);
 #if VERBOSE_DEBUG
-                if (stage == 5) { DBG_MSG  << "send done\n"; }
+                if (stage == 5) {
+                    DBG_MSG << "send done\n";
+                }
 #endif
                 assert(stage == 5);
                 status = e_update; // time to send process data to EtherCAT
@@ -750,7 +757,8 @@ void EtherCATThread::operator()() {
 
         // check for communication from clockwork
         if (getClockworkMessage(out_sock, ec_ok) && microsecs() < next_ecat_receive - 300) {
-            DBG_ETHERCAT_PACKETS << "ecat thread got clockwork message. next ecat: " << next_ecat_receive << "\n";
+            DBG_ETHERCAT_PACKETS << "ecat thread got clockwork message. next ecat: "
+                                 << next_ecat_receive << "\n";
             usleep(20);
         }
         usleep(20);

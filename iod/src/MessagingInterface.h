@@ -22,6 +22,7 @@
 #define cwlang_MessagingInterface_h
 
 #include "Message.h"
+#include "Receiver.h"
 #include "cJSON.h"
 #include "symboltable.h"
 #include "value.h"
@@ -30,7 +31,6 @@
 #include <sstream>
 #include <string>
 #include <zmq.hpp>
-#include "Receiver.h"
 
 #include "MessageEncoding.h"
 #include "MessageHeader.h"

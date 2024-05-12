@@ -27,8 +27,7 @@ extern bool program_done;
 Action *ShutdownActionTemplate::factory(MachineInstance *mi) { return new ShutdownAction(mi); }
 
 std::ostream &ShutdownAction::operator<<(std::ostream &out) const {
-    return out << "Shutdown Action "
-               << "\n";
+    return out << "Shutdown Action " << "\n";
 }
 
 Action::Status ShutdownAction::run() {

@@ -18,11 +18,11 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include <iostream>
-#include <unistd.h>
 #include "ControlSystemMachine.h"
 #include "IOComponent.h"
+#include <iostream>
 #include <stdio.h>
+#include <unistd.h>
 #include <zmq.hpp>
 
 #include <boost/thread/condition.hpp>
@@ -695,7 +695,7 @@ int main(int argc, char const *argv[]) {
     MQTTInterface::instance()->activate();
 
 #ifdef SOEM_ETHERCAT
-    if (strlen(ethercat_adapter()) > 0 ) {
+    if (strlen(ethercat_adapter()) > 0) {
         std::cout << "Using SOEM EtherCAT on interface " << ethercat_adapter() << "\n";
         EtherCATthread::instance()->activate(ethercat_adapter());
         EtherCATthread::instance()->stop();

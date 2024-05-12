@@ -78,10 +78,8 @@ std::ostream &FireTriggerAction::operator<<(std::ostream &out) const {
         t = pending_trigger;
     }
     out << owner->getName() << " FireTrigger Action " << ((t) ? t->getName() : "(no trigger)")
-        << ","
-        << " enabled: " << ((t) ? t->enabled() : false) << ","
-        << " status: " << status << ","
-        << " owner: " << owner->getName() << ","
+        << "," << " enabled: " << ((t) ? t->enabled() : false) << "," << " status: " << status
+        << "," << " owner: " << owner->getName() << ","
         << " owner state: " << owner->getCurrent().getName();
     return out;
 }

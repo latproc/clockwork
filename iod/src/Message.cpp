@@ -19,6 +19,7 @@
 */
 
 #include "Message.h"
+#include "Receiver.h"
 #include "value.h"
 #include <algorithm>
 #include <boost/thread/condition.hpp>
@@ -27,7 +28,6 @@
 #include <list>
 #include <set>
 #include <string.h>
-#include "Receiver.h"
 
 // Used to generate a unique id for each transmitter.
 long Transmitter::next_id;
@@ -149,15 +149,17 @@ bool Message::operator==(const char *msg) const {
 }
 
 Package::Package(const Package &other)
-    : transmitter(other.transmitter), receiver(other.receiver), message(new Message(*other.message)),
-      needs_receipt(other.needs_receipt) {}
+    : transmitter(other.transmitter), receiver(other.receiver),
+      message(new Message(*other.message)), needs_receipt(other.needs_receipt) {}
 
 Package::~Package() { delete message; }
 
 Package &Package::operator=(const Package &other) {
     transmitter = other.transmitter;
     receiver = other.receiver;
-    if (message) { delete message; }
+    if (message) {
+        delete message;
+    }
     message = new Message(*other.message);
     needs_receipt = other.needs_receipt;
     return *this;

@@ -98,8 +98,10 @@ class Transmitter {
         ss << id;
         _name = ss.str();
     }
-    virtual void sendMessageToReceiver(const Message &m, Receiver *r = NULL, bool expect_reply = false);
-    virtual void sendMessageToReceiver(const char *msg, Receiver *r = NULL, bool expect_reply = false);
+    virtual void sendMessageToReceiver(const Message &m, Receiver *r = NULL,
+                                       bool expect_reply = false);
+    virtual void sendMessageToReceiver(const char *msg, Receiver *r = NULL,
+                                       bool expect_reply = false);
     virtual const std::string &getName() const { return _name; }
     virtual Receiver *asReceiver() { return 0; }
     virtual bool debug() { return allow_debug; }
@@ -125,6 +127,5 @@ struct Package {
     std::ostream &operator<<(std::ostream &out) const;
 };
 std::ostream &operator<<(std::ostream &out, const Package &package);
-
 
 #endif

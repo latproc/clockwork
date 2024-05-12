@@ -13,9 +13,7 @@ class MockSystemSetup {
   public:
     class MockHardwareActivation : public HardwareActivation {
       public:
-        bool initialiseHardware() override {
-            return initialise_machines(); 
-        }
+        bool initialiseHardware() override { return initialise_machines(); }
         void operator()(void) override { initialiseHardware(); }
     };
     MockSystemSetup() {
@@ -31,8 +29,8 @@ class MockSystemSetup {
         Dispatcher::start();
         ControlSystemMachine csm;
         IODCommandThread *ict = IODCommandThread::instance();
-        auto & thread{ProcessingThread::create(&csm, iod_activation, *ict)};
-        pt=&thread;
+        auto &thread{ProcessingThread::create(&csm, iod_activation, *ict)};
+        pt = &thread;
         iod_activation();
     }
     void deactivate() {

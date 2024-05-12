@@ -143,10 +143,6 @@ void set_cpu_affinity(const char *thread_name, int cpu) {
 bool fix_invalid_transitions() { return fix_invalid_auto_transitions; }
 void set_fix_invalid_transitions(bool which) { fix_invalid_auto_transitions = which; }
 
-void set_ethercat_adapter(const char *adapter) {
-    ethercat_adapter_name = adapter;
-}
+void set_ethercat_adapter(const char *adapter) { ethercat_adapter_name = adapter; }
 
-const char *ethercat_adapter() {
-    return ethercat_adapter_name.c_str();
-}
+const char *ethercat_adapter() { return ethercat_adapter_name.c_str(); }

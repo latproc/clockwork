@@ -34,9 +34,9 @@
 #include "cJSON.h"
 #include "options.h"
 #include <fstream>
+#include <iostream>
 #include <list>
 #include <stdlib.h>
-#include <iostream>
 
 #ifndef EC_SIMULATOR
 #include "ECInterface.h"
@@ -77,7 +77,9 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
 
                 char buf[10];
                 const char *fmt = "(%ld)";
-                if (sizeof(long long) == sizeof(uint64_t)) { fmt="(%lld)"; }
+                if (sizeof(long long) == sizeof(uint64_t)) {
+                    fmt = "(%lld)";
+                }
                 snprintf(buf, 9, fmt, device->value());
                 res += buf;
             }

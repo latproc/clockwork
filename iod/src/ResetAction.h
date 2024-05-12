@@ -10,8 +10,7 @@ class ResetActionTemplate : public ActionTemplate {
     ResetActionTemplate() {}
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
-        return out << "ResetAction template "
-                   << "\n";
+        return out << "ResetAction template " << "\n";
     }
 };
 

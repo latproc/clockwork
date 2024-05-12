@@ -30,19 +30,19 @@
 #include "SharedWorkSet.h"
 #include "symboltable.h"
 #include <assert.h>
+#include <functional>
 #include <iostream>
 #include <list>
 #include <pthread.h>
 #include <zmq.hpp>
-#include <functional>
 
 namespace {
-    struct Cleanup {
-        std::function<void()> cleanup;
-        Cleanup(std::function<void()> && cleanup) : cleanup(std::move(cleanup)) {}
-        ~Cleanup() { cleanup(); }
-    };
-}
+struct Cleanup {
+    std::function<void()> cleanup;
+    Cleanup(std::function<void()> &&cleanup) : cleanup(std::move(cleanup)) {}
+    ~Cleanup() { cleanup(); }
+};
+} // namespace
 
 Dispatcher *Dispatcher::instance_ = NULL;
 static boost::mutex dispatcher_mutex;
@@ -76,15 +76,15 @@ void DispatchThread::operator()() {
 Dispatcher::Dispatcher()
     : started(false), finished(false), dispatch_thread(0), thread_ref(0),
       sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting_cw),
-      self(*MessagingInterface::getContext(), ZMQ_REP), owner_thread(0) {
-}
+      self(*MessagingInterface::getContext(), ZMQ_REP), owner_thread(0) {}
 
 Dispatcher::~Dispatcher() {
-    if (!instance()->finished) { stop(); }
+    if (!instance()->finished) {
+        stop();
+    }
     //if (socket) { delete socket; }
     delete dispatch_thread;
 }
-
 
 Dispatcher *Dispatcher::instance() {
     if (!instance_) {
@@ -95,7 +95,9 @@ Dispatcher *Dispatcher::instance() {
 }
 void Dispatcher::start() {
     auto dispatcher = Dispatcher::instance();
-    if (dispatcher->dispatch_thread) { return; }
+    if (dispatcher->dispatch_thread) {
+        return;
+    }
     dispatcher->dispatch_thread = new DispatchThread;
     dispatcher->thread_ref = new boost::thread(boost::ref(*dispatcher->dispatch_thread));
     while (!Dispatcher::instance()->started) {
@@ -175,7 +177,7 @@ void Dispatcher::idle() {
     sync.bind("inproc://dispatcher_sync");
 
     // receive notifications (see stop)
-    self.bind("inproc://dispatcher_self"); 
+    self.bind("inproc://dispatcher_self");
 
     Cleanup cleanup([&]() {
         //sync.close();
@@ -198,7 +200,6 @@ void Dispatcher::idle() {
     buf[response_len] = 0;
 
     DBG_DISPATCHER << "Dispatcher got sync start: " << buf << "\n";
-
 
     /*  this module waits for a start from clockwork and then starts looking for input on its
         command socket and its message socket (e_waiting). When either a command or message is detected

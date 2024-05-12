@@ -31,8 +31,8 @@
 #include <errno.h>
 #include <exception>
 #include <functional>
-#include <iostream>
 #include <iomanip>
+#include <iostream>
 #include <signal.h>
 #include <stddef.h>
 #include <sys/time.h>
@@ -115,8 +115,7 @@ void usage(int argc, const char *argv[]) {
         << " | (--serial_port portname --serial_settings baud:bits:parity:stop_bits:flow_control )\n"
         << " --property property_name [--client] [--name device_name]\n"
         << " --watch_property property_name --collect_repeats [ --no_timeout_disconnect | --disconnect_on_timeout ]\n"
-        << " --no_json --queue queue_name --channel channel_name [--cw_port port] "
-        << "\n";
+        << " --no_json --queue queue_name --channel channel_name [--cw_port port] " << "\n";
 }
 
 std::string escapeNonprintables(const char *buf) {
@@ -737,7 +736,8 @@ struct ConnectionThread {
                             if (connection != -1) {
                                 char err_buf[100];
                                 if (anetTcpKeepAlive(err_buf, connection) == ANET_ERR) {
-                                    std::cerr << "Warning: error setting keep alive: " << err_buf << "\n";
+                                    std::cerr << "Warning: error setting keep alive: " << err_buf
+                                              << "\n";
                                 }
                             }
                         }

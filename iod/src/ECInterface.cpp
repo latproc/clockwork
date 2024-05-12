@@ -18,9 +18,9 @@
 */
 
 #include "ECInterface.h"
+#include "DebugExtra.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
-#include "DebugExtra.h"
 #include "Statistic.h"
 #include "Statistics.h"
 #include "cJSON.h"
@@ -93,16 +93,16 @@ Statistic update_to_recv("Update to receive");
 #endif
 
 namespace {
-    std::string compare_modules(const ECModule & a, const ECModule &b) {
-        std::stringstream ss;
-        ss << "a.alias: " << a.alias << " b.alias: " << b.alias << "\n";
-        ss << "a.position: " << a.position << " b.position: " << b.position << "\n";
-        ss << "a.revision_no: " << a.revision_no << " b.revision_no: " << b.revision_no << "\n";
-        ss << "a.sync_count: " << a.sync_count << " b.sync_count: " << b.sync_count << "\n";
-        ss << "a.num_entries: " << a.num_entries << " b.num_entries: " << b.num_entries << "\n";
-        return ss.str();
-    }
+std::string compare_modules(const ECModule &a, const ECModule &b) {
+    std::stringstream ss;
+    ss << "a.alias: " << a.alias << " b.alias: " << b.alias << "\n";
+    ss << "a.position: " << a.position << " b.position: " << b.position << "\n";
+    ss << "a.revision_no: " << a.revision_no << " b.revision_no: " << b.revision_no << "\n";
+    ss << "a.sync_count: " << a.sync_count << " b.sync_count: " << b.sync_count << "\n";
+    ss << "a.num_entries: " << a.num_entries << " b.num_entries: " << b.num_entries << "\n";
+    return ss.str();
 }
+} // namespace
 
 ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), num_entries(0), entry_details(0) {
     offsets = new unsigned int[64];
@@ -181,7 +181,7 @@ SDOEntry::~SDOEntry() {
 ec_sdo_request_t *SDOEntry::getRequest() { return realtime_request; }
 
 void SDOEntry::setData(bool val) {
-        DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
+    DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
     uint8_t *data = ecrt_sdo_request_data(realtime_request);
     if (data) {
         EC_WRITE_BIT(data, offset_, ((val) ? 1 : 0));
@@ -189,28 +189,34 @@ void SDOEntry::setData(bool val) {
 }
 
 void SDOEntry::setData(uint8_t val) {
-        DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
-        EC_WRITE_U8(ecrt_sdo_request_data(realtime_request), val); }
+    DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
+    EC_WRITE_U8(ecrt_sdo_request_data(realtime_request), val);
+}
 
 void SDOEntry::setData(int8_t val) {
-        DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
-        EC_WRITE_S8(ecrt_sdo_request_data(realtime_request), val); }
+    DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
+    EC_WRITE_S8(ecrt_sdo_request_data(realtime_request), val);
+}
 
 void SDOEntry::setData(uint16_t val) {
-        DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
-        EC_WRITE_U16(ecrt_sdo_request_data(realtime_request), val); }
+    DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
+    EC_WRITE_U16(ecrt_sdo_request_data(realtime_request), val);
+}
 
 void SDOEntry::setData(int16_t val) {
-        DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
-        EC_WRITE_S16(ecrt_sdo_request_data(realtime_request), val); }
+    DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
+    EC_WRITE_S16(ecrt_sdo_request_data(realtime_request), val);
+}
 
 void SDOEntry::setData(uint32_t val) {
-        DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
-        EC_WRITE_U32(ecrt_sdo_request_data(realtime_request), val); }
+    DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
+    EC_WRITE_U32(ecrt_sdo_request_data(realtime_request), val);
+}
 
 void SDOEntry::setData(int32_t val) {
-        DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
-        EC_WRITE_S32(ecrt_sdo_request_data(realtime_request), val); }
+    DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
+    EC_WRITE_S32(ecrt_sdo_request_data(realtime_request), val);
+}
 
 ECModule *SDOEntry::getModule() { return module_; }
 
@@ -245,8 +251,8 @@ void SDOEntry::resolveSDOModules() {
         if (entry->getModule()) {
             // this occurs when an entry has been automatically setup in the code
             // (only done for EL2535 modules as a temporary measure to be removed)
-            DBG_ETHERCAT << "Module already linked to SDO entry " 
-                    << entry->getName() << "- replacing old entry\n";
+            DBG_ETHERCAT << "Module already linked to SDO entry " << entry->getName()
+                         << "- replacing old entry\n";
             iter = new_sdo_entries.erase(iter);
             continue;
         }
@@ -259,9 +265,10 @@ void SDOEntry::resolveSDOModules() {
                 module = ECInterface::findModule(module_position);
             }
             else {
-                DBG_ETHERCAT << "Invalid module " << mi->getName() << " bad position value: " << module_position
-                    << "aborting\n" << std::flush;
-                exit(1); 
+                DBG_ETHERCAT << "Invalid module " << mi->getName()
+                             << " bad position value: " << module_position << "aborting\n"
+                             << std::flush;
+                exit(1);
             }
             if (module && entry->prepareRequest(module)) {
                 DBG_ETHERCAT << "Prepared SDO entry: " << entry->getName() << "\n";
@@ -270,7 +277,7 @@ void SDOEntry::resolveSDOModules() {
                     entry->machineInstance()->properties.exists("default")) {
                     const Value &val = entry->machineInstance()->properties.lookup("default");
                     DBG_ETHERCAT << "setting default value of " << entry->getName() << " to " << val
-                              << "\n";
+                                 << "\n";
                     ECInterface::instance()->queueInitialisationRequest(entry, val);
                 }
                 else {
@@ -279,7 +286,8 @@ void SDOEntry::resolveSDOModules() {
                 ECInterface::instance()->queueRuntimeRequest(entry);
             }
             else {
-                DBG_ETHERCAT << "Warning: failed to prepare SDO entry: " << entry->getName() << "\n";
+                DBG_ETHERCAT << "Warning: failed to prepare SDO entry: " << entry->getName()
+                             << "\n";
                 iter++;
             }
         }
@@ -350,7 +358,7 @@ std::ostream &ECModule::operator<<(std::ostream &out) const {
     return out;
 }
 
-std::ostream &operator<<(std::ostream & out, const ECModule &module) {
+std::ostream &operator<<(std::ostream &out, const ECModule &module) {
     return module.operator<<(out);
 }
 
@@ -365,16 +373,15 @@ ec_sdo_request_t *SDOEntry::prepareRequest(ECModule *module) {
                                                     module->vendor_id, module->product_code);
     assert(x);
     ec_slave_config_state_t s;
-        DBG_ETHERCAT_CALLS << "ecrt_slave_config_state\n";
+    DBG_ETHERCAT_CALLS << "ecrt_slave_config_state\n";
     ecrt_slave_config_state(x, &s);
     // the request field size must be big enough to hold the offset
     // the EtherLab interface only provides a byte-sized interface to SDO so we convert
     // our bit-sized fields before creating the sdo request
     size_t sz = ((size_ + offset_ - 1) / 8) + 1;
 
-    DBG_ETHERCAT_SDO << "Creating SDO request " << module->getName() << " 0x" << std::hex << index_ << ":"
-              << subindex_ << std::dec << " (" << sz << ")"
-              << "\n";
+    DBG_ETHERCAT_SDO << "Creating SDO request " << module->getName() << " 0x" << std::hex << index_
+                     << ":" << subindex_ << std::dec << " (" << sz << ")" << "\n";
     DBG_ETHERCAT_CALLS << "ecrt_slave_config_create_sdo_request\n";
     realtime_request = ecrt_slave_config_create_sdo_request(x, index_, subindex_, sz);
     prepared_sdo_entries.push_back(this);
@@ -415,7 +422,7 @@ void ECInterface::beginModulePreparation() {
 }
 
 void readValue(ec_sdo_request_t *sdo, unsigned int size, int offset = 0) {
-        DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
+    DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
     if (size == 32) {
         fprintf(stderr, "SDO value: 0x%08X\n", EC_READ_U32(ecrt_sdo_request_data(sdo)));
     }
@@ -431,7 +438,7 @@ void readValue(ec_sdo_request_t *sdo, unsigned int size, int offset = 0) {
 }
 
 void SDOEntry::syncValue() {
-        DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
+    DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
     if (size_ == 32) {
         if (machine_instance) {
             machine_instance->setValue("VALUE",
@@ -552,17 +559,14 @@ void ECInterface::checkSDOUpdates() {
             entry->failure();
             current_update_entry++; // move on to the next item and retry soon
             sdo_entry_state = e_None;
-                        }
-            break;
-        default:
-            {
+        } break;
+        default: {
             std::stringstream error;
-            error << "unexpected sdo request state: " << state
-                << std::hex << "0x" << entry->getIndex()
-                << ":" << (int)entry->getSubindex() << std::dec;
+            error << "unexpected sdo request state: " << state << std::hex << "0x"
+                  << entry->getIndex() << ":" << (int)entry->getSubindex() << std::dec;
             MessageLog::instance()->add(error.str());
             NB_MSG << error.str() << "\n";
-            }
+        }
         }
     }
 }
@@ -640,8 +644,8 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             else {
                 DBG_ETHERCAT_SDO << "Failed to write SDO entry ";
             }
-            DBG_ETHERCAT_SDO << std::hex << "0x" << entry->getIndex() << ":" << (int)entry->getSubindex()
-                      << std::dec << "\n";
+            DBG_ETHERCAT_SDO << std::hex << "0x" << entry->getIndex() << ":"
+                             << (int)entry->getSubindex() << std::dec << "\n";
             entry->failure();
             if (entry->getErrorCount() < 4) {
                 current_init_entry++; // move on to the next item and retry soon
@@ -679,8 +683,8 @@ void ECInterface::registerModules() {
         assert(m);
         if (!m->ecrtMasterSlaveConfig(master)) {
             auto error = "Failed to get slave configuration.";
-                        MessageLog::instance()->add(error);
-                        DBG_ETHERCAT << error << "\n";
+            MessageLog::instance()->add(error);
+            DBG_ETHERCAT << error << "\n";
             return;
         }
         assert(m->slave_config);
@@ -690,32 +694,32 @@ void ECInterface::registerModules() {
             for (unsigned int j = 0; j < m->syncs[i].n_pdos; ++j) {
                 for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
                     DBG_ETHERCAT_CALLS << "ecrt_config_reg_pdo_entry_pos\n";
-                    if (std::string(m->name).substr(0, 6) == "EL2535" && i == 3 && m->syncs[i].n_pdos == 2) {
+                    if (std::string(m->name).substr(0, 6) == "EL2535" && i == 3 &&
+                        m->syncs[i].n_pdos == 2) {
                         std::stringstream ss;
                         ss << "******* Warning: Configureing EL2535 with 2 pdos (need 4)";
                         MessageLog::instance()->add(ss.str());
                         std::cerr << ss.str() << "\n";
                     }
                     int res = ecrt_slave_config_reg_pdo_entry_pos(
-                        m->slave_config,
-                        m->syncs[i].index, j, k, domain1, &(m->bit_positions[module_offset_idx]));
+                        m->slave_config, m->syncs[i].index, j, k, domain1,
+                        &(m->bit_positions[module_offset_idx]));
                     if (res < 0) {
                         DBG_ETHERCAT << "Error: " << res << " registering pdo entry mapping "
-                                  << " to sm " << i << " pdo: " << std::hex << "0x"
-                                  << m->syncs[i].pdos[j].index << " "
-                                  << " entry 0x" << m->syncs[i].pdos[j].entries[k].index << " "
-                                  << std::dec << (int)m->syncs[i].pdos[j].entries[k].subindex << " "
-                                  << "\n";
+                                     << " to sm " << i << " pdo: " << std::hex << "0x"
+                                     << m->syncs[i].pdos[j].index << " " << " entry 0x"
+                                     << m->syncs[i].pdos[j].entries[k].index << " " << std::dec
+                                     << (int)m->syncs[i].pdos[j].entries[k].subindex << " " << "\n";
                     }
                     else {
-                        DBG_ETHERCAT<< "Successfully added item " << module_offset_idx << " at index "
-                                  << std::hex << "0x" << m->syncs[i].pdos[j].index << " "
-                                  << std::dec << " subindex "
-                                  << (int)m->syncs[i].pdos[j].entries[k].subindex << " length "
-                                  << (int)m->syncs[i].pdos[j].entries[k].bit_length
-                                  << " offset: " << res
-                                  << " bitpos: " << m->bit_positions[module_offset_idx] << " "
-                                  << m->entry_details[module_offset_idx].name << "\n";
+                        DBG_ETHERCAT << "Successfully added item " << module_offset_idx
+                                     << " at index " << std::hex << "0x"
+                                     << m->syncs[i].pdos[j].index << " " << std::dec << " subindex "
+                                     << (int)m->syncs[i].pdos[j].entries[k].subindex << " length "
+                                     << (int)m->syncs[i].pdos[j].entries[k].bit_length
+                                     << " offset: " << res
+                                     << " bitpos: " << m->bit_positions[module_offset_idx] << " "
+                                     << m->entry_details[module_offset_idx].name << "\n";
                         m->offsets[module_offset_idx] = res;
                     }
                     module_offset_idx++;
@@ -731,7 +735,9 @@ void ECInterface::configureModules() {
     boost::recursive_mutex::scoped_lock lock(modules_mutex);
     for (unsigned int mi = 0; mi < modules.size(); ++mi) {
         ECModule *m = findModule(mi);
-        if (!m) { DBG_ETHERCAT << __FUNCTION__ << " missing ECModule at position " << mi << "\n"; }
+        if (!m) {
+            DBG_ETHERCAT << __FUNCTION__ << " missing ECModule at position " << mi << "\n";
+        }
         assert(m);
 
         if (!m->ecrtMasterSlaveConfig(master)) {
@@ -740,7 +746,8 @@ void ECInterface::configureModules() {
         }
 
         if (m->sync_count == 0) {
-             DBG_ETHERCAT << "Warning: configuring module " << m->position << " with no sync managers\n";
+            DBG_ETHERCAT << "Warning: configuring module " << m->position
+                         << " with no sync managers\n";
         }
 
         assert(m->slave_config);
@@ -787,34 +794,33 @@ void ECInterface::configureModules() {
             }
 #endif
 
-            DBG_ETHERCAT <<  "---- adding pdo assignments for sm " << i << " " << m->syncs[i].n_pdos << " items\n";
+            DBG_ETHERCAT << "---- adding pdo assignments for sm " << i << " " << m->syncs[i].n_pdos
+                         << " items\n";
             for (unsigned int j = 0; j < m->syncs[i].n_pdos; ++j) {
-                DBG_ETHERCAT_CALLS << "ecrt_slave_config_pdo_assign_add"
-                    << std::hex
-                    << m->syncs[i].index << " "
-                    << m->syncs[i].pdos[j].index
-                    << std::dec
-                    << "\n";
+                DBG_ETHERCAT_CALLS << "ecrt_slave_config_pdo_assign_add" << std::hex
+                                   << m->syncs[i].index << " " << m->syncs[i].pdos[j].index
+                                   << std::dec << "\n";
                 int res = ecrt_slave_config_pdo_assign_add(m->slave_config, m->syncs[i].index,
                                                            m->syncs[i].pdos[j].index);
                 if (res < 0) {
-                    std::cerr << "Error: " << res << " appending pdo assignment "
-                              << " to sm " << i << " pdo: " << std::hex << "0x"
-                              << m->syncs[i].pdos[j].index << std::dec << "\n";
+                    std::cerr << "Error: " << res << " appending pdo assignment " << " to sm " << i
+                              << " pdo: " << std::hex << "0x" << m->syncs[i].pdos[j].index
+                              << std::dec << "\n";
                 }
                 else {
-                    DBG_ETHERCAT << "**** added pdo assignment "
-                              << " to sm " << i << " pdo: " << std::hex << "0x"
-                              << m->syncs[i].pdos[j].index << std::dec << " adding "
-                              << m->syncs[i].pdos[j].n_entries << " entries\n"
-                              << "\n";
+                    DBG_ETHERCAT << "**** added pdo assignment " << " to sm " << i
+                                 << " pdo: " << std::hex << "0x" << m->syncs[i].pdos[j].index
+                                 << std::dec << " adding " << m->syncs[i].pdos[j].n_entries
+                                 << " entries\n"
+                                 << "\n";
                     if (m->syncs[i].pdos[j].n_entries) {
                         DBG_ETHERCAT_CALLS << "ecrt_config_pdo_mapping_clear\n";
-                        ecrt_slave_config_pdo_mapping_clear(m->slave_config, m->syncs[i].pdos[j].index);
+                        ecrt_slave_config_pdo_mapping_clear(m->slave_config,
+                                                            m->syncs[i].pdos[j].index);
                     }
                 }
                 for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
-                                        DBG_ETHERCAT_CALLS << "ecrt_config_pdo_mapping_add\n";
+                    DBG_ETHERCAT_CALLS << "ecrt_config_pdo_mapping_add\n";
                     res = ecrt_slave_config_pdo_mapping_add(
                         m->slave_config, m->syncs[i].pdos[j].index,
                         m->syncs[i].pdos[j].entries[k].index,
@@ -823,19 +829,17 @@ void ECInterface::configureModules() {
                     if (res < 0) {
                         std::cerr << "Error: " << res << " adding pdo entry mapping " << std::hex
                                   << "0x" << m->syncs[i].pdos[j].entries[k].index << " " << std::dec
-                                  << m->syncs[i].pdos[j].entries[k].subindex << " "
-                                  << "\n";
+                                  << m->syncs[i].pdos[j].entries[k].subindex << " " << "\n";
                         assert(false);
                     }
                     else {
-                        DBG_ETHERCAT << "Successfully added entry item " << module_offset_idx
-                                  << " at index " << std::hex << "0x" << m->syncs[i].pdos[j].index
-                                  << " "
-                                  << " subindex " << (int)m->syncs[i].pdos[j].entries[k].subindex
-                                  << " length " << (int)m->syncs[i].pdos[j].entries[k].bit_length
-                                  << " offset: " << res
-                                  << " bitpos: " << m->bit_positions[module_offset_idx] << std::dec
-                                  << " " << m->entry_details[module_offset_idx].name << "\n";
+                        DBG_ETHERCAT
+                            << "Successfully added entry item " << module_offset_idx << " at index "
+                            << std::hex << "0x" << m->syncs[i].pdos[j].index << " " << " subindex "
+                            << (int)m->syncs[i].pdos[j].entries[k].subindex << " length "
+                            << (int)m->syncs[i].pdos[j].entries[k].bit_length << " offset: " << res
+                            << " bitpos: " << m->bit_positions[module_offset_idx] << std::dec << " "
+                            << m->entry_details[module_offset_idx].name << "\n";
                     }
 #if 0
                     DBG_ETHERCAT_CALLS << "ecrt_slave_config_reg_pdo_entry_pos\n";
@@ -921,7 +925,8 @@ tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool re
 
     if (module) {
         boost::recursive_mutex::scoped_lock lock(modules_mutex);
-        DBG_ETHERCAT << "adding module " << module->name << " pos: " << module->position << " to io\n";
+        DBG_ETHERCAT << "adding module " << module->name << " pos: " << module->position
+                     << " to io\n";
         if (modules.size() == module->position) {
             modules.push_back(module);
         }
@@ -932,26 +937,28 @@ tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool re
                     modules.at(module->position) = module;
                     std::stringstream ss;
                     ss << "similar module at " << module->position << " replaced"
-                       << "\ncompare old,new:\n" << compare_modules(*m, *module);
+                       << "\ncompare old,new:\n"
+                       << compare_modules(*m, *module);
                     DBG_ETHERCAT << ss.str() << "\n";
                     delete m;
                 }
                 else {
                     std::stringstream ss;
-                    ss  << "Error: replacing module at position " << module->position
-                        << " with a different type/release of module\n";
+                    ss << "Error: replacing module at position " << module->position
+                       << " with a different type/release of module\n";
                     return tl::make_unexpected<std::string>(ss.str());
                 }
             }
         }
         else {
             std::stringstream ss;
-            ss  << "Error: adding module " << module->position << " out of order\n";
+            ss << "Error: adding module " << module->position << " out of order\n";
             return tl::make_unexpected<std::string>(ss.str());
         }
     }
     else {
-        return tl::make_unexpected<std::string>(std::string(__FUNCTION__) + " null module cannot be added");
+        return tl::make_unexpected<std::string>(std::string(__FUNCTION__) +
+                                                " null module cannot be added");
     }
     return true;
 }
@@ -1034,7 +1041,8 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
                     std::flush(std::cerr);
                 }
                 for (j = 0; j < pdo_count; j++) {
-                    DBG_ETHERCAT << "ecrt_master_get_pdo(..., sm: " << i << ", pdo: " << j << ")" << "\n";
+                    DBG_ETHERCAT << "ecrt_master_get_pdo(..., sm: " << i << ", pdo: " << j << ")"
+                                 << "\n";
                     ecrt_master_get_pdo(m, slave.position, i, j, &pdo);
                     c_pdos[j + pdo_pos].index = pdo.index;
                     c_pdos[j + pdo_pos].n_entries = (unsigned int)pdo.n_entries;
@@ -1056,15 +1064,10 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
                             char entry_name[100];
                             snprintf(entry_name, 100, "entry-%X-%X", entry.index, entry.subindex);
 
-                            DBG_ETHERCAT << " entry: " << k
-                                << "{"
-                                << entry_pos << ", "
-                                << std::hex << (int)entry.index << ", "
-                                << std::dec
-                                << (int)entry.subindex << ", "
-                                << (int)entry.bit_length << ", "
-                                << entry_name
-                                << "}";
+                            DBG_ETHERCAT << " entry: " << k << "{" << entry_pos << ", " << std::hex
+                                         << (int)entry.index << ", " << std::dec
+                                         << (int)entry.subindex << ", " << (int)entry.bit_length
+                                         << ", " << entry_name << "}";
                             c_entries[entry_pos].index = entry.index;
                             c_entries[entry_pos].subindex = entry.subindex;
                             c_entries[entry_pos].bit_length = entry.bit_length;
@@ -1109,16 +1112,15 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
     }
 };
 
-
 void collectEtherCatModules() {
     unsigned int pos = 0;
     int res = 0;
     auto slaves = ECInterface::instance()->listSlaves();
     assert(slaves.size() > 0);
     std::stringstream ss;
-    for (const ec_slave_info_t & slave : slaves) {
-        ss << "Adding slave " << std::hex << std::setw(8) << slave.product_code
-                << " " << std::setw(8) << slave.revision_number << " at position " << std::dec << pos << "\n";
+    for (const ec_slave_info_t &slave : slaves) {
+        ss << "Adding slave " << std::hex << std::setw(8) << slave.product_code << " "
+           << std::setw(8) << slave.revision_number << " at position " << std::dec << pos << "\n";
         addEtherCatSlave(ECInterface::master, slave);
     }
     DBG_ETHERCAT << ss.str() << "\n";
@@ -1181,7 +1183,7 @@ bool ECInterface::deactivate() {
     else {
         DBG_ETHERCAT_CALLS << "ecrt_domain_size\n";
         snprintf(buf, 200, "EtherCAT interface: domain1 successfully created with size %ld",
-        ecrt_domain_size(domain1));
+                 ecrt_domain_size(domain1));
         MessageLog::instance()->add(buf);
         DBG_ETHERCAT << buf << "\n";
     }
@@ -1210,7 +1212,7 @@ bool ECInterface::activate() {
     }
     DBG_ETHERCAT << "Activating master...";
     char buf[200];
-        DBG_ETHERCAT_CALLS << "ecrt_master_activate\n";
+    DBG_ETHERCAT_CALLS << "ecrt_master_activate\n";
     if ((res = ecrt_master_activate(master))) {
         snprintf(buf, 200, "EtherCAT interface: Activating master failed with code: %d", res);
         MessageLog::instance()->add(buf);
@@ -1222,7 +1224,7 @@ bool ECInterface::activate() {
     MessageLog::instance()->add(buf);
     DBG_ETHERCAT << buf << "\n";
 
-        DBG_ETHERCAT_CALLS << "ecrt_domain_data\n";
+    DBG_ETHERCAT_CALLS << "ecrt_domain_data\n";
     if (!(domain1_pd = ecrt_domain_data(domain1))) {
         snprintf(buf, 200, "EtherCAT interface: ecrt_domain_data failure");
         MessageLog::instance()->add(buf);
@@ -1234,7 +1236,7 @@ bool ECInterface::activate() {
         active = false;
         return false;
     }
-        DBG_ETHERCAT_CALLS << "ecrt_domain_size\n";
+    DBG_ETHERCAT_CALLS << "ecrt_domain_size\n";
     size_t domain_size = ecrt_domain_size(domain1);
     snprintf(buf, 200, "Activated master with domain size %ld", domain_size);
     DBG_ETHERCAT << buf << "\n";
@@ -1250,13 +1252,13 @@ bool ECInterface::online() {
         if (m->online()) {
             if (!online_modules.count(m)) {
                 online_modules.insert(m);
-                DBG_ETHERCAT << "Module: " << m->getName()  << " online\n";
+                DBG_ETHERCAT << "Module: " << m->getName() << " online\n";
             }
         }
         else {
             if (online_modules.count(m)) {
                 online_modules.erase(m);
-                DBG_ETHERCAT << "Module: " << m->getName()  << " not online\n";
+                DBG_ETHERCAT << "Module: " << m->getName() << " not online\n";
             }
         }
     }
@@ -1278,7 +1280,7 @@ bool ECInterface::operational() {
         else {
             if (operational_modules.count(m)) {
                 operational_modules.erase(m);
-                DBG_ETHERCAT << "Module: " << m->getName()  << " not operational\n";
+                DBG_ETHERCAT << "Module: " << m->getName() << " not operational\n";
             }
         }
     }
@@ -1316,7 +1318,7 @@ void ECInterface::init() {
 
 #if 0
     int res = 0;
-        DBG_ETHERCAT_CALLS << "ecrt_master\n";
+    DBG_ETHERCAT_CALLS << "ecrt_master\n";
     if ((res = ecrt_master(master, &master_info)) < 0) {
         std::cerr << "Error " << res << " getting master info\n";
         master_into_time = 0; // master info information is invalid
@@ -1427,7 +1429,8 @@ void ECInterface::setProcessData(uint8_t *pd) {
     process_data = pd;
 #if VERBOSE_DEBUG
     if (process_data) {
-        DBG_ETHERCAT_PACKETS << "ecrt_domain_size: set process data (" << ecrt_domain_size(domain1) << ") ";
+        DBG_ETHERCAT_PACKETS << "ecrt_domain_size: set process data (" << ecrt_domain_size(domain1)
+                             << ") ";
         display(process_data, ecrt_domain_size(domain1));
         DBG_ETHERCAT_PACKETS << "\n";
     }
@@ -1481,7 +1484,7 @@ static void display(uint8_t *p, size_t n) {
 #endif
 
 void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
-        DBG_ETHERCAT_CALLS << "ecrt_domain_data\n";
+    DBG_ETHERCAT_CALLS << "ecrt_domain_data\n";
     uint8_t *domain1_pd = ecrt_domain_data(domain1);
     uint8_t *pd = domain1_pd;
 
@@ -1531,12 +1534,12 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 }
 
 void ECInterface::receiveState() {
-      static long warned = 0;
+    static long warned = 0;
     if (!master || !initialised) {
-                if (warned++ %100 == 0)
+        if (warned++ % 100 == 0)
             std::cerr << "master not ready to receive state "
-                << ( (!master) ? "(no master)" : "(!initialised)") 
-                << "\n" << std::flush;
+                      << ((!master) ? "(no master)" : "(!initialised)") << "\n"
+                      << std::flush;
         return;
     }
 
@@ -1559,12 +1562,12 @@ void ECInterface::receiveState() {
         }
 #endif
         // receive process data
-                DBG_ETHERCAT_CALLS << "ecrt_master_receive\n";
+        DBG_ETHERCAT_CALLS << "ecrt_master_receive\n";
         ecrt_master_receive(master);
-                DBG_ETHERCAT_CALLS << "ecrt_domain_process\n";
+        DBG_ETHERCAT_CALLS << "ecrt_domain_process\n";
         ecrt_domain_process(domain1);
 #ifdef USE_DC
-                DBG_ETHERCAT_CALLS << "ecrt_imaster_reference_clock_time\n";
+        DBG_ETHERCAT_CALLS << "ecrt_imaster_reference_clock_time\n";
         int err = ecrt_master_reference_clock_time(master, &reference_time);
         if (err == -ENXIO) {
             reference_time = -1; // no reference clocks
@@ -1587,10 +1590,18 @@ void ECInterface::receiveState() {
 int ECInterface::collectState() {
     if (!master || !initialised || !active || !domain1) {
         std::cerr << "master not ready to collect state ";
-        if (!master) std::cerr << "(no master)";
-        else if (!initialised) std::cerr << "(not initialised)";
-        else if (!active) std::cerr << "(not active)";
-        else if (!domain1) std::cerr << "(no domain)";
+        if (!master) {
+            std::cerr << "(no master)";
+        }
+        else if (!initialised) {
+            std::cerr << "(not initialised)";
+        }
+        else if (!active) {
+            std::cerr << "(not active)";
+        }
+        else if (!domain1) {
+            std::cerr << "(no domain)";
+        }
         std::cerr << "\n";
         return 0;
     }
@@ -1673,16 +1684,16 @@ int ECInterface::collectState() {
             affected_bits++;
 #if VERBOSE_DEBUG
             DBG_ETHERCAT_PACKETS << "init update data from process byte " << i << ": " << std::hex
-                      << (int)domain1_pd[i] << std::dec << "\n";
+                                 << (int)domain1_pd[i] << std::dec << "\n";
 #endif
         }
         else if (last_pd[i] != domain1_pd[i]) {
             uint8_t bitmask = 0x01;
             int count = 0;
 #if VERBOSE_DEBUG
-            DBG_ETHERCAT_PACKETS << " offset " << i << " data 0x" << std::hex << (int)*pd << " (was "
-                      << (int)last_pd[i] << ")"
-                      << " process mask: 0x" << (int)*pm << std::dec << "\n";
+            DBG_ETHERCAT_PACKETS << " offset " << i << " data 0x" << std::hex << (int)*pd
+                                 << " (was " << (int)last_pd[i] << ")" << " process mask: 0x"
+                                 << (int)*pm << std::dec << "\n";
 #endif
             while (bitmask) {
                 if (*pm & bitmask) { // we care about this bit
@@ -1690,8 +1701,9 @@ int ECInterface::collectState() {
                     if (((*pd) & bitmask) != ((last_pd[i]) & bitmask)) { // changed
 #if VERBOSE_DEBUG
                         //if (i == 24 ) // ignore analog changes on our machine
-                        DBG_ETHERCAT_PACKETS << "incoming bit " << i << ":" << count << " changed to "
-                                  << (((*pd) & bitmask) ? 1 : 0) << "\n";
+                        DBG_ETHERCAT_PACKETS << "incoming bit " << i << ":" << count
+                                             << " changed to " << (((*pd) & bitmask) ? 1 : 0)
+                                             << "\n";
 #endif
                         if ((*pd) & bitmask) {
                             *q |= bitmask;
@@ -1753,14 +1765,14 @@ void ECInterface::sendUpdates() {
     }
 #ifndef EC_SIMULATOR
 #ifdef USE_DC
-        DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
+    DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
     ecrt_master_application_time(master, EC_TIMEVAL2NANO(now));
-        DBG_ETHERCAT_CALLS << "ecrt_master_sync_reference_clock\n";
+    DBG_ETHERCAT_CALLS << "ecrt_master_sync_reference_clock\n";
     ecrt_master_sync_reference_clock(master);
-        DBG_ETHERCAT_CALLS << "ecrt_master_sync_slave_clocks\n";
+    DBG_ETHERCAT_CALLS << "ecrt_master_sync_slave_clocks\n";
     ecrt_master_sync_slave_clocks(master);
 #endif
-        DBG_ETHERCAT_CALLS << "ecrt_domain_queue\n";
+    DBG_ETHERCAT_CALLS << "ecrt_domain_queue\n";
     ecrt_domain_queue(domain1);
 
 #ifdef KEEP_STATS
@@ -1778,7 +1790,7 @@ void ECInterface::sendUpdates() {
     }
 #endif
 
-        DBG_ETHERCAT_CALLS << "ecrt_master_send\n";
+    DBG_ETHERCAT_CALLS << "ecrt_master_send\n";
     ecrt_master_send(master);
 #endif
 }
@@ -2023,8 +2035,8 @@ void ECInterface::check_slave_config_states(void) {
 
         if (s.al_state != m->slave_config_state.al_state) {
             //MEMCHECK();
-            DBG_ETHERCAT << "ecat_thread: " << m->name << ": State 0x" << std::ios::hex << s.al_state
-                      << ".\n";
+            DBG_ETHERCAT << "ecat_thread: " << m->name << ": State 0x" << std::ios::hex
+                         << s.al_state << ".\n";
             snprintf(buf, BUFSIZE, "Slave %d (%s) changed state was 0x%x now 0x%x", i,
                      m->name.c_str(), m->slave_config_state.al_state, s.al_state);
             MessageLog::instance()->add(buf);
@@ -2111,7 +2123,8 @@ ec_pdo_info_t *c_pdos = 0;
 ec_sync_info_t *c_syncs = 0;
 EntryDetails *c_entry_details = 0;
 
-cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave_info_t &slave, bool reconfigure) {
+cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave_info_t &slave,
+                            bool reconfigure) {
     unsigned int i, j, k, pdo_pos = 0, entry_pos = 0;
 
     const unsigned int estimated_max_entries = 128;
@@ -2130,15 +2143,15 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
     cJSON_AddNumberToObject(root, "error_flag", slave.error_flag);
     bool isEL2535 = false;
     {
-    std::string name(slave.name);
-    int name_len = name.length();
-    for (int i = 0; i < name_len; ++i) {
-        name[i] &= 127;
-    }
-    cJSON_AddStringToObject(root, "name", name.c_str());
-    if (name.substr(6) == "EL2535") {
-        isEL2535 = true;
-    }
+        std::string name(slave.name);
+        int name_len = name.length();
+        for (int i = 0; i < name_len; ++i) {
+            name[i] &= 127;
+        }
+        cJSON_AddStringToObject(root, "name", name.c_str());
+        if (name.substr(6) == "EL2535") {
+            isEL2535 = true;
+        }
     }
 
     if (slave.sync_count) {
@@ -2189,7 +2202,8 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
                     // assert(false); // TODO: what is the above comment about?
                 }
                 for (j = 0; j < pdo_count; j++) {
-                    DBG_ETHERCAT_CALLS << "ecrt_master_get_pdo(..., sm: " << i << ", pdo: " << j << ")" << "\n";
+                    DBG_ETHERCAT_CALLS << "ecrt_master_get_pdo(..., sm: " << i << ", pdo: " << j
+                                       << ")" << "\n";
                     ecrt_master_get_pdo(m, slave.position, i, j, &pdo);
                     cJSON *json_pdo = cJSON_CreateObject();
                     snprintf(index_str, 40, "0x%04X (%d)", pdo.index, pdo.index);
@@ -2216,20 +2230,17 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
                             ecrt_master_get_pdo_entry(m, slave.position, i, j, k, &entry);
                             char entry_name[40];
                             if (xml_module && entry_pos < xml_module->num_entries) {
-                                snprintf(entry_name, 40, "%s", xml_module->entry_details[entry_pos].name.c_str());
+                                snprintf(entry_name, 40, "%s",
+                                         xml_module->entry_details[entry_pos].name.c_str());
                             }
                             else {
-                                snprintf(entry_name, 40, "entry-%X-%X", entry.index, entry.subindex);
+                                snprintf(entry_name, 40, "entry-%X-%X", entry.index,
+                                         entry.subindex);
                             }
-                            DBG_ETHERCAT << " entry: " << k
-                                << "{"
-                                << entry_pos << ", "
-                                << std::hex << (int)entry.index << ", "
-                                << std::dec
-                                << (int)entry.subindex << ", "
-                                << (int)entry.bit_length << ", "
-                                << entry_name
-                                << "}";
+                            DBG_ETHERCAT << " entry: " << k << "{" << entry_pos << ", " << std::hex
+                                         << (int)entry.index << ", " << std::dec
+                                         << (int)entry.subindex << ", " << (int)entry.bit_length
+                                         << ", " << entry_name << "}";
                             c_entries[entry_pos].index = entry.index;
                             c_entries[entry_pos].subindex = entry.subindex;
                             c_entries[entry_pos].bit_length = entry.bit_length;
@@ -2289,7 +2300,7 @@ char *collectSlaveConfig(bool reconfigure) {
     unsigned int pos = 0;
     int res = 0;
     ec_master_info_t master_info;
-        DBG_ETHERCAT_CALLS << "ecrt_master\n";
+    DBG_ETHERCAT_CALLS << "ecrt_master\n";
     res = ecrt_master(ECInterface::master, &master_info);
     while (res >= 0 && pos < master_info.slave_count) {
         ECModule *module = ECInterface::findModule(pos);
@@ -2299,11 +2310,11 @@ char *collectSlaveConfig(bool reconfigure) {
             DBG_ETHERCAT_CALLS << "ecrt_master_get_slave\n";
             res = ecrt_master_get_slave(ECInterface::master, pos, &slave_info);
 
-            DBG_ETHERCAT << "generating JSON slave description for: "
-                << "pos: " << slave_info.position << ", "
-                << "syncs: " << slave_info.sync_count << ", "
-                << "sdos: " << slave_info.sdo_count << ")\n";
-            cJSON_AddItemToArray(root, generateSlaveCStruct(ECInterface::master, module, slave_info, reconfigure));
+            DBG_ETHERCAT << "generating JSON slave description for: " << "pos: "
+                         << slave_info.position << ", " << "syncs: " << slave_info.sync_count
+                         << ", " << "sdos: " << slave_info.sdo_count << ")\n";
+            cJSON_AddItemToArray(
+                root, generateSlaveCStruct(ECInterface::master, module, slave_info, reconfigure));
         }
         ++pos;
     }

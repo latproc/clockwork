@@ -68,8 +68,8 @@ Action::Status SetListEntriesAction::run() {
         }
         else if (source.kind == Value::t_symbol) {
             int64_t val;
-            if (owner->getValue(source).asInteger(val) ) {
-                unsigned long bitmap = (unsigned long) val;
+            if (owner->getValue(source).asInteger(val)) {
+                unsigned long bitmap = (unsigned long)val;
                 setListEntries(bitmap);
             }
         }

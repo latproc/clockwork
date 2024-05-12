@@ -22,8 +22,8 @@ struct FileOperationActionTemplate : public ActionTemplate {
 
     virtual Action *factory(MachineInstance *mi);
     std::ostream &operator<<(std::ostream &out) const {
-        return out << "FileOperationAction " << src_a_name << ", src_b_name "
-                   << " to " << dest_name << " using " << property_name << "\n";
+        return out << "FileOperationAction " << src_a_name << ", src_b_name " << " to " << dest_name
+                   << " using " << property_name << "\n";
     }
 
     Value count;

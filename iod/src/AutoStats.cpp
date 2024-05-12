@@ -54,7 +54,8 @@ void AutoStatStorage::update() {
     start_time = now;
 }
 
-const int64_t *AutoStatStorage::setupPropertyRef(const char *machine_name, const char *property_name) {
+const int64_t *AutoStatStorage::setupPropertyRef(const char *machine_name,
+                                                 const char *property_name) {
     MachineInstance *system = MachineInstance::find(machine_name);
     if (!system) {
         return 0;

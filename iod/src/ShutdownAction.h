@@ -27,8 +27,7 @@ struct ShutdownActionTemplate : public ActionTemplate {
     ShutdownActionTemplate() {}
     Action *factory(MachineInstance *mi) override;
     std::ostream &operator<<(std::ostream &out) const override {
-        return out << "ShutdownAction template "
-                   << "\n";
+        return out << "ShutdownAction template " << "\n";
     }
 };
 
