@@ -1668,7 +1668,8 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                 if (!m->getStateMachine()->property_names.count(key.asString())) {
                     return; //ignore properties no in the interface definition
                 }
-                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val, auth);
+                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val,
+                                                     (int64_t)auth);
             }
             else {
                 //NB_MSG << "using authority " << getAuthority()

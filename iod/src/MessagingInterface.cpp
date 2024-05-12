@@ -571,10 +571,10 @@ char *MessagingInterface::send(const char *txt) {
             NB_MSG << "Warning: Error code " << pgn_rc << " returned when getting thread name\n";
         }
 
-        NB_MSG << "error: message send (" << txt << ") from a different thread:"
-               << " owner: " << std::hex << " '" << owner_thread << " '" << tnam2
-               << "' current: " << std::hex << " " << pthread_self() << " '" << tnam1 << "'"
-               << std::dec << "\n";
+        NB_MSG << "error: message send (" << txt
+               << ") from a different thread:" << " owner: " << std::hex << " '" << owner_thread
+               << " '" << tnam2 << "' current: " << std::hex << " " << pthread_self() << " '"
+               << tnam1 << "'" << std::dec << "\n";
     }
 
     if (!is_publisher) {

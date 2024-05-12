@@ -45,7 +45,6 @@ class ActionTemplate {
 };
 std::ostream &operator<<(std::ostream &out, const ActionTemplate &a);
 
-
 // an action is started by operator(). If the action successfully starts,
 // running() will return true. When the action is complete, complete() will
 // return true;
