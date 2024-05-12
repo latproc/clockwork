@@ -66,8 +66,7 @@ IncludeAction::IncludeAction()
     : list_machine(0), entry_machine(0), position(-1), before(false), expand(false) {}
 
 std::ostream &IncludeAction::operator<<(std::ostream &out) const {
-    return out << "Include Action "
-               << " " << entry << ((before) ? " before " : " after ");
+    return out << "Include Action " << " " << entry << ((before) ? " before " : " after ");
     if (position < 0) {
         out << "last";
     }

@@ -6,7 +6,6 @@ namespace {
 
 class SymbolTableTest : public ::testing::Test {
   protected:
-
     void SetUp() override {
         st.add("x", Value(1));
         st.add("y", Value(2));
@@ -27,7 +26,7 @@ TEST(SymbolTable, AddToTable) {
 }
 
 TEST_F(SymbolTableTest, ValuesAreAsExpected) {
-    EXPECT_EQ(st.find("one").kind,Value::t_string);
+    EXPECT_EQ(st.find("one").kind, Value::t_string);
     EXPECT_EQ(st.find("name").kind, Value::t_symbol);
     EXPECT_EQ(st.find("x").kind, Value::t_integer);
     EXPECT_EQ(st.find("unknown").kind, Value::t_empty);

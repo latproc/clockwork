@@ -166,7 +166,7 @@ class ExpressionTests {
     }
 };
 
-int main(int , char **) {
+int main(int, char **) {
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();

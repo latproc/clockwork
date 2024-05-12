@@ -108,8 +108,7 @@ void usage(int argc, char const *argv[]) {
         << "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
         << "[-mp modbus_port] [-ps persistent_store_port] "
         << "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics\n"
-        << "[--fix-invalid true [-e ethernet_interface]"
-        << "\n";
+        << "[--fix-invalid true [-e ethernet_interface]" << "\n";
 }
 
 static void listDirectory(const std::string pathToCheck, std::list<std::string> &file_list) {
@@ -292,7 +291,7 @@ MachineClass *makeSettingsClass(const char *host_name) {
     return result;
 }
 
-MachineClass * makeClockworkClass() {
+MachineClass *makeClockworkClass() {
     MachineClass *result = new MachineClass("CLOCKWORK");
     result->addState("ready");
     result->default_state = State("ready");
@@ -463,11 +462,9 @@ MachineClass *makeModuleMachineClass() {
     result->addState("OP");
 #ifdef EC_SIMULATOR
     result->transitions.push_back(Transition(State("INIT"), State("OP"), Message("turnOn")));
-    result->transitions.push_back(
-        Transition(State("INIT"), State("PREOP"), Message("powerUp")));
+    result->transitions.push_back(Transition(State("INIT"), State("PREOP"), Message("powerUp")));
     result->transitions.push_back(Transition(State("PREOP"), State("OP"), Message("turnOn")));
-    result->transitions.push_back(
-        Transition(State("OP"), State("PREOP"), Message("turnOff")));
+    result->transitions.push_back(Transition(State("OP"), State("PREOP"), Message("turnOff")));
 #endif
     return result;
 }
@@ -807,11 +804,11 @@ void semantic_analysis() {
             }
             else if (((sm_name == "POINT" || sm_name == "INPUTBIT" || sm_name == "OUTPUTBIT" ||
                        sm_name == "INPUTREGISTER" || sm_name == "OUTPUTREGISTER") &&
-                      num_sm_params >= 2 && num_sm_params <= 3)
-                || (sm_name == "MQTTBROKER" && (num_sm_params == 2 || num_sm_params == 4))
-                || (sm_name == "COUNTERRATE" && (num_sm_params == 3 || num_sm_params == 1))
+                      num_sm_params >= 2 && num_sm_params <= 3) ||
+                     (sm_name == "MQTTBROKER" && (num_sm_params == 2 || num_sm_params == 4)) ||
+                     (sm_name == "COUNTERRATE" && (num_sm_params == 3 || num_sm_params == 1))
 #ifdef USE_SDO
-                || (sm_name == "SDOENTRY" && (num_sm_params == 4 || num_sm_params == 5))
+                     || (sm_name == "SDOENTRY" && (num_sm_params == 4 || num_sm_params == 5))
 #endif //USE_SDO
             ) {
             }
@@ -864,8 +861,7 @@ void semantic_analysis() {
                     else {
                         std::stringstream ss;
                         ss << "Error: no instance " << p_i.sValue << " ("
-                           << mi->parameters[i].real_name << ")"
-                           << " found for " << mi->getName();
+                           << mi->parameters[i].real_name << ")" << " found for " << mi->getName();
                         error_messages.push_back(ss.str());
                         MessageLog::instance()->add(ss.str().c_str());
                         ++num_errors;

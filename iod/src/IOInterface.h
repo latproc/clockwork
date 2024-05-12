@@ -22,6 +22,10 @@
 
 struct IOInterface {
     // Process data will only be used if default data has been sent.
-    enum class MessageType : uint8_t { DEFAULT_DATA, PROCESS_DATA, ACTIVATE_REQUEST, DEACTIVATE_REQUEST };
-
+    enum class MessageType : uint8_t {
+        DEFAULT_DATA,
+        PROCESS_DATA,
+        ACTIVATE_REQUEST,
+        DEACTIVATE_REQUEST
+    };
 };

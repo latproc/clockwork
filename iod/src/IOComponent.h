@@ -21,17 +21,17 @@
 #ifndef __IOComponent
 #define __IOComponent
 
+#include "MQTTInterface.h"
+#include "Message.h"
 #include "State.h"
+#include "filtering.h"
+#include <boost/thread/mutex.hpp>
 #include <list>
 #include <map>
 #include <ostream>
 #include <set>
 #include <string>
 #include <vector>
-#include "MQTTInterface.h"
-#include "Message.h"
-#include "filtering.h"
-#include <boost/thread/mutex.hpp>
 
 struct IOAddress {
     unsigned int module_position;

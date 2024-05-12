@@ -1,8 +1,8 @@
 #include "ethercat_xml_parser.h"
-#include <ECInterface.h>
-#include <Statistics.h>
-#include <Logger.h>
 #include <DebugExtra.h>
+#include <ECInterface.h>
+#include <Logger.h>
+#include <Statistics.h>
 #include <algorithm>
 #include <assert.h>
 #include <ecrt.h>
@@ -13,36 +13,32 @@
 #include <libxml/xmlreader.h>
 #include <map>
 
-std::ostream & operator <<(std::ostream &out, const EntryDetails &details) {
-    out << "name: " << details.name
-        << ", index: " << std::hex << details.entry_index
-        << ", sm_index: " << details.sm_index
-        << ", pdo_index: " << details.pdo_index
-        << std::dec;
+std::ostream &operator<<(std::ostream &out, const EntryDetails &details) {
+    out << "name: " << details.name << ", index: " << std::hex << details.entry_index
+        << ", sm_index: " << details.sm_index << ", pdo_index: " << details.pdo_index << std::dec;
     return out;
 }
 
-std::ostream & operator <<(std::ostream &out, const ec_pdo_entry_info_t &entry) {
+std::ostream &operator<<(std::ostream &out, const ec_pdo_entry_info_t &entry) {
     out << "index: " << std::hex << entry.index << std::dec << " "
-        << "subindex: " << (int)entry.subindex << " "
-        << "bitlen: " << (int)entry.bit_length;
+        << "subindex: " << (int)entry.subindex << " " << "bitlen: " << (int)entry.bit_length;
     return out;
 }
 
-std::ostream & operator <<(std::ostream &out, const ConfigurationDetails &details) {
+std::ostream &operator<<(std::ostream &out, const ConfigurationDetails &details) {
     return details.operator<<(out);
 }
 
-std::ostream &ConfigurationDetails::operator<<(std::ostream &out) const
-{
-     out << "num_syncs: " << num_syncs << " "
-         << "num_entries: " << num_entries << " "
-         << "entry_details:\n";
-     if (c_entry_details) {  out <<  *c_entry_details << "\n"; }
-     for (unsigned int i=0; i<num_entries; ++i) {
-         out << c_entries[i] << "\n";
-     }
-     return out;
+std::ostream &ConfigurationDetails::operator<<(std::ostream &out) const {
+    out << "num_syncs: " << num_syncs << " " << "num_entries: " << num_entries << " "
+        << "entry_details:\n";
+    if (c_entry_details) {
+        out << *c_entry_details << "\n";
+    }
+    for (unsigned int i = 0; i < num_entries; ++i) {
+        out << c_entries[i] << "\n";
+    }
+    return out;
 }
 
 using namespace std;
@@ -289,8 +285,8 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                     ec_sync_info_t *si = current_device->config.c_syncs;
                     for (unsigned int i = 0; i < n; ++i) {
                         DBG_ETHERCAT << "sm entry: " << i << " index: " << (int)si->index
-                                  << " direction: " << si->dir << " num pdos: " << si->n_pdos
-                                  << "\n";
+                                     << " direction: " << si->dir << " num pdos: " << si->n_pdos
+                                     << "\n";
                         ++si;
                     }
                 }
@@ -350,9 +346,9 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                         }
                     }
                     else {
-                        DBG_ETHERCAT << "no match for device with pc: " << std::hex << pc << "/" << rn
-                                  << std::dec << " (" << attributes["ProductCode"] << "/"
-                                  << attributes["RevisionNo"] << std::dec << ")\n";
+                        DBG_ETHERCAT << "no match for device with pc: " << std::hex << pc << "/"
+                                     << rn << std::dec << " (" << attributes["ProductCode"] << "/"
+                                     << attributes["RevisionNo"] << std::dec << ")\n";
                     }
                 }
                 else if (nameKey == name) {
@@ -401,8 +397,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                     DBG_ETHERCAT << xmlTextReaderConstValue(reader) << "\n";
                 }
                 DBG_ETHERCAT << " ProductCode: " << attributes["ProductCode"] << " "
-                    << " RevisionNo: " << attributes["RevisionNo"] << " "
-                    << "\n";
+                             << " RevisionNo: " << attributes["RevisionNo"] << " " << "\n";
             }
             if (kind == XML_READER_TYPE_END_ELEMENT && typeKey == name) {
                 enter(in_device);
@@ -477,7 +472,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 std::string cb = attributes["ControlByte"];
                 uint8_t b_cb = 0xff & intFromStr(cb.c_str());
                 DBG_ETHERCAT << "SM. Name: " << attributes["Name"] << " ControlByte: " << cb << " "
-                          << (b_cb & 0x0c ? "Output" : "Input") << "\n";
+                             << (b_cb & 0x0c ? "Output" : "Input") << "\n";
                 unsigned int &ns = current_device->config.num_syncs;
                 ec_sync_info_t *si = &current_device->config.c_syncs[ns];
                 si->index = ns++;
@@ -526,9 +521,9 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                             current_device->config.num_entries - current_pdo_start_entry;
                         pd->entries = &current_device->config.c_entries[current_pdo_start_entry];
 
-                        DBG_ETHERCAT << "Added pdo entry " << std::hex << "0x" << pd->index << std::dec
-                                  << ", " << pd->n_entries << " entries to sm " << current_sm_index
-                                  << "\n";
+                        DBG_ETHERCAT << "Added pdo entry " << std::hex << "0x" << pd->index
+                                     << std::dec << ", " << pd->n_entries << " entries to sm "
+                                     << current_sm_index << "\n";
                         ++n;
                     }
                 }
@@ -583,9 +578,9 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                         capturing_pdo = true;
                     }
                     DBG_ETHERCAT << "PDO Index: ";
-                    DBG_ETHERCAT << "0x" << std::hex << current_pdo_index << std::dec << " sm index "
-                              << current_alt_sm_mapping_index << " (" << attributes["Sm"] << ") "
-                              << (capturing_pdo ? " (USE)" : "");
+                    DBG_ETHERCAT << "0x" << std::hex << current_pdo_index << std::dec
+                                 << " sm index " << current_alt_sm_mapping_index << " ("
+                                 << attributes["Sm"] << ") " << (capturing_pdo ? " (USE)" : "");
                 }
                 DBG_ETHERCAT << "\n";
             }
@@ -607,8 +602,8 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                     e->index = intFromStr(entry_attributes["Index"].c_str());
                     e->subindex = intFromStr(entry_attributes["SubIndex"].c_str());
                     e->bit_length = intFromStr(entry_attributes["BitLen"].c_str());
-                    DBG_ETHERCAT << "Added entry: " << std::hex << "0x" << e->index << std::dec << ", "
-                              << (int)e->subindex << ", " << (int)e->bit_length << "\n";
+                    DBG_ETHERCAT << "Added entry: " << std::hex << "0x" << e->index << std::dec
+                                 << ", " << (int)e->subindex << ", " << (int)e->bit_length << "\n";
 
                     EntryDetails *ed = &current_device->config.c_entry_details[n];
                     ed->name = (e->index != 0)
@@ -620,7 +615,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                     ed->sm_index = current_sm_index;
 
                     DBG_ETHERCAT << "Added entry detail: " << ed->name << ", " << ed->entry_index
-                              << ", " << ed->pdo_index << ", " << ed->sm_index << "\n";
+                                 << ", " << ed->pdo_index << ", " << ed->sm_index << "\n";
                     ++n;
                 }
                 ++num_device_entries;
@@ -681,11 +676,11 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
 
                 unsigned int curr_mapping = intFromStr(attributes["No"].c_str());
                 DBG_ETHERCAT << " No: " << curr_mapping
-                          << (matched_device->selected_alt_sm_name.length() &&
-                                      matched_device->selected_alt_sm_name == sm_name
-                                  ? " [selected]"
-                                  : "")
-                          << "\n";
+                             << (matched_device->selected_alt_sm_name.length() &&
+                                         matched_device->selected_alt_sm_name == sm_name
+                                     ? " [selected]"
+                                     : "")
+                             << "\n";
                 int count = (int)current_alt_sm->mappings[0]->n_pdos;
                 if (count) {
                     unsigned int *i = current_alt_sm->mappings[0]->pdos;
@@ -739,7 +734,7 @@ bool EtherCATXMLParser::loadDeviceConfigurationXML(const char *filename) {
             continue;
         }
         DBG_ETHERCAT << "looking for : " << std::hex << "0x" << info->product_code << "/"
-                  << info->revision_no << std::dec << "\n";
+                     << info->revision_no << std::dec << "\n";
     }
     reader = xmlReaderForFile(filename, 0, 0);
     if (reader) {

@@ -22,42 +22,42 @@
 
 namespace {
 
-    // To test messages we need a receiver and a transmitter.
-    class Taker : public Receiver {
-    public:
-        Taker(CStringHolder name_str,
-              const std::function<bool(const Message &, Transmitter *)> & can_receive)
-              : Receiver(name_str), m_can_receive(can_receive) {}
-        bool receives(const Message &msg, Transmitter *t) override {
-            return m_can_receive(msg, t);
-        }
-        void handle(const Message &msg, Transmitter *from, bool needs_receipt = false) override {
-            received_message = true;
-        }
-        void reset() { received_message = false; }
-        bool got_message() { return received_message; }
-    private:
-        const std::function<bool(const Message &, Transmitter *)> m_can_receive;
-        bool received_message = false;
-    };
+// To test messages we need a receiver and a transmitter.
+class Taker : public Receiver {
+  public:
+    Taker(CStringHolder name_str,
+          const std::function<bool(const Message &, Transmitter *)> &can_receive)
+        : Receiver(name_str), m_can_receive(can_receive) {}
+    bool receives(const Message &msg, Transmitter *t) override { return m_can_receive(msg, t); }
+    void handle(const Message &msg, Transmitter *from, bool needs_receipt = false) override {
+        received_message = true;
+    }
+    void reset() { received_message = false; }
+    bool got_message() { return received_message; }
 
-    class Giver : public Transmitter {
-    public:
-        Giver(CStringHolder name_str) : Transmitter(name_str) {}
-        virtual bool receives(const Message &msg, Transmitter *t) { return true; }
-        virtual void sendMessageToReceiver(const Message &msg, Receiver *to, bool expect_reply = false) {
-            if (to->receives(msg, this)) {
-                to->handle(msg, this, expect_reply);
-            }
+  private:
+    const std::function<bool(const Message &, Transmitter *)> m_can_receive;
+    bool received_message = false;
+};
+
+class Giver : public Transmitter {
+  public:
+    Giver(CStringHolder name_str) : Transmitter(name_str) {}
+    virtual bool receives(const Message &msg, Transmitter *t) { return true; }
+    virtual void sendMessageToReceiver(const Message &msg, Receiver *to,
+                                       bool expect_reply = false) {
+        if (to->receives(msg, this)) {
+            to->handle(msg, this, expect_reply);
         }
-    };
+    }
+};
 
-    class TransmissionTest : public ::testing::Test {
-    protected:
-        void SetUp() override {}
-    };
+class TransmissionTest : public ::testing::Test {
+  protected:
+    void SetUp() override {}
+};
 
-}
+} // namespace
 
 // The following aren't particularly useful tests, just practice TDD.
 TEST(MessageTest, default_message_type_is_simple) {
@@ -108,9 +108,7 @@ TEST(MessageTest, messages_with_different_text_are_unequal) {
 
 TEST_F(TransmissionTest, can_send_to_receiver) {
     Message msg("test");
-    Taker taker("taker", [](const Message &msg, Transmitter *t) {
-        return true;
-    });
+    Taker taker("taker", [](const Message &msg, Transmitter *t) { return true; });
     Giver giver("giver");
     giver.sendMessageToReceiver(msg, &taker);
     EXPECT_TRUE(taker.got_message());
@@ -118,9 +116,7 @@ TEST_F(TransmissionTest, can_send_to_receiver) {
 
 TEST_F(TransmissionTest, receiver_can_refuse_message) {
     Message msg("test");
-    Taker taker("taker", [](const Message &msg, Transmitter *t) {
-        return false;
-    });
+    Taker taker("taker", [](const Message &msg, Transmitter *t) { return false; });
     Giver giver("giver");
     giver.sendMessageToReceiver(msg, &taker);
     EXPECT_FALSE(taker.got_message());

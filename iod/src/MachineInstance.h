@@ -28,10 +28,10 @@
 #include "MachineClass.h"
 #include "MachineCommandAction.h"
 #include "Message.h"
-#include "Receiver.h"
 #include "ModbusInterface.h"
 #include "Parameter.h"
 #include "Plugin.h"
+#include "Receiver.h"
 #include "SetStateAction.h"
 #include "StableState.h"
 #include "State.h"
@@ -40,8 +40,8 @@
 #include "dynamic_value.h"
 #include "symboltable.h"
 #include <boost/foreach.hpp>
-#include <boost/thread/recursive_mutex.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/thread/recursive_mutex.hpp>
 #include <cassert>
 #include <list>
 #include <map>
@@ -114,8 +114,10 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     virtual bool receives(const Message &, Transmitter *t);
     Action::Status execute(const Message &m, Transmitter *from, Action *action = 0);
     virtual void handle(const Message &, Transmitter *from, bool send_receipt = false);
-    virtual void sendMessageToReceiver(const Message &m, Receiver *r = NULL, bool expect_reply = false);
-    virtual void sendMessageToReceiver(const char *msg, Receiver *r = NULL, bool expect_reply = false);
+    virtual void sendMessageToReceiver(const Message &m, Receiver *r = NULL,
+                                       bool expect_reply = false);
+    virtual void sendMessageToReceiver(const char *msg, Receiver *r = NULL,
+                                       bool expect_reply = false);
 
     virtual void idle();
     //virtual bool hasWork() { return has_work; }
@@ -355,12 +357,12 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     uint64_t setupSubconditionTriggers(const StableState &s, uint64_t earliestTimer);
     Action *findReceiveHandler(Transmitter *from, const Message &m, const std::string short_name,
                                bool response_required);
-    virtual Action::Status setState(const State & new_state) { return setState(new_state, 0, false); }
+    virtual Action::Status setState(const State &new_state) {
+        return setState(new_state, 0, false);
+    }
     virtual Action::Status setState(const char *new_state) { return setState(new_state, 0, false); }
-    virtual Action::Status setState(const State &new_state, uint64_t authority,
-                                    bool resume);
-    virtual Action::Status setState(const char *new_state, uint64_t authority,
-                                    bool resume);
+    virtual Action::Status setState(const State &new_state, uint64_t authority, bool resume);
+    virtual Action::Status setState(const char *new_state, uint64_t authority, bool resume);
     bool is_enabled;
     Value state_timer;
     MachineInstance *locked;

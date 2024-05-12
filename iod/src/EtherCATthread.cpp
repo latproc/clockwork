@@ -1,24 +1,22 @@
 #include "EtherCATthread.h"
-#include <iostream>
-#include <inttypes.h>
 #include <ethercat.h>
+#include <inttypes.h>
+#include <iostream>
 
 EtherCATthread *EtherCATthread::instance_ = nullptr;
 class EtherCATthreadInternals {
-public:
+  public:
     std::string adapter;
 };
 
-EtherCATthread::EtherCATthread() {
-    m_pimpl = new EtherCATthreadInternals;
-}
+EtherCATthread::EtherCATthread() { m_pimpl = new EtherCATthreadInternals; }
 
-EtherCATthread::~EtherCATthread() {
-    delete m_pimpl;
-}
+EtherCATthread::~EtherCATthread() { delete m_pimpl; }
 
 EtherCATthread *EtherCATthread::instance() {
-    if (instance_ == nullptr) { instance_ = new EtherCATthread; }
+    if (instance_ == nullptr) {
+        instance_ = new EtherCATthread;
+    }
     return instance_;
 }
 
@@ -27,12 +25,12 @@ void EtherCATthread::stop() {
     instance_ = nullptr;
 }
 
-void EtherCATthread::activate(const std::string & adapter) {
+void EtherCATthread::activate(const std::string &adapter) {
     m_pimpl->adapter = adapter;
 #ifdef SOEM_ETHERCAT
     if (ec_init(m_pimpl->adapter.c_str())) {
         std::cerr << "SOEM EtherCAT initialised.";
-        if ( ec_config_init(false) > 0 ) {
+        if (ec_config_init(false) > 0) {
             std::cerr << ec_slavecount << " slaves found.\n";
         }
     }
@@ -40,6 +38,4 @@ void EtherCATthread::activate(const std::string & adapter) {
 #endif
 }
 
-void EtherCATthread::operator()() {
-
-}
+void EtherCATthread::operator()() {}

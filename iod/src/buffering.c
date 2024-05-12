@@ -259,8 +259,8 @@ void fail(int test) {
 }
 
 int run_buffer_tests(int argc, const char *argv[]) {
-    double (*sum)(struct CircularBuffer * buf, int n) = bufferSum;
-    double (*average)(struct CircularBuffer * buf, int n) = bufferAverage;
+    double (*sum)(struct CircularBuffer *buf, int n) = bufferSum;
+    double (*average)(struct CircularBuffer *buf, int n) = bufferAverage;
 
     int tests = 0;
     int test_buffer_size = 4;

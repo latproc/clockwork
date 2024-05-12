@@ -1,13 +1,13 @@
 #include "DebugExtra.h"
 #include "ECInterface.h"
 #include "gtest/gtest.h"
+#include <DebugExtra.h>
 #include <ethercat_xml_parser.h>
 #include <list>
 #include <map>
 #include <symboltable.h>
-#include <value.h>
-#include <DebugExtra.h>
 #include <utility>
+#include <value.h>
 
 namespace {
 std::vector<DeviceInfo *> collected_configurations;
@@ -41,7 +41,7 @@ class EtherCatXMLTest : public ::testing::Test {
     }
 
     void TearDown() override {
-        for (size_t i=0; i<collected_configurations.size(); ++i) {
+        for (size_t i = 0; i < collected_configurations.size(); ++i) {
             delete collected_configurations[i];
         }
     };
@@ -57,7 +57,7 @@ TEST_F(EtherCatXMLTest, LoadDeviceConfigurationXML) {
 TEST_F(EtherCatXMLTest, FindADevice) {
     EXPECT_EQ(collected_configurations.size(), 0);
     DeviceInfo di;
-    di.product_code =0x0000ffff;
+    di.product_code = 0x0000ffff;
     di.revision_no = 0x0010000;
     parser.xml_configured.push_back(&di);
     EXPECT_TRUE(parser.loadDeviceConfigurationXML("test.xml")) << "it parses the test XML";

@@ -17,9 +17,7 @@ class DisableActionTest : public ::testing::Test {
         flag->setStateMachine(fc);
         system.activate();
     }
-    void TearDown() override {
-        system.deactivate();
-    }
+    void TearDown() override { system.deactivate(); }
 
   private:
     MockSystemSetup system;

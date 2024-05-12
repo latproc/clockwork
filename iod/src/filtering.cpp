@@ -1,5 +1,5 @@
-#include <math.h>
 #include "filtering.h"
+#include <math.h>
 
 #if 0
 class scoped_lock {

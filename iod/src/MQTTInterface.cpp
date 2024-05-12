@@ -51,7 +51,7 @@ void my_message_callback(struct mosquitto *mosq, void *obj,
         memcpy(payload, message->payload, message->payloadlen);
         payload[message->payloadlen] = 0;
         std::stringstream ss;
-        ss  << message->topic << ": " << payload;
+        ss << message->topic << ": " << payload;
         MessageLog::instance()->add(ss.str());
         std::map<std::string, MachineInstance *>::iterator pos =
             device->handlers.find(message->topic);
@@ -115,7 +115,8 @@ void my_disconnect_callback(struct mosquitto *mosq, void *obj, int rc) {
     MQTTModule *device = (MQTTModule *)obj;
     device->connected = false;
     if (rc != 0) {
-        MessageLog::instance()->add("Unexpected disconnect: " + std::string(mosquitto_strerror(rc)));
+        MessageLog::instance()->add("Unexpected disconnect: " +
+                                    std::string(mosquitto_strerror(rc)));
     }
 }
 
@@ -218,7 +219,9 @@ bool MQTTModule::publish(const std::string &topic, const std::string &message, M
             last_error_str = "Error: Message payload is too large.";
             break;
         }
-        if (rc != MOSQ_ERR_SUCCESS) { MessageLog::instance()->add(last_error_str); }
+        if (rc != MOSQ_ERR_SUCCESS) {
+            MessageLog::instance()->add(last_error_str);
+        }
         return false;
     }
     m->setValue("topic", Value(topic.c_str(), Value::t_string));
@@ -252,7 +255,9 @@ bool MQTTModule::subscribe(const std::string &topic, MachineInstance *m) {
         case MOSQ_ERR_PAYLOAD_SIZE:
             last_error_str = "MQTT Error: invalid payload size when communicating with broker.";
         }
-        if (rc != MOSQ_ERR_SUCCESS) { MessageLog::instance()->add(last_error_str); }
+        if (rc != MOSQ_ERR_SUCCESS) {
+            MessageLog::instance()->add(last_error_str);
+        }
         return false;
     }
     handlers[topic] = m;
@@ -386,7 +391,8 @@ void MQTTInterface::collectState() {
         }
         else if (!module->connect()) {
             std::stringstream ss;
-            ss << "Error: " << mosquitto_strerror(module->last_error)  << ": " << module->last_error_str;
+            ss << "Error: " << mosquitto_strerror(module->last_error) << ": "
+               << module->last_error_str;
             MessageLog::instance()->add(ss.str());
         }
     }
@@ -399,110 +405,109 @@ void MQTTInterface::sendUpdates() {
 }
 
 void setup_mqtt(const std::map<std::string, MachineInstance *> &machines) {
-        {
-            size_t remaining = machines.size();
-            DBG_PARSER << remaining << " Machines\n";
-            DBG_INITIALISATION << "Initialising MQTT\n";
+    {
+        size_t remaining = machines.size();
+        DBG_PARSER << remaining << " Machines\n";
+        DBG_INITIALISATION << "Initialising MQTT\n";
 
-            // find and process all MQTT Modules as they are required before POINTS that use them
-            std::map<std::string, MachineInstance *>::const_iterator iter = machines.begin();
-            while (iter != machines.end()) {
-                MachineInstance *m = (*iter).second;
-                iter++;
-                if (m->_type == "MQTTBROKER" && (m->parameters.size() == 2 || m->parameters.size() == 4)){
-                    MQTTModule *module = MQTTInterface::instance()->findModule(m->getName());
-                    if (module) {
+        // find and process all MQTT Modules as they are required before POINTS that use them
+        std::map<std::string, MachineInstance *>::const_iterator iter = machines.begin();
+        while (iter != machines.end()) {
+            MachineInstance *m = (*iter).second;
+            iter++;
+            if (m->_type == "MQTTBROKER" &&
+                (m->parameters.size() == 2 || m->parameters.size() == 4)) {
+                MQTTModule *module = MQTTInterface::instance()->findModule(m->getName());
+                if (module) {
+                    std::stringstream ss;
+                    ss << "MQTT Broker " << m->getName() << " is already registered";
+                    MessageLog::instance()->add(ss.str());
+                    continue;
+                }
+                module = new MQTTModule(m->getName().c_str());
+                module->host = m->parameters[0].val.asString();
+                if (m->parameters.size() == 4) {
+                    module->username = m->parameters[2].val.asString();
+                    module->password = m->parameters[3].val.asString();
+                }
+                int64_t port;
+                if (m->parameters[1].val.asInteger(port)) {
+                    module->port = (int)port;
+                    MQTTInterface::instance()->addModule(module, false);
+                    module->connect();
+                }
+            }
+        }
+
+        iter = machines.begin();
+        while (iter != machines.end()) {
+            MachineInstance *m = (*iter).second;
+            iter++;
+            --remaining;
+            if (m->_type == "MQTTBROKER" &&
+                (m->parameters.size() == 2 || m->parameters.size() == 4)) {
+                continue;
+            }
+            else if (m->_type == "POINT" && m->parameters.size() > 1 &&
+                     m->parameters[1].val.kind == Value::t_integer) {
+                // POINTs with integer values are used by EtherCAT
+#if 0
+                std::string name = m->parameters[0].real_name;
+                //int bit_position = (int)m->parameters[1].val.iValue;
+                //std::cerr << "Setting up point " << m->getName() << " " << bit_position << " on module " << name << "\n";
+                MachineInstance *module_mi = MachineInstance::find(name.c_str());
+                if (!module_mi) {
+                    std::cerr << "No machine called " << name << "\n";
+                    continue;
+                }
+                if (!module_mi->properties.exists("position")) { // module position not given
+                    std::cerr << "Machine " << name << " does not specify a position\n";
+                    continue;
+                }
+                int module_position = (int)module_mi->properties.lookup("position").iValue;
+                if (module_position == -1) { // module position unmapped
+                    std::cerr << "Machine " << name << " position not mapped\n";
+                    continue;
+                }
+#else
+                continue;
+#endif
+            }
+            else {
+                if (m->_type == "POINT" || m->_type == "MQTTPUBLISHER" ||
+                    m->_type == "MQTTSUBSCRIBER") {
+                    std::string name = m->parameters[0].real_name;
+                    DBG_INITIALISATION << "Setting up " << m->_type << " " << m->getName() << " \n";
+                    MQTTModule *module =
+                        MQTTInterface::instance()->findModule(m->parameters[0].real_name);
+                    if (!module) {
                         std::stringstream ss;
-                        ss << "MQTT Broker " << m->getName() << " is already registered";
+                        ss << "No MQTT Broker called " << m->parameters[0].real_name;
                         MessageLog::instance()->add(ss.str());
                         continue;
                     }
-                    module = new MQTTModule(m->getName().c_str());
-                    module->host = m->parameters[0].val.asString();
-                    if (m->parameters.size() == 4) {
-                        module->username = m->parameters[2].val.asString();
-                        module->password = m->parameters[3].val.asString();
+                    std::string topic = m->parameters[1].val.asString();
+                    if (m->_type != "MQTTSUBSCRIBER" && m->parameters.size() == 3) {
+                        if (!module->publishes(topic)) {
+                            m->properties.add("type", "Output");
+                            module->publish(topic, m->parameters[2].val.asString(), m);
+                        }
                     }
-                    int64_t port;
-                    if (m->parameters[1].val.asInteger(port)) {
-                        module->port = (int)port;
-                        MQTTInterface::instance()->addModule(module, false);
-                        module->connect();
+                    else if (m->_type != "MQTTPUBLISHER") {
+                        if (!module->subscribes(topic)) {
+                            m->properties.add("type", "Input");
+                            module->subscribe(topic, m);
+                        }
+                    }
+                    else {
+                        MessageLog::instance()->add("Error defining instance " + m->getName());
                     }
                 }
             }
-
-            iter = machines.begin();
-            while (iter != machines.end()) {
-                MachineInstance *m = (*iter).second;
-                iter++;
-                --remaining;
-                if (m->_type == "MQTTBROKER" && (m->parameters.size() == 2 || m->parameters.size() == 4)) {
-                    continue;
-                }
-                else if (m->_type == "POINT" && m->parameters.size() > 1 &&
-                         m->parameters[1].val.kind == Value::t_integer) {
-                    // POINTs with integer values are used by EtherCAT
-#if 0
-                    std::string name = m->parameters[0].real_name;
-                    //int bit_position = (int)m->parameters[1].val.iValue;
-                    //std::cerr << "Setting up point " << m->getName() << " " << bit_position << " on module " << name << "\n";
-                    MachineInstance *module_mi = MachineInstance::find(name.c_str());
-                    if (!module_mi) {
-                        std::cerr << "No machine called " << name << "\n";
-                        continue;
-                    }
-                    if (!module_mi->properties.exists("position")) { // module position not given
-                        std::cerr << "Machine " << name << " does not specify a position\n";
-                        continue;
-                    }
-                    int module_position = (int)module_mi->properties.lookup("position").iValue;
-                    if (module_position == -1) { // module position unmapped
-                        std::cerr << "Machine " << name << " position not mapped\n";
-                        continue;
-                    }
-#else
-                    continue;
-#endif
-                }
-                else {
-                    if (m->_type == "POINT" || m->_type == "MQTTPUBLISHER" ||
-                        m->_type == "MQTTSUBSCRIBER")
-                    {
-                        std::string name = m->parameters[0].real_name;
-                        DBG_INITIALISATION << "Setting up " << m->_type << " " << m->getName()
-                                           << " \n";
-                        MQTTModule *module =
-                            MQTTInterface::instance()->findModule(m->parameters[0].real_name);
-                        if (!module) {
-                            std::stringstream ss;
-                            ss << "No MQTT Broker called " << m->parameters[0].real_name;
-                            MessageLog::instance()->add(ss.str());
-                            continue;
-                        }
-                        std::string topic = m->parameters[1].val.asString();
-                        if (m->_type != "MQTTSUBSCRIBER" && m->parameters.size() == 3) {
-                            if (!module->publishes(topic)) {
-                                m->properties.add("type", "Output");
-                                module->publish(topic, m->parameters[2].val.asString(), m);
-                            }
-                        }
-                        else if (m->_type != "MQTTPUBLISHER") {
-                            if (!module->subscribes(topic)) {
-                                m->properties.add("type", "Input");
-                                module->subscribe(topic, m);
-                            }
-                        }
-                        else {
-                            MessageLog::instance()->add("Error defining instance " + m->getName());
-                        }
-                    }
-                }
-            }
-            assert(remaining == 0);
         }
+        assert(remaining == 0);
+    }
 }
-
 
 bool MQTTInterface::start() {
 #if 0
@@ -559,4 +564,3 @@ bool MQTTInterface::stop() {
     }
     return true;
 }
-

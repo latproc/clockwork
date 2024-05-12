@@ -8,7 +8,7 @@
 #include "Message.h"
 
 class Receiver : public Transmitter {
-public:
+  public:
     Receiver(CStringHolder name_str) : Transmitter(name_str), has_work(false) {}
     virtual bool receives(const Message &, Transmitter *t) = 0;
     virtual void handle(const Message &, Transmitter *from, bool needs_receipt = false) = 0;
@@ -17,7 +17,7 @@ public:
     bool hasPending(const Message &msg);
     long getId() const { return id; }
 
-protected:
+  protected:
     std::list<Package> mail_queue;
     static boost::mutex q_mutex;
     bool has_work;

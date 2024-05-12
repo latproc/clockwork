@@ -210,7 +210,7 @@ class ChannelInternals;
 class IODCommand;
 class Channel : public MachineInstance, public ChannelImplementation {
   public:
-    Channel(const std::string & name, const std::string & type);
+    Channel(const std::string &name, const std::string &type);
     ~Channel() override;
     Channel(const Channel &orig) = delete;
     Channel &operator=(const Channel &other);
@@ -220,12 +220,14 @@ class Channel : public MachineInstance, public ChannelImplementation {
     void operator()();
     void abort();
 
-    Action::Status setState(const State &new_state, uint64_t authority,
-                            bool resume) override;
-    Action::Status setState(const char *new_state, uint64_t authority,
-                            bool resume) override;
-    Action::Status setState(const State & new_state) override { return setState(new_state, 0, false); }
-    Action::Status setState(const char *new_state) override { return setState(new_state, 0, false); }
+    Action::Status setState(const State &new_state, uint64_t authority, bool resume) override;
+    Action::Status setState(const char *new_state, uint64_t authority, bool resume) override;
+    Action::Status setState(const State &new_state) override {
+        return setState(new_state, 0, false);
+    }
+    Action::Status setState(const char *new_state) override {
+        return setState(new_state, 0, false);
+    }
 
     static void initialiseChannels();
 
@@ -253,7 +255,7 @@ class Channel : public MachineInstance, public ChannelImplementation {
     static void sendCommand(MachineInstance *machine, std::string cmd, std::list<Value> *params,
                             MessageHeader mh);
     static void setupAllShadows();
-    static Channel *findByType(const std::string & kind);
+    static Channel *findByType(const std::string &kind);
     MessagingInterface *getPublisher() { return mif; }
 
     void setupFilters();
@@ -319,6 +321,7 @@ class Channel : public MachineInstance, public ChannelImplementation {
 
   private:
     std::string channel_name;
+
   protected:
     ChannelInternals *internals;
 

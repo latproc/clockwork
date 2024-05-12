@@ -24,7 +24,7 @@
 #include <sys/types.h>
 
 #include "IODCommand.h"
-#include "tl/expected.hpp"  
+#include "tl/expected.hpp"
 #ifndef EC_SIMULATOR
 #include "value.h"
 
@@ -203,7 +203,7 @@ class ECInterface {
     uint32_t reference_time;
 #ifndef EC_SIMULATOR
     static std::vector<ECModule *> modules;
-    std::set<ECModule*> online_modules;
+    std::set<ECModule *> online_modules;
     std::set<ECModule *> operational_modules;
 #ifdef USE_SDO
     std::list<std::pair<SDOEntry *, Value>> initialisation_entries;

@@ -48,14 +48,18 @@ bool ControlSystemMachine::connected() const {
 }
 
 void ControlSystemMachine::requestActivation(bool which) {
-		DBG_MSG << "requesting activation of control system\n";
+    DBG_MSG << "requesting activation of control system\n";
     activate_requested = which;
-    if (activate_requested) { deactivate_requested = false; }
+    if (activate_requested) {
+        deactivate_requested = false;
+    }
 }
 bool ControlSystemMachine::activationRequested() { return activate_requested; }
 void ControlSystemMachine::requestDeactivation(bool which) {
     deactivate_requested = which;
-    if (deactivate_requested) { activate_requested = false; }
+    if (deactivate_requested) {
+        activate_requested = false;
+    }
 }
 bool ControlSystemMachine::deactivationRequested() { return deactivate_requested; }
 
@@ -261,7 +265,9 @@ void ControlSystemMachine::enter_operational() {
     ecat_last_synced = 0; // state changes requires followup sync
     DBG_PROCESSING << "Control System is operational\n ";
 #ifndef EC_SIMULATOR
-    if (!ECInterface::active) ECInterface::instance()->activate();
+    if (!ECInterface::active) {
+        ECInterface::instance()->activate();
+    }
 #endif
     if (ethercat_machine) {
         SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "ACTIVE");

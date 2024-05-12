@@ -4,12 +4,13 @@
 
 class EtherCATthreadInternals;
 class EtherCATthread {
-public:
+  public:
     static EtherCATthread *instance();
     static void stop();
     void activate(const std::string &adapter);
     void operator()();
-private:
+
+  private:
     static EtherCATthread *instance_;
     EtherCATthreadInternals *m_pimpl;
     EtherCATthread();

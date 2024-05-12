@@ -18,10 +18,10 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include <iostream>
 #include "LogAction.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
+#include <iostream>
 
 Action *LogActionTemplate::factory(MachineInstance *mi) { return new LogAction(mi, *this); }
 

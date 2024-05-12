@@ -49,7 +49,7 @@ class TriggerInternals;
 class Trigger;
 struct TriggerOwner {
     virtual ~TriggerOwner() = default;
-    virtual void triggerFired(Trigger *trigger){};
+    virtual void triggerFired(Trigger *trigger) {};
 };
 
 class Trigger {
@@ -166,8 +166,8 @@ class Action : public TriggerOwner {
     CStringHolder error_str;
     CStringHolder result_str;
     Status status;
-    Status saved_status; // used when an action is suspended
-    Action *blocked = nullptr;     // blocked on this action
+    Status saved_status;       // used when an action is suspended
+    Action *blocked = nullptr; // blocked on this action
     Trigger *trigger;
     uint64_t start_time{};
     bool started_ = false;

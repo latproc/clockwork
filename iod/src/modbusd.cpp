@@ -433,8 +433,7 @@ struct ModbusServerThread {
                                                 << (int)(modbus_mapping->tab_bits[addr]) << ")"
                                                 << " ("
                                                 << (int)(modbus_mapping->tab_input_bits[addr])
-                                                << ")"
-                                                << "\n";
+                                                << ")" << "\n";
                                         unsigned char val = (*data) & (1 << bit);
 
                                         if (!initialised_address[addr_str] ||
@@ -444,8 +443,8 @@ struct ModbusServerThread {
                                                 std::cout << "setting iod address " << addr + 1
                                                           << " to " << ((val) ? 1 : 0) << "\n";
                                             }
-                                            iod_sync_commands.push_back(getIODSyncCommand(
-                                                    0, addr + 1, val != 0));
+                                            iod_sync_commands.push_back(
+                                                getIODSyncCommand(0, addr + 1, val != 0));
                                             initialised_address[addr_str] = true;
                                         }
                                     }

@@ -415,7 +415,8 @@ void Scheduler::idle() {
             else if (item->package) {
                 DBG_SCHEDULER << "Scheduler activating package on "
                               << item->package->receiver->getName() << "\n";
-                item->package->receiver->handle(*item->package->message, item->package->transmitter);
+                item->package->receiver->handle(*item->package->message,
+                                                item->package->transmitter);
                 delete item->package;
                 delete item;
                 ++items_found;
@@ -431,7 +432,7 @@ void Scheduler::idle() {
             is_ready = ready(last_poll);
         }
         if (items_found) {
-        //  MachineInstance::forceIdleCheck();
+            //  MachineInstance::forceIdleCheck();
         }
         if (state == e_running) {
             DBG_SCHEDULER << "scheduler done\n";

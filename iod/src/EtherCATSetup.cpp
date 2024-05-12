@@ -222,11 +222,11 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
 
                 if (direction == EC_DIR_OUTPUT) {
                     DBG_ETHERCAT << "Adding new output device " << m->getName()
-                              << " position: " << entry_position
-                              << " name: " << module->entry_details[offset_idx].name
-                              << " bit_pos: " << module->bit_positions[offset_idx]
-                              << " offset: " << module->offsets[offset_idx] << " bitlen: " << bitlen
-                              << "\n";
+                                 << " position: " << entry_position
+                                 << " name: " << module->entry_details[offset_idx].name
+                                 << " bit_pos: " << module->bit_positions[offset_idx]
+                                 << " offset: " << module->offsets[offset_idx]
+                                 << " bitlen: " << bitlen << "\n";
                     IOAddress addr(IOComponent::add_io_entry(
                         ed->name.c_str(), module_position, module->offsets[offset_idx],
                         module->bit_positions[offset_idx], offset_idx, bitlen));
@@ -254,12 +254,12 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                     //const char *name_str = sstr.str().c_str();
 #if 1
                     DBG_ETHERCAT << "Adding new input device " << m->getName()
-                              << " position: " << entry_position
-                              << " name: " << module->entry_details[offset_idx].name
-                              << " sm_idx: " << std::hex << ed->sm_index << std::dec
-                              << " bit_pos: " << module->bit_positions[offset_idx]
-                              << " offset: " << module->offsets[offset_idx] << " bitlen: " << bitlen
-                              << "\n";
+                                 << " position: " << entry_position
+                                 << " name: " << module->entry_details[offset_idx].name
+                                 << " sm_idx: " << std::hex << ed->sm_index << std::dec
+                                 << " bit_pos: " << module->bit_positions[offset_idx]
+                                 << " offset: " << module->offsets[offset_idx]
+                                 << " bitlen: " << bitlen << "\n";
 #endif
                     IOAddress addr(IOComponent::add_io_entry(
                         ed->name.c_str(), module_position, module->offsets[offset_idx],

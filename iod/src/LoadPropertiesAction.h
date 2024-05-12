@@ -11,8 +11,7 @@ class LoadPropertiesActionTemplate : public ActionTemplate {
         : values_file(filename), property_name(property) {}
     Action *factory(MachineInstance *mi) override;
     std::ostream &operator<<(std::ostream &out) const override {
-        return out << "Load Properties template "
-                   << "\n";
+        return out << "Load Properties template " << "\n";
     }
     const std::string values_file;
     Value property_name;

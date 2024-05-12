@@ -23,9 +23,9 @@
 
 #include "Message.h"
 #include "symboltable.h"
+#include <boost/optional.hpp>
 #include <mosquitto.h>
 #include <sys/types.h>
-#include <boost/optional.hpp>
 
 class MachineInstance;
 

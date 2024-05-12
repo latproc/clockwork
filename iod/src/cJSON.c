@@ -118,7 +118,7 @@ static const char *parse_number(cJSON *item, const char *num) {
         do {
             n.val._int = (n.val._int * 10L) + (*num++ - '0');
         } while (*num >= '0' && *num <= '9'); // Number?
-    if (*num == '.') {                        // Fractional part?
+    if (*num == '.') { // Fractional part?
         num++;
         n.kind = cJSON_Number_double_t;
         n.val._double = n.val._int;

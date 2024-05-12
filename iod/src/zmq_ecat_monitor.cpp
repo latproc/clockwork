@@ -38,9 +38,9 @@ int main(int argc, const char *argv[]) {
 #if 0
         po::options_description desc("Allowed options");
         desc.add_options()
-        ("help", "produce help message")
-        ("server", "run as server")
-        ;
+                ("help", "produce help message")
+                ("server", "run as server")
+                ;
         po::variables_map vm;
         po::store(po::parse_command_line(argc, argv, desc), vm);
         po::notify(vm);

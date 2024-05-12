@@ -56,8 +56,7 @@ Action *MoveStateActionTemplate::factory(MachineInstance *mi) {
 
 void SetStateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
     std::string machine_name(target.get());
-    out << "\tif (executing(m->_" << machine_name << ")) {"
-        << "\t\tccrReturn(0);\n"
+    out << "\tif (executing(m->_" << machine_name << ")) {" << "\t\tccrReturn(0);\n"
         << "\t}\n"
         << "changeMachineState(m->_" << machine_name << ", state_cw_" << new_state << ", 0);\n";
 }
@@ -98,18 +97,19 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
         if (first_valid_stable_state != new_state_str) {
             auto &ss = MessageLog::instance()->get_stream();
             ss << owner->definition_file << ":" << owner->definition_line << " " << owner->getName()
-               << ": ";
+                    << ": ";
             if (fix_invalid_transitions()) {
                 ss << "Detected invalid transition request to '" << new_state_str << "' using '"
-                   << first_valid_stable_state << "' instead";
+                        << first_valid_stable_state << "' instead";
             }
             else {
                 ss << "Applying invalid automatic transition to '" << new_state_str
-                   << "'; correct state is '" << first_valid_stable_state << "'";
+                        << "'; correct state is '" << first_valid_stable_state << "'";
             }
             MessageLog::instance()->release_stream();
             if (fix_invalid_transitions()) {
-                new_state = first_valid_stable_state.empty() ? Value{} : first_valid_stable_state;
+                new_state = first_valid_stable_state.empty() ? Value{} :
+                        first_valid_stable_state;
             }
         }
     }
@@ -259,9 +259,9 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
                             }
                             else {
                                 std::stringstream ss;
-                                ss << owner->getName() << " "
-                                   << "Transition from " << t.source << " to " << value
-                                   << " denied due to condition " << t.condition->last_evaluation;
+                                ss << owner->getName() << " " << "Transition from " << t.source
+                                   << " to " << value << " denied due to condition "
+                                   << t.condition->last_evaluation;
                                 error_str = strdup(ss.str().c_str());
                                 MessageLog::instance()->add(ss.str().c_str());
                                 DBG_M_ACTIONS << ss.str() << "\n";
