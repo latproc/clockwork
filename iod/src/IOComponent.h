@@ -27,6 +27,7 @@
 #include <ostream>
 #include <set>
 #include <string>
+#include <vector>
 #include "MQTTInterface.h"
 #include "Message.h"
 #include "filtering.h"
