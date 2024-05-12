@@ -2,6 +2,7 @@
 #include <symboltable.h>
 #include <value.h>
 #include <cJSON.h>
+#include <cmath>
 
 namespace {
 
@@ -65,7 +66,6 @@ TEST(Value, CanGetStringFromJSONObject) {
     EXPECT_EQ(result.asString(), std::string("hello"));
 }
 
-#include <cmath>
 TEST(Value, CanGetFloatFromJSONObject) {
     Value v(cJSON_CreateObject());
     cJSON_AddItemToObject(v.json, "Pi", cJSON_CreateDouble(M_PI));
