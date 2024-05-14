@@ -13,11 +13,17 @@ cJSON *apply(const std::string &str, cJSON *json) {
     bool done = false;
     // execute parser in new fiber and process tokens in the main function
     ctx::fiber source{[&is, &token, &kind, &done](ctx::fiber &&sink) {
-        Parser p(is, [&sink, &token, &kind](char token_, Parser::TokenType token_type) {
-            token = token_;
-            kind = token_type;
-            sink = std::move(sink).resume();
-        });
+        Parser p(is,
+            [&sink, &token, &kind](char token_, Parser::TokenType token_type) {
+                token = token_;
+                kind = token_type;
+                sink = std::move(sink).resume();
+            },
+            [&sink, &token, &kind](std::string token_, Parser::TokenType token_type) {
+                token = token_;
+                kind = token_type;
+                sink = std::move(sink).resume();
+            });
         p.run();
         done = true;
         return std::move(sink); // resume the main fiber

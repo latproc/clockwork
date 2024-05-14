@@ -8,14 +8,16 @@
 // Boost.Context reference: https://www.boost.org/doc/libs/1_84_0/libs/context/doc/html/context/ff.html
 
 // Grammar: { } => 0 or more, ( ) => group, | => or
-// expr = root | root member 
+// expr = root | root member
 // member = { ( "[" key "]" | "." var ) }
 // root = "$"
-// var  = alpha
-// key = "*" | var || number
+// var  = alpha { alpha | digit | "_"}
+// key = "*" | var | number
 
-Parser::Parser(std::istream &is_, std::function<void(char, Parser::TokenType kind)> cb_)
-    : next(), is(is_), cb(cb_) {}
+Parser::Parser(std::istream &is_,
+                std::function<void(char, Parser::TokenType kind)> cb_,
+                std::function<void(std::string, Parser::TokenType kind)> cb2_)
+    : next(), is(is_), cb(cb_), cb2(cb2_) {}
 
 char Parser::pull() { return std::char_traits<char>::to_char_type(is.get()); }
 
@@ -47,7 +49,7 @@ std::ostream & Parser::display(std::ostream & out, Parser::TokenType kind) {
          case TokenType::wildcard: out << "wildcard"; break;
      };
      return out;
-} 
+}
 
 std::ostream & operator<<(std::ostream & out, Parser::TokenType kind) {
     return Parser::display(out, kind);
@@ -70,6 +72,7 @@ void Parser::member() {
             scan();
             key();
             if (next != ']') {
+                std::cerr << "member: " << next << std::endl;
                 throw std::runtime_error("parse error");
             }
             cb(next, TokenType::subs_end);
@@ -82,6 +85,7 @@ void Parser::member() {
                 var();
             }
             if (!is.eof() && next != '[' && next != '.') {
+                std::cerr << "member: " << next << std::endl;
                 throw std::runtime_error("syntax error");
             }
         }
@@ -90,10 +94,17 @@ void Parser::member() {
 
 void Parser::var() {
     if (isalpha(next)) {
-        cb(next, TokenType::var);
-        scan();
+        std::stringstream ss;
+        while (!is.eof() && (isalpha(next) || isdigit(next) || next == '_')) {
+            ss << next;
+            next = is.get();
+        }
+        value = ss.str();
+        cb2(value, TokenType::var);
+        if (next == ' ') { scan(); }
     }
     else {
+        std::cerr << "var: " << next << std::endl;
         throw std::runtime_error("parse error");
     }
 }
@@ -104,14 +115,21 @@ void Parser::key() {
         scan();
     }
     else if (isalpha(next)) {
-        cb(next, TokenType::key);
-        scan();
+        std::stringstream ss;
+        while (!is.eof() && (isalpha(next) || isdigit(next) || next == '_')) {
+            ss << next;
+            next = is.get();
+        }
+        value = ss.str();
+        cb2(value, TokenType::key);
+        if (next == ' ') { scan(); }
     }
     else if (next == '*') {
         cb(next, TokenType::wildcard);
         scan();
     }
     else {
+        std::cerr << "key: " << next << std::endl;
         throw std::runtime_error("parsing failed");
     }
 }

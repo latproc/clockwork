@@ -24,13 +24,18 @@ std::string parse(const std::string &str) {
     namespace ctx = boost::context;
 
     std::istringstream is(str);
-    char token;
+    std::string token;
     Parser::TokenType kind = Parser::TokenType::expr;
     bool done = false;
 
     ctx::fiber source{[&is, &token, &kind, &done](ctx::fiber &&sink) {
         Parser p(is, [&sink, &token, &kind](char token_, Parser::TokenType token_type) {
             token = token_;
+            kind = token_type;
+            sink = std::move(sink).resume();
+        },
+        [&sink, &token, &kind](std::string value, Parser::TokenType token_type) {
+            token = value;
             kind = token_type;
             sink = std::move(sink).resume();
         });
@@ -76,6 +81,10 @@ TEST(Parser, CanParseComplexExprWithSpaces) {
 
 TEST(Parser, CanUseStringIdentifiers) {
     EXPECT_EQ((parse("$.name")), "$.name");
+}
+
+TEST(Parser, CanUseStringKey) {
+    EXPECT_EQ((parse("$.a[key]")), "$.a[key]");
 }
 
 TEST(Value, AssignJSON) {
