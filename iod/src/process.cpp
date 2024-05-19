@@ -1,4 +1,5 @@
 #include <process.h>
+#include <iostream>
 
 namespace Process {
 
@@ -21,12 +22,12 @@ Scheduler::Scheduler() :
             if (proc->ready && proc->f) {
                 proc->f = std::move(proc->f).resume();
             }
-            if (proc->f) {
+            if (proc->ready && proc->f) {
                 runnable.push_back(proc);
             }
             else {
                 auto found = std::find(all_procs.begin(), all_procs.end(), *proc);
-                if (found != all_procs.end()) {
+                if (found != all_procs.end() && !proc->f) {
                     all_procs.erase(found);
                 }
             }
@@ -47,6 +48,17 @@ void Scheduler::activate(Proc *p) {
         }
     }
     assert("Attempt to activate an unknown proc" && false);
+}
+
+void Scheduler::wake(Proc *p) {
+    for (auto & proc : all_procs) {
+        if (*p == proc) {
+            assert(proc.ready);
+            runnable.push_back(&proc);
+            return;
+        }
+    }
+    assert("Attempt to wake an unknown proc" && false);
 }
 
 void Scheduler::join() {
@@ -70,6 +82,16 @@ void Signal::send() {
         proc->ready = true;
         scheduler.activate(proc);
     }
+}
+
+void Signal::broadcast() {
+    while (!procs.empty()) {
+        auto proc = procs.front();
+        procs.pop_front();
+        proc->ready = true;
+        scheduler.wake(proc);
+    }
+    scheduler.resume();
 }
 
 bool Signal::awaited() {
