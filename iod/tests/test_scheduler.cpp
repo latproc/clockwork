@@ -115,3 +115,48 @@ TEST(Scheduler, TasksCanWaitForSignals) {
     EXPECT_EQ(up_counter, down_counter);
 }
 
+TEST(Scheduler, SignalsCanWakeMultipleProcs) {
+    Process::Scheduler scheduler;
+    scheduler.start();
+
+    int counter = 0;
+
+    Process::Signal signal(scheduler);
+
+    Process::Proc a(Process::Scheduler::Task([&](Process::Scheduler::Task && sink) {
+        signal.wait(std::move(sink));
+        ++counter;
+        return std::move(sink);
+    }));
+
+    Process::Proc b(Process::Scheduler::Task([&](Process::Scheduler::Task && sink) {
+        signal.wait(std::move(sink));
+        ++counter;
+        return std::move(sink);
+    }));
+
+    Process::Proc c(Process::Scheduler::Task([&](Process::Scheduler::Task && sink) {
+        signal.wait(std::move(sink));
+        ++counter;
+        return std::move(sink);
+    }));
+
+    Process::Proc d(Process::Scheduler::Task([&](Process::Scheduler::Task && sink) {
+        signal.wait(std::move(sink));
+        ++counter;
+        return std::move(sink);
+    }));
+
+    scheduler.add(std::move(a));
+    scheduler.add(std::move(b));
+    scheduler.add(std::move(c));
+    scheduler.add(std::move(d));
+
+    // wait for processes to start
+    while(scheduler.num_active() > 0) {
+        scheduler.resume();
+    }
+    signal.broadcast();
+    scheduler.join();
+    EXPECT_EQ(counter, 4);
+}

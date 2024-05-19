@@ -30,8 +30,11 @@ public:
     bool finished() { return all_procs.empty(); }
     void stop() { done = true; }
     void resume() { sch = std::move(sch).resume(); }
-    void activate(Proc *p);
-    void join(); // Block the caller until all procs are finished.
+    void activate(Proc *p); // Make the Proc runnable and resume the scheduler.
+    void wake(Proc *p);     // Make the Proc runnable but don't resume the scheduler.
+    void join();            // Block the caller until all procs are finished.
+    size_t num_active() { return runnable.size(); }
+    size_t num_waiting() { return all_procs.size(); }
 
 private:
     std::deque<Proc> all_procs; 
@@ -47,6 +50,7 @@ public:
     void wait(Scheduler::Task && sink);
     void send();
     bool awaited();
+    void broadcast();
 private:
     std::deque<Proc*> procs; // Procs waiting for this signal
     Scheduler &scheduler;
