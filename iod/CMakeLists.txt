@@ -209,7 +209,7 @@ set (Clockwork_Headers
 	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
 	src/SyncRemoteStatesAction.h src/MachineCommandList.h
 	src/ControlSystemMachine.h src/HandleRequestAction.h src/SDOEntry.h
-    src/ExportState.h
+    src/ExportState.h src/Trigger.h
 	src/AutoStats.h src/Configuration.h
 	src/ResetAction.h src/LoadPropertiesAction.h
     src/split_string.h src/read_file.h src/copy_environment.h
@@ -246,7 +246,7 @@ set (Clockwork_SRCS
 	src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
 	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp
 	src/MachineCommandList.cpp src/ControlSystemMachine.cpp
-    src/ExportState.cpp
+    src/ExportState.cpp src/Trigger.cpp
 	src/HandleRequestAction.cpp src/AutoStats.cpp src/Configuration.cpp
 	src/ResetAction.cpp src/LoadPropertiesAction.cpp
     src/split_string.c src/read_file.c src/copy_environment.c
