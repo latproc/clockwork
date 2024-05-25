@@ -19,7 +19,28 @@ Parser::Parser(std::istream &is_,
                 std::function<void(std::string, Parser::TokenType kind)> cb2_)
     : next(), is(is_), cb(cb_), cb2(cb2_) {}
 
-char Parser::pull() { return std::char_traits<char>::to_char_type(is.get()); }
+Parser::Parser(const char *&input,
+                std::function<void(char, Parser::TokenType kind)> cb_,
+                std::function<void(std::string, Parser::TokenType kind)> cb2_)
+    : next(), input(input), cb(cb_), cb2(cb2_) {}
+
+bool Parser::is_eof() {
+    if (is) {
+        return is->eof();
+    }
+    else {
+        return *(*input) == '\0';
+    }
+}
+
+char Parser::pull() {
+    if (is) {
+        return std::char_traits<char>::to_char_type(is->get()); 
+    }
+    else {
+        return *(*input)++;
+    }
+}
 
 void Parser::scan() {
     do {
@@ -30,7 +51,7 @@ void Parser::scan() {
 void Parser::run() {
     scan();
     root();
-    if (!is.eof()) {
+    if (!is_eof()) {
         member();
     }
 }
@@ -66,7 +87,7 @@ void Parser::root() {
 }
 
 void Parser::member() {
-    while (!is.eof()) {
+    while ( (is && !is->eof() ) || (input && next != '\0') ) {
         if (next == '[') {
             cb(next, TokenType::subs_begin);
             scan();
@@ -84,9 +105,10 @@ void Parser::member() {
                 scan();
                 var();
             }
-            if (!is.eof() && next != '[' && next != '.') {
+            if (!is_eof() && next != '[' && next != '.') {
                 std::cerr << "member: " << next << std::endl;
-                throw std::runtime_error("syntax error");
+                //throw std::runtime_error("syntax error");
+                return; // This is the end of the JSON path
             }
         }
     }
@@ -95,9 +117,9 @@ void Parser::member() {
 void Parser::var() {
     if (isalpha(next)) {
         std::stringstream ss;
-        while (!is.eof() && (isalpha(next) || isdigit(next) || next == '_')) {
+        while (!is_eof() && (isalpha(next) || isdigit(next) || next == '_')) {
             ss << next;
-            next = is.get();
+            next = pull();
         }
         value = ss.str();
         cb2(value, TokenType::var);
@@ -116,9 +138,9 @@ void Parser::key() {
     }
     else if (isalpha(next)) {
         std::stringstream ss;
-        while (!is.eof() && (isalpha(next) || isdigit(next) || next == '_')) {
+        while (!is_eof() && (isalpha(next) || isdigit(next) || next == '_')) {
             ss << next;
-            next = is.get();
+            next = pull();
         }
         value = ss.str();
         cb2(value, TokenType::key);

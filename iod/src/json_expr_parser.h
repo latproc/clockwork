@@ -3,6 +3,7 @@
 #include <sstream>
 #include <string>
 #include <functional>
+#include <boost/optional.hpp>
 
 // A JSON expression is an expression that can be applied to a JSON
 // document to extract a value or a subdocument.
@@ -21,6 +22,10 @@ class Parser {
   public:
     enum class TokenType { expr, root, introducer, member, var, subs_begin, key, subs_end, index, wildcard};
 
+    Parser(const char *&input, 
+                    std::function<void(char, TokenType kind)> cb_,
+                    std::function<void(std::string, TokenType kind)> cb2_);
+
     Parser(std::istream &is_, 
                     std::function<void(char, TokenType kind)> cb_,
                     std::function<void(std::string, TokenType kind)> cb2_);
@@ -33,11 +38,13 @@ class Parser {
 
     char next;
     std::string value;
-    std::istream &is;
+    boost::optional<std::istream &>is;
+    boost::optional<const char *&>input;
     std::function<void(char, TokenType)> cb;
     std::function<void(std::string, TokenType)> cb2;
 
     char pull();
+    bool is_eof();
     void scan();
     void root();
     void member();
