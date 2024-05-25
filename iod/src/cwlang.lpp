@@ -9,6 +9,8 @@ static int buflen = 0;
 static char *bufp;
 extern YYSTYPE yylval;
 int yycharno;
+static char json_delim;
+static int json_depth;
 
 void append_char(int ch);
 %}
@@ -17,6 +19,7 @@ void append_char(int ch);
 %x HASHCOMMENT
 %x PATTERNSTR
 %x PLUGIN_CODE
+%x JSONSTR
 
 %%
 
@@ -208,7 +211,46 @@ WHERE               return WHERE;
 WITH                return WITH;
 WITHIN              return WITHIN;
 
-[A-Za-z][A-Za-z0-9_.]*       { 
+JSON              {
+                    BEGIN JSONSTR;
+                    json_delim = 0;
+                    json_depth = 0;
+					if (!buf) { buf = (char *)malloc(20); buflen = 20; }
+					bufp = buf;
+					*bufp = 0;
+                  }
+<JSONSTR>" "      {   if (json_delim != 0) { append_char(*yytext); } }
+<JSONSTR>"{"      {
+                    if (json_delim == 0) { json_delim = '{'; }
+                    if (json_delim == '{') {
+                        append_char('{');
+                        json_depth++;
+                    }
+                  }
+<JSONSTR>"}"      {
+                    if (json_delim == '{') {
+                        append_char('}');
+                        if (--json_depth == 0) {
+                            BEGIN 0;
+                            printf("JSON: %s\n", buf);
+                            yylval.jVal = cJSON_Parse(buf);
+                            buf = NULL;
+                            return JSONVAL;
+                        }
+                    }
+                  }
+<JSONSTR>\n     { append_char(*yytext); yylineno++; yycharno=1; }
+<JSONSTR>.      {
+                  if (json_delim == 0) {
+                      printf("invalid JSON character %d (%c)\n", *yytext, *yytext);
+                      yyerror("Unexpected character");
+                  }
+                  else {
+                      append_char(*yytext);
+                  }
+                }
+
+[A-Za-z][A-Za-z0-9_.]*       {
     yylval.sVal = strdup(yytext);
     return SYMBOL;
 }
@@ -255,10 +297,10 @@ WITHIN              return WITHIN;
 
 `               {
                     BEGIN PATTERNSTR;
-					if (!buf) 
-					{ 
-					     buf = (char *)malloc(20); 
-					     buflen = 20; 
+					if (!buf)
+					{
+					     buf = (char *)malloc(20);
+					     buflen = 20;
 					}
 					bufp = buf;
 					*bufp = 0;
@@ -271,12 +313,13 @@ WITHIN              return WITHIN;
 <PATTERNSTR>\n		{ append_char('\n'); yylineno++; yycharno=1; }
 <PATTERNSTR>.      { append_char( *yytext); }
 
+
 \"			    {  /*"*/	
-                    BEGIN STRING; 
-					if (!buf) 
-					{ 
-					     buf = (char *)malloc(20); 
-					     buflen = 20; 
+                    BEGIN STRING;
+					if (!buf)
+					{
+					     buf = (char *)malloc(20);
+					     buflen = 20;
 					}
 					bufp = buf;
 					*bufp = 0;
@@ -316,7 +359,7 @@ WITHIN              return WITHIN;
 [ \t]+        ;       /* ignore whitespace */
 
 \'              /*' ignore single quotes */
-.               { printf("found char %d (%c)\n", *yytext, *yytext); yyerror("Unknown character"); } 
+.               { printf("found char %d (%c)\n", *yytext, *yytext); yyerror("Unknown character"); }
 
 %%
 int yywrap(void) {

@@ -180,6 +180,7 @@ struct Subcondition {
 	const char *sVal;
 	const char *symbol;
     const char *pVal;
+    cJSON *jVal;
 	Predicate *expr;
 	PredicateOperator opr;
 	Value *val;
@@ -193,6 +194,7 @@ struct Subcondition {
 %token <symbol> SYMBOL
 %token <sVal> STRINGVAL
 %token <pVal> PATTERN
+%token <jVal> JSONVAL
 %type <symbol> transition_state
 
 %left BECOMES
@@ -553,6 +555,9 @@ INTEGERVAL   {
 }
 | STRINGVAL {
     $$ = new Value($1, Value::t_string);
+}
+| JSONVAL {
+    $$ = new Value($1);
 }
 | SYMBOL {
     $$ = new Value($1);
@@ -1009,6 +1014,13 @@ INTEGERVAL   {
 | STRINGVAL {
     $$ = new Value($1, Value::t_string);
 //	NB_MSG << " created string value: " << *$$ << " (type: " << $$->kind << ")\n";
+}
+| JSONVAL {
+    printf("json\n");
+    auto json_str = cJSON_Print($1);
+    std::printf("json: %s\n", json_str);
+    free(json_str);
+    $$ = new Value($1);
 }
 | SYMBOL {
     $$ = new Value($1);
