@@ -7,7 +7,7 @@
 cJSON *apply(const std::string &str, cJSON *json) {
     namespace ctx = boost::context;
 
-    std::istringstream is(str);
+    Parser::StringInputStream is(str);
     std::string token;
     Parser::TokenType kind = Parser::TokenType::expr;
     bool done = false;

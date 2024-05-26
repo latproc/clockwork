@@ -14,32 +14,13 @@
 // var  = alpha { alpha | digit | "_"}
 // key = "*" | var | number
 
-Parser::Parser(std::istream &is_,
+Parser::Parser(InputStream &is_,
                 std::function<void(char, Parser::TokenType kind)> cb_,
                 std::function<void(std::string, Parser::TokenType kind)> cb2_)
     : next(), is(is_), cb(cb_), cb2(cb2_) {}
 
-Parser::Parser(const char *&input,
-                std::function<void(char, Parser::TokenType kind)> cb_,
-                std::function<void(std::string, Parser::TokenType kind)> cb2_)
-    : next(), input(input), cb(cb_), cb2(cb2_) {}
-
-bool Parser::is_eof() {
-    if (is) {
-        return is->eof();
-    }
-    else {
-        return *(*input) == '\0';
-    }
-}
-
 char Parser::pull() {
-    if (is) {
-        return std::char_traits<char>::to_char_type(is->get()); 
-    }
-    else {
-        return *(*input)++;
-    }
+    return is.get();
 }
 
 void Parser::scan() {
@@ -51,7 +32,7 @@ void Parser::scan() {
 void Parser::run() {
     scan();
     root();
-    if (!is_eof()) {
+    if (!is.eof()) {
         member();
     }
 }
@@ -87,7 +68,7 @@ void Parser::root() {
 }
 
 void Parser::member() {
-    while ( (is && !is->eof() ) || (input && next != '\0') ) {
+    while (!is.eof()) {
         if (next == '[') {
             cb(next, TokenType::subs_begin);
             scan();
@@ -96,6 +77,7 @@ void Parser::member() {
                 std::cerr << "member: " << next << std::endl;
                 throw std::runtime_error("parse error");
             }
+            is.mark();
             cb(next, TokenType::subs_end);
             scan();
         }
@@ -105,9 +87,8 @@ void Parser::member() {
                 scan();
                 var();
             }
-            if (!is_eof() && next != '[' && next != '.') {
-                std::cerr << "member: " << next << std::endl;
-                //throw std::runtime_error("syntax error");
+            if (!is.eof() && next != '[' && next != '.') {
+                is.reset();
                 return; // This is the end of the JSON path
             }
         }
@@ -117,12 +98,13 @@ void Parser::member() {
 void Parser::var() {
     if (isalpha(next)) {
         std::stringstream ss;
-        while (!is_eof() && (isalpha(next) || isdigit(next) || next == '_')) {
+        while (!is.eof() && (isalpha(next) || isdigit(next) || next == '_')) {
             ss << next;
             next = pull();
         }
         value = ss.str();
         cb2(value, TokenType::var);
+        is.mark();
         if (next == ' ') { scan(); }
     }
     else {
@@ -138,7 +120,7 @@ void Parser::key() {
     }
     else if (isalpha(next)) {
         std::stringstream ss;
-        while (!is_eof() && (isalpha(next) || isdigit(next) || next == '_')) {
+        while (!is.eof() && (isalpha(next) || isdigit(next) || next == '_')) {
             ss << next;
             next = pull();
         }

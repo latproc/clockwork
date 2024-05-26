@@ -15,15 +15,32 @@ namespace {
 
 struct parser_exception : public std::runtime_error {
     boost::context::fiber f;
-    parser_exception(boost::context::fiber&& f_,std::string const& what) :
+    parser_exception(boost::context::fiber && f_,std::string const& what) :
         std::runtime_error{what},
         f{ std::move(f_) } { }
 };
 
-std::string parse(const std::string &str) {
+TEST(StringInputStream, CanReadString) {
+    Parser::StringInputStream is{"hi"};
+    EXPECT_EQ(is.get(), 'h');
+    EXPECT_EQ(is.get(), 'i');
+    EXPECT_FALSE(is.eof());
+    EXPECT_EQ(is.get(), (char)0xff);
+    EXPECT_TRUE(is.eof());
+}
+
+TEST(CStringInputStream, CanReadString) {
+    Parser::CStringInputStream is{"hi"};
+    EXPECT_EQ(is.get(), 'h');
+    EXPECT_EQ(is.get(), 'i');
+    EXPECT_FALSE(is.eof());
+    EXPECT_EQ(is.get(), (char)0xff);
+    EXPECT_TRUE(is.eof());
+}
+
+std::string parse(Parser::InputStream &is) {
     namespace ctx = boost::context;
 
-    std::istringstream is(str);
     std::string token;
     Parser::TokenType kind = Parser::TokenType::expr;
     bool done = false;
@@ -59,6 +76,11 @@ std::string parse(const std::string &str) {
     return result;
 }
 
+std::string parse(const std::string &str) {
+    Parser::CStringInputStream is{str.c_str()};
+    return parse(is);
+}
+
 TEST(Parser, CanParseSimpleExpr) {
     EXPECT_EQ(parse("$"), "$");
 }
@@ -85,6 +107,28 @@ TEST(Parser, CanUseStringIdentifiers) {
 
 TEST(Parser, CanUseStringKey) {
     EXPECT_EQ((parse("$.a[key]")), "$.a[key]");
+}
+
+TEST(Parser, CanUseWildcard) {
+    EXPECT_EQ((parse("$.a[*]")), "$.a[*]");
+}
+
+TEST(Parser, ParsingStringStopsAtInvalidCharacter) {
+    Parser::StringInputStream is{"$.a[1]x"};
+    EXPECT_EQ(parse(is), "$.a[1]");
+    EXPECT_EQ(is.get(), 'x');
+    EXPECT_FALSE(is.eof());
+    is.get();
+    EXPECT_TRUE(is.eof());
+}
+
+TEST(Parser, ParsingCStringStopsAtInvalidCharacter) {
+    Parser::CStringInputStream is{"$.a[1]x"};
+    EXPECT_EQ(parse(is), "$.a[1]");
+    EXPECT_EQ(is.get(), 'x');
+    EXPECT_FALSE(is.eof());
+    is.get();
+    EXPECT_TRUE(is.eof());
 }
 
 TEST(Value, AssignJSON) {

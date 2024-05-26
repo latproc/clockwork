@@ -20,13 +20,37 @@ class Parser {
     // key = "*" | var || number
 
   public:
+    struct InputStream {
+        virtual char get() = 0;
+        virtual bool eof() = 0;
+        virtual void mark() = 0;
+        virtual void reset() = 0;
+    };
+
+    struct StringInputStream : public Parser::InputStream {
+        std::stringstream is;
+        size_t pos = 0;
+        StringInputStream(const std::string &str_) : is(str_) {}
+        char get() override { return is.get(); }
+        bool eof() override { return is.eof(); }
+        void mark() override { pos = is.tellg(); }
+        void reset() override { is.seekg(pos); }
+    };
+
+    struct CStringInputStream : public Parser::InputStream {
+        const char *pos;
+        char last;
+        const char *mark_pos = 0;
+        CStringInputStream(const char *pos_) : pos(pos_), last(0) {}
+        char get() override { last = *pos == '\0' ? 0xff : *pos++; return last; }
+        bool eof() override { return last == (char)0xff; }
+        void mark() override { mark_pos = pos; }
+        void reset() override { pos = mark_pos; }
+    };
+
     enum class TokenType { expr, root, introducer, member, var, subs_begin, key, subs_end, index, wildcard};
 
-    Parser(const char *&input, 
-                    std::function<void(char, TokenType kind)> cb_,
-                    std::function<void(std::string, TokenType kind)> cb2_);
-
-    Parser(std::istream &is_, 
+    Parser(InputStream &is_,
                     std::function<void(char, TokenType kind)> cb_,
                     std::function<void(std::string, TokenType kind)> cb2_);
 
@@ -38,13 +62,11 @@ class Parser {
 
     char next;
     std::string value;
-    boost::optional<std::istream &>is;
-    boost::optional<const char *&>input;
+    InputStream &is;
     std::function<void(char, TokenType)> cb;
     std::function<void(std::string, TokenType)> cb2;
 
     char pull();
-    bool is_eof();
     void scan();
     void root();
     void member();
