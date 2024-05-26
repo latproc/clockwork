@@ -95,6 +95,7 @@ class Value {
     Value(const char *str, Kind k = t_symbol);
     Value(std::string str, Kind k = t_symbol);
     Value(const Value &other);
+    Value(Value &&other);
     Value(DynamicValueBase *dv);
     Value(DynamicValueBase &dv);
     virtual ~Value();
