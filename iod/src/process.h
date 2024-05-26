@@ -14,6 +14,11 @@ struct  Proc {
 
 class Scheduler;
 
+// TODO:
+//     - Add start_at() method to Proc to start the Proc at a specific time.
+//     - Add a way to set the current time.
+//     - Add a priority queue to the scheduler to run the Proc with the earliest start time.
+//     - Add support for priority tasks that run before other tasks.
 class Scheduler {
 public:
     using Task = boost::context::fiber;
