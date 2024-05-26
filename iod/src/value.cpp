@@ -134,7 +134,7 @@ Value::Value(cJSON *v)
     }
 
 Value::Value(const char *str, Kind k)
-    : kind(k), sValue(str), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {
+    : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {
     if (kind == t_symbol && !sValue.empty()) {
         if (sValue == "FALSE") {
             sValue = "";
@@ -157,7 +157,7 @@ Value::Value(const char *str, Kind k)
 }
 
 Value::Value(std::string str, Kind k)
-    : kind(k), sValue(str), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {
+    : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {
     if (kind == t_symbol && !str.empty()) {
         if (sValue == "FALSE") {
             sValue = "";
@@ -217,8 +217,44 @@ Value::~Value() {
 
 Value::Value(const Value &other)
     : kind(other.kind), bValue(other.bValue), iValue(other.iValue), fValue(other.fValue),
-      sValue(other.sValue), cached_machine(other.cached_machine), cached_value(0),
+      json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine), cached_value(0),
       token_id(other.token_id), dyn_value(DynamicValueBase::ref(other.dyn_value)) {
+          if (other.json) {
+              auto str = cJSON_PrintUnformatted(other.json);
+              json = cJSON_Parse(str);
+              free(str);
+          }
+
+    //      if (kind == t_list) {
+    //              std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
+    //      }
+    //      else if (kind == t_map) {
+    //              std::pair<std::string, Value> node;
+    //              BOOST_FOREACH(node, other.mapValue) {
+    //                      mapValue[node.first] = node.second;
+    //              }
+    //      }
+}
+
+Value::Value(Value && other)
+    : kind(other.kind), bValue(other.bValue), iValue(other.iValue), fValue(other.fValue),
+      json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine), cached_value(0),
+      token_id(other.token_id), dyn_value(DynamicValueBase::ref(other.dyn_value)) {
+      if (other.kind == t_string) {
+          sValue = std::move(other.sValue);
+      }
+      else if (other.kind == t_dynamic) {
+          dyn_value = other.dyn_value;
+          other.dyn_value = nullptr;
+          other.kind = t_empty;
+      }
+      else if (other.kind == t_json) {
+          json = other.json;
+          other.json = nullptr;
+          other.kind = t_empty;
+
+      }
+
     //      if (kind == t_list) {
     //              std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
     //      }
