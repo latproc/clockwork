@@ -480,7 +480,7 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
     while (true) {
         try {
             zmq::socket_t test_bind(*MessagingInterface::getContext(), ZMQ_PULL);
-            res = random() % (end - start + 1) + start;
+            res = (int)(random() % (end - start + 1) + start);
             if (checked_ports.count(res) && checked_ports.size() < end - start + 1) {
                 continue;
             }
@@ -567,10 +567,10 @@ char *MessagingInterface::send(const char *txt) {
             NB_MSG << "Warning: Error code " << pgn_rc << " returned when getting thread name\n";
         }
 
-        NB_MSG << "error: message send (" << txt
-               << ") from a different thread:" << " owner: " << std::hex << " '" << owner_thread
-               << " '" << tnam2 << "' current: " << std::hex << " " << pthread_self() << " '"
-               << tnam1 << "'" << std::dec << "\n";
+        NB_MSG << "error: message send (" << txt << ") from a different thread:"
+               << " owner: " << std::hex << " '" << owner_thread << " '" << tnam2
+               << "' current: " << std::hex << " " << pthread_self() << " '" << tnam1 << "'"
+               << std::dec << "\n";
     }
 
     if (!is_publisher) {

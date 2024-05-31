@@ -25,12 +25,12 @@ class ExportState {
     const Value &symbol(const char *name);
     const Value &create_symbol(const char *name);
     static void add_state(const std::string name);
-    static int lookup(const std::string name);
+    static size_t lookup(const std::string name);
     static void add_message(const std::string name, int value = -1);
-    static std::map<std::string, int> &all_messages() { return string_ids; }
-    static int lookup_symbol(const std::string name);
+    static std::map<std::string, size_t> &all_messages() { return string_ids; }
+    static size_t lookup_symbol(const std::string name);
     static void add_symbol(const std::string name, int value = -1);
-    static std::map<std::string, int> &all_symbols() { return symbols; }
+    static std::map<std::string, size_t> &all_symbols() { return symbols; }
     static std::map<std::string, PredicateSymbolDetails> &all_symbol_names() {
         return symbol_names;
     }
@@ -44,9 +44,9 @@ class ExportState {
     SymbolTable messages;
     std::string variable_prefix;
     static ExportState *_instance;
-    static std::map<std::string, int> string_ids;
-    static std::map<std::string, int> message_ids;
-    static std::map<std::string, int> symbols;
+    static std::map<std::string, size_t> string_ids;
+    static std::map<std::string, size_t> message_ids;
+    static std::map<std::string, size_t> symbols;
     static std::map<std::string, PredicateSymbolDetails> symbol_names;
     std::set<std::string> remote_properties;
 };

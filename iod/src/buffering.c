@@ -25,8 +25,8 @@ void destroyBuffer(struct CircularBuffer *buf) {
     free(buf);
 }
 
-int bufferIndexFor(struct CircularBuffer *buf, int i) {
-    int l = bufferLength(buf);
+int bufferIndexFor(struct CircularBuffer *buf, size_t i) {
+    size_t l = bufferLength(buf);
     /*  it is a non-recoverable error to access the buffer without
         adding a value */
     if (l == 0) {
@@ -60,11 +60,11 @@ void addSampleDebug(struct CircularBuffer *buf, long time, double val) {
     printf("buffer added: %5.2f, %ld at %d\n", val, time, buf->front);
 }
 
-double rate(struct CircularBuffer *buf, int n) {
+double rate(struct CircularBuffer *buf, size_t n) {
     if (buf->front == buf->back || buf->back == -1) {
         return 0.0f;
     }
-    int idx = bufferIndexFor(buf, n);
+    size_t idx = bufferIndexFor(buf, n);
     double v1 = buf->values[idx], v2 = buf->values[buf->front];
     double t1 = buf->times[idx], t2 = buf->times[buf->front];
     double ds = v2 - v1;
@@ -75,15 +75,15 @@ double rate(struct CircularBuffer *buf, int n) {
     return ds / dt;
 }
 
-int findMovement(struct CircularBuffer *buf, double amount, int max_len) {
+size_t findMovement(struct CircularBuffer *buf, double amount, size_t max_len) {
     /* reading the buffer without entering data is a non-recoverable error */
-    int l = bufferLength(buf);
+    size_t l = bufferLength(buf);
     if (l == 0) {
         assert(0);
         abort();
     }
-    int n = 0;
-    int idx = buf->front;
+    size_t n = 0;
+    size_t idx = buf->front;
     double current = buf->values[idx];
 
     while (idx != buf->back && n < max_len) {
@@ -121,8 +121,8 @@ double rateDebug(struct CircularBuffer *buf) {
     return ds / dt;
 }
 
-double bufferAverage(struct CircularBuffer *buf, int n) {
-    int l = bufferLength(buf);
+double bufferAverage(struct CircularBuffer *buf, size_t n) {
+    size_t l = bufferLength(buf);
     if (n > l) {
         n = l;
     }
@@ -153,19 +153,19 @@ double bufferStddev(struct CircularBuffer *buf, int n) {
     return sqrt(res / (double)(n - 1));
 }
 
-double getBufferValue(struct CircularBuffer *buf, int n) {
+double getBufferValue(struct CircularBuffer *buf, size_t n) {
     int idx = bufferIndexFor(buf, n);
     return buf->values[idx];
 }
 
-long getBufferTime(struct CircularBuffer *buf, int n) {
+long getBufferTime(struct CircularBuffer *buf, size_t n) {
     int idx = bufferIndexFor(buf, n);
     return buf->times[idx];
 }
 
 double getBufferValueAt(struct CircularBuffer *buf, unsigned long t) {
-    int n = bufferLength(buf) - 1;
-    int idx = bufferIndexFor(buf, n);
+    size_t n = bufferLength(buf) - 1;
+    size_t idx = bufferIndexFor(buf, n);
 
     if (buf->times[idx] >= t) {
         return buf->values[idx];
@@ -183,9 +183,9 @@ double getBufferValueAt(struct CircularBuffer *buf, unsigned long t) {
     return buf->values[idx] + scale * (buf->values[nxt] - buf->values[idx]);
 }
 
-double bufferSum(struct CircularBuffer *buf, int n) {
+double bufferSum(struct CircularBuffer *buf, size_t n) {
     //return buf->total;
-    int i = bufferLength(buf);
+    size_t i = bufferLength(buf);
     if (i > n) {
         i = n;
     }
@@ -196,7 +196,7 @@ double bufferSum(struct CircularBuffer *buf, int n) {
     return tot;
 }
 
-int size(struct CircularBuffer *buf) { return buf->bufsize; }
+size_t size(struct CircularBuffer *buf) { return buf->bufsize; }
 
 unsigned int bufferLength(struct CircularBuffer *buf) {
     if (buf->front == -1) {
@@ -233,13 +233,13 @@ double slope(struct CircularBuffer *buf) {
     return m;
 }
 
-double savitsky_golay_filter(struct CircularBuffer *buf, unsigned int filter_len,
-                             double *coefficients, float normal) {
+double savitsky_golay_filter(struct CircularBuffer *buf, size_t filter_len, double *coefficients,
+                             float normal) {
     if (bufferLength(buf) < buf->bufsize || filter_len > buf->bufsize) {
         return getBufferValue(buf, 0);
     }
     double sum = 0;
-    for (unsigned int i = 0; i < filter_len; i++) {
+    for (size_t i = 0; i < filter_len; i++) {
         sum += getBufferValue(buf, i) * coefficients[filter_len - i - 1];
     }
     return sum / normal;

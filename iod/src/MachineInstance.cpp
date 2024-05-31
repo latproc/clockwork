@@ -725,8 +725,8 @@ MachineInstance::~MachineInstance() {
 
 void MachineInstance::describe(std::ostream &out) {
     out << "---------------\n"
-        << _name << ": " << current_state.getName() << " " << " Class: " << _type
-        << (enabled() ? "" : " DISABLED") << (isShadow() ? " SHADOW " : " ")
+        << _name << ": " << current_state.getName() << " "
+        << " Class: " << _type << (enabled() ? "" : " DISABLED") << (isShadow() ? " SHADOW " : " ")
         << (isActive() ? "" : " PASSIVE") << "\n"
         << " instantiated at: " << definition_file << " line:" << definition_line << "\n";
     if (expected_authority) {
@@ -790,7 +790,8 @@ void MachineInstance::describe(std::ostream &out) {
             Transmitter *t = *iter++;
             MachineInstance *machine = dynamic_cast<MachineInstance *>(t);
             if (machine) {
-                out << "  " << machine->getName() << "[" << machine->getId() << "]" << ":   "
+                out << "  " << machine->getName() << "[" << machine->getId() << "]"
+                    << ":   "
                     << (machine->enabled() ? machine->getCurrent().getName() : "DISABLED");
                 if (machine->owner) {
                     out << " owner: " << (machine->owner ? machine->owner->getName() : "null");
@@ -809,7 +810,8 @@ void MachineInstance::describe(std::ostream &out) {
         while (iter != depends.end()) {
             MachineInstance *machine = *iter++;
             if (machine) {
-                out << "  " << machine->getName() << "[" << machine->getId() << "]" << ":   "
+                out << "  " << machine->getName() << "[" << machine->getId() << "]"
+                    << ":   "
                     << (machine->enabled() ? machine->getCurrent().getName() : "DISABLED");
                 if (machine->owner) {
                     out << " owner: " << (machine->owner ? machine->owner->getName() : "null");
@@ -1347,7 +1349,7 @@ template <class T> class Inserter {
     }
 };
 
-void MachineInstance::addParameter(const Parameter &p, MachineInstance *mi, int position,
+void MachineInstance::addParameter(const Parameter &p, MachineInstance *mi, ssize_t position,
                                    bool before) {
 
     //std::cout << _name << " " << ((mi) ?  mi->getName() : "") << " " << position << " " << before << "\n";
@@ -1388,7 +1390,8 @@ void MachineInstance::addParameter(const Parameter &p, MachineInstance *mi, int 
     //}
 }
 
-void MachineInstance::addParameter(Value param, MachineInstance *mi, int position, bool before) {
+void MachineInstance::addParameter(Value param, MachineInstance *mi, ssize_t position,
+                                   bool before) {
     Parameter p(param);
 
     if (!mi && param.kind == Value::t_symbol) {
@@ -1410,7 +1413,7 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi, int positio
     addParameter(p, mi, position, before);
 }
 
-void MachineInstance::removeParameter(int which) {
+void MachineInstance::removeParameter(size_t which) {
     if (which < 0 || which >= (int)parameters.size()) {
         return;
     }
@@ -1548,7 +1551,8 @@ MachineInstance &MachineInstance::operator=(const MachineInstance &orig) {
 }
 
 std::ostream &MachineInstance::operator<<(std::ostream &out) const {
-    out << _name << "(" << id << ")" << "<" << _type << ">\n";
+    out << _name << "(" << id << ")"
+        << "<" << _type << ">\n";
     if (properties.begin() != properties.end()) {
         out << "  Properties: " << properties << "\n";
     }
@@ -2167,7 +2171,8 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
     std::map<Message, MachineCommand *>::iterator receive_handler_i =
         receives_functions.find(Message(m.getText().c_str()));
     DBG_MESSAGING << getName() << " " << state_machine->name << " (" << current_state.getName()
-                  << ")" << " receiving " << m.getText() << " short name: " << short_name << "\n";
+                  << ")"
+                  << " receiving " << m.getText() << " short name: " << short_name << "\n";
     //    if (receive_handler_i == receives_functions.end()) {
     //      DBG_MSG << getName() << " no handler found for " << m.getText() << "\n";
     //      }
@@ -2283,7 +2288,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                 // found match, if there is a command defined for this transition, we
                 // execute the command, otherwise we just do the state change
                 bool state_change_ok = true;
-                int num_commands = commands.count(t.trigger.getText());
+                auto num_commands = commands.count(t.trigger.getText());
                 if (num_commands) {
                     DBG_M_MESSAGING << "Transition on machine " << getName()
                                     << " has a linked command; using it\n";
@@ -3797,8 +3802,8 @@ const Value &MachineInstance::getValue(const std::string &property) {
         if (other) {
             const Value &v = other->getValue(prop);
             DBG_M_PROPERTIES << other->getName() << " found property " << prop
-                             << " (type: " << v.kind << ") " << " in machine " << name
-                             << " with value " << v << "\n";
+                             << " (type: " << v.kind << ") "
+                             << " in machine " << name << " with value " << v << "\n";
             return v;
         }
         else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" &&
@@ -4129,7 +4134,8 @@ void MachineInstance::sendModbusUpdate(const std::string &property_name, const V
     if (false) {
         FileLogger fl(program_name);
         fl.f() << _name << " Sending modbus update " << property_name << " " << new_value
-               << " (kind:" << new_value.kind << ")" << "\n";
+               << " (kind:" << new_value.kind << ")"
+               << "\n";
     }
 
     ModbusAddress ma = modbus_exports[property_name];
@@ -4308,7 +4314,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
 
         if ((new_value.kind == Value::t_integer || new_value.kind != Value::t_float) &&
             state_machine && state_machine->plugin && state_machine->plugin->filter) {
-            int filtered_value = state_machine->plugin->filter(this, new_value.iValue);
+            int64_t filtered_value = state_machine->plugin->filter(this, new_value.iValue);
             was_changed = (!prev_value.identical(filtered_value) ||
                            (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
             if (was_changed) {

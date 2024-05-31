@@ -100,7 +100,7 @@ void MessageLog::close_stream() { mutex_.unlock(); }
 
 std::string MessageLog::access_stream_message() const { return output.str(); }
 
-cJSON *MessageLog::toJSON(unsigned int num) const {
+cJSON *MessageLog::toJSON(long num) const {
     boost::mutex::scoped_lock lock(mutex_);
     cJSON *data = cJSON_CreateArray();
     std::list<LogEntry *>::const_iterator iter = entries.begin();
@@ -117,7 +117,7 @@ cJSON *MessageLog::toJSON(unsigned int num) const {
     return data;
 }
 
-char *MessageLog::toString(unsigned int num) const {
+char *MessageLog::toString(long num) const {
     boost::mutex::scoped_lock lock(mutex_);
     std::stringstream ss;
     std::list<LogEntry *>::const_iterator iter = entries.begin();

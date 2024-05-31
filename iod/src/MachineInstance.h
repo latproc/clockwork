@@ -91,11 +91,11 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     void triggerFired(Trigger *trig);
 
-    void addParameter(const Parameter &param, MachineInstance *machine = 0, int position = -1,
+    void addParameter(const Parameter &param, MachineInstance *machine = 0, ssize_t position = -1,
                       bool before = false);
-    void addParameter(Value param, MachineInstance *machine = 0, int position = -1,
+    void addParameter(Value param, MachineInstance *machine = 0, ssize_t position = -1,
                       bool before = false);
-    void removeParameter(int which);
+    void removeParameter(size_t which);
     void addLocal(Value param, MachineInstance *machine = 0);
     void removeLocal(int index);
     void setProperties(const SymbolTable &props);

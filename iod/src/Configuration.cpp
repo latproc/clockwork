@@ -54,7 +54,7 @@ int Configuration::asInt(std::string name) const {
     if (val.length() == 0) {
         return 0;
     }
-    return strtol(val.c_str(), NULL, 0);
+    return static_cast<int>(strtol(val.c_str(), NULL, 0));
 }
 
 #ifdef USAGE_EXAMPLE

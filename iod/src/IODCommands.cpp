@@ -1429,7 +1429,7 @@ bool IODCommandChannel::run(std::vector<Value> &params) {
                 while (true) {
                     try {
                         std::cout << "instantiating a channel on port " << port << "\n";
-                        chn = defn->instantiate(port);
+                        chn = defn->instantiate(static_cast<unsigned int>(port));
                         assert(chn);
                         if (ch_name == "PERSISTENCE_CHANNEL") {
                             chn->setValue("PersistentStore",

@@ -40,7 +40,7 @@ class TestRunner {
         }
     }
 
-    int count() const { return tests.size(); }
+    size_t count() const { return tests.size(); }
 
     double run_all() {
         int passed = 0;

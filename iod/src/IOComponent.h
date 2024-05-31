@@ -30,9 +30,9 @@
 #include <map>
 #include <ostream>
 #include <set>
+#include <stdint.h>
 #include <string>
 #include <vector>
-#include <stdint.h>
 
 struct IOAddress {
     unsigned int module_position;
@@ -107,9 +107,9 @@ class IOComponent : public Transmitter {
                                   unsigned int bit_len = 1, bool is_signed = false);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
-    static void processAll(const Update & update, std::set<IOComponent *> &updatedMachines);
-    static void processAll(uint64_t clock, uint64_t data_size, const uint8_t *mask, const uint8_t *data,
-                           std::set<IOComponent *> &updatedMachines);
+    static void processAll(const Update &update, std::set<IOComponent *> &updatedMachines);
+    static void processAll(uint64_t clock, uint64_t data_size, const uint8_t *mask,
+                           const uint8_t *data, std::set<IOComponent *> &updatedMachines);
     static void setupIOMap();
     static int getMinIOOffset();
     static int getMaxIOOffset();
@@ -199,7 +199,7 @@ class IOComponent : public Transmitter {
     int index() { return io_index; } // this component's index into the io array
     void setIndex(int idx) { io_index = idx; }
 
-    static int updatesWaiting();
+    static size_t updatesWaiting();
     Direction direction() { return direction_; }
 
     enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };
@@ -214,7 +214,7 @@ class IOComponent : public Transmitter {
     int getStatus();
     int io_index; // the index of the first bit in this component's address space
     int64_t raw_value;
-    static unsigned int outputs_waiting; // this many outputs are waiting to change
+    static size_t outputs_waiting; // this many outputs are waiting to change
     static size_t process_data_size;
     static uint8_t *io_process_data;
     static uint8_t *io_process_mask;
@@ -251,8 +251,8 @@ class AnalogueInput : public IOComponent {
   public:
     AnalogueInput(IOAddress addr);
     const char *type() override { return "AnalogueInput"; }
-    void setupProperties(
-        MachineInstance *m) override; // link properties in the component to the MachineInstance properties
+    void setupProperties(MachineInstance *m)
+        override; // link properties in the component to the MachineInstance properties
     int64_t filter(int64_t raw) override;
     void update(); // clockwork uses this to notify of updates
     InputFilterSettings *config;
@@ -265,8 +265,8 @@ class Counter : public IOComponent {
     const char *type() override { return "Counter"; }
     void update(); // clockwork uses this to notify of updates
     int64_t filter(int64_t raw) override;
-    void setupProperties(
-        MachineInstance *m) override; // link properties in the component to the MachineInstance properties
+    void setupProperties(MachineInstance *m)
+        override; // link properties in the component to the MachineInstance properties
   private:
     CounterInternals *internals;
 };

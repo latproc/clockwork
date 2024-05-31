@@ -57,7 +57,7 @@ bool CounterRateInstance::setValue(const std::string &property, const Value &upd
         uint64_t delta_t = settings->update_t - settings->start_t;
         settings->readings.append(val, delta_t);
 
-        int32_t mean = (settings->readings.average(settings->readings.length()) + 0.5f);
+        auto mean = (settings->readings.average(settings->readings.length()) + 0.5f);
         if ((uint32_t)abs(mean - settings->last_sent) > settings->noise_tolerance) {
             settings->last_sent = mean;
         }
@@ -93,7 +93,7 @@ void CounterRateInstance::idle() {
         if (settings->update_t + 2000 < now_t) {
             int64_t new_val =
                 (int64_t)((float)settings->position +
-                       settings->velocity * 2 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
+                          settings->velocity * 2 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
             setValue("VALUE", new_val);
         }
     }

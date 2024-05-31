@@ -98,7 +98,7 @@ std::string constructAlphaNumericString(const char *prefix, const char *val, con
     if (!val) {
         return default_name;
     }
-    int len = strlen(val);
+    auto len = strlen(val);
     if (prefix) {
         len += strlen(prefix);
     }
@@ -657,7 +657,7 @@ void MessageRouter::poll() {
         usleep(10);
         return;
     }
-    unsigned int num_socks = internals->routes.size() + 1;
+    auto num_socks = internals->routes.size() + 1;
 
     if (internals->saved_num_items != num_socks) {
         if (internals->destinations) {
