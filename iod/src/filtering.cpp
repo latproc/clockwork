@@ -10,12 +10,12 @@ public:
 };
 #endif
 
-Buffer::Buffer(int buf_size) : BUFSIZE(buf_size) {
+Buffer::Buffer(size_t buf_size) : BUFSIZE(buf_size) {
     front = -1;
     back = -1;
 }
 
-unsigned int Buffer::length() const {
+ssize_t Buffer::length() const {
     if (front == -1) {
         return 0;
     }
@@ -29,7 +29,7 @@ void Buffer::reset() {
     total_ = 0.0;
 }
 
-double Buffer::difference(int idx_a, int idx_b) const {
+double Buffer::difference(size_t idx_a, size_t idx_b) const {
     double a = getFloatAtOffset(idx_a);
     double b = getFloatAtOffset(idx_b);
     a = a - b;
@@ -39,7 +39,7 @@ double Buffer::difference(int idx_a, int idx_b) const {
     return 0.0f;
 }
 
-double Buffer::distance(int idx_a, int idx_b) const {
+double Buffer::distance(size_t idx_a, size_t idx_b) const {
     double a = difference(idx_a, idx_b);
     a = fabs(a);
     if (a < 0.0001) {
@@ -48,7 +48,7 @@ double Buffer::distance(int idx_a, int idx_b) const {
     return a;
 }
 
-double Buffer::average(int n) {
+double Buffer::average(size_t n) {
     boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);
     ;
     double res = 0.0f;
@@ -58,16 +58,16 @@ double Buffer::average(int n) {
     if (n == 0) {
         return 0.0;
     }
-    int len = length();
+    auto len = length();
     if (len <= 0) {
         return 0.0;
     }
-    if (len < n) {
+    if (len < (ssize_t)n) {
         n = len;
     }
     //  return total_ / (double)n;
 #if 1
-    int i = (front + BUFSIZE - n + 1) % BUFSIZE;
+    auto i = (front + BUFSIZE - n + 1) % BUFSIZE;
     while (i != front) {
 #ifdef TESTING
         std::cout << i << ":" << getFloatAtIndex(i) << " ";
@@ -83,7 +83,7 @@ double Buffer::average(int n) {
 #endif
 }
 
-double Buffer::stddev(int n) {
+double Buffer::stddev(size_t n) {
     boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);
     ;
     double avg = average(n);
@@ -94,14 +94,14 @@ double Buffer::stddev(int n) {
     if (n == 0) {
         return 0.0;
     }
-    int len = length();
+    auto len = length();
     if (len <= 1) {
         return 0.0;
     }
     if (len < n) {
         n = len;
     }
-    int i = (front + BUFSIZE - n + 1) % BUFSIZE;
+    auto i = (front + BUFSIZE - n + 1) % BUFSIZE;
     do {
         double val = getFloatAtIndex(i) - avg;
         res += val * val;
@@ -123,26 +123,26 @@ void LongBuffer::append(long val) {
         back = (back + 1) % BUFSIZE;
     }
 }
-long LongBuffer::get(unsigned int n) const { return buf[(front + BUFSIZE - n) % BUFSIZE]; }
-void LongBuffer::set(unsigned int n, long value) { buf[(front + BUFSIZE - n) % BUFSIZE] = value; }
+long LongBuffer::get(size_t n) const { return buf[(front + BUFSIZE - n) % BUFSIZE]; }
+void LongBuffer::set(size_t n, long value) { buf[(front + BUFSIZE - n) % BUFSIZE] = value; }
 
-double LongBuffer::getFloatAtOffset(int offset) const { return get(offset); }
+double LongBuffer::getFloatAtOffset(ssize_t offset) const { return get(offset); }
 
-double LongBuffer::getFloatAtIndex(int idx) const { return buf[idx]; }
+double LongBuffer::getFloatAtIndex(size_t idx) const { return buf[idx]; }
 
-double FloatBuffer::getFloatAtOffset(int offset) const { return get(offset); }
+double FloatBuffer::getFloatAtOffset(ssize_t offset) const { return get(offset); }
 
-double FloatBuffer::getFloatAtIndex(int idx) const { return buf[idx]; }
+double FloatBuffer::getFloatAtIndex(size_t idx) const { return buf[idx]; }
 
-int findMovement(FloatBuffer *buf, double amount, int max_len) {
+size_t findMovement(FloatBuffer *buf, double amount, size_t max_len) {
     /* reading the buffer without entering data is a non-recoverable error */
-    int l = buf->length();
+    auto l = buf->length();
     if (l == 0) {
         assert(0);
         abort();
     }
-    int n = 0;
-    int idx = buf->front;
+    size_t n = 0;
+    size_t idx = buf->front;
     double current = buf->buf[idx];
 
     while (idx != buf->back && n < max_len) {
@@ -158,7 +158,7 @@ int findMovement(FloatBuffer *buf, double amount, int max_len) {
     return n;
 }
 
-double FloatBuffer::inner_product(double *coefficients, unsigned int num_coeff) const {
+double FloatBuffer::inner_product(double *coefficients, size_t num_coeff) const {
     float sum = 0;
     for (unsigned int i = 0; i < num_coeff; i++) {
         float x = (i < length()) ? get(i) : 0;
@@ -181,23 +181,21 @@ void FloatBuffer::append(double val) {
     }
 }
 
-double FloatBuffer::get(unsigned int n) const { return buf[(front + BUFSIZE - n) % BUFSIZE]; }
+double FloatBuffer::get(size_t n) const { return buf[(front + BUFSIZE - n) % BUFSIZE]; }
 
-void FloatBuffer::set(unsigned int n, double value) {
-    buf[(front + BUFSIZE - n) % BUFSIZE] = value;
-}
+void FloatBuffer::set(size_t n, double value) { buf[(front + BUFSIZE - n) % BUFSIZE] = value; }
 
 double FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf) {
     boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);
     ;
     double sumX = 0.0f, sumY = 0.0f, sumXY = 0.0f;
     double sumXsquared = 0.0f;
-    int n = length() - 1;
+    auto n = length() - 1;
     if (n <= 0) {
         return 0;
     }
     double t0 = time_buf.get(n);
-    for (int i = n; i > 0; i--) {
+    for (auto i = n; i > 0; i--) {
         double y = (get(i) - get(n));
         double x = time_buf.get(i) - t0;
         sumX += x;
@@ -214,7 +212,7 @@ double FloatBuffer::slopeFromLeastSquaresFit(const LongBuffer &time_buf) {
     return m;
 }
 
-double FloatBuffer::movingAverage(unsigned int n) const {
+double FloatBuffer::movingAverage(size_t n) const {
     if (n == 0) {
         return 0.0;
     }
@@ -222,7 +220,7 @@ double FloatBuffer::movingAverage(unsigned int n) const {
         n = length();
     }
     double sum = 0;
-    for (unsigned int i = 0; i < n; i++) {
+    for (size_t i = 0; i < n; i++) {
         sum += get(i);
     }
     return sum / n;
@@ -239,11 +237,11 @@ float ButterworthFilter::filter(float x) {
     return filtered;
 }
 
-double SampleBuffer::getFloatAtOffset(int offset) const {
+double SampleBuffer::getFloatAtOffset(ssize_t offset) const {
     return values[(front + BUFSIZE - offset) % BUFSIZE];
 }
 
-double SampleBuffer::getFloatAtIndex(int idx) const { return values[idx]; }
+double SampleBuffer::getFloatAtIndex(size_t idx) const { return values[idx]; }
 void SampleBuffer::quickAppend(double val, uint64_t time) {
     front = (front + 1) % BUFSIZE;
     if (front == back) {
@@ -267,12 +265,12 @@ void SampleBuffer::append(double val, uint64_t time) {
     if (front != -1 && time == times[front]) {
         return;
     }
-    unsigned int n = length();
+    ssize_t n = length();
 
     if (n > (unsigned int)BUFSIZE / 2) {
         double mean_change = ((values[front] - values[back])) / n;
         double period = ((double)(times[front] - times[back])) / n;
-        int missing = ((double)(time - times[front])) / period;
+        ssize_t missing = ((double)(time - times[front])) / period;
         if (missing >= 3) {
             //DBG_MSG << "synthesizing missing data: " << missing << "\n";
             uint64_t last_time = times[front];
@@ -280,7 +278,7 @@ void SampleBuffer::append(double val, uint64_t time) {
             if (missing > BUFSIZE / 2) {
                 missing = BUFSIZE / 2;
             }
-            for (int i = missing; i > 0; --i) {
+            for (auto i = missing; i > 0; --i) {
                 quickAppend(val - i * mean_change, time - i * (time - last_time) / missing);
             }
         }

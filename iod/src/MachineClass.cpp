@@ -187,13 +187,13 @@ const Value &ExportState::create_symbol(const char *name) {
     return messages.find(name);
 }
 void ExportState::add_state(const std::string name) {
-    std::map<std::string, int>::iterator found = string_ids.find(name);
+    std::map<std::string, size_t>::iterator found = string_ids.find(name);
     if (found == string_ids.end()) {
         string_ids[name] = string_ids.size() + 1;
     }
 }
-int ExportState::lookup(const std::string name) {
-    std::map<std::string, int>::iterator found = string_ids.find(name);
+size_t ExportState::lookup(const std::string name) {
+    std::map<std::string, size_t>::iterator found = string_ids.find(name);
     if (found == string_ids.end()) {
         return -1;
     }
@@ -204,15 +204,15 @@ int ExportState::lookup(const std::string name) {
 // states and messages share the same id range; messages also have their own
 // hash to make it easy to generate a global message id header file
 void ExportState::add_message(const std::string name, int value) {
-    std::map<std::string, int>::iterator found = string_ids.find(name);
+    std::map<std::string, size_t>::iterator found = string_ids.find(name);
     if (found == string_ids.end()) {
         string_ids[name] = (value == -1) ? string_ids.size() + 1 : value;
     }
     message_ids[name] = string_ids[name];
 }
 
-int ExportState::lookup_symbol(const std::string name) {
-    std::map<std::string, int>::iterator found = symbols.find(name);
+size_t ExportState::lookup_symbol(const std::string name) {
+    std::map<std::string, size_t>::iterator found = symbols.find(name);
     if (found == symbols.end()) {
         return -1;
     }
@@ -222,7 +222,7 @@ int ExportState::lookup_symbol(const std::string name) {
 }
 
 void ExportState::add_symbol(const std::string name, int value) {
-    std::map<std::string, int>::iterator found = symbols.find(name);
+    std::map<std::string, size_t>::iterator found = symbols.find(name);
     if (found == symbols.end()) {
         symbols[name] = (value == -1) ? symbols.size() + 1 : value;
     }
@@ -293,8 +293,8 @@ void MachineClass::exportHandlers(std::ostream &ofs) {
                         received_message_handlers
                             << "\t if (source == m->_" << message_name
                             << " && state == " << ExportState::lookup(msg_name) << ")\n"
-                            << "\t\tMachineActions_add(obj, (enter_func)" << "cw_" << name << "_"
-                            << method_name(item.first.getText()) << ");\n";
+                            << "\t\tMachineActions_add(obj, (enter_func)"
+                            << "cw_" << name << "_" << method_name(item.first.getText()) << ");\n";
                         handled = true;
                     }
                 }
@@ -302,8 +302,8 @@ void MachineClass::exportHandlers(std::ostream &ofs) {
                     ExportState::add_message(message_name);
                     received_message_handlers
                         << "\tif (state == cw_message_" << message_name << ")\n"
-                        << "\t\tMachineActions_add(obj, (enter_func)" << "cw_" << name << "_"
-                        << method_name(item.first.getText()) << ");\n";
+                        << "\t\tMachineActions_add(obj, (enter_func)"
+                        << "cw_" << name << "_" << method_name(item.first.getText()) << ");\n";
                     handled = true;
                 }
             }
@@ -395,16 +395,20 @@ static std::string generate_name_backups(std::string var, std::string to_lookup,
     std::stringstream res;
 
     if (type == "machine") {
-        res << "\tb->l_" << var << " = " << "*v->l_" << var << ";\n";
+        res << "\tb->l_" << var << " = "
+            << "*v->l_" << var << ";\n";
     }
     else if (type == "state") {
-        res << "\tb->l_" << var << " = " << "v->l_" << var << ";\n";
+        res << "\tb->l_" << var << " = "
+            << "v->l_" << var << ";\n";
     }
     else if (type == "timer" || stringEndsWith(to_lookup, ".TIMER")) {
-        res << "\tb->l_" << var << " = " << "*v->l_" << var << ";\n";
+        res << "\tb->l_" << var << " = "
+            << "*v->l_" << var << ";\n";
     }
     else {
-        res << "\tb->l_" << var << " = " << "*v->l_" << var << ";\n";
+        res << "\tb->l_" << var << " = "
+            << "*v->l_" << var << ";\n";
     }
     return res.str();
 }
@@ -482,9 +486,9 @@ static void subst_all(std::string &s, std::string old, std::string replacement)
     }
 }
 #endif
-std::map<std::string, int> ExportState::string_ids;
-std::map<std::string, int> ExportState::message_ids;
-std::map<std::string, int> ExportState::symbols;
+std::map<std::string, size_t> ExportState::string_ids;
+std::map<std::string, size_t> ExportState::message_ids;
+std::map<std::string, size_t> ExportState::symbols;
 std::map<std::string, PredicateSymbolDetails> ExportState::symbol_names;
 
 bool MachineClass::cExport(const std::string &filename) {
@@ -560,7 +564,8 @@ bool MachineClass::cExport(const std::string &filename) {
             ofh << ", int pin";
         }
         ofh << params.str() << ");\n"
-            << "void Init_cw_" << name << "(struct cw_" << name << " * " << ", const char *name";
+            << "void Init_cw_" << name << "(struct cw_" << name << " * "
+            << ", const char *name";
         if (name == "ANALOGINPUT" || name == "ANALOGOUTPUT") {
             ofh << ", int pin";
         }
@@ -871,7 +876,8 @@ bool MachineClass::cExport(const std::string &filename) {
             if (s.condition.predicate->priority != 1) { // not the DEFAULT state
                 s.condition.predicate->toCstring(desc, desc_vars);
                 when_clauses << "\tsnprintf(buf, 200, \"" << s.state_name << " [%d]: " << desc.str()
-                             << "\"" << ",state_cw_" << s.state_name << desc_vars.str() << ");\n";
+                             << "\""
+                             << ",state_cw_" << s.state_name << desc_vars.str() << ");\n";
                 when_clauses << "\tsendMQTT(0, \"/response\", buf);\n";
                 ofs << "\tif (";
                 s.condition.predicate->toC(ofs);

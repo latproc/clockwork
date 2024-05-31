@@ -57,7 +57,7 @@ void LogState::cleanup() {
 }
 
 int LogState::define(std::string new_name) {
-    int logid = name_map[new_name] = flag_names.size();
+    int logid = name_map[new_name] = static_cast<int>(flag_names.size());
     flag_names.push_back(new_name);
     return logid;
 }

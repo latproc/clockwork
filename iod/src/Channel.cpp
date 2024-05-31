@@ -101,8 +101,7 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
         if (command->param(0) == "STATE") {
             MachineInstance *m = MachineInstance::find(command->param(1).asString().c_str());
             if (!m->isShadow()) {
-                if (command->numParams() == 4 &&
-                    command->param(3) == channel->getAuthority()) {
+                if (command->numParams() == 4 && command->param(3) == channel->getAuthority()) {
                     // do nothing, this is an echo of a command we sent
                     {
                         FileLogger fl(program_name);
@@ -173,7 +172,7 @@ Channel::Channel(const std::string &ch_name, const std::string &type)
     // make sure the channel is in the LIST of channels
     if (::machines.find("CHANNELS") != ::machines.end()) {
         MachineInstance *channel_list = ::machines["CHANNELS"];
-        unsigned int i, n = channel_list->parameters.size();
+        size_t i, n = channel_list->parameters.size();
         for (i = 0; i < n; i++) {
             if (channel_list->parameters.at(i).val == ch_name) {
                 break;
@@ -244,8 +243,8 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
                 const std::string &s = *props++;
                 Value v = m->getValue(s);
                 if (v != SymbolTable::Null) {
-                    char *cmd = MessageEncoding::encodeCommand(
-                        "PROPERTY", m->getName(), s, v, definition()->getAuthority());
+                    char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v,
+                                                               definition()->getAuthority());
                     //NB_MSG  << channel_name << " prepared command" << cmd << "\n";
                     messages.push_back(cmd);
                     //std::string response;
@@ -647,7 +646,7 @@ unsigned int Channel::getPort() const {
         const Value &port_v = properties.find("port");
         int64_t port_num;
         if (port_v.asInteger(port_num)) {
-            return port_num;
+            return static_cast<unsigned int>(port_num);
         }
     }
     return port;
@@ -659,7 +658,7 @@ int Channel::uniquePort(unsigned int start, unsigned int end) {
     while (true) {
         try {
             zmq::socket_t test_bind(*MessagingInterface::getContext(), ZMQ_PULL);
-            res = random() % (end - start + 1) + start;
+            res = static_cast<int>(random() % (end - start + 1) + start);
             snprintf(address_buf, 40, "tcp://*:%d", res);
             test_bind.bind(address_buf);
             int linger = 0; // do not wait at socket close time

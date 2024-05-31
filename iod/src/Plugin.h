@@ -14,7 +14,7 @@ extern "C" {
 
 typedef void *cwpi_Scope;
 
-typedef int (*plugin_func)(cwpi_Scope);
+typedef long (*plugin_func)(cwpi_Scope);
 typedef long (*plugin_filter)(cwpi_Scope, long);
 
 void *getNamedScope(cwpi_Scope, const char *name);

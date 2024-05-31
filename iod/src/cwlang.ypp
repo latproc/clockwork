@@ -175,7 +175,7 @@ struct Subcondition {
 
 %union {
 	bool bVal;
-	int iVal;
+	int64_t iVal;
 	double fVal;
 	const char *sVal;
 	const char *symbol;
@@ -811,7 +811,7 @@ pin_definition
 pin_definition:
 SYMBOL DIGITALIO INTEGERVAL ';'{
   std::string name($1);
-  int x = $3;
+  auto x = $3;
   current_machineclass->setOption(name, $3);
   //current_machineclass->addProperty(name.c_str());
 }

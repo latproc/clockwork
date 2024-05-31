@@ -86,7 +86,7 @@ class MachineCommand : public Action {
 
   private:
     std::vector<Action *> actions;
-    unsigned int last_step, current_step;
+    size_t last_step, current_step;
     CStringHolder command_name;
 
     CStringHolder state_name;

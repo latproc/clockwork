@@ -49,7 +49,7 @@ Action::Status PopBackAction::run() {
     if (list_machine && list_machine->_type == "LIST") {
 
         if (list_machine->parameters.size()) {
-            unsigned int i = list_machine->parameters.size();
+            auto i = list_machine->parameters.size();
             Value res;
             if (list_machine->parameters[i].val.kind == Value::t_symbol) {
                 MachineInstance *mi = list_machine->parameters[i].machine;

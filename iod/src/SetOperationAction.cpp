@@ -540,7 +540,7 @@ Action::Status SelectSetOperation::doOperation() {
             ++idx;
         }
 
-        unsigned int i = sp; // start from here
+        auto i = sp; // start from here
         while (i < source_a_machine->parameters.size()) {
             debugParameterChange(dest_machine);
             Value a(source_a_machine->parameters.at(i).val);

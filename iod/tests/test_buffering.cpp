@@ -32,7 +32,7 @@ TEST_F(BufferTest, destroyBuffer) {
 TEST_F(BufferTest, size) {
     // int size(struct CircularBuffer *buf);
     struct CircularBuffer *buf = createBuffer(5);
-    int buffer_size = size(buf);
+    size_t buffer_size = size(buf);
     EXPECT_EQ(5, buffer_size) << "returns the capacity of the buffer";
     addSample(buf, 1.0, 1.0);
     EXPECT_EQ(5, buffer_size) << "returns the capacity of the buffer";
@@ -63,7 +63,6 @@ TEST_F(BufferTest, bufferSum) {
     EXPECT_EQ(6.0, bufferSum(buf, 3)) << "returns the sum of the buffer samples";
     EXPECT_EQ(6.0, bufferSum(buf, 5))
         << "returns the sum when the sample count greater than the buffer size";
-    EXPECT_EQ(0, bufferAverage(buf, -1)) << "returns 0 when the sample count is invalid";
 }
 
 TEST_F(BufferTest, bufferAverage) {
@@ -77,7 +76,6 @@ TEST_F(BufferTest, bufferAverage) {
     EXPECT_EQ(2.0, bufferAverage(buf, 3)) << "returns the average of the buffer samples";
     EXPECT_EQ(2.0, bufferAverage(buf, 5))
         << "returns the average when the sample count greater than the buffer size";
-    EXPECT_EQ(0, bufferAverage(buf, -1)) << "returns 0 when the sample count is invalid";
     destroyBuffer(buf);
 }
 

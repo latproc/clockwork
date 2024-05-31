@@ -37,8 +37,8 @@ class MessageLog {
 
     size_t count() const;
 
-    cJSON *toJSON(unsigned int num) const;
-    char *toString(unsigned int num) const;
+    cJSON *toJSON(long num) const;
+    char *toString(long num) const;
 
     void load(const char *filename);
 
