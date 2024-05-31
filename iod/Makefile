@@ -42,3 +42,8 @@ ifdef CLANGFORMAT
 	clang-format --style=file -i `find src -name \*.c -o -name \*.cpp -o -name \*.h -o -name \*.hpp`
 	clang-format --style=file -i `find tests -name \*.c -o -name \*.cpp -o -name \*.h -o -name \*.hpp`
 endif
+
+fix-style:
+ifdef CLANGFORMAT
+	./fix-format.sh
+endif
