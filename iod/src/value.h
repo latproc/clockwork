@@ -78,6 +78,7 @@ class Value {
         t_float,
         t_json /*, t_list, t_map */
     };
+    std::string kind_to_string() const;
 
     typedef std::list<Value *> List;
     //    typedef std::map<std::string, Value> Map;

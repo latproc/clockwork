@@ -40,6 +40,39 @@
 static bool stringToLong(const std::string &s, int64_t &x);
 static bool stringToFloat(const std::string &s, double &x);
 
+std::string Value::kind_to_string() const {
+     std::string result;
+     switch(kind) {
+         case t_empty:
+             result = "empty";
+             break;
+         case t_bool:
+             result = "bool";
+             break;
+         case t_integer:
+             result = "integer";
+             break;
+         case t_float:
+             result = "float";
+             break;
+         case t_string:
+             result = "string";
+             break;
+         case t_symbol:
+             result = "symbol";
+             break;
+         case t_json:
+             result = "json";
+             break;
+         case t_dynamic:
+             result = "dynamic";
+             break;
+         default:
+             result = "unknown";
+     }
+     return result;
+}
+
 uint64_t microsecs() { return Clock::clock(); }
 
 static const double ZERO_DISTANCE = 1.0E-8;

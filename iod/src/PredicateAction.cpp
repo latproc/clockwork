@@ -91,7 +91,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
             if (prop != SymbolTable::Null) {
                 if (m->debug()) {
                     DBG_PREDICATES << "Using property " << p->entry << " to resolve search ("
-                                   << prop << ", type: " << prop.kind << ")" << ")\n";
+                                   << prop << ", type: " << prop.kind_to_string() << ")" << ")\n";
                 }
                 return prop;
             }
@@ -291,7 +291,7 @@ Action::Status PredicateAction::run() {
         }
         else {
             DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name
-                             << " to " << val << " (type: " << val.kind << ")\n";
+                             << " to " << val << " (type: " << val.kind_to_string() << ")\n";
             owner->setValue(name, val);
             status = Complete;
             owner->stop(this);
