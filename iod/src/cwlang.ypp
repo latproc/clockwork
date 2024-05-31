@@ -181,6 +181,7 @@ struct Subcondition {
 	const char *symbol;
     const char *pVal;
     cJSON *jVal;
+    const char *jsExpr;
 	Predicate *expr;
 	PredicateOperator opr;
 	Value *val;
@@ -195,6 +196,7 @@ struct Subcondition {
 %token <sVal> STRINGVAL
 %token <pVal> PATTERN
 %token <jVal> JSONVAL
+%token <jsExpr> JSONEXPR
 %type <symbol> transition_state
 
 %left BECOMES
@@ -1525,6 +1527,16 @@ SET SYMBOL TO expression error_clause  {
 //    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5, $7);
 //	cleanupErrorClause(true);
 //}
+| SYMBOL BECOMES ITEM JSONEXPR OF SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    printf("%s := %s->%s\n", $1, $6, $4);
+    current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opAssign, new Predicate($6))); // FIXME
+}
+| ITEM JSONEXPR OF SYMBOL BECOMES expression {
+    if (current_action) current_actions->push_back(current_action);
+    std::cout <<  $4 << "->" <<  $2 << " := " << *$6 << "\n";
+    current_action = new PredicateActionTemplate(new Predicate(new Predicate($4), opAssign, new Predicate($6))); // FIXME
+}
 | PROPERTY SYMBOL OF SYMBOL BECOMES expression {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate(new Value(new PropertyLookupValue($4, $2))), opAssign, $6));
