@@ -12,6 +12,7 @@ int yycharno;
 static char json_delim;
 static int json_depth;
 
+void prepare_buffer();
 void append_char(int ch);
 void begin_group(char start);
 int end_group(char end);
@@ -22,6 +23,7 @@ int end_group(char end);
 %x PATTERNSTR
 %x PLUGIN_CODE
 %x JSONSTR
+%x JSONEXPRSTR
 
 %%
 
@@ -217,9 +219,7 @@ JSON              {
                     BEGIN JSONSTR;
                     json_delim = 0;
                     json_depth = 0;
-					if (!buf) { buf = (char *)malloc(20); buflen = 20; }
-					bufp = buf;
-					*bufp = 0;
+                    prepare_buffer();
                   }
 <JSONSTR>" "      {   if (json_delim != 0) { append_char(*yytext); } }
 <JSONSTR>"{"      {
@@ -232,16 +232,26 @@ JSON              {
                     begin_group('[');
                   }
 <JSONSTR>"]"      { if (end_group(']') == 0) { return JSONVAL; } }
-<JSONSTR>\n     { append_char(*yytext); yylineno++; yycharno=1; }
-<JSONSTR>.      {
-                  if (json_delim == 0) {
+<JSONSTR>\n       { append_char(*yytext); yylineno++; yycharno=1; }
+<JSONSTR>.        {
+                    if (json_delim == 0) {
                       printf("invalid JSON character %d (%c)\n", *yytext, *yytext);
                       yyerror("Unexpected character");
-                  }
-                  else {
+                    }
+                    else {
                       append_char(*yytext);
+                    }
                   }
-                }
+
+"${"              { BEGIN JSONEXPRSTR; prepare_buffer(); }
+<JSONEXPRSTR>\n   { append_char('\n'); yylineno++; yycharno=1; }
+<JSONEXPRSTR>"}"  {
+                      BEGIN 0;
+                      yylval.jsExpr = buf;
+                      buf = NULL;
+                      return JSONEXPR;
+                  }
+<JSONEXPRSTR>.    { append_char(*yytext); }
 
 [A-Za-z][A-Za-z0-9_.]*       {
     yylval.sVal = strdup(yytext);
@@ -288,35 +298,17 @@ JSON              {
 <HASHCOMMENT>\n     { yylineno++; yycharno=1; BEGIN 0; }
 <HASHCOMMENT>.		;
 
-`               {
-                    BEGIN PATTERNSTR;
-					if (!buf)
-					{
-					     buf = (char *)malloc(20);
-					     buflen = 20;
-					}
-					bufp = buf;
-					*bufp = 0;
-                }
-<PATTERNSTR>\\`    { append_char('`'); }
-<PATTERNSTR>`      { BEGIN 0; yylval.sVal = buf; buf = NULL; return PATTERN; }
+`                   { BEGIN PATTERNSTR; prepare_buffer(); }
+<PATTERNSTR>\\`     { append_char('`'); }
+<PATTERNSTR>`       { BEGIN 0; yylval.sVal = buf; buf = NULL; return PATTERN; }
 <PATTERNSTR>\\[0-3][0-7][0-7] { unsigned char ch = ((yytext[1]-'0')*8 + yytext[2]-'0')*8+yytext[3]-'0'; append_char(ch);  }
 <PATTERNSTR>\r		{ append_char('\r');  }
 <PATTERNSTR>\t		{ append_char('\t');}
 <PATTERNSTR>\n		{ append_char('\n'); yylineno++; yycharno=1; }
-<PATTERNSTR>.      { append_char( *yytext); }
+<PATTERNSTR>.       { append_char( *yytext); }
 
 
-\"			    {  /*"*/	
-                    BEGIN STRING;
-					if (!buf)
-					{
-					     buf = (char *)malloc(20);
-					     buflen = 20;
-					}
-					bufp = buf;
-					*bufp = 0;
- 				}
+\"			    {  /*"*/	BEGIN STRING; prepare_buffer(); }
 <STRING>\\n		{ append_char('\n'); }
 <STRING>\\r		{ append_char('\r'); }
 <STRING>\\t		{ append_char('\t'); }
@@ -357,6 +349,16 @@ JSON              {
 %%
 int yywrap(void) {
     return 1;
+}
+
+void prepare_buffer() {
+    if (!buf)
+    {
+        buf = (char *)malloc(20);
+        buflen = 20;
+    }
+        bufp = buf;
+    *bufp = 0;
 }
 
 void append_char(int ch)
