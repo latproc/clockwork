@@ -26,6 +26,7 @@
 #include "symboltable.h"
 #include <boost/foreach.hpp>
 #include <functional>
+#include <inttypes.h>
 #include <iomanip>
 #include <iostream>
 #include <iterator>
@@ -35,42 +36,41 @@
 #include <sstream>
 #include <stdio.h>
 #include <utility>
-#include <inttypes.h>
 
 static bool stringToLong(const std::string &s, int64_t &x);
 static bool stringToFloat(const std::string &s, double &x);
 
 std::string Value::kind_to_string() const {
-     std::string result;
-     switch(kind) {
-         case t_empty:
-             result = "empty";
-             break;
-         case t_bool:
-             result = "bool";
-             break;
-         case t_integer:
-             result = "integer";
-             break;
-         case t_float:
-             result = "float";
-             break;
-         case t_string:
-             result = "string";
-             break;
-         case t_symbol:
-             result = "symbol";
-             break;
-         case t_json:
-             result = "json";
-             break;
-         case t_dynamic:
-             result = "dynamic";
-             break;
-         default:
-             result = "unknown";
-     }
-     return result;
+    std::string result;
+    switch (kind) {
+    case t_empty:
+        result = "empty";
+        break;
+    case t_bool:
+        result = "bool";
+        break;
+    case t_integer:
+        result = "integer";
+        break;
+    case t_float:
+        result = "float";
+        break;
+    case t_string:
+        result = "string";
+        break;
+    case t_symbol:
+        result = "symbol";
+        break;
+    case t_json:
+        result = "json";
+        break;
+    case t_dynamic:
+        result = "dynamic";
+        break;
+    default:
+        result = "unknown";
+    }
+    return result;
 }
 
 uint64_t microsecs() { return Clock::clock(); }
@@ -81,43 +81,43 @@ namespace {
 
 Value assign_value(cJSON *json) {
     Value result;
-    switch(json->type) {
-        case cJSON_NULL:
-            break;
-        case cJSON_True:
-            result = true;
-            break;
-        case cJSON_False:
-            result = false;
-            break;
-        case cJSON_Number:
-            if (json->valueNumber.kind == cJSON_Number_int_t) {
-                result = (int64_t)json->valueNumber.val._int;
-            }
-            else {
-                result = json->valueNumber.val._double;
-            }
-            break;
-        case cJSON_String:
-            {
-                std::string s(json->valuestring);
-                if (*s.begin() == '"' && *s.end() == '"') {
-                    result = s.substr(1, s.length()-2);
-                }
-                else {
-                    result = s;
-                }
-                break;
-            }
-        case cJSON_Array:
-        case cJSON_Object:
-            result.kind = Value::t_json;
-            result.json = json;
+    switch (json->type) {
+    case cJSON_NULL:
+        break;
+    case cJSON_True:
+        result = true;
+        break;
+    case cJSON_False:
+        result = false;
+        break;
+    case cJSON_Number:
+        if (json->valueNumber.kind == cJSON_Number_int_t) {
+            result = (int64_t)json->valueNumber.val._int;
+        }
+        else {
+            result = json->valueNumber.val._double;
+        }
+        break;
+    case cJSON_String: {
+        std::string s(json->valuestring);
+        if (*s.begin() == '"' && *s.end() == '"') {
+            result = s.substr(1, s.length() - 2);
+        }
+        else {
+            result = s;
+        }
+        result.kind = Value::t_string;
+        break;
+    }
+    case cJSON_Array:
+    case cJSON_Object:
+        result.kind = Value::t_json;
+        result.json = json;
     }
     return result;
 }
 
-}
+} // namespace
 
 void simple_deltat(std::ostream &out, int64_t dt) {
     if (dt > 60000000) {
@@ -136,38 +136,49 @@ void simple_deltat(std::ostream &out, int64_t dt) {
 
 DynamicValueBase::~DynamicValueBase() {}
 
-Value::Value() : kind(t_empty), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+Value::Value()
+    : kind(t_empty), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
 
-Value::Value(Kind k) : kind(k), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+Value::Value(Kind k)
+    : kind(k), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
 
 Value::Value(bool v)
-    : kind(t_bool), bValue(v), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+    : kind(t_bool), bValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+      dyn_value(0) {}
 
 Value::Value(int64_t v)
-    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+      dyn_value(0) {}
 
 Value::Value(int v)
-    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+      dyn_value(0) {}
 
 Value::Value(unsigned int v)
-    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+      dyn_value(0) {}
 
 Value::Value(uint64_t v)
-    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+      dyn_value(0) {}
 
 Value::Value(float v)
-    : kind(t_float), fValue(v), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+    : kind(t_float), fValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+      dyn_value(0) {}
 
 Value::Value(double v)
-    : kind(t_float), fValue(v), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+    : kind(t_float), fValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+      dyn_value(0) {}
 
 Value::Value(cJSON *v)
-    : kind(t_json), fValue(0), json(nullptr), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {
-       *this = assign_value(v);
-    }
+    : kind(t_json), fValue(0), json(nullptr), cached_machine(0), cached_value(0), token_id(0),
+      dyn_value(0) {
+    *this = assign_value(v);
+}
 
 Value::Value(const char *str, Kind k)
-    : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {
+    : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0),
+      dyn_value(0) {
     if (kind == t_symbol && !sValue.empty()) {
         if (sValue == "FALSE") {
             sValue = "";
@@ -190,7 +201,8 @@ Value::Value(const char *str, Kind k)
 }
 
 Value::Value(std::string str, Kind k)
-    : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {
+    : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0),
+      dyn_value(0) {
     if (kind == t_symbol && !str.empty()) {
         if (sValue == "FALSE") {
             sValue = "";
@@ -252,11 +264,11 @@ Value::Value(const Value &other)
     : kind(other.kind), bValue(other.bValue), iValue(other.iValue), fValue(other.fValue),
       json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine), cached_value(0),
       token_id(other.token_id), dyn_value(DynamicValueBase::ref(other.dyn_value)) {
-          if (other.json) {
-              auto str = cJSON_PrintUnformatted(other.json);
-              json = cJSON_Parse(str);
-              free(str);
-          }
+    if (other.json) {
+        auto str = cJSON_PrintUnformatted(other.json);
+        json = cJSON_Parse(str);
+        free(str);
+    }
 
     //      if (kind == t_list) {
     //              std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
@@ -269,24 +281,23 @@ Value::Value(const Value &other)
     //      }
 }
 
-Value::Value(Value && other)
+Value::Value(Value &&other)
     : kind(other.kind), bValue(other.bValue), iValue(other.iValue), fValue(other.fValue),
       json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine), cached_value(0),
       token_id(other.token_id), dyn_value(DynamicValueBase::ref(other.dyn_value)) {
-      if (other.kind == t_string) {
-          sValue = std::move(other.sValue);
-      }
-      else if (other.kind == t_dynamic) {
-          dyn_value = other.dyn_value;
-          other.dyn_value = nullptr;
-          other.kind = t_empty;
-      }
-      else if (other.kind == t_json) {
-          json = other.json;
-          other.json = nullptr;
-          other.kind = t_empty;
-
-      }
+    if (other.kind == t_string) {
+        sValue = std::move(other.sValue);
+    }
+    else if (other.kind == t_dynamic) {
+        dyn_value = other.dyn_value;
+        other.dyn_value = nullptr;
+        other.kind = t_empty;
+    }
+    else if (other.kind == t_json) {
+        json = other.json;
+        other.json = nullptr;
+        other.kind = t_empty;
+    }
 
     //      if (kind == t_list) {
     //              std::copy(other.listValue.begin(), other.listValue.end(), std::back_inserter(listValue));
@@ -347,12 +358,11 @@ Value &Value::operator=(const Value &orig) {
         sValue = orig.sValue;
         token_id = orig.token_id;
         break;
-    case t_json:
-        {
-            auto str = cJSON_PrintUnformatted(orig.json);
-            json = cJSON_Parse(str);
-            free(str);
-        }
+    case t_json: {
+        auto str = cJSON_PrintUnformatted(orig.json);
+        json = cJSON_Parse(str);
+        free(str);
+    }
     case t_dynamic:
         dyn_value = DynamicValueBase::ref(orig.dyn_value);
         break;
@@ -1489,11 +1499,11 @@ std::ostream &Value::operator<<(std::ostream &out) const {
         break;
     }
     case t_json: {
-            assert(json != nullptr);
-            auto json_str = cJSON_PrintUnformatted(json);
-            out << json_str;
-            free(json_str);
-        }
+        assert(json != nullptr);
+        auto json_str = cJSON_PrintUnformatted(json);
+        out << json_str;
+        free(json_str);
+    }
     case t_symbol:
         out << sValue;
         break;
@@ -1597,13 +1607,13 @@ std::string Value::asString(const char *fmt) const {
     case t_empty:
         return "null";
     case t_json: {
-            std::string result;
-            assert(json != nullptr);
-            auto json_str = cJSON_PrintUnformatted(json);
-            result = json_str;
-            free(json_str);
-            return result;
-        }
+        std::string result;
+        assert(json != nullptr);
+        auto json_str = cJSON_PrintUnformatted(json);
+        result = json_str;
+        free(json_str);
+        return result;
+    }
     case t_symbol:
     case t_string:
         return sValue;
@@ -1730,11 +1740,45 @@ bool Value::asFloat(double &x) const {
     return false;
 }
 
-cJSON *Value::getFromJSON(const std::string &key) {// lookup the named property
-    assert(kind == t_json);
-    if (kind != t_json) return nullptr;
-    if (json == nullptr) return nullptr;
-    if (json->type != cJSON_Object) return nullptr;
-    return cJSON_GetObjectItem(json, key.c_str());
+cJSON *Value::asJSON() const {
+    if (kind == t_json) {
+        auto str = cJSON_PrintUnformatted(json);
+        auto result = cJSON_Parse(str);
+        free(str);
+        return result;
+    }
+    else if (kind == t_string) {
+        return cJSON_Parse(sValue.c_str());
+    }
+    else if (kind == t_symbol) {
+        return cJSON_Parse(sValue.c_str());
+    }
+    else if (kind == t_dynamic) {
+        assert(false && "conversion of dynamic value to JSON not implemented");
+        return cJSON_CreateNull();
+    }
+    else if (kind == t_empty) {
+        return cJSON_CreateNull();
+    }
+    else if (kind == t_bool) {
+        return bValue ? cJSON_CreateTrue() : cJSON_CreateFalse();
+    }
+    else if (kind == t_integer) {
+        return cJSON_CreateNumber(iValue);
+    }
+    else if (kind == t_float) {
+        return cJSON_CreateNumber(fValue);
+    }
+    return nullptr;
 }
 
+cJSON *Value::getFromJSON(const std::string &key) { // lookup the named property
+    assert(kind == t_json);
+    if (kind != t_json)
+        return nullptr;
+    if (json == nullptr)
+        return nullptr;
+    if (json->type != cJSON_Object)
+        return nullptr;
+    return cJSON_GetObjectItem(json, key.c_str());
+}

@@ -92,7 +92,7 @@ class Value {
     Value(uint64_t v);
     Value(float v);
     Value(double v);
-    Value(cJSON *v);       // take ownership of the JSON
+    Value(cJSON *v); // take ownership of the JSON
     Value(const char *str, Kind k = t_symbol);
     Value(std::string str, Kind k = t_symbol);
     Value(const Value &other);
@@ -106,6 +106,7 @@ class Value {
     bool asFloat(double &val) const;
     bool asInteger(int64_t &val) const;
     bool asBoolean(bool &val) const;
+    cJSON *asJSON() const;
     int64_t trunc() const;
     int64_t round(int digits = 0) const;
     double toFloat() const;
