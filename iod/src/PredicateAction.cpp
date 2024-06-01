@@ -20,6 +20,7 @@
 
 #include "PredicateAction.h"
 #include "DebugExtra.h"
+#include "Expression.h"
 #include "Logger.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
@@ -27,6 +28,7 @@
 #include "regular_expressions.h"
 #include "value.h"
 #include <iostream>
+#include "json_expression.h"
 
 void breakpoint() {}
 
@@ -90,7 +92,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
             Value prop = m->getValue(v.sValue); // property lookup
             if (prop != SymbolTable::Null) {
                 if (m->debug()) {
-                    DBG_PREDICATES << "Using property " << p->entry << " to resolve search ("
+                    DBG_PREDICATES << "Used property " << p->entry << " to resolve search ("
                                    << prop << ", type: " << prop.kind_to_string() << ")" << ")\n";
                 }
                 return prop;
@@ -257,6 +259,22 @@ Value eval(Predicate *p, MachineInstance *m) {
 
 PredicateAction::~PredicateAction() { delete predicate; }
 
+void setValue(MachineInstance *m, const std::string &property, const Value &value, Predicate *predicate) {
+    if (predicate->op == opPutSubExpr) {
+        assert(predicate->left_p->json_expression);
+        Value lhs = eval(predicate->left_p, m);
+        assert(lhs.kind == Value::t_json);
+        cJSON *result = assign(predicate->left_p->json_expression.value(), lhs.json, value);
+        auto result_str = cJSON_PrintUnformatted(result);
+        result = cJSON_Parse(result_str);
+        free(result_str);
+        m->setValue(property, Value(result));
+    }
+    else {
+        m->setValue(property, value);
+    }
+}
+
 Action::Status PredicateAction::run() {
     owner->start(this);
     DBG_M_PREDICATES << " processing expression: " << *predicate << "\n";
@@ -265,7 +283,24 @@ Action::Status PredicateAction::run() {
         std::string &name = predicate->left_p->entry.sValue;
         Value val;
         if (predicate->right_p) {
-            val = eval(predicate->right_p, owner);
+            Value &rhs(predicate->right_p->entry);
+            if (predicate->op == opGetSubExpr) {
+                assert(predicate->right_p->json_expression);
+                if (rhs.kind == Value::t_symbol) {
+                    val = eval(predicate->right_p, owner);
+                    assert(val.kind == Value::t_json);
+                    cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), val.json);
+                    val = Value(sub_expr);
+                }
+                else {
+                    assert(rhs.kind == Value::t_json);
+                    cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), rhs.json);
+                    val = Value(sub_expr);
+                }
+            }
+            else {
+                val = eval(predicate->right_p, owner);
+            }
         }
         else {
             val = owner->getValue(predicate->entry);
@@ -283,7 +318,7 @@ Action::Status PredicateAction::run() {
                 error_str = "cannot change the value of a constant";
             }
             else {
-                global_machine->setValue("VALUE", val);
+                setValue(global_machine, "VALUE", val, predicate);
                 status = Complete;
                 owner->stop(this);
                 return status;
@@ -292,7 +327,7 @@ Action::Status PredicateAction::run() {
         else {
             DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name
                              << " to " << val << " (type: " << val.kind_to_string() << ")\n";
-            owner->setValue(name, val);
+            setValue(owner, name, val, predicate);
             status = Complete;
             owner->stop(this);
             return status;
