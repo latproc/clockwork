@@ -16,7 +16,9 @@ namespace {
 struct parser_exception : public std::runtime_error {
     boost::context::fiber f;
     parser_exception(boost::context::fiber &&f_, std::string const &what)
-        : std::runtime_error{what}, f{std::move(f_)} {}
+        : std::runtime_error{what}, f{std::move(f_)} {
+        std::cerr << "parser_exception: " << what << "\n";
+    }
 };
 
 TEST(StringInputStream, CanReadString) {
@@ -40,15 +42,21 @@ TEST(CStringInputStream, CanReadString) {
 std::string parse(Parser::InputStream &is) {
     namespace ctx = boost::context;
 
-    std::string token;
     Parser::TokenType kind = Parser::TokenType::expr;
+    std::string token;
+    size_t index = 0;
     bool done = false;
 
-    ctx::fiber source{[&is, &token, &kind, &done](ctx::fiber &&sink) {
+    ctx::fiber source{[&is, &token, &index, &kind, &done](ctx::fiber &&sink) {
         Parser p(
             is,
             [&sink, &token, &kind](char token_, Parser::TokenType token_type) {
                 token = token_;
+                kind = token_type;
+                sink = std::move(sink).resume();
+            },
+            [&sink, &index, &kind](size_t index_, Parser::TokenType token_type) {
+                index = index_;
                 kind = token_type;
                 sink = std::move(sink).resume();
             },
@@ -64,7 +72,12 @@ std::string parse(Parser::InputStream &is) {
     source = std::move(source).resume();
     std::string result;
     while (!done) {
-        result += token;
+        if (kind != Parser::TokenType::index) {
+            result += token;
+        }
+        else {
+            result += std::to_string(index);
+        }
         try {
             source = std::move(source).resume(); // resume the parser
         }
@@ -86,7 +99,9 @@ TEST(Parser, CanParseSimpleExpr) { EXPECT_EQ(parse("$"), "$"); }
 
 TEST(Parser, CanParseMember) { EXPECT_EQ(parse("$.a"), "$.a"); }
 
-TEST(Parser, CanParseArray) { EXPECT_EQ(parse("$.a[1]"), "$.a[1]"); }
+TEST(Parser, CanParseArrayIndex) { EXPECT_EQ(parse("$.a[1]"), "$.a[1]"); }
+
+TEST(Parser, CanParseTwoDigitArrayIndex) { EXPECT_EQ(parse("$.a[10]"), "$.a[10]"); }
 
 TEST(Parser, CanParseComplexExpr) { EXPECT_EQ(parse("$.a[1][0].b.c[2]"), "$.a[1][0].b.c[2]"); }
 
