@@ -11,8 +11,8 @@ Y MACHINE other {
     OPTION b 0;
     ENTER INIT {
       other := a;
-      b := ITEM ${[2]} OF other.b;
-      ITEM ${[0]} OF other.b := 4;
+      b := ITEM ${$[2]} OF other.b;
+      ITEM ${$[0]} OF other.b := 4;
     }
 }
 y Y x;

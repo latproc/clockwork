@@ -27,7 +27,9 @@
 #include "MessageLog.h"
 #include "ProcessingThread.h"
 #include "Scheduler.h"
+#include "cJSON.h"
 #include "dynamic_value.h"
+#include "json_expression.h"
 #include "regular_expressions.h"
 #include <iomanip>
 
@@ -59,6 +61,13 @@ std::ostream &operator<<(std::ostream &out, const Predicate &p) { return p.opera
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
     const char *opstr = "UNKNOWN";
     switch (op) {
+
+    case opGetSubExpr:
+        opstr = "GETSUBEXPR";
+        break;
+    case opPutSubExpr:
+        opstr = "PUTSUBEXPR";
+        break;
     case opNone:
         opstr = "None";
         break;
@@ -489,6 +498,9 @@ std::ostream &Predicate::operator<<(std::ostream &out) const {
         }
         out << ")";
     }
+    else if (right_p) {
+        right_p->operator<<(out);
+    }
     else {
         if (cached_entry) {
             out << entry;
@@ -505,6 +517,9 @@ std::ostream &Predicate::operator<<(std::ostream &out) const {
         else {
             out << " " << entry;
         }
+    }
+    if (json_expression) {
+        out << " json_expr: " << *this->json_expression << " ";
     }
     return out;
 }
@@ -531,6 +546,7 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
     else {
         dyn_value = 0;
     }
+    json_expression = other.json_expression;
     entry.cached_machine = 0; // do not preserve any cached values in this clone
     priority = other.priority;
     mi = 0;
@@ -562,6 +578,7 @@ Predicate &Predicate::operator=(const Predicate &other) {
     else {
         dyn_value = 0;
     }
+    json_expression = other.json_expression;
     entry.cached_machine = 0; // do not preserve any cached machine pointers in this clone
     priority = other.priority;
     mi = 0;
@@ -954,10 +971,19 @@ void prep(Predicate *p, MachineInstance *m, bool left);
 std::ostream &operator<<(std::ostream &out, const ExprNode &o) {
     if (o.kind == ExprNode::t_int) {
         if (o.node) {
-            out << "val: " << *o.node;
+            out << "node: " << *o.node;
         }
         else {
-            out << "null";
+            out << "node: null";
+        }
+        if (o.val) {
+            out << " val: " << *o.val;
+        }
+        else {
+            out << "val: null";
+        }
+        if (o.json_expression) {
+            out << " json_expr: " << *o.json_expression;
         }
     }
     else {
@@ -977,6 +1003,7 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     }
     Value lhs, rhs;
     ExprNode b(eval_stack(m, stack_iter));
+    boost::optional<std::string> json_expression;
     assert(b.kind != ExprNode::t_op);
     if (b.val && b.val->kind == Value::t_dynamic) {
         rhs = b.val->dynamicValue()->operator()(m);
@@ -990,6 +1017,15 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     else if (b.val) {
         rhs = *b.val;
     }
+    if (o.op == opAssign) {
+        m->setValue(stack_iter->node->sValue, rhs);
+    }
+    if (o.op == opGetSubExpr) {
+        assert(rhs.kind == Value::t_json);
+        assert(b.json_expression);
+        cJSON *sub_expr = apply(b.json_expression.value(), rhs.json);
+        m->setValue(stack_iter->node->sValue,Value(sub_expr));
+    }
     ExprNode a(eval_stack(m, stack_iter));
     assert(a.kind != ExprNode::t_op);
     if (a.val && a.val->kind == Value::t_dynamic) {
@@ -998,7 +1034,20 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     else if (a.val) {
         lhs = *a.val;
     }
+    if (o.op == opPutSubExpr) {
+        assert(lhs.kind == Value::t_json);
+        assert(a.json_expression);
+        cJSON *update = assign(a.json_expression.value(), lhs.json, rhs);
+        auto update_str = cJSON_PrintUnformatted(update);
+        update = cJSON_Parse(update_str);
+        free(update_str);
+        m->setValue(a.node->sValue, Value(update));
+    }
     switch (o.op) {
+    case opGetSubExpr:
+        return rhs;
+    case opPutSubExpr:
+        return rhs;
     case opGE:
         return lhs >= rhs;
     case opGT:
@@ -1151,7 +1200,11 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
             stack.push(ExprNode(result, &p->entry));
         }
         else {
-            stack.push(ExprNode(result, &p->entry));
+            auto node = ExprNode(result, &p->entry);
+            if (p->json_expression) {
+                node.json_expression = p->json_expression;
+            }
+            stack.push(std::move(node));
         }
     }
     return true;
@@ -1219,7 +1272,8 @@ ExprNode::ExprNode(PredicateOperator o) : val(0), node(0), op(o), kind(t_op) {
 }
 
 ExprNode::ExprNode(const ExprNode &other)
-    : tmpval(other.tmpval), val(other.val), node(other.node), op(other.op), kind(other.kind) {
+    : tmpval(other.tmpval), val(other.val), node(other.node), json_expression(other.json_expression),
+        op(other.op), kind(other.kind) {
     if (other.val == &other.tmpval) {
         val = &tmpval;
     }

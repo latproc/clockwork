@@ -23,6 +23,7 @@
 
 #include "ExportState.h"
 #include "symboltable.h"
+#include <boost/optional.hpp>
 #include <list>
 #include <stdint.h>
 
@@ -58,7 +59,9 @@ enum PredicateOperator {
     opInteger,
     opFloat,
     opAbsoluteValue,
-    opString
+    opString,
+    opGetSubExpr,
+    opPutSubExpr
 };
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 void toC(std::ostream &out, const PredicateOperator op);
@@ -78,6 +81,7 @@ struct ExprNode {
     Value tmpval;
     const Value *val;
     const Value *node;
+    boost::optional<std::string> json_expression;
     PredicateOperator op;
     enum { t_int, t_op } kind;
 
@@ -126,6 +130,7 @@ class Predicate {
     Value *dyn_value;
     const Value *cached_entry;
     const Value *last_calculation; // for dynamic values, retains the last value for display only
+    boost::optional<std::string> json_expression;
     bool error() { return lookup_error; }
     const std::string &errorString() { return error_str; }
     void clearError() { lookup_error = false; }

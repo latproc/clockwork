@@ -7,6 +7,9 @@
 #include <MessageLog.h>
 #include <memory>
 #include <symboltable.h>
+#include <json_expression.h>
+#include <cJSON.h>
+#include <json_expr_parser.h>
 
 #include "library_globals.c"
 
@@ -66,6 +69,10 @@ class ExpressionTests {
         tests_.push_back(TestCase([this]() { return evaluates_comparison_of_properties(); }));
         tests_.push_back(TestCase([this]() { return condition_evaluates_expressions(); }));
         tests_.push_back(TestCase([this]() { return evaluates_false_eq_false(); }));
+        tests_.push_back(TestCase([this]() { return assigns_a_value(); }));
+        tests_.push_back(TestCase([this]() { return assigns_a_json_value(); }));
+        tests_.push_back(TestCase([this]() { return assigns_a_json_subexpression(); }));
+        tests_.push_back(TestCase([this]() { return puts_a_json_subexpression(); }));
     }
     ~ExpressionTests() { delete scope_; }
     std::list<TestCase> tests() { return tests_; }
@@ -162,6 +169,61 @@ class ExpressionTests {
         Value res = cond(scope_);
         EXPECT_BOOL(res);
         EXPECT_TRUE(res);
+        PASS;
+    }
+
+    TestResult assigns_a_value() {
+        Predicate pred(new Predicate("x"), opAssign, new Predicate(1));
+        eval.evaluate(&pred, scope_);
+        Value x = scope_->properties.lookup("x");
+        std::cout << "x: " << x << std::endl;
+        EXPECT_TRUE(x.kind == Value::t_integer);
+        EXPECT_TRUE(x == 1);
+        PASS;
+    }
+
+    TestResult assigns_a_json_value() {
+        cJSON *json = cJSON_Parse("{\"a\": 1}");
+        Predicate pred(new Predicate("x"), opAssign, new Predicate(Value(json)));
+        eval.evaluate(&pred, scope_);
+        Value x = scope_->properties.lookup("x");
+        std::cout << "x: " << x << std::endl;
+        EXPECT_TRUE(x.kind == Value::t_json);
+        PASS;
+    }
+
+    TestResult assigns_a_json_subexpression() {
+        cJSON *json = cJSON_Parse(R"JSON({"a": 1, "b": {"c": 2}})JSON");
+        auto source = new Predicate(Value(json));
+        source->json_expression = "$.b.c";
+        Predicate pred(new Predicate("x"), opGetSubExpr, source);
+        Value res = eval.evaluate(&pred, scope_);
+        std::cout << "res: " << res << std::endl;
+        Value x = scope_->properties.lookup("x");
+        std::cout << "x: " << x << std::endl;
+        EXPECT_TRUE(x.kind == Value::t_integer);
+        EXPECT_TRUE(x == 2);
+        PASS;
+    }
+
+    TestResult puts_a_json_subexpression() {
+        cJSON *json = cJSON_Parse(R"JSON({"a": 1, "b": {"c": 2}})JSON");
+        scope_->setValue("x", Value(json));
+        auto target = new Predicate("x");
+        target->json_expression = "$.b.c";
+        Predicate pred(target, opPutSubExpr, new Predicate(3));
+        Value res = eval.evaluate(&pred, scope_);
+        std::cout << "res: " << res << std::endl;
+        Value x = scope_->properties.lookup("x");
+        EXPECT_TRUE(x.kind == Value::t_json);
+        auto x_str = cJSON_PrintUnformatted(x.json);
+        auto expected = cJSON_Parse(R"JSON({"a":1,"b":{"c":3}})JSON");
+        auto expected_str = cJSON_PrintUnformatted(expected);
+        std::cout << "x: " << x_str << " expected: " << expected_str << std::endl;
+        EXPECT_TRUE(strcmp(x_str, expected_str) == 0);
+        free(x_str);
+        free(expected_str);
+        cJSON_Delete(expected);
         PASS;
     }
 };

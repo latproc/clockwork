@@ -1011,22 +1011,17 @@ INTEGERVAL   {
 }
 | FLOATVAL {
 	$$ = new Value($1);
-//	NB_MSG << " created float value: " << *$$ << " (type: " << $$->kind << ")\n";
 }
 | STRINGVAL {
     $$ = new Value($1, Value::t_string);
-//	NB_MSG << " created string value: " << *$$ << " (type: " << $$->kind << ")\n";
 }
 | JSONVAL {
-    printf("json\n");
     auto json_str = cJSON_Print($1);
-    std::printf("json: %s\n", json_str);
     free(json_str);
     $$ = new Value($1);
 }
 | SYMBOL {
     $$ = new Value($1);
-//	NB_MSG << " created symbol value: " << *$$ << " (type: " << $$->kind << ")\n";
 }
 | ABS SYMBOL {
 	$$ = new Value(new AbsoluteValue($2));
@@ -1530,12 +1525,16 @@ SET SYMBOL TO expression error_clause  {
 | SYMBOL BECOMES ITEM JSONEXPR OF SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     printf("%s := %s->%s\n", $1, $6, $4);
-    current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opAssign, new Predicate($6))); // FIXME
+    Predicate *source = new Predicate($6);
+    source->json_expression = $4;
+    current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opGetSubExpr, source)); // FIXME
 }
 | ITEM JSONEXPR OF SYMBOL BECOMES expression {
     if (current_action) current_actions->push_back(current_action);
     std::cout <<  $4 << "->" <<  $2 << " := " << *$6 << "\n";
-    current_action = new PredicateActionTemplate(new Predicate(new Predicate($4), opAssign, new Predicate($6))); // FIXME
+    Predicate *target = new Predicate($4);
+    target->json_expression = $2;
+    current_action = new PredicateActionTemplate(new Predicate(target, opPutSubExpr, new Predicate(*$6))); // FIXME
 }
 | PROPERTY SYMBOL OF SYMBOL BECOMES expression {
     if (current_action) current_actions->push_back(current_action);
