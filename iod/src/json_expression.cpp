@@ -21,14 +21,20 @@ PathResult follow_json_expr_path(const std::string &str, cJSON *json) {
 
     Parser::StringInputStream is(str);
     std::string token;
+    size_t index = 0;
     Parser::TokenType kind = Parser::TokenType::expr;
     bool done = false;
     // execute parser in new fiber and process tokens in the main function
-    ctx::fiber source{[&is, &token, &kind, &done](ctx::fiber &&sink) {
+    ctx::fiber source{[&is, &token, &index, &kind, &done](ctx::fiber &&sink) {
         Parser p(
             is,
             [&sink, &token, &kind](char token_, Parser::TokenType token_type) {
                 token = token_;
+                kind = token_type;
+                sink = std::move(sink).resume();
+            },
+            [&sink, &index, &kind](size_t index_, Parser::TokenType token_type) {
+                index = index_;
                 kind = token_type;
                 sink = std::move(sink).resume();
             },
@@ -81,8 +87,8 @@ PathResult follow_json_expr_path(const std::string &str, cJSON *json) {
             if (result.value && result.value->type == cJSON_Array) {
                 result.parent = result.value;
                 result.key.reset();
-                result.index = std::stoi(token);
-                result.value = cJSON_GetArrayItem(result.value, *result.index);
+                result.index = index;
+                result.value = cJSON_GetArrayItem(result.parent, *result.index);
             }
             else {
                 throw std::runtime_error("not an array");
@@ -115,15 +121,11 @@ cJSON *apply(const std::string &str, cJSON *json) {
         result = cJSON_Parse(str);
         free(str);
     }
-    else {
-        std::cerr << "Expression did not match\n";
-    }
     return result;
 }
 
 cJSON *assign(const std::string &str, cJSON *json, const std::string &value) {
     auto result = follow_json_expr_path(str, json);
-    std::cout << "original value: " << cJSON_PrintUnformatted(json) << std::endl;
     auto string = cJSON_CreateString(value.c_str());
     if (result.value) {
         if (result.parent) {
@@ -138,13 +140,11 @@ cJSON *assign(const std::string &str, cJSON *json, const std::string &value) {
             json = string;
         }
     }
-    std::cout << "new value: " << cJSON_PrintUnformatted(json) << std::endl;
     return json;
 }
 
 cJSON *assign(const std::string &str, cJSON *json, uint64_t value) {
     auto result = follow_json_expr_path(str, json);
-    std::cout << "original value: " << cJSON_PrintUnformatted(json) << std::endl;
     auto number = cJSON_CreateNumber(value);
     if (result.value) {
         if (result.parent) {
@@ -159,13 +159,11 @@ cJSON *assign(const std::string &str, cJSON *json, uint64_t value) {
             json = number;
         }
     }
-    std::cout << "new value: " << cJSON_PrintUnformatted(json) << std::endl;
     return json;
 }
 
 cJSON *assign(const std::string &str, cJSON *json, bool value) {
     auto result = follow_json_expr_path(str, json);
-    std::cout << "original value: " << cJSON_PrintUnformatted(json) << std::endl;
     auto boolean = value ? cJSON_CreateTrue() : cJSON_CreateFalse();
     if (result.value) {
         if (result.parent) {
@@ -180,13 +178,11 @@ cJSON *assign(const std::string &str, cJSON *json, bool value) {
             json = boolean;
         }
     }
-    std::cout << "new value: " << cJSON_PrintUnformatted(json) << std::endl;
     return json;
 }
 
 cJSON *assign(const std::string &str, cJSON *json, double value) {
     auto result = follow_json_expr_path(str, json);
-    std::cout << "original value: " << cJSON_PrintUnformatted(json) << std::endl;
     auto number = cJSON_CreateDouble(value);
     if (result.value) {
         if (result.parent) {
@@ -201,13 +197,11 @@ cJSON *assign(const std::string &str, cJSON *json, double value) {
             json = number;
         }
     }
-    std::cout << "new value: " << cJSON_PrintUnformatted(json) << std::endl;
     return json;
 }
 
 cJSON *assign(const std::string &str, cJSON *json, cJSON *value) {
     auto result = follow_json_expr_path(str, json);
-    std::cout << "original value: " << cJSON_PrintUnformatted(json) << std::endl;
     if (result.value) {
         if (result.parent) {
             if (result.key) {
@@ -221,7 +215,6 @@ cJSON *assign(const std::string &str, cJSON *json, cJSON *value) {
             json = value;
         }
     }
-    std::cout << "new value: " << cJSON_PrintUnformatted(json) << std::endl;
     return json;
 }
 

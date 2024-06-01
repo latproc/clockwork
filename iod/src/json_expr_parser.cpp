@@ -1,9 +1,9 @@
+#include "json_expr_parser.h"
+#include <boost/context/fiber.hpp>
 #include <cJSON.h>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <boost/context/fiber.hpp>
-#include "json_expr_parser.h"
 
 // Boost.Context reference: https://www.boost.org/doc/libs/1_84_0/libs/context/doc/html/context/ff.html
 
@@ -14,14 +14,12 @@
 // var  = alpha { alpha | digit | "_"}
 // key = "*" | var | number
 
-Parser::Parser(InputStream &is_,
-                std::function<void(char, Parser::TokenType kind)> cb_,
-                std::function<void(std::string, Parser::TokenType kind)> cb2_)
-    : next(), is(is_), cb(cb_), cb2(cb2_) {}
+Parser::Parser(InputStream &is_, std::function<void(char, Parser::TokenType kind)> cb_,
+               std::function<void(size_t, Parser::TokenType kind)> cb_number_,
+               std::function<void(std::string, Parser::TokenType kind)> cb_string_)
+    : next(), is(is_), cb(cb_), cb_number(cb_number_), cb_string(cb_string_) {}
 
-char Parser::pull() {
-    return is.get();
-}
+char Parser::pull() { return is.get(); }
 
 void Parser::scan() {
     do {
@@ -37,23 +35,43 @@ void Parser::run() {
     }
 }
 
-std::ostream & Parser::display(std::ostream & out, Parser::TokenType kind) {
-     switch(kind) {
-         case TokenType::expr: out << "expr"; break;
-         case TokenType::root: out << "root"; break;
-         case TokenType::introducer: out << "introducer"; break;
-         case TokenType::member: out << "member"; break;
-         case TokenType::var: out << "var"; break;
-         case TokenType::subs_begin: out << "subs_begin"; break;
-         case TokenType::key: out << "key"; break;
-         case TokenType::subs_end: out << "subs_end"; break;
-         case TokenType::index: out << "index"; break;
-         case TokenType::wildcard: out << "wildcard"; break;
-     };
-     return out;
+std::ostream &Parser::display(std::ostream &out, Parser::TokenType kind) {
+    switch (kind) {
+    case TokenType::expr:
+        out << "expr";
+        break;
+    case TokenType::root:
+        out << "root";
+        break;
+    case TokenType::introducer:
+        out << "introducer";
+        break;
+    case TokenType::member:
+        out << "member";
+        break;
+    case TokenType::var:
+        out << "var";
+        break;
+    case TokenType::subs_begin:
+        out << "subs_begin";
+        break;
+    case TokenType::key:
+        out << "key";
+        break;
+    case TokenType::subs_end:
+        out << "subs_end";
+        break;
+    case TokenType::index:
+        out << "index";
+        break;
+    case TokenType::wildcard:
+        out << "wildcard";
+        break;
+    };
+    return out;
 }
 
-std::ostream & operator<<(std::ostream & out, Parser::TokenType kind) {
+std::ostream &operator<<(std::ostream &out, Parser::TokenType kind) {
     return Parser::display(out, kind);
 }
 
@@ -74,7 +92,6 @@ void Parser::member() {
             scan();
             key();
             if (next != ']') {
-                std::cerr << "member: " << next << std::endl;
                 throw std::runtime_error("parse error");
             }
             is.mark();
@@ -103,20 +120,34 @@ void Parser::var() {
             next = pull();
         }
         value = ss.str();
-        cb2(value, TokenType::var);
+        cb_string(value, TokenType::var);
         is.mark();
-        if (next == ' ') { scan(); }
+        if (next == ' ') {
+            scan();
+        }
     }
     else {
-        std::cerr << "var: " << next << std::endl;
+        throw std::runtime_error("parse error");
+    }
+}
+
+void Parser::number() {
+    if (isdigit(next)) {
+        size_t index = 0;
+        while (!is.eof() && isdigit(next)) {
+            index = index * 10 + next - '0';
+            next = pull();
+        }
+        cb_number(index, TokenType::index);
+    }
+    else {
         throw std::runtime_error("parse error");
     }
 }
 
 void Parser::key() {
     if (isdigit(next)) {
-        cb(next, TokenType::index);
-        scan();
+        number();
     }
     else if (isalpha(next)) {
         std::stringstream ss;
@@ -125,15 +156,16 @@ void Parser::key() {
             next = pull();
         }
         value = ss.str();
-        cb2(value, TokenType::key);
-        if (next == ' ') { scan(); }
+        cb_string(value, TokenType::key);
+        if (next == ' ') {
+            scan();
+        }
     }
     else if (next == '*') {
         cb(next, TokenType::wildcard);
         scan();
     }
     else {
-        std::cerr << "key: " << next << std::endl;
         throw std::runtime_error("parsing failed");
     }
 }
