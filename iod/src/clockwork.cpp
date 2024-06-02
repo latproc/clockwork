@@ -727,7 +727,7 @@ void semantic_analysis() {
             }
             mc->collectTimerPredicates();
         }
-        machine_classes[mc->name] = mc;
+        MachineClass::machine_classes[mc->name] = mc;
     }
     // setup references for each global
     BOOST_FOREACH (MachineClass *mc, MachineClass::all_machine_classes) {
@@ -753,8 +753,8 @@ void semantic_analysis() {
     std::list<MachineInstance *>::iterator m_iter = MachineInstance::begin();
     while (m_iter != MachineInstance::end()) {
         MachineInstance *m = *m_iter++;
-        std::map<std::string, MachineClass *>::iterator c_iter = machine_classes.find(m->_type);
-        if (c_iter == machine_classes.end()) {
+        std::map<std::string, MachineClass *>::iterator c_iter = MachineClass::machine_classes.find(m->_type);
+        if (c_iter == MachineClass::machine_classes.end()) {
             std::stringstream ss;
             ss << "## - Error: class " << m->_type << " not found for machine " << m->getName();
             error_messages.push_back(ss.str());
@@ -1317,7 +1317,7 @@ int loadConfig(std::list<std::string> &files) {
 void enable_all_machines() {
     // enable all machines
 
-    bool only_startup = machine_classes.count("STARTUP") > 0;
+    bool only_startup = MachineClass::machine_classes.count("STARTUP") > 0;
     auto m_iter = MachineInstance::begin();
     while (m_iter != MachineInstance::end()) {
         MachineInstance *m = *m_iter++;

@@ -209,6 +209,11 @@ Value eval(Predicate *p, MachineInstance *m) {
         case opString:
             res = r.asString();
             break;
+        case opJson: {
+            auto str = r.asString();
+            res = Value(cJSON_Parse(str.c_str()));
+            break;
+        }
         case opAssign:
             res = r;
             break; // TBD

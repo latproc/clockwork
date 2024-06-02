@@ -145,6 +145,9 @@ std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
         break;
     case opString:
         opstr = "AS STRING";
+    case opJson:
+        opstr = "AS JSON";
+        break;
     case opAny:
         opstr = "ANY";
         break;
@@ -489,7 +492,7 @@ void Predicate::clearTimerEvents(
 std::ostream &Predicate::operator<<(std::ostream &out) const {
     if (left_p) {
         out << "(";
-        if (op != opNOT && op != opInteger && op != opFloat && op != opString) {
+        if (op != opNOT && op != opInteger && op != opFloat && op != opString && op != opJson) {
             left_p->operator<<(out); // ignore the lhs for NOT operators
         }
         out << " " << op << " ";
@@ -676,7 +679,7 @@ void Predicate::toC(std::ostream &out) const {
         if (op != opAssign) {
             out << "(";
         }
-        if (op != opNOT && op != opInteger && op != opFloat) {
+        if (op != opNOT && op != opInteger && op != opFloat && op != opJson) {
             left_p->toC(out); // ignore the lhs for NOT operators
         }
         out << " ";
@@ -723,7 +726,7 @@ void Predicate::toCstring(std::ostream &out, std::stringstream &vars) const {
         if (op != opAssign) {
             out << "(";
         }
-        if (op != opNOT && op != opInteger && op != opFloat) {
+        if (op != opNOT && op != opInteger && op != opFloat && op != opJson) {
             left_p->toCstring(out, vars); // ignore the lhs for NOT operators
         }
         out << " ";
@@ -830,7 +833,7 @@ std::ostream &Stack::traverse(std::ostream &out, std::list<ExprNode>::const_iter
     const ExprNode &n = *iter++;
     if (n.kind == ExprNode::t_op) {
         out << "(";
-        if (n.op != opNOT && n.op != opInteger && n.op != opFloat)
+        if (n.op != opNOT && n.op != opInteger && n.op != opFloat && n.op != opJson)
         // ignore lhs for the not operator
         {
             traverse(out, iter, end);
@@ -1104,6 +1107,10 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
         return rhs.toFloat();
     case opString:
         return Value(rhs.asString(), Value::t_string);
+    case opJson: {
+        cJSON *json = cJSON_Parse(rhs.asString().c_str());
+        return Value(json);
+    }
     case opAssign:
         return rhs;
     case opMatch: {
@@ -1179,7 +1186,7 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
         }
         stack.push(p->op);
     }
-    else if (p->op == opInteger || p->op == opFloat || p->op == opString) {
+    else if (p->op == opInteger || p->op == opFloat || p->op == opString || p->op == opJson) {
         stack.push(ExprNode(SymbolTable::True));
         if (!prep(stack, p->right_p, m, false, reevaluate)) {
             return false;

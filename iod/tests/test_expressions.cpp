@@ -83,6 +83,68 @@ TEST_F(EvaluatorTest, simple_expression_equality) {
     delete scope;
 }
 
+TEST_F(EvaluatorTest, compare_integer_and_float) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    Predicate pred(new Predicate(3), opEQ, new Predicate(Value(3.0)));
+    EXPECT_EQ(Value(true), eval.evaluate(&pred, scope))
+        << "evaluates a simple equality with a simple expression";
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, compare_float_and_integer) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    Predicate pred(new Predicate(Value(3.0)), opEQ, new Predicate(3));
+    EXPECT_EQ(Value(true), eval.evaluate(&pred, scope))
+        << "evaluates a simple equality with a simple expression";
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, compare_float_and_float) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    Predicate pred(new Predicate(Value(3.0)), opEQ, new Predicate(Value(3.0)));
+    EXPECT_EQ(Value(true), eval.evaluate(&pred, scope))
+        << "evaluates a simple equality with a simple expression";
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, compare_float_and_float_2) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    Predicate pred(new Predicate(Value(3.0)), opEQ, new Predicate(Value(3.1)));
+    EXPECT_EQ(Value(false), eval.evaluate(&pred, scope))
+        << "evaluates a simple equality with a simple expression";
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, convert_integer_to_float) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    Predicate pred(0, opFloat, new Predicate(Value(3.0)));
+    Value res = eval.evaluate(&pred, scope);
+    EXPECT_EQ(res.kind, Value::t_float) << "converts an integer to a float";
+    EXPECT_EQ(res, 3.0) << "converts an integer to a float";
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, convert_string_to_json) {
+    MachineClass *flag_class = new MachineClass("FLAG");
+    assert(MachineClass::machine_classes.size() > 0);
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    std::string json_str = "[1,2,3]";
+    scope->setValue("json", json_str);
+    Predicate pred(0, opJson, new Predicate("json"));
+    Value res = eval.evaluate(&pred, scope);
+    EXPECT_EQ(res.kind, Value::t_json) << "converts a string to json";
+    auto res_str = cJSON_PrintUnformatted(res.json);
+    EXPECT_EQ(json_str, res_str) << "converts a string to json";
+    delete scope;
+}
+
+
 #include <Dispatcher.h>
 #include <Logger.h>
 #include <MessagingInterface.h>

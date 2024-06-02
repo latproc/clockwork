@@ -13,7 +13,7 @@
 #include <vector>
 
 std::list<MachineClass *> MachineClass::all_machine_classes;
-std::map<std::string, MachineClass> MachineClass::machine_classes;
+std::map<std::string, MachineClass*> MachineClass::machine_classes;
 
 // TODO: relocate this
 static bool stringEndsWith(const std::string &str, const std::string &subs) {
@@ -31,6 +31,7 @@ MachineClass::MachineClass(const char *class_name)
     addState("INIT", true);
     token_id = Tokeniser::instance()->getTokenId(class_name);
     all_machine_classes.push_back(this);
+    machine_classes[class_name] = this;
 }
 
 void MachineClass::defaultState(State state) { default_state = state; }

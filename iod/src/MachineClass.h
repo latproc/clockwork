@@ -55,7 +55,7 @@ class MachineClass {
     std::vector<std::string> state_exports;
     std::vector<std::string> state_exports_rw;
     std::vector<std::string> command_exports;
-    static std::map<std::string, MachineClass> machine_classes;
+    static std::map<std::string, MachineClass*> machine_classes;
     explicit MachineClass(const char *class_name);
     void defaultState(State state);
     bool isStableState(State &state);
