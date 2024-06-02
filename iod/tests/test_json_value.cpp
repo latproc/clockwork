@@ -99,7 +99,11 @@ TEST(Parser, CanParseSimpleExpr) { EXPECT_EQ(parse("$"), "$"); }
 
 TEST(Parser, CanParseMember) { EXPECT_EQ(parse("$.a"), "$.a"); }
 
+TEST(Parser, CanParseMemberWithDefaultRoot) { EXPECT_EQ(parse("a"), "a"); }
+
 TEST(Parser, CanParseArrayIndex) { EXPECT_EQ(parse("$.a[1]"), "$.a[1]"); }
+
+TEST(Parser, CanParseArrayIndexWithDefaultRoot) { EXPECT_EQ(parse("[1]"), "[1]"); }
 
 TEST(Parser, CanParseTwoDigitArrayIndex) { EXPECT_EQ(parse("$.a[10]"), "$.a[10]"); }
 
@@ -303,7 +307,7 @@ TEST(AssignJsonExpr, AssignJsonValue) {
 
 TEST(AssignJsonExpr, AssignArrayValue) {
     auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
-    auto expr_str = "$.a";
+    auto expr_str = "a";
     JsonExpr expr(expr_str);
     auto doc = cJSON_Parse(json_str);
     auto new_json = cJSON_Parse(R"JSON([1,2,3])JSON");

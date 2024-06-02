@@ -29,7 +29,15 @@ void Parser::scan() {
 
 void Parser::run() {
     scan();
-    root();
+    if (next == '$') {
+        root();
+        if (!is.eof()) {
+            member();
+        }
+    }
+    else if (next != '[') {
+        var();
+    }
     if (!is.eof()) {
         member();
     }
