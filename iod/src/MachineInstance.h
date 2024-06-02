@@ -61,7 +61,6 @@ struct cJSON;
 class Channel;
 
 extern std::map<std::string, MachineInstance *> machines;
-extern std::map<std::string, MachineClass *> machine_classes;
 
 struct HardwareAddress {
     int io_offset;

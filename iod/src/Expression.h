@@ -58,6 +58,7 @@ enum PredicateOperator {
     opIncludes,
     opInteger,
     opFloat,
+    opJson,
     opAbsoluteValue,
     opString,
     opGetSubExpr,

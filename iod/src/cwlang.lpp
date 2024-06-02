@@ -215,7 +215,7 @@ WHERE               return WHERE;
 WITH                return WITH;
 WITHIN              return WITHIN;
 
-JSON              {
+JSON_VALUE        {
                     BEGIN JSONSTR;
                     json_delim = 0;
                     json_depth = 0;
@@ -252,6 +252,8 @@ JSON              {
                       return JSONEXPR;
                   }
 <JSONEXPRSTR>.    { append_char(*yytext); }
+
+JSON               return JSON;
 
 [A-Za-z][A-Za-z0-9_.]*       {
     yylval.sVal = strdup(yytext);

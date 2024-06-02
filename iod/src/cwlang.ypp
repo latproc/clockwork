@@ -171,7 +171,7 @@ struct Subcondition {
 %token ASCENDING ASC DESCENDING DESC INDEX
 %token REFERS FIND SEEK CPU BOARD
 %token DIGITALIN ADC TOUCH PIN ETHERNET DIGITALIO DAC SPI SDIO JTAG UART
-%token FORMAT SEPARATED SERIALISE RESET LOAD
+%token FORMAT SEPARATED SERIALISE RESET LOAD JSON
 
 %union {
 	bool bVal;
@@ -994,6 +994,7 @@ value {
 | expression AS INTEGER { $$ = new Predicate(0, opInteger, $1); }
 | expression AS FLOAT { $$ = new Predicate(0, opFloat, $1); }
 | expression AS STRINGTYPE { $$ = new Predicate(0, opString, $1); }
+| expression AS JSON { $$ = new Predicate(0, opJson, $1); }
 | '!' expression { $$ = new Predicate(0, opNegate, $2);}
 | '-' expression { $$ = new Predicate(new Predicate(-1), opTimes, $2);}
 | expression MATCHES PATTERN {

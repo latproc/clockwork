@@ -118,7 +118,7 @@ class MachineInstance::Cache {
 std::ostream &operator<<(std::ostream &out, const ActionTemplate &a) { return a.operator<<(out); }
 
 std::map<std::string, MachineInstance *> machines;
-std::map<std::string, MachineClass *> machine_classes;
+// std::map<std::string, MachineClass *> machine_classes;
 
 // All machine instances automatically join and leave this list.
 // During the poll process, all machines in this list have their idle() called.
@@ -684,6 +684,10 @@ MachineInstance::MachineInstance(InstanceType instance_type)
         Dispatcher::instance()->addReceiver(this);
         start_time = microsecs();
     }
+    auto found = MachineClass::machine_classes.find(_type);
+    if (found != MachineClass::machine_classes.end()) {
+        state_machine = found->second;
+    }
 }
 
 MachineInstance::MachineInstance(const CStringHolder name, const char *type,
@@ -712,6 +716,10 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
         all_machines.push_back(this);
         Dispatcher::instance()->addReceiver(this);
         start_time = microsecs();
+    }
+    auto found = MachineClass::machine_classes.find(_type);
+    if (found != MachineClass::machine_classes.end()) {
+        state_machine = found->second;
     }
 }
 
@@ -3452,9 +3460,8 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                                                     p.machine->definition_line);
                 listenTo(newp.machine);
                 newp.machine->addDependancy(this);
-                std::map<std::string, MachineClass *>::iterator c_iter =
-                    machine_classes.find(newp.machine->_type);
-                if (c_iter == machine_classes.end()) {
+                auto c_iter = MachineClass::machine_classes.find(newp.machine->_type);
+                if (c_iter == MachineClass::machine_classes.end()) {
                     auto &ss = MessageLog::instance()->get_stream();
                     ss << _name << ": " << newp.machine->_type << " not found";
                     auto error = MessageLog::instance()->access_stream_message();
@@ -3463,58 +3470,56 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                     MessageLog::instance()->release_stream();
                     ++num_errors;
                 }
-                else if ((*c_iter).second) {
-                    newp.machine->owner = this;
-                    MachineClass *newsm = (*c_iter).second;
-                    newp.machine->setStateMachine(newsm);
-                    if (newsm->parameters.size() != p.machine->parameters.size()) {
-                        // LISTS can have any number of parameters
-                        // POINTs and ANALOGINPUTs can have 2 or three parameters
-                        if (newsm->name == "LIST") {
-                            DBG_PARSER << "List has " << p.machine->parameters.size()
-                                       << " parameters\n";
-                            p.machine->setNeedsCheck();
-                        }
-                        if (newsm->name == "LIST" ||
-                            ((newsm->name == "POINT" || newsm->name == "ANALOGINPUT" ||
-                              newsm->name == "COUNTER" || newsm->name == "INPUTBIT" ||
-                              newsm->name == "OUTPUTBIT" || newsm->name == "INPUTREGISTER" ||
-                              newsm->name == "OUTPUTREGISTER" || newsm->name == "DIGITALVALUE") &&
-                             newsm->parameters.size() >= 2 && newsm->parameters.size() <= 3) ||
-                            (newsm->name == "COUNTERRATE" &&
-                             (newsm->parameters.size() == 3 || newsm->parameters.size() == 1))) {
-                        }
-                        else {
-                            resetTemporaryStringStream();
-                            ss << "## - Error: Machine " << newsm->name << " requires "
-                               << newsm->parameters.size() << " parameters but instance " << _name
-                               << "." << newp.machine->getName() << " has "
-                               << p.machine->parameters.size();
-                            error_messages.push_back(ss.str());
-                            ++num_errors;
-                        }
+                newp.machine->owner = this;
+                MachineClass *newsm = (*c_iter).second;
+                newp.machine->setStateMachine(newsm);
+                if (newsm->parameters.size() != p.machine->parameters.size()) {
+                    // LISTS can have any number of parameters
+                    // POINTs and ANALOGINPUTs can have 2 or three parameters
+                    if (newsm->name == "LIST") {
+                        DBG_PARSER << "List has " << p.machine->parameters.size()
+                                   << " parameters\n";
+                        p.machine->setNeedsCheck();
                     }
-                    if (p.machine->parameters.size()) {
-                        std::copy(p.machine->parameters.begin(), p.machine->parameters.end(),
-                                  back_inserter(newp.machine->parameters));
-                        DBG_M_INITIALISATION << "copied " << p.machine->parameters.size()
-                                             << " parameters. local has "
-                                             << p.machine->parameters.size() << "parameters\n";
+                    if (newsm->name == "LIST" ||
+                        ((newsm->name == "POINT" || newsm->name == "ANALOGINPUT" ||
+                          newsm->name == "COUNTER" || newsm->name == "INPUTBIT" ||
+                          newsm->name == "OUTPUTBIT" || newsm->name == "INPUTREGISTER" ||
+                          newsm->name == "OUTPUTREGISTER" || newsm->name == "DIGITALVALUE") &&
+                         newsm->parameters.size() >= 2 && newsm->parameters.size() <= 3) ||
+                        (newsm->name == "COUNTERRATE" &&
+                         (newsm->parameters.size() == 3 || newsm->parameters.size() == 1))) {
                     }
-                    if (p.machine->stable_states.size()) {
-                        DBG_M_INITIALISATION << " restoring stable states for " << newp.val
-                                             << "...before: " << newp.machine->stable_states.size();
-                        newp.machine->stable_states.clear();
-                        BOOST_FOREACH (StableState &s, p.machine->stable_states) {
-                            newp.machine->stable_states.push_back(s);
-                            newp.machine->stable_states[newp.machine->stable_states.size() - 1]
-                                .setOwner(this); //
-                        }
-                        std::copy(p.machine->stable_states.begin(), p.machine->stable_states.end(),
-                                  back_inserter(newp.machine->stable_states));
-                        DBG_M_INITIALISATION << " after: " << newp.machine->stable_states.size()
-                                             << "\n";
+                    else {
+                        resetTemporaryStringStream();
+                        ss << "## - Error: Machine " << newsm->name << " requires "
+                           << newsm->parameters.size() << " parameters but instance " << _name
+                           << "." << newp.machine->getName() << " has "
+                           << p.machine->parameters.size();
+                        error_messages.push_back(ss.str());
+                        ++num_errors;
                     }
+                }
+                if (p.machine->parameters.size()) {
+                    std::copy(p.machine->parameters.begin(), p.machine->parameters.end(),
+                              back_inserter(newp.machine->parameters));
+                    DBG_M_INITIALISATION << "copied " << p.machine->parameters.size()
+                                         << " parameters. local has "
+                                         << p.machine->parameters.size() << "parameters\n";
+                }
+                if (p.machine->stable_states.size()) {
+                    DBG_M_INITIALISATION << " restoring stable states for " << newp.val
+                                         << "...before: " << newp.machine->stable_states.size();
+                    newp.machine->stable_states.clear();
+                    BOOST_FOREACH (StableState &s, p.machine->stable_states) {
+                        newp.machine->stable_states.push_back(s);
+                        newp.machine->stable_states[newp.machine->stable_states.size() - 1]
+                            .setOwner(this); //
+                    }
+                    std::copy(p.machine->stable_states.begin(), p.machine->stable_states.end(),
+                              back_inserter(newp.machine->stable_states));
+                    DBG_M_INITIALISATION << " after: " << newp.machine->stable_states.size()
+                                         << "\n";
                 }
             }
             locals.push_back(newp);
