@@ -140,6 +140,10 @@ cJSON *assign(const std::string &str, cJSON *json, const std::string &value) {
             json = string;
         }
     }
+    else {
+        // add a new key to the parent object
+        cJSON_AddItemToObject(json, str.c_str(), string);
+    }
     return json;
 }
 

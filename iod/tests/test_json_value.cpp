@@ -248,6 +248,35 @@ TEST(AssignJsonExpr, AssignStringValue) {
     cJSON_Delete(doc);
 }
 
+TEST(AssignJsonExpr, AssignNewTopLevelValue) {
+    auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
+    auto expr_str = "c";
+    JsonExpr expr(expr_str);
+    auto doc = cJSON_Parse(json_str);
+    assign(expr_str, doc, std::string("world"));
+    cJSON *json = expr.apply(doc);
+    EXPECT_NE(json, nullptr);
+    EXPECT_EQ(json->type, cJSON_String);
+    EXPECT_EQ(strcmp(json->valuestring, "world"), 0);
+    auto updated_json_str = cJSON_PrintUnformatted(doc);
+    EXPECT_EQ(strcmp(updated_json_str, R"JSON({"a":1,"b":"hello","c":"world"})JSON"), 0);
+    free(updated_json_str);
+    cJSON_Delete(json);
+    cJSON_Delete(doc);
+}
+
+TEST(AssignJsonExpr, AssignNewNestedValue) {
+    auto json_str = R"JSON({"a":1,"b":{"one":"hello"}})JSON";
+    auto expr_str = "b.two";
+    JsonExpr expr(expr_str);
+    auto doc = cJSON_Parse(json_str);
+    assign(expr_str, doc, std::string("world"));
+    std::cout << "Assigning a new key into a nested object is unsupported\n";
+    cJSON *json = expr.apply(doc);
+    EXPECT_EQ(json, nullptr);
+    cJSON_Delete(doc);
+}
+
 TEST(AssignJsonExpr, AssignIntegerNumberValue) {
     auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
     auto expr_str = "$.a";
