@@ -4302,13 +4302,6 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             }
         }
 
-        if (state_machine->token_id == ClockworkToken::MQTTPUBLISHER && mq_interface &&
-            property_val.token_id == ClockworkToken::tokMessage) {
-            std::string old_val(properties.lookup(property.c_str()).asString());
-            mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
-            return true;
-        }
-
         if ((new_value.kind == Value::t_integer || new_value.kind != Value::t_float) &&
             state_machine && state_machine->plugin && state_machine->plugin->filter) {
             int filtered_value = state_machine->plugin->filter(this, new_value.iValue);
