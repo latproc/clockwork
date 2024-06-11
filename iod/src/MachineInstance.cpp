@@ -4326,9 +4326,10 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
         }
 
-        if ((new_value.kind == Value::t_integer || new_value.kind != Value::t_float) &&
+        if ((new_value.kind == Value::t_integer || new_value.kind == Value::t_float) &&
             state_machine && state_machine->plugin && state_machine->plugin->filter) {
-            int64_t filtered_value = state_machine->plugin->filter(this, new_value.iValue);
+            double float_value = new_value.kind == Value::t_float ? new_value.fValue : new_value.iValue;
+            double filtered_value = state_machine->plugin->filter(this, float_value);
             was_changed = (!prev_value.identical(filtered_value) ||
                            (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
             if (was_changed) {
