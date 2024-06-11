@@ -4301,7 +4301,6 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             property_val.token_id == ClockworkToken::tokMessage) {
             std::string old_val(properties.lookup(property.c_str()).asString());
             mq_interface->publish(properties.lookup("topic").asString(), old_val, this);
-            return true;
         }
 
         if ((new_value.kind == Value::t_integer || new_value.kind != Value::t_float) &&
