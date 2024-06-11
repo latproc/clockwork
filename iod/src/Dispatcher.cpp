@@ -79,7 +79,9 @@ Dispatcher::Dispatcher()
       self(*MessagingInterface::getContext(), ZMQ_REP), owner_thread(0) {}
 
 Dispatcher::~Dispatcher() {
-    if (!instance()->finished) { stop(); }
+    if (!instance()->finished) {
+        stop();
+    }
     // if (socket) { delete socket; }
     delete dispatch_thread;
 }
@@ -240,6 +242,9 @@ void Dispatcher::idle() {
                     if (to) {
                         MachineInstance *mi = dynamic_cast<MachineInstance *>(to);
                         Channel *chn = dynamic_cast<Channel *>(to);
+                        if (chn) {
+                            DBG_DISPATCHER << "Channel message\n";
+                        }
                         if (!mi->getStateMachine()) {
                             char buf[100];
                             snprintf(buf, 100,
@@ -286,12 +291,15 @@ void Dispatcher::idle() {
                                             if (!mif->started()) {
                                                 mif->start();
                                             }
+                                            DBG_DISPATCHER << "sending (CLOCKWORK): " << m.getText()
+                                                           << "\n";
                                             mif->send(m);
                                         }
                                         else {
                                             MessagingInterface *mif = MessagingInterface::create(
                                                 host.asString(), (int)port, eZMQ);
                                             mif->start();
+                                            DBG_DISPATCHER << "sending: " << m.getText() << "\n";
                                             mif->send(m.getText().c_str());
                                         }
                                     }
@@ -300,6 +308,8 @@ void Dispatcher::idle() {
                         }
                         else if (chn) {
                             // when sending to a channel, if the channel has a publisher, get it to send the message
+                            DBG_DISPATCHER << "Dispatcher sending " << *p << " to channel "
+                                           << to->getName() << "\n";
                             MessagingInterface *mif = chn->getPublisher();
                             if (mif) {
                                 Value protocol = mi->properties.lookup("PROTOCOL");
@@ -308,6 +318,8 @@ void Dispatcher::idle() {
                                 }
                                 else {
                                     if (protocol == "CLOCKWORK") {
+                                        DBG_DISPATCHER << "sending to " << mif->getName()
+                                                       << " (CLOCKWORK): " << m.getText() << "\n";
                                         mif->send(m);
                                     }
                                     else {
