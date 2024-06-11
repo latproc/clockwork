@@ -436,12 +436,15 @@ target_link_libraries(persistd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "p
 add_executable(modbusd src/modbusd.cpp )
 target_link_libraries(modbusd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
+add_executable(dbd src/dbd.cpp )
+target_link_libraries(dbd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+
 if (RUN_TESTS)
 enable_testing()
 add_subdirectory(tests)
 endif()
 
-install(TARGETS cw iosh iocmd device_connector modbusd persistd RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+install(TARGETS cw dbd iosh iocmd device_connector modbusd persistd RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 if(USE_SOEM)
 	install(TARGETS cw_ecat RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
