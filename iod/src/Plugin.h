@@ -27,7 +27,7 @@ char *getState(cwpi_Scope);
 void log_message(cwpi_Scope, const char *);
 void log_message_2(cwpi_Scope, const char *, const char *);
 void log_message_3(cwpi_Scope, const char *, const char *, const char *);
-uint64_t getIOClock();
+uint64_t getIOClock(void);
 
 void *getInstanceData(cwpi_Scope);
 void setInstanceData(cwpi_Scope, void *block);

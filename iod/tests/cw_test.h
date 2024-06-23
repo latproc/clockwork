@@ -70,12 +70,16 @@ class TestRunner {
     if ((res).kind != Value::t_bool) {                                                             \
         return TestResult(std::string(__FUNCTION__) + ": expected bool result");                   \
     }
+#define EXPECT_INT(res)                                                                            \
+    if ((res).kind != Value::t_integer) {                                                          \
+        return TestResult(std::string(__FUNCTION__) + ": expected integer result");                \
+    }
 #define EXPECT_TRUE(res)                                                                           \
     if ((res) != true) {                                                                           \
-        return TestResult(__FUNCTION__);                                                           \
+        return TestResult(std::string(__FUNCTION__) + " expected true: " + #res);                  \
     }
 #define EXPECT_FALSE(res)                                                                          \
     if ((res) != false) {                                                                          \
-        return TestResult(__FUNCTION__);                                                           \
+        return TestResult(std::string(__FUNCTION__) + " expected false: " + #res);                 \
     }
 #define PASS return TestResult(true)
