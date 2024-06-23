@@ -77,11 +77,7 @@ continue_plugin:
         if (cmd && *cmd) {
             did_alloc("cmd");
             if (!changeState(scope, "Running")) {
-<<<<<<< HEAD
                 //assert("exec_command did not immedieately change state to Running" && 0);
-=======
-                assert("exec_command did not immedieately change state to Running" && 0);
->>>>>>> 6dc4e0a3 (Split up and test the SystemExec plugin)
                 goto CommandFinished;
             }
             data->parameters = split_string(cmd);
@@ -97,13 +93,7 @@ continue_plugin:
                 perror("fork");
                 setIntValue(scope, "CommandStatus", errno);
                 if (!changeState(scope, "Error")) {
-<<<<<<< HEAD
                     // assert( "exec_command did not immediately transition to error after fork() failed" && 0);
-=======
-                    assert(
-                        "exec_command did not immediately transition to error after fork() failed" &&
-                        0);
->>>>>>> 6dc4e0a3 (Split up and test the SystemExec plugin)
                 }
                 data->child = 0; // Does this plugin recover if the above state change fails?
                 goto CommandFinished;
@@ -130,11 +120,8 @@ continue_plugin:
                 if (res == -1) {
                     perror("execve");
                     display_params(data->parameters);
-<<<<<<< HEAD
-=======
                     release_params(data->parameters);
                     release_params(data->environment);
->>>>>>> 6dc4e0a3 (Split up and test the SystemExec plugin)
                     _exit(2);
                 }
             }
@@ -145,12 +132,7 @@ continue_plugin:
         }
         else { /* empty or missing Command property in scope */
             if (!changeState(scope, "Error")) {
-<<<<<<< HEAD
                 // assert("exec_command did not immediately transition to error due to no command" && 0);
-=======
-                assert("exec_command did not immediately transition to error due to no command" &&
-                       0);
->>>>>>> 6dc4e0a3 (Split up and test the SystemExec plugin)
             }
             data->child = 0;
             debug_free(current, "current");
@@ -217,10 +199,7 @@ continue_plugin:
         }
     }
     debug_free(current, "current");
-<<<<<<< HEAD
-=======
     setInstanceData(scope, 0);
     debug_free(data, "data");
->>>>>>> 6dc4e0a3 (Split up and test the SystemExec plugin)
     return PLUGIN_COMPLETED;
 }
