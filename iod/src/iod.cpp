@@ -249,8 +249,8 @@ bool setupEtherCatThread() {
                                         << "\n";
                             }
                             else {
-                                delete module; // module may be already registered
                                 std::cerr << "addModule: " << module->name << " " << res.error() << "\n";
+                                delete module; // module may be already registered
                             }
                             delete di;
                             collected_configurations.clear();
