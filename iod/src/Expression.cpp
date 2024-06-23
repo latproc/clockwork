@@ -57,7 +57,7 @@ void toC(std::ostream &out, const PredicateOperator op) {
 
 std::ostream &operator<<(std::ostream &out, const Predicate &p) { return p.operator<<(out); }
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
-    const char *opstr;
+    const char *opstr = "UNKNOWN";
     switch (op) {
     case opNone:
         opstr = "None";
