@@ -127,4 +127,14 @@ if (USE_ETHERCAT)
 
 endif()
 
+add_executable(test_split_string test_split_string.cpp)
+set_target_properties (test_split_string PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_split_string gmock_main cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} dl pthread)
+add_test(NAME test_split_string COMMAND test_split_string)
+
+add_executable(test_exec_command test_exec_command.cpp)
+set_target_properties (test_exec_command PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_exec_command gmock_main cw_interpreter cw_client dl ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
+add_test(NAME test_exec_command COMMAND test_exec_command)
+
 endif()

@@ -206,7 +206,8 @@ set (Clockwork_Headers
     src/ExportState.h
 	src/AutoStats.h src/Configuration.h
 	src/ResetAction.h src/LoadPropertiesAction.h
-
+    src/split_string.h src/read_file.h src/copy_environment.h
+    src/exec_command.h src/debug_malloc.h
 )
 if (USE_ETHERCAT)
 	LIST (APPEND Clockwork_Headers "src/EtherCATthread.h")
@@ -241,6 +242,8 @@ set (Clockwork_SRCS
     src/ExportState.cpp
 	src/HandleRequestAction.cpp src/AutoStats.cpp src/Configuration.cpp
 	src/ResetAction.cpp src/LoadPropertiesAction.cpp
+    src/split_string.c src/read_file.c src/copy_environment.c
+    src/exec_command.c src/debug_malloc.c
 	)
 if (USE_ETHERCAT)
 if (USE_SOEM)
