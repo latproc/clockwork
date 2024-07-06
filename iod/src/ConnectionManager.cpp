@@ -41,7 +41,8 @@
 #include "options.h"
 #include "symboltable.h"
 
-static std::string STATE_ERROR("Operation cannot be accomplished in current state");
+namespace {
+std::string STATE_ERROR("Operation cannot be accomplished in current state");
 
 std::string STATUS_NAMES[]{"not_used",
                            "startup",
@@ -53,6 +54,43 @@ std::string STATUS_NAMES[]{"not_used",
                            "done",
                            "error",
                            "e_connected"};
+
+std::string constructAlphaNumericString(const char *prefix, const char *val, const char *suffix,
+                                        const char *default_name) {
+    if (!val) {
+        return default_name;
+    }
+    auto len = strlen(val);
+    if (prefix) {
+        len += strlen(prefix);
+    }
+    if (suffix) {
+        len += strlen(suffix);
+    }
+    char buf[len + 1];
+    char *q = buf;
+    if (prefix) {
+        strcpy(buf, prefix);
+        q += strlen(prefix);
+    }
+    const char *p = val;
+    while (*p && len--) {
+        if (isalnum(*p)) {
+            *q++ = *p;
+        }
+        ++p;
+    }
+    *q = 0;
+    if (q == buf) { // no alpha/num found in the input string
+        return default_name;
+    }
+    if (suffix) {
+        strcpy(q, suffix);
+    }
+    return buf;
+}
+
+}
 
 SingleConnectionMonitor::SingleConnectionMonitor(zmq::socket_t &sm) : SocketMonitor(sm) {}
 
@@ -93,44 +131,6 @@ ConnectionManager::~ConnectionManager() = default;
 
 void ConnectionManager::abort() { has_aborted = true; }
 
-std::string constructAlphaNumericString(const char *prefix, const char *val, const char *suffix,
-                                        const char *default_name) {
-    if (!val) {
-        return default_name;
-    }
-    auto len = strlen(val);
-    if (prefix) {
-        len += strlen(prefix);
-    }
-    if (suffix) {
-        len += strlen(suffix);
-    }
-    char buf[len + 1];
-    char *q = buf;
-    if (prefix) {
-        strcpy(buf, prefix);
-        q += strlen(prefix);
-    }
-    const char *p = val;
-    while (*p && len--) {
-        if (isalnum(*p)) {
-            *q++ = *p;
-        }
-        ++p;
-    }
-    *q = 0;
-    if (q == buf) { // no alpha/num found in the input string
-        return default_name;
-    }
-    if (suffix) {
-        strcpy(q, suffix);
-    }
-    return buf;
-}
-
-std::string copyAlphaNumChars(const char *val, const char *default_name) {
-    return constructAlphaNumericString(0, val, 0, default_name);
-}
 
 class SubscriptionManagerInternals : public ConnectionManagerInternals {
 

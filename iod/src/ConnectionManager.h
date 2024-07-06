@@ -38,9 +38,7 @@
 #include "MessageEncoding.h"
 #include "SocketMonitor.h"
 
-std::string constructAlphaNumericString(const char *prefix, const char *val, const char *suffix,
-                                        const char *default_name);
-
+#if 0
 class CommunicationPoll {
   public:
     CommunicationPoll *instance() {
@@ -56,6 +54,7 @@ class CommunicationPoll {
     CommunicationPoll(const CommunicationPoll &);
     CommunicationPoll &operator=(const CommunicationPoll &);
 };
+#endif
 
 class SingleConnectionMonitor : public SocketMonitor {
   public:
