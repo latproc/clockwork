@@ -208,16 +208,17 @@ void Channel::addSocket(int route_id, const char *addr) {
 
 void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &messages) {
     if (!definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) {
+        DBG_CHANNELS << "ReportPropertyChanges not set for " << channel_name << " not syncing properties\n";
         return;
     }
     if (m->isShadow()) {
+        DBG_CHANNELS << "skipping shadow machine " << m->getName() << " not syncing properties\n";
         return;
     }
     if (definition()->updates_names.count(m->getName()) ||
         definition()->shares_names.count(m->getName())) {
 
-        std::map<std::string, Value>::const_iterator found =
-            definition()->updates_names.find(m->getName());
+        auto found = definition()->updates_names.find(m->getName());
         if (found == definition()->updates_names.end()) {
             found = definition()->shares_names.find(m->getName());
             if (found == definition()->shares_names.end()) {
@@ -351,12 +352,16 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
 
 Action::Status Channel::setState(const State &new_state, uint64_t authority, bool resume) {
     setNeedsCheck(); // conservative: likely to need attention after a setstate
+    DBG_CHANNELS << "--- Channel " << channel_name << " " << getCurrent() << " --> " << new_state << " authority "
+                 << authority << " resume " << resume << "\n";
     if (new_state != ChannelImplementation::DISCONNECTED && connections == 0) {
         // can only change state if the channel is actually connected
         if (!communications_manager || (isClient() && !communications_manager->monit_setup)) {
             {
                 FileLogger fl(program_name);
                 fl.f() << channel_name << " state change to " << new_state
+                       << " failed. Subscription manager is not initialised\n";
+                DBG_CHANNELS << channel_name << " state change to " << new_state
                        << " failed. Subscription manager is not initialised\n";
             }
             return Action::Failed;
@@ -367,6 +372,8 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
                 FileLogger fl(program_name);
                 fl.f() << channel_name << " state change to " << new_state
                        << " failed. command socket is not connected\n";
+                DBG_CHANNELS << channel_name << " state change to " << new_state
+                       << " failed. command socket is not connected\n";
             }
             return Action::Failed;
         }
@@ -374,6 +381,8 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
             {
                 FileLogger fl(program_name);
                 fl.f() << channel_name << " state change to " << new_state
+                       << " failed. Subscriber is disconnected\n";
+                DBG_CHANNELS << channel_name << " state change to " << new_state
                        << " failed. Subscriber is disconnected\n";
             }
             return Action::Failed;
