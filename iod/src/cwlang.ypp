@@ -2173,8 +2173,7 @@ SYMBOL MODULE parameters ';'
 		entry->setMachineInstance(m);
 	}
 #else
-    error_messages.push_back("Error: SDO is not supported in this version");
-    num_errors++;
+    // User code may simulate SDO devices
 #endif //USE_SDO
 }
 | SYMBOL SDO parameters ';'
@@ -2194,8 +2193,7 @@ SYMBOL MODULE parameters ';'
 
 	entry->setMachineInstance(m);
 #else
-    error_messages.push_back("Error: SDO is not supported in this version");
-    num_errors++;
+    // User code may simulate SDO devices
 #endif //USE_SDO
 }
 | SYMBOL FLAG ';'
