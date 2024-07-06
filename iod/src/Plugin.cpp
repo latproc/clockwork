@@ -7,7 +7,7 @@
 #include "symboltable.h"
 #include "value.h"
 
-uint64_t getIOClock() { return IOComponent::getClock(); }
+uint64_t getIOClock(void) { return IOComponent::getClock(); }
 
 void log_message(cwpi_Scope, const char *m) { MessageLog::instance()->add(m); }
 
