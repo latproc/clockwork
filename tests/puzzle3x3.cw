@@ -4,10 +4,10 @@
 # solving a suduko style problem
 #
 # We have a grid of cells that can each take a value of
-# 1,2 or 3 but only if there are no other cells in the 
+# 1,2 or 3 but only if there are no other cells in the
 # row or column with that value.
 
-# The configuration has 9 cells, 
+# The configuration has 9 cells,
 all LIST c11,c12,c13,c21,c22,c23,c31,c32,c33;
 
 # There are three rows with three cells each
@@ -33,6 +33,15 @@ c31 Cell(r:3, c:1) row3,col1;
 c32 Cell(r:3, c:2) row3,col2;
 c33 Cell(r:3, c:3) row3,col3;
 
+AllTentative MACHINE related {
+  true WHEN SIZE OF related == 9 AND SELF IS true OR
+      ( COUNT tentative_one FROM related == 3
+         AND COUNT tentative_two FROM related == 3
+         AND COUNT tentative_three FROM related == 3);
+  false DEFAULT;
+}
+all_tentative AllTentative all;
+
 # Here is cell that ultimately tries to get into a state of 'one', 'two' or 'three'
 # corresponding to the legal values.
 #
@@ -40,35 +49,38 @@ c33 Cell(r:3, c:3) row3,col3;
 # also have picked a tentative value the cell will be able to lock into that value.
 #
 Cell MACHINE row, col {
-	LOCAL OPTION r 0;
-	LOCAL OPTION c 0;
-	related LIST; # the set of all cells that this cell shares row or columns with
+  LOCAL OPTION r 0;
+  LOCAL OPTION c 0;
+  GLOBAL all_tentative;
+  related LIST; # the set of all cells that this cell shares row or columns with
 
-    one WHEN SELF IS one OR (SELF IS tentative_one && NOT ANY related ARE unknown AND NOT ANY related ARE blocked);
-    two WHEN SELF IS two OR (SELF IS tentative_two && NOT ANY related ARE unknown AND NOT ANY related ARE blocked);
-    three WHEN SELF IS three OR (SELF IS tentative_three && NOT ANY related ARE unknown AND NOT ANY related ARE blocked);
+  wait WHEN (SELF IS wait OR SELF IS INIT) AND TIMER < 400; # give sampler time to connect
 
-	tentative_one WHEN NOT ANY related ARE blocked
-			AND	( SELF IS unknown AND COUNT tentative_one FROM related == 0 AND COUNT one FROM related == 0
-	            OR SELF IS tentative_one AND COUNT tentative_one FROM related == 1);
+    one   WHEN SELF IS one   OR (SELF IS tentative_one && all_tentative IS true);
+    two   WHEN SELF IS two   OR (SELF IS tentative_two && all_tentative IS true);
+    three WHEN SELF IS three OR (SELF IS tentative_three && all_tentative IS true);
 
-    tentative_two WHEN NOT ANY related ARE blocked
-			AND ( SELF IS unknown AND COUNT tentative_two FROM related == 0 AND COUNT two FROM related == 0
-	            OR SELF IS tentative_two AND COUNT tentative_two FROM related == 1);
+     tentative_one WHEN
+      ( SELF IS unknown AND COUNT tentative_one FROM related == 0
+              OR SELF IS tentative_one AND COUNT tentative_one FROM related == 1);
 
-    tentative_three WHEN NOT ANY related ARE blocked
-			AND	( SELF IS unknown AND COUNT tentative_three FROM related == 0 AND COUNT three FROM related == 0
-	            OR SELF IS tentative_three AND COUNT tentative_three FROM related == 1);
+    tentative_two WHEN
+      ( SELF IS unknown AND COUNT tentative_two FROM related == 0
+              OR SELF IS tentative_two AND COUNT tentative_two FROM related == 1);
 
-	blocked WHEN TIMER < 40; # yuk. we need to sit in blocked long enough for the other machines to stabilise 
-	unknown DEFAULT;
+    tentative_three WHEN
+      ( SELF IS unknown AND COUNT tentative_three FROM related == 0
+              OR SELF IS tentative_three AND COUNT tentative_three FROM related == 1);
 
-	ENTER INIT {
-		# NOTE: In clockwork a LIST of objects is actually a SET of objects. This
-		# 	machine will break when we fix that problem
-		COPY ALL FROM row TO related;
-		COPY ALL FROM col TO related;
-	}
+  blocked WHEN TIMER < 40; # yuk. we need to sit in blocked long enough for the other machines to stabilise
+  unknown DEFAULT;
+
+  ENTER INIT {
+    # NOTE: In clockwork a LIST of objects is actually a SET of objects. This
+    #   machine will break when we fix that problem
+    COPY ALL FROM row TO related;
+    COPY ALL FROM col TO related;
+  }
 
 }
 
