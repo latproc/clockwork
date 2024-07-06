@@ -12,15 +12,26 @@ extern "C" {
 #endif
 #include <stdint.h>
 
+//#if sizeof(long) == sizeof(int64_t)
+#if LONG_MAX == INT64_MAX
+#define LDFMT "%ld"
+#define LUFMT "%lu"
+#define LXFMT "%lx"
+#else
+#define LDFMT "%lld"
+#define LUFMT "%llu"
+#define LXFMT "%llx"
+#endif
+
 typedef void *cwpi_Scope;
 
-typedef long (*plugin_func)(cwpi_Scope);
+typedef uint64_t (*plugin_func)(cwpi_Scope);
 typedef double (*plugin_filter)(cwpi_Scope, double);
 
 void *getNamedScope(cwpi_Scope, const char *name);
-int getIntValue(cwpi_Scope, const char *property_name, const long **val);
+int getIntValue(cwpi_Scope s, const char *property_name, const int64_t **res);
 char *getStringValue(cwpi_Scope, const char *property_name);
-void setIntValue(cwpi_Scope, const char *property_name, long new_value);
+void setIntValue(cwpi_Scope, const char *property_name, const int64_t new_value);
 void setStringValue(cwpi_Scope, const char *property_name, const char *new_value);
 int changeState(cwpi_Scope, const char *new_state);
 char *getState(cwpi_Scope);
