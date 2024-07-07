@@ -123,7 +123,7 @@ Action::Status SyncRemoteStatesAction::execute() {
             internals->message_state = SyncRemoteStatesActionInternals::e_done;
         }
         else if (internals->message_state == SyncRemoteStatesActionInternals::e_receiving) {
-            char *repl;
+            char *repl = nullptr;
             size_t len;
             if (safeRecv(*internals->sock, &repl, &len, false, 0, internals->header)) {
                 //snprintf(buf, 200, "%s Sync remote states - received reply %s", chn->getName().c_str(), repl);
@@ -170,7 +170,7 @@ Action::Status SyncRemoteStatesAction::execute() {
         //snprintf(buf, 200, "%s Sync remote states - awaiting ack", chn->getName().c_str());
         //MessageLog::instance()->add(buf);
         //DBG_CHANNELS << buf << "\n";
-        char *ack;
+        char *ack = nullptr;
         size_t len;
         if (safeRecv(*internals->sock, &ack, &len, false, 0, internals->header)) {
             DBG_CHANNELS << "channel " << chn->getName() << " got " << ack << " from server\n";

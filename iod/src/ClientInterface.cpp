@@ -602,7 +602,7 @@ void IODCommandThread::operator()() {
                 processing thread will call: (*command)(params) for all pending commands
             */
             if (items[2].revents & ZMQ_POLLIN) {
-                char *buf = 0;
+                char *buf = nullptr;
                 size_t response_len;
                 if (safeRecv(command_sync, &buf, &response_len, true, 0)) {
 #if 0

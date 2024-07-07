@@ -762,7 +762,7 @@ void MessageRouter::poll() {
     }
 #endif
 
-    char *buf = 0;
+    char *buf = nullptr;
     size_t len = 0;
     MessageHeader mh;
 
@@ -1137,8 +1137,8 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
                 }
             }
             else if (items[0].revents & ZMQ_POLLIN) {
-                char *buf;
-                size_t len;
+                char *buf = nullptr;
+                size_t len = 0;
                 bool res = safeRecv(setup(), &buf, &len, false, 0);
                 if (res) {
                     FileLogger fl(program_name);

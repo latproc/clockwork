@@ -812,7 +812,7 @@ void ProcessingThread::operator()() {
                         have_command = true;
 
                         zmq::message_t msg;
-                        char *buf = 0;
+                        char *buf = nullptr;
                         size_t len = 0;
                         MessageHeader mh;
                         uint32_t default_id = mh.getId(); // save the msgid to following check
