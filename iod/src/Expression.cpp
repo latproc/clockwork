@@ -1026,7 +1026,7 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     if (o.op == opGetSubExpr) {
         assert(rhs.kind == Value::t_json);
         assert(b.json_expression);
-        cJSON *sub_expr = apply(b.json_expression.value(), rhs.json);
+        cJSON *sub_expr = apply(b.json_expression.value(), rhs.json, m);
         m->setValue(stack_iter->node->sValue,Value(sub_expr));
     }
     ExprNode a(eval_stack(m, stack_iter));

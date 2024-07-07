@@ -14,8 +14,9 @@ class Parser {
     // expr = root | root member
     // member = { ( "[" key "]" | "." var ) }
     // root = "$"
-    // var  = alpha
-    // key = "*" | var || number
+    // var  = alpha { alpha | digit | "_"}
+    // key = "*" | var | number
+    // symbol = "@" var
 
   public:
     struct InputStream {
@@ -59,6 +60,8 @@ class Parser {
         key,
         subs_end,
         index,
+        symbol_begin,
+        symbol,
         wildcard
     };
 
@@ -85,6 +88,8 @@ class Parser {
     void var();
     void key();
     void number();
+    void symbol();
+    void field();
 };
 
 std::ostream &operator<<(std::ostream &out, Parser::TokenType kind);

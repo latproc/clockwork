@@ -5,6 +5,8 @@
 #include <iostream>
 #include <json_expression.h>
 #include <string>
+#include <symboltable.h>
+#include <MachineInstance.h>
 
 namespace {
 
@@ -16,7 +18,10 @@ struct PathResult {
     explicit PathResult(cJSON *value_ = nullptr) : parent(nullptr), value(value_) {}
 };
 
-PathResult follow_json_expr_path(const std::string &str, cJSON *json) {
+PathResult follow_json_expr_path(const std::string &str,
+                cJSON *json,
+                boost::optional<SymbolTable*> symbols = boost::none,
+                boost::optional<MachineInstance*> context = boost::none) {
     namespace ctx = boost::context;
 
     Parser::StringInputStream is(str);
@@ -56,6 +61,8 @@ PathResult follow_json_expr_path(const std::string &str, cJSON *json) {
         case Parser::TokenType::root:
             break;
         case Parser::TokenType::introducer:
+            break;
+        case Parser::TokenType::symbol_begin:
             break;
         case Parser::TokenType::var:
             if (result.value && result.value->type == cJSON_Object) {
@@ -105,17 +112,73 @@ PathResult follow_json_expr_path(const std::string &str, cJSON *json) {
                 throw std::runtime_error("not an array");
             }
             break;
-        default:
-            throw std::runtime_error("unexpected token");
+        case Parser::TokenType::symbol:
+        {
+            Value symbol;
+            if (symbols) {
+                symbol = (*symbols)->lookup(token.c_str());
+                if (symbol == SymbolTable::Null) {
+                    std::stringstream ss;
+                    ss << "symbol not found: " << token;
+                    throw std::runtime_error(ss.str());
+                }
+            }
+            else if (context) {
+                symbol = (*context)->getValue(token);
+                if (symbol == SymbolTable::Null) {
+                    std::stringstream ss;
+                    ss << "symbol not found: " << token;
+                    throw std::runtime_error(ss.str());
+                }
+            }
+            else {
+                throw std::runtime_error("no symbol table");
+            }
+            if (result.value && result.value->type == cJSON_Array) {
+                result.parent = result.value;
+                result.key.reset();
+                int64_t index = 8;
+                if (symbol.asInteger(index)) {
+                    result.index = index;
+                }
+                else {
+                    std::stringstream ss;
+                    ss << "symbol not an integer: " << token;
+                    throw std::runtime_error(ss.str());
+                }
+                result.value = cJSON_GetArrayItem(result.value, *result.index);
+            }
+            else if (result.value && result.value->type == cJSON_Object) {
+                if (symbol.kind != Value::t_symbol && symbol.kind != Value::t_string) {
+                    throw std::runtime_error("symbol not a string");
+                }
+                result.parent = result.value;
+                result.key = symbol.sValue;
+                result.index.reset();
+                result.value = cJSON_GetObjectItem(result.value, result.key->c_str());
+            }
+            else {
+                std::stringstream ss;
+                ss << "not an array or object: " << token;
+                throw std::runtime_error(ss.str());
+            }
+            break;
+        }
+        default: {
+            std::stringstream ss;
+            ss << "unexpected token " << token;
+            throw std::runtime_error(ss.str());
+            }
         }
         source = std::move(source).resume(); // resume the parser
     }
     return result;
 }
+
 } // namespace
 
 cJSON *apply(const std::string &str, cJSON *json) {
-    cJSON *result = follow_json_expr_path(str, json).value;
+    cJSON *result = follow_json_expr_path(str, json, boost::none).value;
     if (result) {
         auto str = cJSON_Print(result);
         result = cJSON_Parse(str);
@@ -124,8 +187,30 @@ cJSON *apply(const std::string &str, cJSON *json) {
     return result;
 }
 
-cJSON *assign(const std::string &str, cJSON *json, const std::string &value) {
-    auto result = follow_json_expr_path(str, json);
+cJSON *apply(const std::string &str, cJSON *json, SymbolTable* symbols) {
+    cJSON *result = follow_json_expr_path(str, json, symbols).value;
+    if (result) {
+        auto str = cJSON_Print(result);
+        result = cJSON_Parse(str);
+        free(str);
+    }
+    return result;
+}
+
+cJSON *apply(const std::string &str, cJSON *json, MachineInstance* context) {
+    cJSON *result = follow_json_expr_path(str, json, boost::none, context).value;
+    if (result) {
+        auto str = cJSON_Print(result);
+        result = cJSON_Parse(str);
+        free(str);
+    }
+    return result;
+}
+
+cJSON *assign(const std::string &str, cJSON *json, const std::string &value,
+                boost::optional<SymbolTable *> symbols,
+                boost::optional<MachineInstance *> context) {
+    auto result = follow_json_expr_path(str, json, symbols, context);
     auto string = cJSON_CreateString(value.c_str());
     if (result.value) {
         if (result.parent) {
@@ -147,8 +232,10 @@ cJSON *assign(const std::string &str, cJSON *json, const std::string &value) {
     return json;
 }
 
-cJSON *assign(const std::string &str, cJSON *json, uint64_t value) {
-    auto result = follow_json_expr_path(str, json);
+cJSON *assign(const std::string &str, cJSON *json, uint64_t value,
+                boost::optional<SymbolTable *> symbols,
+                boost::optional<MachineInstance *> context) {
+    auto result = follow_json_expr_path(str, json, symbols, context);
     auto number = cJSON_CreateNumber(value);
     if (result.value) {
         if (result.parent) {
@@ -166,8 +253,10 @@ cJSON *assign(const std::string &str, cJSON *json, uint64_t value) {
     return json;
 }
 
-cJSON *assign(const std::string &str, cJSON *json, bool value) {
-    auto result = follow_json_expr_path(str, json);
+cJSON *assign(const std::string &str, cJSON *json, bool value,
+                boost::optional<SymbolTable *> symbols,
+                boost::optional<MachineInstance *> context) {
+    auto result = follow_json_expr_path(str, json, symbols, context);
     auto boolean = value ? cJSON_CreateTrue() : cJSON_CreateFalse();
     if (result.value) {
         if (result.parent) {
@@ -185,8 +274,10 @@ cJSON *assign(const std::string &str, cJSON *json, bool value) {
     return json;
 }
 
-cJSON *assign(const std::string &str, cJSON *json, double value) {
-    auto result = follow_json_expr_path(str, json);
+cJSON *assign(const std::string &str, cJSON *json, double value,
+                boost::optional<SymbolTable *> symbols,
+                boost::optional<MachineInstance *> context) {
+    auto result = follow_json_expr_path(str, json, symbols, context);
     auto number = cJSON_CreateDouble(value);
     if (result.value) {
         if (result.parent) {
@@ -204,8 +295,10 @@ cJSON *assign(const std::string &str, cJSON *json, double value) {
     return json;
 }
 
-cJSON *assign(const std::string &str, cJSON *json, cJSON *value) {
-    auto result = follow_json_expr_path(str, json);
+cJSON *assign(const std::string &str, cJSON *json, cJSON *value,
+                boost::optional<SymbolTable *> symbols,
+                boost::optional<MachineInstance *> context) {
+    auto result = follow_json_expr_path(str, json, symbols, context);
     if (result.value) {
         if (result.parent) {
             if (result.key) {
@@ -222,26 +315,30 @@ cJSON *assign(const std::string &str, cJSON *json, cJSON *value) {
     return json;
 }
 
-cJSON *assign(const std::string &str, cJSON *json, const Value &value) {
+cJSON *assign(const std::string &str, cJSON *json, const Value &value,
+                boost::optional<SymbolTable *> symbols,
+                boost::optional<MachineInstance *> context) {
     switch (value.kind) {
     case Value::t_string:
     case Value::t_symbol:
-        return assign(str, json, value.sValue);
+        return assign(str, json, value.sValue, symbols, context);
     case Value::t_integer:
-        return assign(str, json, (uint64_t)value.iValue);
+        return assign(str, json, (uint64_t)value.iValue, symbols, context);
     case Value::t_float:
-        return assign(str, json, value.fValue);
+        return assign(str, json, value.fValue, symbols, context);
     case Value::t_bool:
-        return assign(str, json, value.bValue ? cJSON_CreateTrue() : cJSON_CreateFalse());
+        return assign(str, json, value.bValue ? cJSON_CreateTrue() : cJSON_CreateFalse(), symbols, context);
     case Value::t_empty:
-        return assign(str, json, cJSON_CreateNull());
+        return assign(str, json, cJSON_CreateNull(), symbols, context);
     case Value::t_json:
-        return assign(str, json, value.json);
+        return assign(str, json, value.json, symbols, context);
     default:
         throw std::runtime_error("unsupported value type for assignment");
     }
 }
 
-cJSON *assign(const std::string &str, cJSON *json, int value) {
-    return assign(str, json, (uint64_t)value);
+cJSON *assign(const std::string &str, cJSON *json, int value,
+                boost::optional<SymbolTable *> symbols,
+                boost::optional<MachineInstance *> context) {
+    return assign(str, json, (uint64_t)value, symbols, context);
 }

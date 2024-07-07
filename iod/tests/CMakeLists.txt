@@ -139,7 +139,7 @@ target_link_libraries(test_exec_command gmock_main cw_interpreter cw_client dl $
 add_test(NAME test_exec_command COMMAND test_exec_command)
 
 add_executable(test_json_value test_json_value.cpp )
-target_link_libraries(test_json_value gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} dl pthread)
+target_link_libraries(test_json_value gmock_main cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_json_value COMMAND test_json_value)
 

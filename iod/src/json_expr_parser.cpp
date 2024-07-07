@@ -9,10 +9,16 @@
 
 // Grammar: { } => 0 or more, ( ) => group, | => or
 // expr = root | root member
-// member = { ( "[" key "]" | "." var ) }
+// member = { ( "[" (key | symbol) "]" | "." field ) }
 // root = "$"
 // var  = alpha { alpha | digit | "_"}
+// field = var | number
 // key = "*" | var | number
+// symbol = "@" alpha { alpha | digit | "_"}
+
+// Throughout the parser, the input stream gets marked whenever the input stream
+// is at a potential end point for the expression. After marking, if the parser
+// fails, the stream is reset and the parse is regarged as done.
 
 Parser::Parser(InputStream &is_, std::function<void(char, Parser::TokenType kind)> cb_,
                std::function<void(size_t, Parser::TokenType kind)> cb_number_,
@@ -36,7 +42,12 @@ void Parser::run() {
         }
     }
     else if (next != '[') {
-        var();
+        if (next == '@') {
+            symbol();
+        }
+        else {
+            var();
+        }
     }
     if (!is.eof()) {
         member();
@@ -75,6 +86,12 @@ std::ostream &Parser::display(std::ostream &out, Parser::TokenType kind) {
     case TokenType::wildcard:
         out << "wildcard";
         break;
+    case TokenType::symbol:
+        out << "symbol";
+        break;
+    case TokenType::symbol_begin:
+        out << "symbol_begin";
+        break;
     };
     return out;
 }
@@ -98,7 +115,12 @@ void Parser::member() {
         if (next == '[') {
             cb(next, TokenType::subs_begin);
             scan();
-            key();
+            if (next == '@') {
+                symbol();
+            }
+            else {
+                key();
+            }
             if (next != ']') {
                 throw std::runtime_error("parse error");
             }
@@ -107,16 +129,43 @@ void Parser::member() {
             scan();
         }
         else {
-            while (next == '.') {
-                cb(next, TokenType::introducer);
-                scan();
-                var();
-            }
+            field();
             if (!is.eof() && next != '[' && next != '.') {
                 is.reset();
                 return; // This is the end of the JSON path
             }
         }
+    }
+}
+
+void Parser::field() {
+    while (next == '.') {
+        cb(next, TokenType::introducer);
+        scan();
+        if (next == '@') {
+           symbol();
+        }
+        else {
+            var();
+        }
+        is.mark();
+    }
+}
+
+void Parser::symbol() {
+    cb(next, TokenType::symbol_begin);
+    scan();
+    // TODO: refactor.. this is a copy of var()
+    std::stringstream ss;
+    while (!is.eof() && (isalpha(next) || isdigit(next) || next == '_')) {
+        ss << next;
+        next = pull();
+    }
+    value = ss.str();
+    cb_string(value, TokenType::symbol);
+    is.mark();
+    if (next == ' ') {
+        scan();
     }
 }
 
