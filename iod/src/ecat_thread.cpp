@@ -456,8 +456,8 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
     out_sock.getsockopt(ZMQ_RCVMORE, &more, &more_size);
     assert(more);
 
-    uint8_t *cw_data = 0;
-    uint8_t *cw_mask = 0;
+    uint8_t *cw_data = nullptr;
+    uint8_t *cw_mask = nullptr;
     // Packet Type
     {
         zmq::message_t iomsg;
@@ -495,6 +495,9 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         {
             zmq::message_t iomsg;
             recv(out_sock, iomsg);
+            if (cw_data) {
+                delete[] cw_data;
+            }
             cw_data = new uint8_t[iomsg.size()];
             memcpy(cw_data, iomsg.data(), iomsg.size());
             assert(iomsg.size() == len);
@@ -556,6 +559,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         setDefaultData(len, cw_data, cw_mask);
         delete[] cw_mask;
         delete[] cw_data;
+        cw_mask = cw_data = nullptr;
         safeSend(out_sock, "ok", 2);
     }
     else if (packet_type == IOInterface::MessageType::PROCESS_DATA) {
@@ -568,7 +572,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
             }
         }
 #if VERBOSE_DEBUG
-        else {
+        else if (cw_data && cw_mask) {
             std::cout << "!";
             display(cw_mask, len);
             std::cout << "\n";
@@ -578,6 +582,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         }
 #endif
         if (ec_ok && default_data) { // only update the domain if default data has been setup
+            assert("updateDomain requires cw data and mask" && cw_data && cw_mask);
             ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
 #if VERBOSE_DEBUG
             // check if our mask is not the same as the data that cw has
@@ -606,6 +611,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         }
         delete[] cw_mask;
         delete[] cw_data;
+        cw_mask = cw_data = nullptr;
         safeSend(out_sock, "ok", 2);
     }
     return true;
@@ -692,15 +698,15 @@ void EtherCATThread::operator()() {
                 std::cout << "ethercat thread is now " << machine_is_ready << "\n";
                 ec_ok = machine_is_ready;
                 if (last_data) {
-                    delete last_data;
+                    delete[] last_data;
                     last_data = 0;
                 }
                 if (dbg_mask) {
-                    delete dbg_mask;
+                    delete[] dbg_mask;
                     dbg_mask = 0;
                 }
                 if (cmp_data) {
-                    delete cmp_data;
+                    delete[] cmp_data;
                     cmp_data = 0;
                 }
                 if (!machine_is_ready) {
