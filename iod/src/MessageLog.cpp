@@ -5,12 +5,6 @@
 #include <functional>
 #include <sstream>
 
-static void MEMCHECK() {
-    char *x = new char[12358];
-    memset(x, 0, 12358);
-    delete[] x;
-}
-
 unsigned int MessageLog::max_memory = 2048 * 1024;
 MessageLog *MessageLog::instance_ = 0;
 boost::mutex MessageLog::mutex_;
@@ -33,14 +27,12 @@ std::string MessageLog::add(const std::string a, const std::string b, const std:
     boost::mutex::scoped_lock lock(mutex_);
     size_t extra = msg.length() + 1 + sizeof(LogEntry);
     if (current_memory + extra > max_memory) {
-        MEMCHECK();
         std::list<LogEntry *>::iterator iter = entries.begin();
         while (iter != entries.end() && current_memory + extra > max_memory) {
             LogEntry *e = *iter;
             current_memory -= e->size();
             iter = entries.erase(iter);
             delete e;
-            MEMCHECK();
         }
     }
     entries.push_back(new LogEntry(msg.c_str()));
@@ -57,7 +49,6 @@ void MessageLog::add(const char *text) {
     strncat(buf, text, len);
     size_t extra = strlen(buf) + 1 + sizeof(LogEntry);
     if (current_memory + extra > max_memory) {
-        MEMCHECK();
         std::list<LogEntry *>::iterator iter = entries.begin();
         while (iter != entries.end() && current_memory + extra > max_memory) {
             LogEntry *e = *iter;
@@ -65,7 +56,6 @@ void MessageLog::add(const char *text) {
             current_memory -= e->size();
             iter = entries.erase(iter);
             delete e;
-            MEMCHECK();
         }
     }
     entries.push_back(new LogEntry(buf));

@@ -79,14 +79,14 @@ class IOUpdate {
     IOUpdate() : size_(0), data_(nullptr), mask_(nullptr) {}
     ~IOUpdate();
 
-    uint32_t size() const { return size_; }
-    void setSize(uint32_t sz) { size_ = sz; }
+    uint32_t size() const;
+    void setSize(uint32_t sz);
 
-    uint8_t *data() const { return data_; }
-    void setData(uint8_t *dt) { data_ = dt; }
+    uint8_t *data() const;
+    void setData(uint8_t *dt);
 
-    uint8_t *mask() const { return mask_; }
-    void setMask(uint8_t *ms) { mask_ = ms; }
+    uint8_t *mask() const;
+    void setMask(uint8_t *ms);
 
   private:
     uint32_t size_;

@@ -75,7 +75,7 @@ zmq::pollitem_t *PolledMessageHandler::getZMQPollItems(zmq::pollitem_t *items) {
         }
     }
     if (poll_items) {
-        delete poll_items;
+        delete []poll_items;
     }
     poll_items = res;
     changed = false;

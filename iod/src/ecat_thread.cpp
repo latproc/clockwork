@@ -270,7 +270,6 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
             case 1: {
 #if VERBOSE_DEBUG
                 DBG_MSG << " send stage: " << (int)stage << " " << sizeof(global_clock) << "\n";
-                //{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
                 zmq::message_t iomsg(sizeof(global_clock));
                 memcpy(iomsg.data(), (void *)&global_clock, sizeof(global_clock));
@@ -280,7 +279,6 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
             case 2: {
 #if VERBOSE_DEBUG
                 DBG_MSG << " send stage: " << (int)stage << " " << "4\n";
-                //{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
                 zmq::message_t iomsg(4);
                 memcpy(iomsg.data(), (void *)&size, 4);
@@ -290,7 +288,6 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
             case 3: {
 #if VERBOSE_DEBUG
                 DBG_MSG << " send stage: " << (int)stage << " " << size << "\n";
-                //{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
 #if VERBOSE_DEBUG
                 if (driver_state == s_driver_init) {
@@ -347,7 +344,6 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
                     display(mask, size);
                     std::cout << "\n";
                 }
-                //{uint8_t *chk = new uint8_t[1]; memset(chk, 0, 1); delete[] chk; }
 #endif
                 ++stage;
                 break;
