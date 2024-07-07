@@ -6,6 +6,8 @@ extern "C" {
 #endif
 
 #include <inttypes.h>
+#include <stdlib.h>
+
 struct CircularBuffer {
     unsigned int bufsize;
     int front;

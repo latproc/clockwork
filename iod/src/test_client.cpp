@@ -21,6 +21,7 @@
 #include <iostream>
 #include <string>
 #include <zmq.hpp>
+#include <unistd.h>
 
 int main() {
     //  Prepare our context and socket

@@ -174,6 +174,15 @@ IOUpdate::~IOUpdate() {
     //  delete mask_;
 }
 
+uint32_t IOUpdate::size() const { return size_; }
+void IOUpdate::setSize(uint32_t sz) { size_ = sz; }
+
+uint8_t *IOUpdate::data() const { return data_; }
+void IOUpdate::setData(uint8_t *dt) { data_ = dt; }
+
+uint8_t *IOUpdate::mask() const { return mask_; }
+void IOUpdate::setMask(uint8_t *ms) { mask_ = ms; }
+
 // these components need to synchronise with clockwork
 std::set<IOComponent *> updatedComponentsIn;
 std::set<IOComponent *> updatedComponentsOut;
@@ -746,7 +755,6 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
             config->speed_scale = speed_scale;
             std::cout << m->getName() << " set velocity scale to: " << config->speed_scale << "\n";
         }
-        const Value &v = m->getValue("acceleration_scale");
         if (getFloatValue(settings, "acceleration_scale", accel_scale)) {
             config->accel_scale = accel_scale;
             std::cout << m->getName() << " set accel scale to: " << config->accel_scale << "\n";
