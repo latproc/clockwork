@@ -119,7 +119,7 @@ ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), num_entries(0), entry_
 
 ECModule::~ECModule() {
     if (pdo_entries) {
-        delete pdo_entries;
+        delete[] pdo_entries;
         pdo_entries = 0;
     }
     if (pdos) {
@@ -712,8 +712,8 @@ void ECInterface::registerModules() {
                     }
                     else {
                         DBG_ETHERCAT << "Successfully added item " << module_offset_idx
-                                     << " at index " << std::hex << "0x" << m->syncs[i].pdos[j].index << " " << std::dec 
-                                     << " subindex " << (int)m->syncs[i].pdos[j].entries[k].subindex 
+                                     << " at index " << std::hex << "0x" << m->syncs[i].pdos[j].index << " " << std::dec
+                                     << " subindex " << (int)m->syncs[i].pdos[j].entries[k].subindex
                                      << " length "   << (int)m->syncs[i].pdos[j].entries[k].bit_length
                                      << " offset: "  << res
                                      << " bitpos: "  << m->bit_positions[module_offset_idx] << " "
@@ -834,8 +834,8 @@ void ECInterface::configureModules() {
                     }
                     else {
                         DBG_ETHERCAT << "Successfully added entry item " << module_offset_idx
-                                     << " at index " << std::hex << "0x" << m->syncs[i].pdos[j].index << " " << std::dec 
-                                     << " subindex " << (int)m->syncs[i].pdos[j].entries[k].subindex 
+                                     << " at index " << std::hex << "0x" << m->syncs[i].pdos[j].index << " " << std::dec
+                                     << " subindex " << (int)m->syncs[i].pdos[j].entries[k].subindex
                                      << " length "   << (int)m->syncs[i].pdos[j].entries[k].bit_length
                                      << " offset: "  << res
                                      << " bitpos: "  << m->bit_positions[module_offset_idx] << " "

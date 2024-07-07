@@ -641,6 +641,8 @@ class InputFilterSettings {
         positions = createBuffer(buffer_len);
     }
 
+    ~InputFilterSettings();
+
     void update(uint64_t read_time) {
 #if 0
         double smoothing_coeff[] = { -7, 8, 8, 0, -9, -12, -2, 28, 85 };
@@ -728,6 +730,15 @@ int64_t InputFilterSettings::default_speed_tolerance = 20;  // a default value f
 int64_t InputFilterSettings::default_calc_dt = 0;           // calculate first deriv
 int64_t InputFilterSettings::default_calc_d2t = 0;          // calculate second deriv
 int64_t InputFilterSettings::default_calc_stddev = 0;       // don't calculate stddev
+
+InputFilterSettings::~InputFilterSettings() {
+    destroyBuffer(positions);
+    delete[] filter_c_coeff;
+    delete[] filter_d_coeff;
+    delete input_bwf;
+    delete vel_bwf;
+    delete accel_bwf;
+}
 
 AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) {
     config = new InputFilterSettings();

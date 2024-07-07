@@ -174,6 +174,7 @@ void MessageLog::load(const char *filename) {
                 throw("Error reading from error log file.");
             }
             file.close();
+            delete[] buf;
         }
         else {
             throw("Error opening error log file");
