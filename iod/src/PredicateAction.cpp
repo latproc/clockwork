@@ -269,7 +269,7 @@ void setValue(MachineInstance *m, const std::string &property, const Value &valu
         assert(predicate->left_p->json_expression);
         Value lhs = eval(predicate->left_p, m);
         assert(lhs.kind == Value::t_json);
-        cJSON *result = assign(predicate->left_p->json_expression.value(), lhs.json, value);
+        cJSON *result = assign(predicate->left_p->json_expression.value(), lhs.json, value, boost::none, m);
         auto result_str = cJSON_PrintUnformatted(result);
         result = cJSON_Parse(result_str);
         free(result_str);
@@ -294,12 +294,12 @@ Action::Status PredicateAction::run() {
                 if (rhs.kind == Value::t_symbol) {
                     val = eval(predicate->right_p, owner);
                     assert(val.kind == Value::t_json);
-                    cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), val.json);
+                    cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), val.json, owner);
                     val = Value(sub_expr);
                 }
                 else {
                     assert(rhs.kind == Value::t_json);
-                    cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), rhs.json);
+                    cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), rhs.json, owner);
                     val = Value(sub_expr);
                 }
             }

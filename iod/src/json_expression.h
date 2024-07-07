@@ -4,15 +4,40 @@
 #include <iostream>
 #include <string>
 #include <value.h>
+#include <boost/optional.hpp>
 
+class SymbolTable;
+class MachineInstance;
 cJSON *apply(const std::string &str, cJSON *json);
-cJSON *assign(const std::string &str, cJSON *json, const std::string &value);
-cJSON *assign(const std::string &str, cJSON *json, int value);
-cJSON *assign(const std::string &str, cJSON *json, uint64_t value);
-cJSON *assign(const std::string &str, cJSON *json, const Value &value);
-cJSON *assign(const std::string &str, cJSON *json, double value);
-cJSON *assign(const std::string &str, cJSON *json, cJSON *value);
-cJSON *assign(const std::string &str, cJSON *json, bool value);
+cJSON *apply(const std::string &str, cJSON *json, SymbolTable *symbols);
+cJSON *apply(const std::string &str, cJSON *json, MachineInstance* context);
+cJSON *assign(const std::string &str, cJSON *json, const std::string &value,
+                boost::optional<SymbolTable *> symbols = boost::none,
+                boost::optional<MachineInstance *> context = boost::none);
+cJSON *assign(const std::string &str, cJSON *json, int value,
+                boost::optional<SymbolTable *> symbols = boost::none,
+                boost::optional<MachineInstance *> context = boost::none);
+
+cJSON *assign(const std::string &str, cJSON *json, uint64_t value,
+                boost::optional<SymbolTable *> symbols = boost::none,
+                boost::optional<MachineInstance *> context = boost::none);
+
+cJSON *assign(const std::string &str, cJSON *json, const Value &value,
+                boost::optional<SymbolTable *> symbols = boost::none,
+                boost::optional<MachineInstance *> context = boost::none);
+
+cJSON *assign(const std::string &str, cJSON *json, double value,
+                boost::optional<SymbolTable *> symbols = boost::none,
+                boost::optional<MachineInstance *> context = boost::none);
+
+cJSON *assign(const std::string &str, cJSON *json, cJSON *value,
+                boost::optional<SymbolTable *> symbols = boost::none,
+                boost::optional<MachineInstance *> context = boost::none);
+
+cJSON *assign(const std::string &str, cJSON *json, bool value,
+                boost::optional<SymbolTable *> symbols = boost::none,
+                boost::optional<MachineInstance *> context = boost::none);
+
 
 class JsonExpr {
   public:

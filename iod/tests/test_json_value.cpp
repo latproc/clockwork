@@ -11,6 +11,8 @@
 #include <value.h>
 #include <vector>
 
+#include "library_globals.c"
+
 namespace {
 
 struct parser_exception : public std::runtime_error {
@@ -372,6 +374,31 @@ TEST(AssignJsonExpr, AssignIntoArray) {
     free(expected_json_str);
     cJSON_Delete(json);
     cJSON_Delete(doc);
+}
+
+TEST(JsonExpr, CanGetValueFromArrayUsingIndexProperty) {
+    auto json_str = R"JSON({"a":[1,2,3],"b":"hello"})JSON";
+    auto expr_str = "$.a[@index]";
+    SymbolTable symbols;
+    symbols.add("index", 1);
+    auto doc = cJSON_Parse(json_str);
+    cJSON *json = apply(expr_str, doc, &symbols);
+    EXPECT_NE(json, nullptr);
+    EXPECT_EQ(json->type, cJSON_Number);
+    EXPECT_EQ(json->valueint, 2);
+}
+
+TEST(JsonExpr, CanGetValueFromObjectUsingProperty) {
+    auto json_str = R"JSON({"a":1, "b": "hello"})JSON";
+    auto expr_str = "$.@property";
+    SymbolTable symbols;
+    symbols.add("property", "b");
+    auto doc = cJSON_Parse(json_str);
+    cJSON *json = apply(expr_str, doc, &symbols);
+    EXPECT_NE(doc, nullptr);
+    EXPECT_NE(json, nullptr);
+    EXPECT_EQ(json->type, cJSON_String);
+    EXPECT_EQ(strcmp(json->valuestring, "hello"), 0);
 }
 
 } // namespace
