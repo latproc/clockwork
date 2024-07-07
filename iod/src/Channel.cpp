@@ -15,6 +15,7 @@
 #include "SocketMonitor.h"
 #include "SyncRemoteStatesAction.h"
 #include "WaitAction.h"
+#include "cwlang.tab.hpp"
 #include "value.h"
 #include <boost/thread.hpp>
 #include <iostream>
@@ -96,6 +97,7 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
     if (len == 0) {
         return true;
     }
+    *buf = nullptr;
     IODCommand *command = parseCommandString(data);
     if (command) {
         if (command->param(0) == "STATE") {
@@ -138,10 +140,11 @@ class ChannelInternals {
     CommandSocketInfo *cmd_sock_info;
     MessageRouter router;
     boost::thread *router_thread;
-    ChannelInternals() : command_sock(0), cmd_sock_info(0), router_thread(0) {}
+    ChannelInternals() : command_sock(0), cmd_sock_info(0), router_thread(0), last_state("undefined") {}
     std::string getCommandSocketName(bool client_endpoint);
     boost::thread *monitor_thread = nullptr;
     boost::thread *subscriber_thread = nullptr;
+    Value last_state;
 };
 
 MachineRecord::MachineRecord(MachineInstance *m) : machine(m), last_sent(0) {}
@@ -351,6 +354,7 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
 }
 
 Action::Status Channel::setState(const State &new_state, uint64_t authority, bool resume) {
+    MachineInstance::setState(new_state, authority, resume);
     setNeedsCheck(); // conservative: likely to need attention after a setstate
     DBG_CHANNELS << "--- Channel " << channel_name << " " << getCurrent() << " --> " << new_state << " authority "
                  << authority << " resume " << resume << "\n";
@@ -391,15 +395,13 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
 
     Action::Status res = MachineInstance::setState(new_state, 0, resume);
     char buf[100];
-
-    /*
-        if (res != Action::Complete) {
-            DBG_CHANNELS << "Action " << *this << " not complete\n";
+    if (res != Action::Complete) {
+        DBG_CHANNELS << "Action " << *this << " not complete\n";
         snprintf(buf, 100, "Channel %s SetState to %s not complete", channel_name.c_str(), new_state.getName().c_str() );
-            MessageLog::instance()->add(buf);
-            return res;
-        }
-    */
+        MessageLog::instance()->add(buf);
+        DBG_CHANNELS << buf << "\n";
+        return res;
+    }
     if (new_state == ChannelImplementation::CONNECTED) {
         snprintf(buf, 100, "Channel %s CONNECTED", channel_name.c_str());
         MessageLog::instance()->add(buf);
@@ -417,6 +419,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
         }
     }
     else if (new_state == ChannelImplementation::WAITSTART) {
+        assert("Client channel should not WAITSTART" && !isClient());
         snprintf(buf, 100, "Channel %s: (%s) setting state to WAITSTART", channel_name.c_str(),
                  (isClient()) ? "client" : "server");
         MessageLog::instance()->add(buf);
@@ -447,8 +450,6 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
             MessageLog::instance()->add(buf);
             DBG_CHANNELS << buf << "\n";
 
-            //sendMessage("status", *cmd_client, ack, mh);
-            //DBG_CHANNELS << "channel " << channel_name << " got ack: " << ack << " to start request\n";
             safeSend(*cmd_client, "status", 6, mh);
         }
         else {
@@ -457,8 +458,6 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
             MessageLog::instance()->add(buf);
             DBG_CHANNELS << buf << "\n";
 
-            //sendMessage("done", *cmd_client, ack, mh);
-            //DBG_CHANNELS << "channel " << channel_name << " got ack: " << ack << " when finished upload\n";
             mh.needReply(true);
             safeSend(*cmd_client, "done", 4, mh);
         }
@@ -580,13 +579,11 @@ void Channel::addConnection() {
         else {
             if (definition()->isPublisher()) {
                 SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE");
-                enqueueAction(ssat.factory(
-                    this)); // execute this state change once all other actions are complete
+                enqueueAction(ssat.factory(this));
             }
             else {
                 SetStateActionTemplate ssat(CStringHolder("SELF"), "WAITSTART");
-                enqueueAction(ssat.factory(
-                    this)); // execute this state change once all other actions are complete
+                enqueueAction(ssat.factory(this));
             }
         }
     }
@@ -879,20 +876,21 @@ void Channel::checkStateChange(std::string event) {
 
     if (current_state == ChannelImplementation::DISCONNECTED) {
         checkCommunications();
-    }
-    if (current_state == ChannelImplementation::DISCONNECTED) {
-        return;
+        if (current_state == ChannelImplementation::DISCONNECTED) {
+            return;
+        }
     }
     if (isClient()) {
         if (current_state == ChannelImplementation::DOWNLOADING) {
-            snprintf(buf, 100, "Channel %s (client) setting state to UPLOADING",
+            snprintf(buf, 100, "Channel %s (client) setting state to UPLOADING in checkStateChange",
                      channel_name.c_str());
             MessageLog::instance()->add(buf);
+            DBG_CHANNELS << buf << "\n";
             if (setState(ChannelImplementation::UPLOADING) == Action::Failed) {
             }
         }
         else if (current_state == ChannelImplementation::UPLOADING) {
-            snprintf(buf, 100, "Channel %s (client) becomming ACTIVE", channel_name.c_str());
+            snprintf(buf, 100, "Channel %s (client) becomming ACTIVE in checkStateChange", channel_name.c_str());
             MessageLog::instance()->add(buf);
             DBG_CHANNELS << channel_name << " -> ACTIVE\n";
             setState(ChannelImplementation::ACTIVE);
@@ -909,13 +907,14 @@ void Channel::checkStateChange(std::string event) {
         if (current_state == ChannelImplementation::CONNECTED && event == "status") {
             setState(ChannelImplementation::UPLOADING);
         }
-        if (current_state == ChannelImplementation::WAITSTART && event == "status") {
+        else if (current_state == ChannelImplementation::WAITSTART && event == "status") {
             setState(ChannelImplementation::UPLOADING);
         }
         else if (current_state == ChannelImplementation::ACTIVE && event == "status") {
             {
                 FileLogger fl(program_name);
                 fl.f() << "ignoring " << event << " while active\n";
+                DBG_CHANNELS << "ignoring " << event << " while active\n";
             }
             //setState(ChannelImplementation::UPLOADING);
         }
@@ -1146,21 +1145,28 @@ void Channel::operator()() {
                 if (safeRecv(remote_sock, &data, &len, false, 0, mh)) {
                     NB_MSG << "CTRL got command " << data << " header " << mh << "\n";
                     char buf[100];
-                    if (strncmp(data, "done", len) == 0 || strncmp(data, "status", len) == 0) {
-                        snprintf(buf, 100, "Channel %s received 'done' from partner",
-                                 channel_name.c_str());
+                    if ((len == 4 && strncmp(data, "done", len) == 0) || (len == 6 && strncmp(data, "status", len) == 0)) {
+                        buf[len] = 0;
+                        snprintf(buf, 100, "Channel %s received %s from partner",
+                                 channel_name.c_str(), data);
                         MessageLog::instance()->add(buf);
+                        DBG_CHANNELS << buf << "\n";
                         checkStateChange(data);
                         if (isClient() && !mh.needsReply()) {
                             snprintf(buf, 100,
                                      "Error: Channel %s detected missing need reply on %s message",
                                      channel_name.c_str(), (data) ? data : "<empty>");
                             MessageLog::instance()->add(buf);
+                            DBG_CHANNELS << buf << "\n";
                             mh.needReply(true);
                         }
                     }
-                    //else if (strncmp(data, "ack", len) == 0)
-                    //  checkStateChange(data);
+                    else {
+                        snprintf(buf, 100, "Channel %s received unexpected message %s from partner",
+                                 channel_name.c_str(), data);
+                        MessageLog::instance()->add(buf);
+                        DBG_CHANNELS << buf << "\n";
+                    }
 
                     if (mh.needsReply()) {
                         NB_MSG << channel_name << " sending reply as requested\n";
@@ -1334,6 +1340,10 @@ void Channel::initialiseChannels() {
         return;
     }
     setupCommandSockets();
+}
+
+void Channel::idle() {
+    MachineInstance::idle();
 }
 
 void ChannelDefinition::instantiateInterfaces() {

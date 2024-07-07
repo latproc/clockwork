@@ -119,7 +119,7 @@ class MessageFilterInternals {
 class MessageFilter {
   public:
     MessageFilter() : internals(0) {}
-    ~MessageFilter() {}
+    virtual ~MessageFilter() {}
     virtual void init(MessageFilterInternals *) {}
     virtual bool filter(char **buf, size_t &len) { return true; }
     virtual bool filter(char **buf, size_t &len, MessageHeader &) { return true; }

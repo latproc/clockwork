@@ -229,6 +229,8 @@ class Channel : public MachineInstance, public ChannelImplementation {
         return setState(new_state, 0, false);
     }
 
+    void idle() override;
+
     static void initialiseChannels();
 
     bool doesMonitor(); // is this channel monitoring any machines?

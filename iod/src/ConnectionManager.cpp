@@ -27,6 +27,8 @@
 #include <iostream>
 #include <map>
 #include <math.h>
+#include <ostream>
+#include <utility>
 #include <zmq.hpp>
 #ifdef DYNAMIC_VALUES
 #include "dynamic_value.h"
@@ -547,18 +549,34 @@ RouteInfo::RouteInfo(const char *addr, zmq::socket_t *s)
 class MessageRouterInternals {
   public:
     MessageRouterInternals()
-        : remote(0), default_dest(0), done(false), destinations(0), saved_num_items(0), items(0) {}
+        : remote(0), default_dest(0), allocated_remote(false), done(false), destinations(0), saved_num_items(0), items(0) {}
+    ~MessageRouterInternals();
     boost::mutex data_mutex;
     std::map<int, RouteInfo *> routes;
     std::list<MessageFilter *> filters;
 
-    zmq::socket_t *remote;
+    zmq::socket_t *remote; // may be non-owning pointer(!)
     zmq::socket_t *default_dest;
+    bool allocated_remote;
     bool done;
     int *destinations;
     size_t saved_num_items;
     zmq::pollitem_t *items;
 };
+
+MessageRouterInternals::~MessageRouterInternals() {
+    delete []items;
+    delete []destinations;
+    for (auto &route : routes) {
+        delete route.second;
+    }
+    for (auto &filter : filters) {
+        delete filter;
+    }
+    if (allocated_remote) {
+        delete remote;
+    }
+}
 
 MessageRouter::MessageRouter() { internals = new MessageRouterInternals; }
 
@@ -597,7 +615,17 @@ void MessageRouter::addRoute(int route_id, zmq::socket_t *dest) {
 
 void MessageRouter::addDefaultRoute(zmq::socket_t *def) { internals->default_dest = def; }
 
-void MessageRouter::setRemoteSocket(zmq::socket_t *remote_sock) { internals->remote = remote_sock; }
+void MessageRouter::setRemoteSocket(zmq::socket_t *remote_sock) {
+    auto prev = internals->remote;
+    if (prev == remote_sock) {
+        return;
+    }
+    internals->remote = remote_sock;
+    if (internals->allocated_remote) {
+        delete prev;
+    }
+    internals->allocated_remote = false;
+}
 
 void MessageRouter::addRoute(int route_id, int type, const std::string address) {
     scoped_lock lock("addRoute", internals->data_mutex);
@@ -610,6 +638,7 @@ void MessageRouter::addRoute(int route_id, int type, const std::string address) 
     }
 }
 
+#if 0
 void MessageRouter::addDefaultRoute(int type, const std::string address) {
     scoped_lock lock("addDefaultRoute", internals->data_mutex);
     zmq::socket_t *def = new zmq::socket_t(*MessagingInterface::getContext(), type);
@@ -623,6 +652,7 @@ void MessageRouter::addRemoteSocket(int type, const std::string address) {
     remote_sock->connect(address.c_str());
     internals->remote = remote_sock;
 }
+#endif
 void MessageRouter::operator()() {
     boost::unique_lock<boost::mutex> lock(internals->data_mutex);
     while (!internals->done) {
@@ -653,20 +683,16 @@ void MessageRouter::removeFilter(int route_id, MessageFilter *filter) {
 
 void MessageRouter::poll() {
     boost::unique_lock<boost::mutex> lock(internals->data_mutex);
-    if (!internals->remote) {
-        usleep(10);
+    if (!internals->remote || internals->routes.size() == 0) {
+        usleep(10000);
         return;
     }
     auto num_socks = internals->routes.size() + 1;
 
     if (internals->saved_num_items != num_socks) {
-        if (internals->destinations) {
-            delete[] internals->destinations;
-        }
+        delete[] internals->items;
+        delete[] internals->destinations;
         internals->destinations = new int[num_socks];
-        if (internals->items) {
-            delete internals->items;
-        }
         internals->items = new zmq::pollitem_t[num_socks];
     }
     zmq::pollitem_t *items = internals->items;
@@ -706,22 +732,25 @@ void MessageRouter::poll() {
         assert(false);
     }
 
-    for (unsigned int i = 0; i < num_socks; ++i)
+    for (unsigned int i = 0; i < num_socks; ++i) {
         if (items[i].revents & ZMQ_POLLERR) {
             char buf[150];
             snprintf(buf, 150, "Channel: ZMQ Error on route %d", i);
             MessageLog::instance()->add(buf);
+            DBG_CHANNELS << buf << "\n";
         }
+    }
     int c = 0;
-    for (unsigned int i = 0; i < num_socks; ++i)
+    for (unsigned int i = 0; i < num_socks; ++i) {
         if (items[i].revents & ZMQ_POLLIN) {
             ++c;
         }
+    }
     if (!c) {
         return;
     }
 
-#if 0
+#if 1
     if (c) {
         std::cout << "activity: ";
         for (unsigned int i = 0; i < num_socks; ++i) {
@@ -801,6 +830,7 @@ void MessageRouter::poll() {
                     }
                 }
                 if (do_send) {
+                    DBG_CHANNELS << "message router forwarding to " << found->first << "\n";
                     mh.start_time = microsecs();
                     safeSend(*internals->remote, buf, len, mh);
                 }
