@@ -44,8 +44,8 @@ Action::Status HandleRequestAction::checkComplete() {
         return status;
     }
 
-    char *buf;
-    size_t len;
+    char *buf = nullptr;
+    size_t len = 0;
     if (safeRecv(*sock, &buf, &len, false, 0, header)) {
         result_str = buf;
         delete[] buf;

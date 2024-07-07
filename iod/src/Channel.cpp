@@ -1138,7 +1138,7 @@ void Channel::operator()() {
             }
 
             if (items[subscriber_idx].revents & ZMQ_POLLIN) {
-                char *data = 0;
+                char *data = nullptr;
                 size_t len;
                 MessageHeader mh;
                 //NB_MSG << "CTRL checking for command\n";
@@ -1223,7 +1223,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
         safeSend(sock, msg, strlen(msg), header);
         usleep(10);
         zmq::message_t resp;
-        char *buf;
+        char *buf = nullptr;
         size_t len;
         if (safeRecv(sock, &buf, &len, true, 0, header)) {
             delete[] buf;
@@ -1234,7 +1234,7 @@ bool Channel::sendMessage(const char *msg, zmq::socket_t &sock, std::string &res
                      << " through a channel thread\n";
         //NB_MSG << "Message header: " << header << "\n";
         safeSend(*cmd_client, msg, strlen(msg), header);
-        char *response_buf;
+        char *response_buf = nullptr;
         size_t rlen;
 
         DBG_CHANNELS << "Channel " << channel_name << " sendMessage() waiting for response\n";

@@ -94,6 +94,8 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
         timeout = 500;
     }
 
+    // TODO: assert("out param buf must be null on call" && *buf == nullptr);
+    *buf = nullptr;
     while (!MessagingInterface::aborted()) {
         try {
             zmq::pollitem_t items[] = {{(void *)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0}};
@@ -153,6 +155,8 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
         timeout = 500;
     }
 
+    // TODO: assert("out param buf must be null on call" && *buf == nullptr);
+    *buf = nullptr;
     while (!MessagingInterface::aborted()) {
         try {
             zmq::pollitem_t items[] = {{(void *)sock, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0}};
@@ -346,8 +350,8 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, in
                  const MessageHeader &header) {
     safeSend(sock, msg, strlen(msg), header);
 
-    char *buf;
-    size_t len;
+    char *buf = nullptr;
+    size_t len = 0;
     MessageHeader response_header;
     //bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block, uint64_t timeout, int *source) {
     if (safeRecv(sock, &buf, &len, true, (int64_t)timeout_us, response_header)) {
@@ -361,7 +365,7 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, in
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us) {
     safeSend(sock, msg, strlen(msg));
 
-    char *buf = 0;
+    char *buf = nullptr;
     size_t len = 0;
     if (safeRecv(sock, &buf, &len, true, (int64_t)timeout_us)) {
         response = buf;
