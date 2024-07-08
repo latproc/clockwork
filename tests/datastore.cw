@@ -7,7 +7,7 @@ DATASTORE MACHINE {
     OPTION result JSON_VALUE {};
 }
 #db DATASTORE (file: "clockwork.db");
-    
+
 customer_record Customer;
 manager RecordManager customer_record;
 raw_sql Sql;
@@ -63,29 +63,28 @@ Customer MACHINE {
 # be used to do things like create indexes and drop or alter tables.
 Sql MACHINE {
     OPTION sql_statement JSON_VALUE {"action": "sql", "sql": ""};
-    OPTION sql ""; 
+    OPTION sql "";
 }
 
-bale_list LIST;
+item_list LIST;
 
-BaleManager MACHINE bale_list{
-    OPTION response;
-    RECEIVE BaleRecord {
-        bale_list := response;
-        bale := TAKE FIRST FROM bale_list;
-        LOG ITEM ${rfid} OF bale;
+ItemManager MACHINE list{
+    OPTION response JSON_VALUE [];
+    LOCAL OPTION rfid 0;
+    RECEIVE ItemRecord {
+        list := response;
+        item := TAKE FIRST FROM list;
+        rfid := ITEM ${rfid} OF item;
+        LOG "rfid: " + rfid;
     }
-}
-
-BaleScanner MACHINE {
 }
 
 RecordManager MACHINE record {
     OPTION id 0;
     OPTION request JSON_VALUE {};
     OPTION response JSON_VALUE {
-        "machine": "BaleManager",
-        "message": "BaleRecord",
+        "machine": "ItemManager",
+        "message": "ItemRecord",
         "details": {"id": 0, "name": "", "email": "", "age": 0}
     };
     COMMAND update {
@@ -112,7 +111,7 @@ RecordManager MACHINE record {
         ITEM ${keys.id} OF request := record.id;
         ITEM ${auth} OF request := "xxx";
         ITEM ${respond_to} OF request := response;
-        customer := LOOKUP USING request TO DATABASE_CHANNEL;
+        #customer := LOOKUP USING request TO DATABASE_CHANNEL;
         SEND request TO DATABASE_CHANNEL;
         LOG request;
     }
