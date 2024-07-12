@@ -620,6 +620,7 @@ char *MessagingInterface::send(const char *txt) {
                 if (--fsm_retries <= 0) {
                     FileLogger fl(program_name);
                     fl.f() << "MessagingInterface::send aborting due to failed EFSM recovery\n";
+                    DBG_MESSAGING << "MessagingInterface::send aborting due to failed EFSM recovery\n";
                     exit(2);
                 }
                 send_state = e_recover;
@@ -629,10 +630,13 @@ char *MessagingInterface::send(const char *txt) {
                 FileLogger fl(program_name);
                 fl.f() << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno())
                        << "\n";
+                DBG_MESSAGING << "Exception when sending " << url << ": " << zmq_strerror(zmq_errno())
+                       << "\n";
             }
             else {
                 FileLogger fl(program_name);
                 fl.f() << "Exception when sending " << url << ": " << e.what() << "\n";
+                DBG_MESSAGING << "Exception when sending " << url << ": " << e.what() << "\n";
             }
             /*          socket->disconnect(url.c_str());
                     usleep(50000);
