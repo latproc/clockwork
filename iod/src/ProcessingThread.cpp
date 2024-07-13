@@ -112,6 +112,12 @@ void ProcessingThread::stop() {
     MessagingInterface::abort();
 }
 
+void ProcessingThread::join() {
+    if (instance_) {
+        instance_->join();
+    }
+}
+
 CommandSocketInfo *ProcessingThread::addCommandChannel(CommandSocketInfo *csi) {
     std::list<CommandSocketInfo *>::iterator iter = internals->channel_sockets.begin();
     int idx = 0;

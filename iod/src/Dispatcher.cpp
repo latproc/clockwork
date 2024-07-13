@@ -83,7 +83,7 @@ Dispatcher::~Dispatcher() {
         stop();
     }
     // if (socket) { delete socket; }
-    delete dispatch_thread;
+    join();
 }
 
 Dispatcher *Dispatcher::instance() {
@@ -110,13 +110,10 @@ void Dispatcher::reset() {
     started = false;
 }
 
-void Dispatcher::stop() {
-    instance()->finished = true;
-    package_available.notify_one();
-    zmq::socket_t to_self(*MessagingInterface::getContext(), ZMQ_REQ);
-    to_self.connect("inproc://dispatcher_self");
-    to_self.send("exit", 4);
-
+void Dispatcher::join() {
+    if (thread_ref) {
+        thread_ref->join();
+    }
     if (thread_ref) {
         delete thread_ref;
         thread_ref = nullptr;
@@ -125,6 +122,15 @@ void Dispatcher::stop() {
         delete dispatch_thread;
         dispatch_thread = nullptr;
     }
+}
+
+void Dispatcher::stop() {
+    instance()->finished = true;
+    package_available.notify_one();
+    zmq::socket_t to_self(*MessagingInterface::getContext(), ZMQ_REQ);
+    to_self.connect("inproc://dispatcher_self");
+    to_self.send("exit", 4);
+    join();
 }
 
 std::ostream &Dispatcher::operator<<(std::ostream &out) const {

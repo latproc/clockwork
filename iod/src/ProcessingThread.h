@@ -71,6 +71,8 @@ class ProcessingThread : public ClockworkProcessManager {
     std::set<MachineInstance *>::iterator begin() { return runnable.begin(); }
     std::set<MachineInstance *>::iterator end() { return runnable.end(); }
 
+    void join();
+
   private:
     static ProcessingThread *instance_;
     ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator,

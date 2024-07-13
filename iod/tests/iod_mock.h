@@ -20,8 +20,8 @@ class MockSystemSetup {
         // TODO: lots of setup needed here...
         zmq::context_t *context = new zmq::context_t;
         MessagingInterface::setContext(context);
-        Logger::instance();
         Dispatcher::instance();
+        Logger::instance();
         MessageLog::setMaxMemory(10000);
     }
     void activate() {
@@ -34,7 +34,6 @@ class MockSystemSetup {
         iod_activation();
     }
     void deactivate() {
-        Dispatcher::instance()->stop();
         pt->stop();
     }
 
