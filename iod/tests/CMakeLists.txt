@@ -148,4 +148,16 @@ target_link_libraries(test_scheduler gmock_main cw_client ${ZeroMQ_LIBRARY} ${Bo
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_scheduler COMMAND test_scheduler)
 
+add_executable(test_shared_queue test_shared_queue.cpp )
+target_link_libraries(test_shared_queue gmock_main cw_client
+    ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_shared_queue COMMAND test_shared_queue)
+
+add_executable(test_thread_safe_queue test_thread_safe_queue.cpp )
+target_link_libraries(test_thread_safe_queue gmock_main cw_client
+    ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_thread_safe_queue COMMAND test_thread_safe_queue)
+
 endif()
