@@ -102,6 +102,10 @@ Message::Message(const Message &orig) : kind(orig.kind), seq(orig.seq), text(ori
     }
 }
 
+Message::Message(Message &&orig) : kind(orig.kind), seq(orig.seq), text(orig.text), params(orig.params) {
+    orig.params = 0;
+}
+
 Message &Message::operator=(const Message &other) {
     kind = other.kind;
     seq = other.seq;
@@ -113,6 +117,15 @@ Message &Message::operator=(const Message &other) {
     else {
         params = 0;
     }
+    return *this;
+}
+
+Message &Message::operator=(Message && other) {
+    kind = other.kind;
+    seq = other.seq;
+    text = other.text;
+    params = other.params;
+    other.params = 0;
     return *this;
 }
 

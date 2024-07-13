@@ -59,7 +59,10 @@ class Message {
     Message(MessageType t = SIMPLEMSG) : kind(t), seq(++sequence), text(""), params(0) {}
     Message(CStringHolder msg, MessageType t = SIMPLEMSG, Parameters *p = 0);
     Message(const Message &orig);
+    Message(Message &&orig);
+
     Message &operator=(const Message &other);
+    Message &operator=(Message &&other);
     ~Message();
     std::ostream &operator<<(std::ostream &out) const;
     bool operator==(const Message &other) const;
