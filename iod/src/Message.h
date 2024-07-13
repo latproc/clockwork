@@ -34,13 +34,17 @@
 
 class CStringHolder {
   public:
+    CStringHolder();
     CStringHolder(char *s);
     CStringHolder(const char *s);
     CStringHolder(const CStringHolder &orig);
+    CStringHolder(CStringHolder &&orig);
     CStringHolder &operator=(const CStringHolder &orig);
+    CStringHolder &operator=(CStringHolder &&orig);
     ~CStringHolder();
+
     const char *get() const;
-    CStringHolder();
+    bool will_free();
 
   private:
     const char *s_str;
