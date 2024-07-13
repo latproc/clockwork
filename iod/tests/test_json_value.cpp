@@ -11,7 +11,7 @@
 #include <value.h>
 #include <vector>
 
-#include "library_globals.c"
+#include "library_globals.cpp"
 
 namespace {
 

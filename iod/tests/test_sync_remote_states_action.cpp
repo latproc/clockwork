@@ -8,7 +8,7 @@
 #include <Statistics.h>
 #include <SyncRemoteStatesAction.h>
 
-#include "library_globals.c"
+#include "library_globals.cpp"
 
 namespace {
 class SyncRemoteStatesActionTest : public ::testing::Test {
