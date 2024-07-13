@@ -128,4 +128,15 @@ struct Package {
 };
 std::ostream &operator<<(std::ostream &out, const Package &package);
 
+struct Bundle {
+    Transmitter *transmitter;
+    Receiver *receiver;
+    Message message;
+    Bundle() : transmitter(0), receiver(0) {}
+    Bundle(Transmitter *t, Receiver *r, Message &&m) : transmitter(t), receiver(r), message(std::move(m)) {}
+    bool operator==(const Bundle &other) const {
+        return transmitter == other.transmitter && receiver == other.receiver && message == other.message;
+    }
+};
+
 #endif
