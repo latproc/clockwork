@@ -6,7 +6,7 @@
 #include <Statistic.h>
 #include <Statistics.h>
 
-#include "library_globals.c"
+#include "library_globals.cpp"
 
 namespace {
 class DisableActionTest : public ::testing::Test {

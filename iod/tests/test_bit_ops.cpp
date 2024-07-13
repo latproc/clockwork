@@ -1,5 +1,5 @@
 #include "bit_ops.h"
-#include "library_globals.c"
+#include "library_globals.cpp"
 #include "gtest/gtest.h"
 
 // internal to IOComponent but not static..

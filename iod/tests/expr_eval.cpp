@@ -11,7 +11,7 @@
 #include <cJSON.h>
 #include <json_expr_parser.h>
 
-#include "library_globals.c"
+#include "library_globals.cpp"
 
 bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate);
 ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &stack_iter);

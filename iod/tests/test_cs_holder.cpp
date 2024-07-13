@@ -4,7 +4,7 @@
 #include <memory>
 #include <symboltable.h>
 
-#include "library_globals.c"
+#include "library_globals.cpp"
 
 #if 0
 TEST(CStringHolderTests, CanConstructFromConstCharPtr)

@@ -2,7 +2,7 @@
 #include <buffering.h>
 #include <value.h>
 
-#include "library_globals.c"
+#include "library_globals.cpp"
 
 #include <buffering.c>
 

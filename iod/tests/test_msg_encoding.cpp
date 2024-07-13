@@ -1,4 +1,4 @@
-#include "library_globals.c"
+#include "library_globals.cpp"
 #include "gtest/gtest.h"
 #include <MessageEncoding.h>
 #include <cJSON.h>
