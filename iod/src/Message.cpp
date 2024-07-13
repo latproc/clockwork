@@ -45,6 +45,12 @@ CStringHolder::CStringHolder(const CStringHolder &orig) : s_str(0), str(0) {
     s_str = orig.s_str;
 }
 
+CStringHolder::CStringHolder(CStringHolder &&orig) : s_str(orig.s_str), str(orig.str) {
+    orig.str = 0;
+}
+
+CStringHolder::CStringHolder() : s_str(0), str(0) {}
+
 CStringHolder &CStringHolder::operator=(const CStringHolder &orig) {
     if (str) {
         free(str);
@@ -56,6 +62,17 @@ CStringHolder &CStringHolder::operator=(const CStringHolder &orig) {
     s_str = orig.s_str;
     return *this;
 }
+
+CStringHolder & CStringHolder::operator=(CStringHolder &&orig) {
+    if (str) {
+        free(str);
+    }
+    str = orig.str;
+    s_str = orig.s_str;
+    orig.str = 0;
+    return *this;
+}
+
 CStringHolder::~CStringHolder() {
     if (str) {
         free(str);
@@ -63,6 +80,8 @@ CStringHolder::~CStringHolder() {
 }
 
 const char *CStringHolder::get() const { return (str) ? str : s_str; }
+
+bool CStringHolder::will_free() { return str != 0; }
 
 //CStringHolder::CStringHolder() { if (str) free( str ); }
 
