@@ -1,5 +1,7 @@
 #include "gtest/gtest.h"
 #include <Message.h>
+#include <ThreadSafeQueue.h>
+#include <Message.h>
 
 #include "library_globals.cpp"
 #if 0
@@ -126,7 +128,8 @@ int main(int argc, char *argv[]) {
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
-    Dispatcher::instance();
+    ThreadSafeQueue<Package*> queue;
+    Dispatcher::create(queue);
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");
 

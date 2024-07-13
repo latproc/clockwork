@@ -44,7 +44,7 @@ struct Cleanup {
 };
 } // namespace
 
-Dispatcher *Dispatcher::instance_ = NULL;
+Dispatcher *Dispatcher::instance_ = nullptr;
 static boost::mutex dispatcher_mutex;
 static boost::condition_variable package_available;
 //boost::mutex Dispatcher::delivery_mutex;
@@ -73,10 +73,11 @@ void DispatchThread::operator()() {
     Dispatcher::instance()->idle();
 }
 
-Dispatcher::Dispatcher()
+Dispatcher::Dispatcher(ThreadSafeQueue<Package*> &q)
     : started(false), finished(false), dispatch_thread(0), thread_ref(0),
       sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting_cw),
-      self(*MessagingInterface::getContext(), ZMQ_REP), owner_thread(0) {}
+      self(*MessagingInterface::getContext(), ZMQ_REP), owner_thread(0),
+      process_queue(q) {}
 
 Dispatcher::~Dispatcher() {
     if (!instance()->finished) {
@@ -84,15 +85,22 @@ Dispatcher::~Dispatcher() {
     }
     // if (socket) { delete socket; }
     join();
+    instance_ = nullptr;
+}
+
+Dispatcher *Dispatcher::create(ThreadSafeQueue<Package*> &q) {
+    if (!instance_) { instance_ = new Dispatcher(q); }
+    else if (&instance()->process_queue != &q) {
+        assert("dispatcher created with a different queue" && &instance()->process_queue == &q);
+    }
+    return instance_;
 }
 
 Dispatcher *Dispatcher::instance() {
-    if (!instance_) {
-        instance_ = new Dispatcher();
-    }
-    assert(instance_);
+    assert("calling instance before create" && instance_);
     return instance_;
 }
+
 void Dispatcher::start() {
     auto dispatcher = Dispatcher::instance();
     if (dispatcher->dispatch_thread) {
@@ -240,128 +248,7 @@ void Dispatcher::idle() {
 
                 Package *p = to_deliver.front();
                 to_deliver.pop_front();
-                {
-                    DBG_DISPATCHER << "Dispatcher sending package " << *p << "\n";
-                    Receiver *to = p->receiver;
-                    Transmitter *from = p->transmitter;
-                    Message m(*p->message); //TBD is this copy necessary
-                    if (to) {
-                        MachineInstance *mi = dynamic_cast<MachineInstance *>(to);
-                        Channel *chn = dynamic_cast<Channel *>(to);
-                        if (chn) {
-                            DBG_DISPATCHER << "Channel message\n";
-                        }
-                        if (!mi->getStateMachine()) {
-                            char buf[100];
-                            snprintf(buf, 100,
-                                     "Warning: Machine %s does not have a valid state machine",
-                                     mi->getName().c_str());
-                            MessageLog::instance()->add(buf);
-                            NB_MSG << buf << "\n";
-                        }
-                        if (!chn && mi && mi->getStateMachine() &&
-                            mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL) {
-                            DBG_DISPATCHER << "Dispatcher sending external message " << *p << " to "
-                                           << to->getName() << "\n";
-                            {
-                                // The machine has no parameters take the properties from the machine
-                                MachineInstance *remote = mi;
-                                if (mi->parameters.size() > 0) {
-                                    remote = mi->lookup(mi->parameters[0]);
-                                    // the host and port properties are specifed by the first parameter
-                                    char buf[100];
-                                    snprintf(
-                                        buf, 100,
-                                        "Error dispatching message,  EXTERNAL configuration: %s not found",
-                                        mi->parameters[0].val.sValue.c_str());
-                                    MessageLog::instance()->add(buf);
-                                    NB_MSG << buf << "\n";
-                                }
-                                Value host = remote->properties.lookup("HOST");
-                                Value port_val = remote->properties.lookup("PORT");
-                                Value protocol = mi->properties.lookup("PROTOCOL");
-                                int64_t port;
-                                if (port_val.asInteger(port)) {
-                                    if (protocol == "RAW") {
-                                        MessagingInterface *mif = MessagingInterface::create(
-                                            host.asString(), (int)port, eRAW);
-                                        if (!mif->started()) {
-                                            mif->start();
-                                        }
-                                        mif->send_raw(m.getText().c_str());
-                                    }
-                                    else {
-                                        if (protocol == "CLOCKWORK") {
-                                            MessagingInterface *mif = MessagingInterface::create(
-                                                host.asString(), (int)port, eCLOCKWORK);
-                                            if (!mif->started()) {
-                                                mif->start();
-                                            }
-                                            DBG_DISPATCHER << "sending (CLOCKWORK): " << m.getText()
-                                                           << "\n";
-                                            mif->send(m);
-                                        }
-                                        else {
-                                            MessagingInterface *mif = MessagingInterface::create(
-                                                host.asString(), (int)port, eZMQ);
-                                            mif->start();
-                                            DBG_DISPATCHER << "sending: " << m.getText() << "\n";
-                                            mif->send(m.getText().c_str());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        else if (chn) {
-                            // when sending to a channel, if the channel has a publisher, get it to send the message
-                            DBG_DISPATCHER << "Dispatcher sending " << *p << " to channel "
-                                           << to->getName() << "\n";
-                            MessagingInterface *mif = chn->getPublisher();
-                            if (mif) {
-                                Value protocol = mi->properties.lookup("PROTOCOL");
-                                if (protocol == "RAW") {
-                                    mif->send_raw(m.getText().c_str());
-                                }
-                                else {
-                                    if (protocol == "CLOCKWORK") {
-                                        DBG_DISPATCHER << "sending to " << mif->getName()
-                                                       << " (CLOCKWORK): " << m.getText() << "\n";
-                                        mif->send(m);
-                                    }
-                                    else {
-                                        mif->send(m.getText().c_str());
-                                    }
-                                }
-                            }
-                        }
-                        else {
-                            DBG_DISPATCHER << "Dispatcher queued " << *p << " to " << to->getName()
-                                           << "\n";
-                            to->enqueue(*p);
-                            //MachineInstance::forceIdleCheck();
-                            MachineInstance *mi = dynamic_cast<MachineInstance *>(to);
-                            if (mi) {
-                                SharedWorkSet::instance()->add(mi);
-                                ProcessingThread::activate(mi);
-                                Action *curr = mi->executingCommand();
-                                if (curr) {
-                                    DBG_DISPATCHER << mi->getName() << " currently executing "
-                                                   << *curr << "\n";
-                                }
-                            }
-                        }
-                    }
-                    else {
-                        ReceiverList::iterator iter = all_receivers.begin();
-                        while (iter != all_receivers.end()) {
-                            Receiver *r = *iter++;
-                            if (r->receives(m, from)) {
-                                r->enqueue(*p);
-                            }
-                        }
-                    }
-                    delete p;
-                }
+                process_queue.enqueue(p);
             }
             sync.send("done", 4);
             if (!wait()) {

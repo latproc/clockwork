@@ -10,6 +10,8 @@
 #include <json_expression.h>
 #include <cJSON.h>
 #include <json_expr_parser.h>
+#include <ThreadSafeQueue.h>
+#include <Message.h>
 
 #include "library_globals.cpp"
 
@@ -231,6 +233,8 @@ class ExpressionTests {
 int main(int, char **) {
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
+    ThreadSafeQueue<Package*> queue;
+    Dispatcher::create(queue);
     Logger::instance();
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");

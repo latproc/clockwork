@@ -52,6 +52,8 @@
 #include "ProcessingThread.h"
 #include "watchdog.h"
 #include <pthread.h>
+#include "SharedWorkSet.h"
+#include "Dispatcher.h"
 
 #include <iostream>
 
@@ -90,17 +92,17 @@ class ProcessingThreadInternals {
 };
 
 ProcessingThread &ProcessingThread::create(ControlSystemMachine *m, HardwareActivation &activator,
-                                           IODCommandThread &cmd_interface) {
+                                           IODCommandThread &cmd_interface, ThreadSafeQueue<Package*> &queue) {
     if (!instance_) {
-        instance_ = new ProcessingThread(m, activator, cmd_interface);
+        instance_ = new ProcessingThread(m, activator, cmd_interface, queue);
     }
     return *instance_;
 }
 
 ProcessingThread::ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator,
-                                   IODCommandThread &cmd_interface)
+                                   IODCommandThread &cmd_interface, ThreadSafeQueue<Package*> &queue)
     : internals(0), machine(*m), status(e_waiting), activate_hardware(activator),
-      command_interface(cmd_interface), program_start(0) {
+      command_interface(cmd_interface), message_queue(queue), program_start(0) {
     program_start = microsecs();
     internals = new ProcessingThreadInternals();
 }
@@ -202,7 +204,6 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
     while (!program_done) {
         try {
             long len = 0;
-            char buf[10];
             res = zmq::poll(&items[0], num_items, poll_wait);
             if (!res) {
                 return res;
@@ -353,12 +354,140 @@ bool ProcessingThread::is_pending(MachineInstance *m) {
     return instance()->runnable.count(m);
 }
 
+void ProcessingThread::handle_package(Package *p) {
+{
+    DBG_DISPATCHER << "Dispatcher sending package " << *p << "\n";
+    Receiver *to = p->receiver;
+    Transmitter *from = p->transmitter;
+    Message m(*p->message); //TBD is this copy necessary
+    if (to) {
+        MachineInstance *mi = dynamic_cast<MachineInstance *>(to);
+        Channel *chn = dynamic_cast<Channel *>(to);
+        if (chn) {
+            DBG_DISPATCHER << "Channel message\n";
+        }
+        if (!mi->getStateMachine()) {
+            char buf[100];
+            snprintf(buf, 100,
+                     "Warning: Machine %s does not have a valid state machine",
+                     mi->getName().c_str());
+            MessageLog::instance()->add(buf);
+            NB_MSG << buf << "\n";
+        }
+        if (!chn && mi && mi->getStateMachine() &&
+            mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL) {
+            DBG_DISPATCHER << "Dispatcher sending external message " << *p << " to "
+                           << to->getName() << "\n";
+            {
+                // The machine has no parameters take the properties from the machine
+                MachineInstance *remote = mi;
+                if (mi->parameters.size() > 0) {
+                    remote = mi->lookup(mi->parameters[0]);
+                    // the host and port properties are specifed by the first parameter
+                    char buf[100];
+                    snprintf(
+                        buf, 100,
+                        "Error dispatching message,  EXTERNAL configuration: %s not found",
+                        mi->parameters[0].val.sValue.c_str());
+                    MessageLog::instance()->add(buf);
+                    NB_MSG << buf << "\n";
+                }
+                Value host = remote->properties.lookup("HOST");
+                Value port_val = remote->properties.lookup("PORT");
+                Value protocol = mi->properties.lookup("PROTOCOL");
+                int64_t port;
+                if (port_val.asInteger(port)) {
+                    if (protocol == "RAW") {
+                        MessagingInterface *mif = MessagingInterface::create(
+                            host.asString(), (int)port, eRAW);
+                        if (!mif->started()) {
+                            mif->start();
+                        }
+                        mif->send_raw(m.getText().c_str());
+                    }
+                    else {
+                        if (protocol == "CLOCKWORK") {
+                            MessagingInterface *mif = MessagingInterface::create(
+                                host.asString(), (int)port, eCLOCKWORK);
+                            if (!mif->started()) {
+                                mif->start();
+                            }
+                            DBG_DISPATCHER << "sending (CLOCKWORK): " << m.getText()
+                                           << "\n";
+                            mif->send(m);
+                        }
+                        else {
+                            MessagingInterface *mif = MessagingInterface::create(
+                                host.asString(), (int)port, eZMQ);
+                            mif->start();
+                            DBG_DISPATCHER << "sending: " << m.getText() << "\n";
+                            mif->send(m.getText().c_str());
+                        }
+                    }
+                }
+            }
+        }
+        else if (chn) {
+            // when sending to a channel, if the channel has a publisher, get it to send the message
+            DBG_DISPATCHER << "Dispatcher sending " << *p << " to channel "
+                           << to->getName() << "\n";
+            MessagingInterface *mif = chn->getPublisher();
+            if (mif) {
+                Value protocol = mi->properties.lookup("PROTOCOL");
+                if (protocol == "RAW") {
+                    mif->send_raw(m.getText().c_str());
+                }
+                else {
+                    if (protocol == "CLOCKWORK") {
+                        DBG_DISPATCHER << "sending to " << mif->getName()
+                                       << " (CLOCKWORK): " << m.getText() << "\n";
+                        mif->send(m);
+                    }
+                    else {
+                        mif->send(m.getText().c_str());
+                    }
+                }
+            }
+        }
+        else {
+            DBG_DISPATCHER << "Dispatcher queued " << *p << " to " << to->getName()
+                           << "\n";
+            to->enqueue(*p);
+            //MachineInstance::forceIdleCheck();
+            MachineInstance *mi = dynamic_cast<MachineInstance *>(to);
+            if (mi) {
+                SharedWorkSet::instance()->add(mi);
+                ProcessingThread::activate(mi);
+                Action *curr = mi->executingCommand();
+                if (curr) {
+                    DBG_DISPATCHER << mi->getName() << " currently executing "
+                                   << *curr << "\n";
+                }
+            }
+        }
+    }
+    else {
+        auto receivers = Dispatcher::instance()->all_receivers.lock();
+        auto iter = receivers.begin();
+        while (iter != receivers.end()) {
+            Receiver *r = *iter++;
+            if (r->receives(m, from)) {
+                r->enqueue(*p);
+            }
+        }
+        Dispatcher::instance()->all_receivers.unlock();
+    }
+}
+}
+
 void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_work_queue,
                                                   uint64_t curr_t, uint64_t last_sample_poll,
                                                   AutoStatStorage &avg_io_time) {
     IOLockHelper io_lock;
+#ifdef KEEPSTATS
     static unsigned long total_mp_time = 0;
     static unsigned long mp_count = 0;
+#endif
     uint8_t *mask_p = incoming_process_mask;
     int n = incoming_data_size;
     while (n && *mask_p == 0) {
@@ -429,7 +558,6 @@ void ProcessingThread::operator()() {
 
     Statistic *cycle_delay_stat = new Statistic("Cycle Delay");
     Statistic::add(cycle_delay_stat);
-    long delta, delta2;
 
     AutoStatStorage avg_io_time("AVG_IO_TIME", 0);
 #ifdef KEEPSTATS
@@ -567,6 +695,20 @@ void ProcessingThread::operator()() {
         bool machines_have_work = false;
         unsigned int num_channels = 0;
         while (!program_done) {
+            {
+                std::list<Package*> to_handle;
+                Package *p;
+                // TODO: Avoid this and exchange the list instead
+                while (message_queue.try_dequeue(p)) {
+                    to_handle.push_back(p);
+                }
+                while (!to_handle.empty()) {
+                    p = to_handle.front();
+                    to_handle.pop_front();
+                    handle_package(p);
+                    delete p;
+                }
+            }
             curr_t = nowMicrosecs();
             internals->process_manager.SetTime(curr_t);
             //TBD add a guard here to detect/prevent rapid cycling
