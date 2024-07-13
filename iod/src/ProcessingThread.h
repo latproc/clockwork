@@ -7,6 +7,8 @@
 #include <boost/thread.hpp>
 #include <set>
 #include <zmq.hpp>
+#include <Message.h>
+#include <ThreadSafeQueue.h>
 
 class IOComponent;
 class HardwareActivation {
@@ -26,7 +28,7 @@ class ProcessingThread : public ClockworkProcessManager {
   public:
     ProcessingThreadInternals *internals;
     static ProcessingThread &create(ControlSystemMachine *m, HardwareActivation &activator,
-                                    IODCommandThread &cmd_interface);
+                                    IODCommandThread &cmd_interface, ThreadSafeQueue<Package*> &queue);
 
     ~ProcessingThread();
 
@@ -68,6 +70,8 @@ class ProcessingThread : public ClockworkProcessManager {
     void waitForCommandProcessing(zmq::socket_t &resource_mgr);
     static uint64_t programStartTime() { return instance()->program_start; }
 
+    void handle_package(Package *p);
+
     std::set<MachineInstance *>::iterator begin() { return runnable.begin(); }
     std::set<MachineInstance *>::iterator end() { return runnable.end(); }
 
@@ -76,7 +80,7 @@ class ProcessingThread : public ClockworkProcessManager {
   private:
     static ProcessingThread *instance_;
     ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator,
-                     IODCommandThread &cmd_interface);
+                     IODCommandThread &cmd_interface, ThreadSafeQueue<Package*> &message_queue);
     ProcessingThread(const ProcessingThread &other);
     ProcessingThread &operator=(const ProcessingThread &other);
 
@@ -85,6 +89,7 @@ class ProcessingThread : public ClockworkProcessManager {
 
     HardwareActivation &activate_hardware;
     IODCommandThread &command_interface;
+    ThreadSafeQueue<Package*> &message_queue;
     uint64_t program_start;
 
     boost::recursive_mutex runnable_mutex;

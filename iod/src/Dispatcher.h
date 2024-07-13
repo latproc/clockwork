@@ -28,6 +28,8 @@
 #include <ostream>
 #include <string>
 #include <utility>
+#include "ThreadSafeQueue.h"
+#include "Message.h"
 
 class Message;
 class Receiver;
@@ -40,13 +42,18 @@ class DispatchThread {
 
 class Dispatcher {
   public:
+	using ReceiverList = ThreadSafeList<Receiver*>;
+    ReceiverList all_receivers;
+
     ~Dispatcher();
     std::ostream &operator<<(std::ostream &out) const;
     void deliver(Package *p);
     void deliverZ(Package *p);
     void addReceiver(Receiver *r);
     void removeReceiver(Receiver *r);
+    static Dispatcher *create(ThreadSafeQueue<Package*> &process_queue);
     static Dispatcher *instance();
+
     static void start();
     void idle();
     void stop();
@@ -54,12 +61,10 @@ class Dispatcher {
     void join();
 
   private:
-    Dispatcher();
+    Dispatcher(ThreadSafeQueue<Package*> &process_queue);
     Dispatcher(const Dispatcher &orig);
     Dispatcher &operator=(const Dispatcher &other);
     bool wait();
-    typedef std::list<Receiver *> ReceiverList;
-    ReceiverList all_receivers;
     static Dispatcher *instance_;
     std::list<Package *> to_deliver;
     bool started;
@@ -77,6 +82,7 @@ class Dispatcher {
     } status;
     zmq::socket_t self;
     pthread_t owner_thread;
+    ThreadSafeQueue<Package*> &process_queue;
 };
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m);

@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <string>
+#include "ThreadSafeList.h"
 
 class CStringHolder {
   public:
@@ -95,6 +96,7 @@ class Message {
 std::ostream &operator<<(std::ostream &out, const Message &m);
 
 class Receiver;
+using ReceiverList = ThreadSafeList<Receiver*>;
 class Transmitter {
   public:
     Transmitter(CStringHolder name_str)

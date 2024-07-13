@@ -61,6 +61,7 @@
 #include "cwlang.h"
 #include "symboltable.h"
 #include <libgen.h>
+#include "ThreadSafeQueue.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -579,10 +580,11 @@ int main(int argc, char const *argv[]) {
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
     auto dbg_instance = DebugExtra::instance();
+    ThreadSafeQueue<Package*> processing_queue;
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
-    Dispatcher::instance();
+    Dispatcher::create(processing_queue);
     MessageLog::setMaxMemory(10000);
     Scheduler::instance();
     ControlSystemMachine machine;
@@ -679,7 +681,7 @@ int main(int argc, char const *argv[]) {
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
     ProcessingThread &processMonitor(
-        ProcessingThread::create(&machine, iod_activation, *stateMonitor));
+        ProcessingThread::create(&machine, iod_activation, *stateMonitor, processing_queue));
 
     zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
     sim_io.bind("inproc://ethercat_sync");

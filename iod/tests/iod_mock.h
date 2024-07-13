@@ -9,6 +9,8 @@
 #include <ProcessingThread.h>
 #include <clockwork.h>
 #include <list>
+#include <Message.h>
+#include <ThreadSafeQueue.h>
 class MockSystemSetup {
   public:
     class MockHardwareActivation : public HardwareActivation {
@@ -20,7 +22,7 @@ class MockSystemSetup {
         // TODO: lots of setup needed here...
         zmq::context_t *context = new zmq::context_t;
         MessagingInterface::setContext(context);
-        Dispatcher::instance();
+        Dispatcher::create(queue);
         Logger::instance();
         MessageLog::setMaxMemory(10000);
     }
@@ -29,15 +31,18 @@ class MockSystemSetup {
         Dispatcher::start();
         ControlSystemMachine csm;
         IODCommandThread *ict = IODCommandThread::instance();
-        auto &thread{ProcessingThread::create(&csm, iod_activation, *ict)};
+        auto &thread{ProcessingThread::create(&csm, iod_activation, *ict, queue)};
         pt = &thread;
         iod_activation();
     }
     void deactivate() {
         pt->stop();
+        std::cout << "delete Dispatcher" << std::endl;
+        delete Dispatcher::instance();
     }
 
   private:
+    ThreadSafeQueue<Package*> queue;
     MockHardwareActivation iod_activation;
     ProcessingThread *pt = nullptr;
 };
