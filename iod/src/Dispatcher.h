@@ -51,6 +51,7 @@ class Dispatcher {
     void idle();
     void stop();
     void reset();
+    void join();
 
   private:
     Dispatcher();
