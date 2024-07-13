@@ -126,11 +126,14 @@ struct Package {
     Receiver *receiver;
     Message *message;
     bool needs_receipt;
+    Package() : transmitter(0), receiver(0), message(0), needs_receipt(false) {}
     Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt = false)
         : transmitter(t), receiver(r), message(new Message(m)), needs_receipt(need_receipt) {}
     Package(const Package &);
+    Package(Package &&);
     ~Package();
     Package &operator=(const Package &);
+    Package &operator=(Package &&);
     std::ostream &operator<<(std::ostream &out) const;
 };
 std::ostream &operator<<(std::ostream &out, const Package &package);
