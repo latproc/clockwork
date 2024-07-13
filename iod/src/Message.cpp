@@ -184,6 +184,12 @@ Package::Package(const Package &other)
     : transmitter(other.transmitter), receiver(other.receiver),
       message(new Message(*other.message)), needs_receipt(other.needs_receipt) {}
 
+Package::Package(Package &&other)
+    : transmitter(other.transmitter), receiver(other.receiver),
+      message(other.message), needs_receipt(other.needs_receipt) {
+      other.message = 0;
+}
+
 Package::~Package() { delete message; }
 
 Package &Package::operator=(const Package &other) {
@@ -193,6 +199,15 @@ Package &Package::operator=(const Package &other) {
         delete message;
     }
     message = new Message(*other.message);
+    needs_receipt = other.needs_receipt;
+    return *this;
+}
+
+Package &Package::operator=(Package &&other) {
+    transmitter = other.transmitter;
+    receiver = other.receiver;
+    message = other.message;
+    other.message = 0;
     needs_receipt = other.needs_receipt;
     return *this;
 }
