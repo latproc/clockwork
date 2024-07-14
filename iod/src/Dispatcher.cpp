@@ -73,7 +73,7 @@ void DispatchThread::operator()() {
     Dispatcher::instance()->idle();
 }
 
-Dispatcher::Dispatcher(ThreadSafeQueue<Package*> &q)
+Dispatcher::Dispatcher(SharedThreadSafeQueue<Package*> &q)
     : started(false), finished(false), dispatch_thread(0), thread_ref(0),
       sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting_cw),
       self(*MessagingInterface::getContext(), ZMQ_REP), owner_thread(0),
@@ -88,7 +88,7 @@ Dispatcher::~Dispatcher() {
     instance_ = nullptr;
 }
 
-Dispatcher *Dispatcher::create(ThreadSafeQueue<Package*> &q) {
+Dispatcher *Dispatcher::create(SharedThreadSafeQueue<Package*> &q) {
     if (!instance_) { instance_ = new Dispatcher(q); }
     else if (&instance()->process_queue != &q) {
         assert("dispatcher created with a different queue" && &instance()->process_queue == &q);

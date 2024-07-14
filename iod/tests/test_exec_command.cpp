@@ -17,6 +17,8 @@
 #include <MessagingInterface.h>
 #include <iostream>
 #include <zmq.hpp>
+#include <ThreadSafeQueue.h>
+#include <boost/thread.hpp>
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -99,6 +101,10 @@ class ExecuteTests {
 int main(int, char **) {
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
+    boost::condition_variable_any m_cond_var;
+    boost::shared_mutex m_mutex;
+    SharedThreadSafeQueue<Package*> queue(m_cond_var, m_mutex);
+    Dispatcher::create(queue);
     Logger::instance();
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");
@@ -106,7 +112,7 @@ int main(int, char **) {
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
     ProcessingThread &processMonitor(
-        ProcessingThread::create(&machine, iod_activation, *stateMonitor));
+        ProcessingThread::create(&machine, iod_activation, *stateMonitor, queue));
     processMonitor.setProcessingThreadInstance(&processMonitor);
     boost::thread process(boost::ref(processMonitor));
 
@@ -123,6 +129,7 @@ int main(int, char **) {
 
     MessagingInterface::abort();
     Dispatcher::instance()->stop();
+    delete Dispatcher::instance();
     LogState::cleanup();
     Logger::cleanup();
 

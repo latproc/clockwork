@@ -156,7 +156,9 @@ int main(int argc, char *argv[]) {
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
-    ThreadSafeQueue<Package*> queue;
+    boost::condition_variable_any cond_var;
+    boost::shared_mutex cond_var_mutex;
+    SharedThreadSafeQueue<Package*> queue(cond_var, cond_var_mutex);
     Dispatcher::create(queue);
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");

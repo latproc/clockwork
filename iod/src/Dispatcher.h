@@ -18,8 +18,7 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef cwlang_Dispatcher_h
-#define cwlang_Dispatcher_h
+#pragma once
 
 #include "zmq.hpp"
 #include <boost/thread.hpp>
@@ -51,7 +50,7 @@ class Dispatcher {
     void deliverZ(Package *p);
     void addReceiver(Receiver *r);
     void removeReceiver(Receiver *r);
-    static Dispatcher *create(ThreadSafeQueue<Package*> &process_queue);
+    static Dispatcher *create(SharedThreadSafeQueue<Package*> &process_queue);
     static Dispatcher *instance();
 
     static void start();
@@ -61,7 +60,7 @@ class Dispatcher {
     void join();
 
   private:
-    Dispatcher(ThreadSafeQueue<Package*> &process_queue);
+    Dispatcher(SharedThreadSafeQueue<Package*> &process_queue);
     Dispatcher(const Dispatcher &orig);
     Dispatcher &operator=(const Dispatcher &other);
     bool wait();
@@ -82,9 +81,8 @@ class Dispatcher {
     } status;
     zmq::socket_t self;
     pthread_t owner_thread;
-    ThreadSafeQueue<Package*> &process_queue;
+    ThreadSafeQueue<std::string> command_queue;
+    SharedThreadSafeQueue<Package*> &process_queue;
 };
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m);
-
-#endif
