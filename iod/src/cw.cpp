@@ -700,6 +700,7 @@ int main(int argc, char const *argv[]) {
     load_debug_config();
     ModbusAddress::message("STARTUP");
     Dispatcher::start();
+    DBG_INITIALISATION << "started dispatcher thread\n";
 
     processMonitor.setProcessingThreadInstance(&processMonitor);
     boost::thread process(boost::ref(processMonitor));

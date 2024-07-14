@@ -20,7 +20,6 @@
 
 #pragma once
 
-#include "zmq.hpp"
 #include <boost/thread.hpp>
 #include <list>
 #include <map>
@@ -58,6 +57,7 @@ class Dispatcher {
     void stop();
     void reset();
     void join();
+    void sync_start();
 
   private:
     Dispatcher(SharedThreadSafeQueue<Package*> &process_queue);
@@ -65,12 +65,10 @@ class Dispatcher {
     Dispatcher &operator=(const Dispatcher &other);
     bool wait();
     static Dispatcher *instance_;
-    std::list<Package *> to_deliver;
     bool started;
     bool finished;
     DispatchThread *dispatch_thread;
     boost::thread *thread_ref;
-    zmq::socket_t sync;
     enum {
         e_waiting,
         e_waiting_cw,
@@ -79,10 +77,10 @@ class Dispatcher {
         e_aborted,
         e_handling_dispatch
     } status;
-    zmq::socket_t self;
     pthread_t owner_thread;
-    ThreadSafeQueue<std::string> command_queue;
     SharedThreadSafeQueue<Package*> &process_queue;
+    SharedThreadSafeQueue<std::string> command_queue;
+    SharedThreadSafeList<Package *> to_deliver;
 };
 
 std::ostream &operator<<(std::ostream &out, const Dispatcher &m);

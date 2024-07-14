@@ -102,6 +102,20 @@ public:
         return true;
     }
 
+    void wait() {
+        std::unique_lock<std::mutex> lock(mutex_);
+        cond_var_any_.wait(lock, [this] { return !queue_.empty(); });
+    }
+
+    void wait_and_dequeue(T& value) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (queue_.empty()) {
+            cond_var_any_.wait(lock, [this] { return !queue_.empty(); });
+        }
+        value = std::move(queue_.front());
+        queue_.pop();
+    }
+
     boost::shared_mutex& get_cond_var_mutex() {
         return cond_var_mutex_;
     }
