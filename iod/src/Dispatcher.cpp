@@ -75,9 +75,9 @@ void DispatchThread::operator()() {
 
 Dispatcher::Dispatcher(SharedThreadSafeQueue<Package*> &q)
     : started(false), finished(false), dispatch_thread(0), thread_ref(0),
-      sync(*MessagingInterface::getContext(), ZMQ_REP), status(e_waiting_cw),
-      self(*MessagingInterface::getContext(), ZMQ_REP), owner_thread(0),
-      process_queue(q) {}
+      owner_thread(0),
+      process_queue(q), command_queue( q.get_cond_var_any(), q.get_cond_var_mutex()),
+      to_deliver(q.get_cond_var_any(), q.get_cond_var_mutex()){}
 
 Dispatcher::~Dispatcher() {
     if (!instance()->finished) {
@@ -108,9 +108,10 @@ void Dispatcher::start() {
     }
     dispatcher->dispatch_thread = new DispatchThread;
     dispatcher->thread_ref = new boost::thread(boost::ref(*dispatcher->dispatch_thread));
-    while (!Dispatcher::instance()->started) {
-        usleep(20);
-    }
+}
+
+void Dispatcher::sync_start() {
+    command_queue.enqueue("start");
 }
 
 void Dispatcher::reset() {
@@ -135,9 +136,7 @@ void Dispatcher::join() {
 void Dispatcher::stop() {
     instance()->finished = true;
     package_available.notify_one();
-    zmq::socket_t to_self(*MessagingInterface::getContext(), ZMQ_REQ);
-    to_self.connect("inproc://dispatcher_self");
-    to_self.send("exit", 4);
+    command_queue.enqueue("exit");
     join();
 }
 
@@ -162,100 +161,55 @@ void Dispatcher::deliver(Package *p) {
 }
 
 bool Dispatcher::wait() {
-    zmq::pollitem_t items[] = {{(void *)self, 0, ZMQ_POLLIN, 0}, {(void *)sync, 0, ZMQ_POLLIN, 0}};
-    while (!finished) {
-        for (;;) {
-            int res = zmq::poll(&items[0], 2, 0);
-            if (res) {
-                break;
-            }
-        }
-        if (items[0].revents & ZMQ_POLLIN) {
-            char buf[11];
-            size_t response_len;
-            safeRecv(self, buf, 10, true, response_len, 0); // wait for an ok to start from cw
-            buf[response_len] = 0;
-            DBG_DISPATCHER << "received " << buf << " from self\n";
-        }
-        if (items[1].revents & ZMQ_POLLIN) {
-            if (!finished) {
-                return true;
-            }
-        }
+    if (finished || !to_deliver.is_empty() || !command_queue.is_empty()) {
+        return true;
     }
-    return false;
+    boost::shared_lock<boost::shared_mutex> lock(to_deliver.get_cond_var_mutex());
+    to_deliver.get_cond_var_any().wait(lock, [this] {
+        return finished || !to_deliver.is_empty() || !command_queue.is_empty();
+    });
+    return true;
 }
 
 void Dispatcher::idle() {
-    // request access to shared resources from // the driver
-    sync.bind("inproc://dispatcher_sync");
-
-    // receive notifications (see stop)
-    self.bind("inproc://dispatcher_self");
-
-    Cleanup cleanup([&]() {
-        //sync.close();
-        //self.close();
-        self.unbind("inproc://dispatcher_self");
-        sync.unbind("inproc://dispatcher_sync");
-    });
-    started = true;
-
-    // the clockwork driver calls our start() method and that blocks until
-    // we get to this point. Note that this thread will then
-    // block until it gets a sync-start from the driver.
-    char buf[11];
-    size_t response_len = 0;
-    if (!wait()) {
-        std::cout << "dispatcher stopped immediately\n";
-        return; // stopped before being started
-    }
-    safeRecv(sync, buf, 10, true, response_len, 0); // wait for an ok to start from cw
-    buf[response_len] = 0;
-
-    DBG_DISPATCHER << "Dispatcher got sync start: " << buf << "\n";
-
-    /*  this module waits for a start from clockwork and then starts looking for input on its
-        command socket and its message socket (e_waiting). When either a command or message is detected
-        it requests time from clockwork (e_waiting_cw). Clockwork in responds and the module
-        reads the incoming request and processes it (e_running)
-    */
-
-    status = e_waiting;
-    while (!finished) {
-        if (status == e_waiting) {
-            boost::unique_lock<boost::mutex> lock(dispatcher_mutex);
-            if (to_deliver.empty()) {
-                package_available.wait(lock);
+    std::string command_message;
+    DBG_DISPATCHER << "------- Dispatcher waiting for start\n";
+    while (!finished && !started) {
+        wait();
+        if (!command_queue.is_empty()) {
+            if (command_queue.try_dequeue(command_message)) {
+                if (command_message == "exit") { finished = true; }
+                else if (command_message == "start") { started = true; }
+                else { assert("unexpected command message" && false); }
             }
-            status = e_waiting_cw;
+            else {
+                assert("Dispatcher should have received a start message" && false);
+            }
         }
+    }
+
+    DBG_DISPATCHER << "------ Dispatcher got sync start: " << command_message << "\n";
+
+    /*  this module waits for a start from clockwork and then starts
+     *  looking for input on its command socket and its message socket (e_waiting).
+     */
+    while (!finished) {
+        wait();
         if (finished) {
             break;
         }
-        if (status == e_waiting_cw) {
-            sync.send("dispatch", 8);
-            if (!wait()) {
-                break;
+        if (!command_queue.is_empty()) {
+            if (command_queue.try_dequeue(command_message)) {
+                if (command_message == "exit") {
+                    finished = true;
+                }
             }
-            safeRecv(sync, buf, 10, true, response_len, 0);
-            status = e_running;
         }
-        else if (status == e_running) {
-            boost::lock_guard<boost::mutex> lock(dispatcher_mutex);
-            while (!to_deliver.empty()) {
-                zmq::message_t reply;
-
-                Package *p = to_deliver.front();
-                to_deliver.pop_front();
+        while (!to_deliver.is_empty()) {
+            Package *p;
+            if (to_deliver.try_pop_front(p)) {
                 process_queue.enqueue(p);
             }
-            sync.send("done", 4);
-            if (!wait()) {
-                break;
-            }
-            safeRecv(sync, buf, 10, true, response_len, 0); // wait for ack from cw
-            status = e_waiting;
         }
     }
 }

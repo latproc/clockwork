@@ -57,14 +57,13 @@ class ProcessingThread : public ClockworkProcessManager {
         e_start_handling_commands,
         e_handling_cmd,
         e_command_done,
-        e_handling_dispatch,
         e_handling_sched,
         e_waiting_sched
     };
     Status status;
 
     int pollZMQItems(int poll_time, zmq::pollitem_t items[], int num_items,
-                     zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr, zmq::socket_t &dispatch,
+                     zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr,
                      zmq::socket_t &sched, zmq::socket_t &ecat_out);
 
     void waitForCommandProcessing(zmq::socket_t &resource_mgr);

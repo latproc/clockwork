@@ -78,10 +78,9 @@ class ProcessingThreadInternals {
 
     static const int ECAT_ITEM = 0;       // ethercat data incoming
     static const int CMD_ITEM = 1;        // client interface time sync
-    static const int DISPATCHER_ITEM = 2; // messages being dispatched
-    static const int SCHEDULER_ITEM = 3;  // scheduled items firing
-    static const int ECAT_OUT_ITEM = 4;   //io has data update for ethercat
-    static const int CMD_SYNC_ITEM = 5;   // client interface sending message
+    static const int SCHEDULER_ITEM = 2;  // scheduled items firing
+    static const int ECAT_OUT_ITEM = 3;   //io has data update for ethercat
+    static const int CMD_SYNC_ITEM = 4;   // client interface sending message
 
     Watchdog processing_wd;
     ClockworkProcessManager process_manager;
@@ -198,8 +197,7 @@ class IOLockHelper {
 
 int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int num_items,
                                    zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr,
-                                   zmq::socket_t &dispatcher, zmq::socket_t &scheduler,
-                                   zmq::socket_t &ecat_out) {
+                                   zmq::socket_t &scheduler, zmq::socket_t &ecat_out) {
     int res = 0;
     while (!program_done) {
         try {
@@ -356,6 +354,9 @@ bool ProcessingThread::is_pending(MachineInstance *m) {
 
 void ProcessingThread::handle_package(Package *p) {
 {
+#ifdef KEEPSTATS
+    AutoStat stats(avg_dispatch_time);
+#endif
     DBG_DISPATCHER << "Dispatcher sending package " << *p << "\n";
     Receiver *to = p->receiver;
     Transmitter *from = p->transmitter;
@@ -574,9 +575,6 @@ void ProcessingThread::operator()() {
     AutoStatStorage scheduler_delay("SCHEDULER_POLL_SEPARATION", 0);
 #endif
 
-    zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
-    dispatch_sync.connect("inproc://dispatcher_sync");
-
     zmq::socket_t sched_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     sched_sync.connect("inproc://scheduler_sync");
 
@@ -597,7 +595,7 @@ void ProcessingThread::operator()() {
 
     safeSend(sched_sync, "go", 2); // scheduled items
     usleep(10000);
-    safeSend(dispatch_sync, "go", 2); //  permit handling of events
+    Dispatcher::instance()->sync_start();
     usleep(10000);
 
     DBG_INITIALISATION << "----------- Enabling client access --------\n";
@@ -615,10 +613,12 @@ void ProcessingThread::operator()() {
     uint64_t last_checked_plugins = 0;
     uint64_t last_checked_machines = 0;
 
+#ifdef KEEP_STATS
     unsigned long total_cmd_time = 0;
     unsigned long cmd_count = 0;
     unsigned long total_sched_time = 0;
     unsigned long sched_count = 0;
+#endif
 
     uint64_t start_cmd = 0;
     uint64_t last_machine_change = 0;
@@ -679,13 +679,15 @@ void ProcessingThread::operator()() {
 #endif
 
         zmq::pollitem_t fixed_items[] = {
-            {(void *)ecat_sync, 0, ZMQ_POLLIN, 0},     {(void *)resource_mgr, 0, ZMQ_POLLIN, 0},
-            {(void *)dispatch_sync, 0, ZMQ_POLLIN, 0}, {(void *)sched_sync, 0, ZMQ_POLLIN, 0},
-            {(void *)ecat_out, 0, ZMQ_POLLIN, 0},      {(void *)command_sync, 0, ZMQ_POLLIN, 0}};
+            {(void *)ecat_sync, 0, ZMQ_POLLIN, 0},
+            {(void *)resource_mgr, 0, ZMQ_POLLIN, 0},
+            {(void *)sched_sync, 0, ZMQ_POLLIN, 0},
+            {(void *)ecat_out, 0, ZMQ_POLLIN, 0},
+            {(void *)command_sync, 0, ZMQ_POLLIN, 0}};
         const int max_poll_sockets = 25;
         zmq::pollitem_t items[max_poll_sockets];
         memset((void *)items, 0, max_poll_sockets * sizeof(zmq::pollitem_t));
-        int dynamic_poll_start_idx = 6;
+        int dynamic_poll_start_idx = 5;
 
         int poll_wait = static_cast<int>(internals->cycle_delay / 1000); // millisecs
         machine_check_delay = internals->cycle_delay / 5;
@@ -757,8 +759,8 @@ void ProcessingThread::operator()() {
 
             //if (Watchdog::anyTriggered(curr_t))
             //  Watchdog::showTriggered(curr_t, true, std::cerr);
-            systems_waiting = pollZMQItems(poll_wait, items, 6 + num_channels, ecat_sync,
-                                           resource_mgr, dispatch_sync, sched_sync, ecat_out);
+            systems_waiting = pollZMQItems(poll_wait, items, 5 + num_channels, ecat_sync,
+                                           resource_mgr, sched_sync, ecat_out);
 
             if (systems_waiting > 0 ||
                 (machines_have_work && curr_t - last_checked_machines >= machine_check_delay)) {
@@ -883,32 +885,6 @@ void ProcessingThread::operator()() {
 
         if (program_done) {
             break;
-        }
-
-        if (status == e_waiting && items[internals->DISPATCHER_ITEM].revents & ZMQ_POLLIN) {
-            if (status == e_waiting) {
-                size_t len = dispatch_sync.recv(buf, 10, ZMQ_NOBLOCK);
-                if (len) {
-                    status = e_handling_dispatch;
-                }
-            }
-        }
-        if (status == e_handling_dispatch) {
-            if (processing_state != eIdle) {
-                // cannot process dispatch events at present
-                status = e_waiting;
-            }
-            else {
-#ifdef KEEPSTATS
-                AutoStat stats(avg_dispatch_time);
-#endif
-                size_t len = 0;
-                safeSend(dispatch_sync, "continue", 3);
-                // wait for the dispatcher
-                safeRecv(dispatch_sync, buf, 10, true, len, 0);
-                safeSend(dispatch_sync, "bye", 3);
-                status = e_waiting;
-            }
         }
 
         if (status == e_waiting && systems_waiting > 0) {
