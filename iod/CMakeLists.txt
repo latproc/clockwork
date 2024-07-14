@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8)
+cmake_minimum_required (VERSION 3.5)
 project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
@@ -91,6 +91,8 @@ set(HEADER_FILES
     ${CLOCKWORK_DIR}/json_expr_parser.h
     ${CLOCKWORK_DIR}/json_expression.h
     ${CLOCKWORK_DIR}/process.h
+    ${CLOCKWORK_DIR}/ThreadSafeQueue.h
+    ${CLOCKWORK_DIR}/ThreadSafeList.h
     )
 
 add_library (cw_client

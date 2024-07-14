@@ -27,6 +27,7 @@
 
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/thread/thread.hpp>
 #include <list>
 #include <map>
 #include <signal.h>
@@ -580,7 +581,9 @@ int main(int argc, char const *argv[]) {
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
     auto dbg_instance = DebugExtra::instance();
-    ThreadSafeQueue<Package*> processing_queue;
+    boost::condition_variable_any processing_condition;
+    boost::shared_mutex processing_queue_mutex;
+    SharedThreadSafeQueue<Package*> processing_queue(processing_condition, processing_queue_mutex);
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();

@@ -92,7 +92,7 @@ class ProcessingThreadInternals {
 };
 
 ProcessingThread &ProcessingThread::create(ControlSystemMachine *m, HardwareActivation &activator,
-                                           IODCommandThread &cmd_interface, ThreadSafeQueue<Package*> &queue) {
+                                           IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue) {
     if (!instance_) {
         instance_ = new ProcessingThread(m, activator, cmd_interface, queue);
     }
@@ -100,7 +100,7 @@ ProcessingThread &ProcessingThread::create(ControlSystemMachine *m, HardwareActi
 }
 
 ProcessingThread::ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator,
-                                   IODCommandThread &cmd_interface, ThreadSafeQueue<Package*> &queue)
+                                   IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue)
     : internals(0), machine(*m), status(e_waiting), activate_hardware(activator),
       command_interface(cmd_interface), message_queue(queue), program_start(0) {
     program_start = microsecs();

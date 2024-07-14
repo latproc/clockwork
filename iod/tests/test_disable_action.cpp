@@ -58,7 +58,7 @@ TEST_F(DisableActionTest, FailsIfTheMachineDoesNotExist) {
 int main(int argc, char **argv) {
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
-    ThreadSafeQueue<Package*> queue;
+    SharedThreadSafeQueue<Package*> queue;
     Dispatcher::create(queue);
     Logger::instance();
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);

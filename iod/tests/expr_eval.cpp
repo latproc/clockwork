@@ -233,7 +233,9 @@ class ExpressionTests {
 int main(int, char **) {
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
-    ThreadSafeQueue<Package*> queue;
+    boost::condition_variable_any cond_var;
+    boost::shared_mutex cond_var_mutex;
+    SharedThreadSafeQueue<Package*> queue(cond_var, cond_var_mutex);
     Dispatcher::create(queue);
     Logger::instance();
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);

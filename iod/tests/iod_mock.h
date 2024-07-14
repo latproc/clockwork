@@ -11,6 +11,8 @@
 #include <list>
 #include <Message.h>
 #include <ThreadSafeQueue.h>
+#include <boost/thread.hpp>
+
 class MockSystemSetup {
   public:
     class MockHardwareActivation : public HardwareActivation {
@@ -18,7 +20,7 @@ class MockSystemSetup {
         bool initialiseHardware() override { return initialise_machines(); }
         void operator()(void) override { initialiseHardware(); }
     };
-    MockSystemSetup() {
+    MockSystemSetup() : queue(m_cond_var, m_mutex) {
         // TODO: lots of setup needed here...
         zmq::context_t *context = new zmq::context_t;
         MessagingInterface::setContext(context);
@@ -42,7 +44,9 @@ class MockSystemSetup {
     }
 
   private:
-    ThreadSafeQueue<Package*> queue;
+    boost::condition_variable_any m_cond_var;
+    boost::shared_mutex m_mutex;
+    SharedThreadSafeQueue<Package*> queue;
     MockHardwareActivation iod_activation;
     ProcessingThread *pt = nullptr;
 };
