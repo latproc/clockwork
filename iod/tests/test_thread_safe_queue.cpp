@@ -5,6 +5,7 @@
 #include <string>
 #include <stdlib.h>
 #include "ThreadSafeQueue.h"
+#include <boost/thread.hpp>
 #include "Message.h"
 
 template <typename T>
@@ -206,4 +207,94 @@ TEST(ThreadSafeQueueTest, WorksWithNodeTypeBundle) {
     EXPECT_EQ(b1, result);
     EXPECT_TRUE(queue.try_dequeue(result));
     EXPECT_EQ(b2, result);
+}
+
+template <typename T>
+class QueueManager {
+public:
+    QueueManager(std::condition_variable_any& owner_cond,
+                 std::vector<SharedThreadSafeQueue<T>*>& queues,
+                 boost::condition_variable_any& cv_any,
+                 boost::shared_mutex& cv_mutex)
+        : owner_cond(owner_cond), queues_(queues), cond_var_(cv_any),
+          cond_var_mutex_(cv_mutex), stop_(false) {}
+
+    void stop() {
+        {
+            std::unique_lock<std::mutex> lock(stop_mutex_);
+            stop_ = true;
+        }
+        cond_var_.notify_all();
+    }
+
+    void process() {
+        owner_cond.notify_all(); // Let the owner know we are ready
+        while (true) {
+            boost::shared_lock<boost::shared_mutex> lock(cond_var_mutex_);
+            cond_var_.wait(lock, [this] { return stop_ || any_non_empty(); });
+            if (stop_) {
+                break;
+            }
+            for (auto& queue : queues_) {
+                T value;
+                if (queue->try_dequeue(value)) {
+                    std::cout << "dequeued: " << value << std::endl;
+                    ++count_;
+                }
+            }
+            owner_cond.notify_all();
+        }
+    }
+
+    int count() {
+        return count_;
+    }
+
+private:
+    bool any_non_empty() {
+        for (auto& queue : queues_) {
+            if (!queue->is_empty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    std::condition_variable_any &owner_cond;
+    std::vector<SharedThreadSafeQueue<T>*>& queues_;
+    boost::condition_variable_any& cond_var_;
+    boost::shared_mutex& cond_var_mutex_;
+    bool stop_;
+    std::mutex stop_mutex_;
+    int count_ = 0;
+};
+
+
+TEST(SharedThreadSafeQueueTest, NotifiesSharedConditionVariable) {
+
+    boost::condition_variable_any cond_var_any_;
+    boost::shared_mutex cond_var_mutex_;
+    SharedThreadSafeQueue<std::string> queue(cond_var_any_, cond_var_mutex_);
+    SharedThreadSafeQueue<std::string> queue2(cond_var_any_, cond_var_mutex_);
+    std::vector<SharedThreadSafeQueue<std::string>*> queues = {&queue, &queue2};
+
+    std::condition_variable_any test_cond;
+    std::mutex test_mutex;
+    QueueManager<std::string> manager(test_cond, queues, cond_var_any_, cond_var_mutex_);
+    std::thread manager_thread(&QueueManager<std::string>::process, &manager);
+    {
+        std::unique_lock<std::mutex> lock(test_mutex);
+        test_cond.wait(lock);
+    }
+    std::string s1 = "hello";
+    std::string s2 = "world";
+    queue.enqueue(s1);
+    queue2.enqueue(s2);
+    {
+        std::unique_lock<std::mutex> lock(test_mutex);
+        test_cond.wait(lock, [&manager] { return manager.count() == 2; });
+    }
+    manager.stop();
+    manager_thread.join();
+    EXPECT_EQ(manager.count(), 2);
 }
