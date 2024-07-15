@@ -14,29 +14,31 @@ namespace {
 class SyncRemoteStatesActionTest : public ::testing::Test {
     MockSystemSetup system;
 
-  public:
-    SyncRemoteStatesActionTest() {
+    void SetUp() override {
         MachineClass *fc = new MachineClass("FLAG");
         flag = MachineInstanceFactory::create("flag", "FLAG");
         flag->setStateMachine(fc);
         system.activate();
-        channel = cd.instantiate(9999);
-        assert(channel->definition() == &cd);
+        cd = new ChannelDefinition{"test_channel"};
+        channel = cd->instantiate(9999);
+        assert("channel definition is not set" && channel->definition() == cd);
     }
-
-  protected:
-    virtual ~SyncRemoteStatesActionTest() {
+    void TearDown() override {
+        system.deactivate(); 
         delete channel;
         delete flag;
     }
+  public:
+
+  protected:
 
     MachineInstance *flag = nullptr;
-    ChannelDefinition cd{"test_channel"};
+    ChannelDefinition *cd = nullptr;
     Channel *channel = nullptr;
 };
 
 TEST_F(SyncRemoteStatesActionTest, ConstructorDoesNotLeak) {
-    auto client_channel = cd.instantiate(9998);
+    auto client_channel = cd->instantiate(9998);
     client_channel->setDefinitionLocation("dummy-file", 1);
 
     //    auto sock_ptr = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);

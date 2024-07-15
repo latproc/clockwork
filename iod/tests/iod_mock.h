@@ -41,7 +41,7 @@ class MockSystemSetup {
     void deactivate() {
         pt->stop();
         std::cout << "delete Dispatcher" << std::endl;
-        delete Dispatcher::instance();
+        Dispatcher::instance()->stop();
     }
 
   private:
