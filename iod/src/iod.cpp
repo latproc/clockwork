@@ -71,6 +71,7 @@
 #include "symboltable.h"
 #include <signal.h>
 #include <stdio.h>
+#include "ThreadSafeQueue.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -351,10 +352,13 @@ int main(int argc, char const *argv[]) {
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
 
+    boost::condition_variable_any processing_condition;
+    boost::shared_mutex processing_queue_mutex;
+    SharedThreadSafeQueue<Package*> processing_queue(processing_condition, processing_queue_mutex);
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
-    Dispatcher::instance();
+    Dispatcher::create(processing_queue);
     MessageLog::setMaxMemory(10000);
     Scheduler::instance();
 
@@ -362,7 +366,7 @@ int main(int argc, char const *argv[]) {
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
     ProcessingThread &processMonitor(
-        ProcessingThread::create(&machine, iod_activation, *stateMonitor));
+        ProcessingThread::create(&machine, iod_activation, *stateMonitor, processing_queue));
 
     Logger::instance()->setLevel(Logger::Debug);
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
@@ -370,6 +374,8 @@ int main(int argc, char const *argv[]) {
     std::list<std::string> source_files;
     int load_result = loadOptions(argc, argv, source_files);
     if (load_result) {
+        Dispatcher::instance()->stop();
+        Scheduler::instance()->stop();
         return load_result;
     }
     load_debug_config();
