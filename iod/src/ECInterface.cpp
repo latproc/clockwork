@@ -48,7 +48,6 @@
 #if VERBOSE_DEBUG
 static void display(uint8_t *p, size_t n);
 #endif
-//static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 extern Statistics *statistics;
 void signal_handler(int signum);
@@ -87,10 +86,15 @@ static std::list<SDOEntry *> prepared_sdo_entries;
 static std::list<SDOEntry *> new_sdo_entries;
 #endif //USE_SDO
 
-#ifdef KEEP_STATS
+namespace {
+
+#if KEEP_STATS
+bool keep_stats = true;
+#else
+bool keep_stats = false;
+#endif
 Statistic recv_to_update("Receive to update");
 Statistic update_to_recv("Update to receive");
-#endif
 
 namespace {
 
@@ -303,7 +307,7 @@ void SDOEntry::resolveSDOModules() {
 #endif
 
 ECInterface::ECInterface()
-    : initialised(0), process_data(0), process_mask(0), update_data(0), update_mask(0),
+    : initialised(0), data_size(0), process_data(0), process_mask(0), update_data(0), update_mask(0),
       reference_time(0),
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
@@ -752,7 +756,7 @@ void ECInterface::configureModules() {
         }
 
         assert(m->slave_config);
-        DBG_ETHERCAT << "\n\nConfiguring module" << m->position << ": " << m->name << "\n";
+        DBG_ETHERCAT << "\n\nConfiguring module " << m->position << ": " << m->name << "\n";
         unsigned int module_offset_idx = 0;
 
         for (unsigned int i = 0; i < m->sync_count; ++i) {
@@ -1123,6 +1127,7 @@ void collectEtherCatModules() {
         ss << "Adding slave " << std::hex << std::setw(8) << slave.product_code << " "
            << std::setw(8) << slave.revision_number << " at position " << std::dec << pos << "\n";
         addEtherCatSlave(ECInterface::master, slave);
+        ++pos;
     }
     DBG_ETHERCAT << ss.str() << "\n";
 }
@@ -1423,6 +1428,12 @@ void ECInterface::setMaxIOIndex(unsigned int new_val) { max_io_index = new_val; 
 
 uint32_t ECInterface::getProcessDataSize() { return max_io_index - min_io_index + 1; }
 
+void ECInterface::setDataSize(size_t ds) {
+    if (data_size == 0 || data_size != ds) {
+        data_size = ds;
+    }
+}
+
 void ECInterface::setProcessData(uint8_t *pd) {
     if (process_data) {
         delete[] process_data;
@@ -1546,20 +1557,17 @@ void ECInterface::receiveState() {
 
     if (active) {
 #ifdef KEEP_STATS
-        uint64_t now = microsecs();
-        int64_t dt = now - last_update;
-        if (dt < 100) {
-            usleep(100); // TODO: what is this doing here?
-            now = microsecs();
-            dt = now - last_update;
-        }
-        if (last_update != 0) {
-            update_to_recv.add(dt);
-        }
-        last_receive = now;
-        if (update_to_recv.getCount() >= 10000) {
-            update_to_recv.report(std::cout);
-            update_to_recv.reset();
+        if (keep_stats) {
+            uint64_t now = microsecs();
+            int64_t dt = now - last_update;
+            if (last_update != 0) {
+                update_to_recv.add(dt);
+            }
+            last_receive = now;
+            if (update_to_recv.getCount() >= 10000) {
+                update_to_recv.report(std::cout);
+                update_to_recv.reset();
+            }
         }
 #endif
         // receive process data
@@ -1621,6 +1629,7 @@ int ECInterface::collectState() {
         char buf[200];
         snprintf(buf, 200, "Warning: domain size %ld less than expected: %ld", domain_size,
                  (size_t)max - min + 1);
+        MessageLog::instance()->add(buf);
         return 0;
     }
 #if 0
@@ -1698,10 +1707,8 @@ int ECInterface::collectState() {
 #endif
             while (bitmask) {
                 if (*pm & bitmask) { // we care about this bit
-                    //if (i == 24) std::cout << "caring about bit " << (int)bitmask <<  "\n";
                     if (((*pd) & bitmask) != ((last_pd[i]) & bitmask)) { // changed
 #if VERBOSE_DEBUG
-                        //if (i == 24 ) // ignore analog changes on our machine
                         DBG_ETHERCAT_PACKETS << "incoming bit " << i << ":" << count
                                              << " changed to " << (((*pd) & bitmask) ? 1 : 0)
                                              << "\n";
@@ -1764,6 +1771,21 @@ void ECInterface::sendUpdates() {
         }
         return;
     }
+
+    if (keep_stats) {
+        uint64_t t = microsecs();
+        int64_t dt = t - last_receive;
+        if (last_receive != 0) {
+            recv_to_update.add(dt);
+        }
+        last_update = t;
+        if (recv_to_update.getCount() >= 10000) {
+            recv_to_update.report(std::cout);
+            recv_to_update.reset();
+        }
+
+    }
+
 #ifndef EC_SIMULATOR
 #ifdef USE_DC
     DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
@@ -1775,22 +1797,6 @@ void ECInterface::sendUpdates() {
 #endif
     DBG_ETHERCAT_CALLS << "ecrt_domain_queue\n";
     ecrt_domain_queue(domain1);
-
-#ifdef KEEP_STATS
-    {
-        uint64_t t = microsecs();
-        int64_t dt = t - last_receive;
-        if (last_receive != 0) {
-            recv_to_update.add(dt);
-        }
-        last_update = t;
-        if (recv_to_update.getCount() >= 10000) {
-            recv_to_update.report(std::cout);
-            recv_to_update.reset();
-        }
-    }
-#endif
-
     DBG_ETHERCAT_CALLS << "ecrt_master_send\n";
     ecrt_master_send(master);
 #endif
@@ -1991,81 +1997,78 @@ void ECInterface::check_master_state(void) {
 
 /*****************************************************************************/
 
+#ifndef EC_SIMULATOR
+void ECInterface::report_module_state_change(ECModule *m, int i) {
+    ec_slave_config_state_t s;
+    const int BUFSIZE = 200;
+    char buf[BUFSIZE];
+
+    // check for errors
+    uint8_t errbuf[EC_COE_EMERGENCY_MSG_SIZE];
+    int res = ecrt_slave_config_emerg_pop(m->slave_config, errbuf);
+    if (res == 0) {
+        char buf[200];
+        snprintf(buf, 200, "Slave %d (%s) reported error: %0x%0x%0x%0x %0x%0x%0x%0x", i,
+                 m->name.c_str(), errbuf[0], errbuf[1], errbuf[2], errbuf[3], errbuf[4],
+                 errbuf[5], errbuf[6], errbuf[7]);
+        MessageLog::instance()->add(buf);
+    }
+
+    ecrt_slave_config_state(m->slave_config, &s);
+    if (!s.online) {
+        ++slaves_not_operational;
+        ++slaves_offline;
+    }
+
+    if (s.al_state != m->slave_config_state.al_state) {
+        DBG_ETHERCAT << "ecat_thread: " << m->name << ": State 0x" << std::ios::hex
+                     << s.al_state << ".\n";
+        snprintf(buf, BUFSIZE, "Slave %d (%s) changed state was 0x%x now 0x%x", i,
+                 m->name.c_str(), m->slave_config_state.al_state, s.al_state);
+        MessageLog::instance()->add(buf);
+    }
+    if (s.online != m->slave_config_state.online) {
+        DBG_ETHERCAT << "ecat_thread: " << m->name << ": " << (s.online ? "online" : "offline")
+                  << "\n";
+        snprintf(buf, BUFSIZE, "Slave %d (%s) changed online state: was %s, now %s", i,
+                 m->name.c_str(), m->slave_config_state.online ? "online" : "offline",
+                 s.online ? "online" : "offline");
+        MessageLog::instance()->add(buf);
+    }
+    if (s.operational != m->slave_config_state.operational) {
+        DBG_ETHERCAT << m->name << ": " << (s.operational ? "" : "Not ") << "operational\n";
+        snprintf(
+            buf, BUFSIZE,
+            "Slave %d (%s) changed operational state: was %s operational, now %s operational",
+            i, m->name.c_str(), m->slave_config_state.operational ? "" : "not ",
+            s.operational ? "" : "not ");
+        MessageLog::instance()->add(buf);
+    }
+
+    m->slave_config_state = s;
+}
+#endif
+
 void ECInterface::check_slave_config_states(void) {
 #ifndef EC_SIMULATOR
-    ec_slave_config_state_t s;
-
     boost::recursive_mutex::scoped_lock lock(modules_mutex);
     std::vector<ECModule *>::iterator iter = modules.begin();
     int i = 0;
     slaves_not_operational = 0;
-    const int BUFSIZE = 200;
-    char buf[BUFSIZE];
     while (iter != modules.end()) {
         ECModule *m = *iter++;
-
         if (!m) {
             char buf[100];
             snprintf(buf, 100, "null module in module list at position %d", i);
-            //MessageLog::instance()->add(buf);
-            std::cout << buf;
+            MessageLog::instance()->add(buf);
+            std::cout << buf << "\n";
             assert(m != 0);
         }
         if (!m->slave_config) {
             //std::cout << "module " << m->name << " not active yet..skipping\n";
             continue;
         }
-        // check for errors
-        uint8_t errbuf[EC_COE_EMERGENCY_MSG_SIZE];
-        //DBG_ETHERCAT_CALLS << "ecrt_islave_config_emerg_pop\n";
-        int res = ecrt_slave_config_emerg_pop(m->slave_config, errbuf);
-        if (res == 0) {
-            char buf[200];
-            snprintf(buf, 200, "Slave %d (%s) reported error: %0x%0x%0x%0x %0x%0x%0x%0x", i,
-                     m->name.c_str(), errbuf[0], errbuf[1], errbuf[2], errbuf[3], errbuf[4],
-                     errbuf[5], errbuf[6], errbuf[7]);
-            MessageLog::instance()->add(buf);
-        }
-
-        //DBG_ETHERCAT_CALLS << "ecrt_slave_config_state\n";
-        ecrt_slave_config_state(m->slave_config, &s);
-        if (!s.online) {
-            ++slaves_not_operational;
-            ++slaves_offline;
-        }
-
-        if (s.al_state != m->slave_config_state.al_state) {
-            //MEMCHECK();
-            DBG_ETHERCAT << "ecat_thread: " << m->name << ": State 0x" << std::ios::hex
-                         << s.al_state << ".\n";
-            snprintf(buf, BUFSIZE, "Slave %d (%s) changed state was 0x%x now 0x%x", i,
-                     m->name.c_str(), m->slave_config_state.al_state, s.al_state);
-            MessageLog::instance()->add(buf);
-            //MEMCHECK();
-        }
-        if (s.online != m->slave_config_state.online) {
-            //MEMCHECK();
-            std::cout << "ecat_thread: " << m->name << ": " << (s.online ? "online" : "offline")
-                      << "\n";
-            snprintf(buf, BUFSIZE, "Slave %d (%s) changed online state: was %s, now %s", i,
-                     m->name.c_str(), m->slave_config_state.online ? "online" : "offline",
-                     s.online ? "online" : "offline");
-            MessageLog::instance()->add(buf);
-            //MEMCHECK();
-        }
-        if (s.operational != m->slave_config_state.operational) {
-            //MEMCHECK();
-            std::cout << m->name << ": " << (s.operational ? "" : "Not ") << "operational\n";
-            snprintf(
-                buf, BUFSIZE,
-                "Slave %d (%s) changed operational state: was %s operational, now %s operational",
-                i, m->name.c_str(), m->slave_config_state.operational ? "" : "not ",
-                s.operational ? "" : "not ");
-            MessageLog::instance()->add(buf);
-            //MEMCHECK();
-        }
-
-        m->slave_config_state = s;
+        report_module_state_change(m, i);
         ++i;
     }
 #endif

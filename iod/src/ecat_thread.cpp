@@ -51,9 +51,14 @@
 #include <stdio.h>
 //#include "SetStateAction.h"
 
-#define USE_RTC 1
+#undef USE_RTC
+#define USE_CHRONO 1
 
-#ifdef USE_RTC
+#ifdef USE_CHRONO
+#include <csignal>
+#include <ctime>
+#include <chrono>
+#elif USE_RTC
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/rtc.h>
@@ -80,10 +85,6 @@ bool EtherCATThread::waitForSync(zmq::socket_t &sync_sock) {
     size_t response_len;
     return safeRecv(sync_sock, buf, 10, true, response_len, 0);
 }
-
-#ifndef USE_RTC
-//#define USE_SIGNALLER 1
-#endif
 
 static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
     bool received = false;
@@ -161,8 +162,154 @@ void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
 #ifdef USE_SIGNALLER
 void sync(zmq::socket_t &clock_sync) { waitForSync(clock_sync); }
 #else
-#ifdef USE_RTC
+#ifdef USE_CHRONO
+
+#include <atomic>
+#include <condition_variable>
+#include <mutex>
+
+namespace {
+
+int timer_pipe_fds[2] = {-1, -1};
+char monitor_stop_command = 'q';
+std::mutex timer_mutex;
+std::condition_variable timer_cv;
+timer_t timerid = 0;
+
+} //namespace
+
+void handle_timer(int sig, siginfo_t *si, void *uc) {
+    if (timer_pipe_fds[1] != -1) {
+        write(timer_pipe_fds[1], ".", 1);
+    }
+    //std::cout << "Timer expired at: " << std::chrono::system_clock::now().time_since_epoch().count() << "\n";
+}
+
+int configure_timer() {
+    struct sigaction sa;
+    struct sigevent sev;
+    struct itimerspec its;
+    if (timer_pipe_fds[0] == -1) {
+        if (pipe(timer_pipe_fds) == -1) {
+            perror("timer-pipe");
+            return 1;
+        }
+        std::cout << "created timer pipe\n";
+    }
+    if (timerid) {
+        if (timer_delete(timerid)) {
+            perror("timer_delete");
+            return 1;
+        }
+        timerid = 0;
+    }
+
+    // Setup signal handler
+    sa.sa_flags = SA_SIGINFO;
+    sa.sa_sigaction = handle_timer;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGRTMIN, &sa, nullptr) == -1) {
+        perror("sigaction");
+        return 1;
+    }
+
+    // Configure the timer to send a signal
+    sev.sigev_notify = SIGEV_SIGNAL;
+    sev.sigev_signo = SIGRTMIN;
+    sev.sigev_value.sival_ptr = &timerid;
+    if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
+        perror("timer_create");
+        return 1;
+    }
+
+    // Set the timer to expire after 1 second, and then every 1 second
+    unsigned long cycle_delay = get_cycle_time();
+    its.it_value.tv_sec = 0;
+    its.it_value.tv_nsec = cycle_delay * 1000;
+    its.it_interval.tv_sec = 0;
+    its.it_interval.tv_nsec = cycle_delay * 1000;
+
+    if (timer_settime(timerid, 0, &its, nullptr) == -1) {
+        perror("timer_settime");
+        return 1;
+    }
+
+    return 0;
+}
+
+void sync() {
+    static bool regular_timer_configured = false;
+    static long saved_frequency = ECInterface::FREQUENCY;
+    if (!regular_timer_configured || saved_frequency != ECInterface::FREQUENCY) {
+        int config_error = configure_timer();
+        assert("could not configure posix timer" && !config_error);
+        regular_timer_configured = true;
+    }
+    char buf;
+    read(timer_pipe_fds[0], &buf, 1);
+    //std::unique_lock<std::mutex> lock(timer_mutex);
+    //timer_cv.wait(lock);
+    //std::cout << "Timer expired at: " << std::chrono::system_clock::now().time_since_epoch().count() << "\n";
+}
+
+// This monitor runs in a thread to notify the timer condition variable
+//#when the timer triggers.
+
+void timer_pipe_monitor() {
+    char buf;
+    while (true) {
+        if (timer_pipe_fds[0] == -1) { usleep(100); continue; }
+        read(timer_pipe_fds[1], &buf, 1);
+        if (buf == monitor_stop_command) { break; }
+        timer_cv.notify_one();
+    }
+}
+
+void stop_timer_monitoring() {
+    write(timer_pipe_fds[1], "q", 1);
+    std::lock_guard<std::mutex> lock(timer_mutex);
+    timer_cv.notify_one();
+    if (timer_delete(timerid) == -1) {
+        perror("timer_delete");
+    }
+}
+
+#elif USE_RTC
+int configure_rtc() {
+    rtc = open("/dev/rtc", 0);
+    if (rtc == -1) {
+        perror("open rtc");
+        exit(1);
+    }
+
+    int rc = ioctl(rtc, RTC_IRQP_SET, freq);
+    if (rc == -1) {
+        perror("set rtc freq");
+        exit(1);
+    }
+
+    rc = ioctl(rtc, RTC_IRQP_READ, &freq);
+    if (rc == -1) {
+        perror("ioctl");
+        exit(1);
+    }
+    std::cout << "Real time clock: freq set to : " << freq << "\n";
+
+    rc = ioctl(rtc, RTC_PIE_ON, 0);
+    if (rc == -1) {
+        perror("enable rtc pie");
+        exit(1);
+    }
+}
+
 void sync(int rtc) {
+    static bool rtc_timer_configured = false;
+    static long saved_frequency = ECInterface::FREQUENCY;
+    if (!rtc_timer_configured || saved_frequency != ECInterface::FREQUENCY) {
+        int config_error = configure_rtc();
+        assert("could not configure posix timer" && !config_error);
+        rtc_timer_configured = true;
+    }
     static uint64_t last_read_sync_check = 0;
     {
         unsigned long val = 0;
@@ -532,10 +679,10 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
             recv(out_sock, iomsg);
             size_t msglen = iomsg.size();
             assert(msglen == len);
-            //assert((long)msglen != -1);
             if (msglen > 0) {
+                assert(!cw_mask);
                 cw_mask = new uint8_t[msglen];
-                memcpy(cw_mask, iomsg.data(), iomsg.size());
+                memcpy(cw_mask, iomsg.data(), msglen);
             }
         }
     }
@@ -607,7 +754,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
 #endif
         }
         else if (!default_data) {
-            std::cout << "ecat_thread: no default data set yet, cannot update domain\n";
+            MessageLog::instance()->add("ecat_thread: no default data set yet, cannot update domain");
         }
         delete[] cw_mask;
         delete[] cw_data;
@@ -622,32 +769,9 @@ void EtherCATThread::operator()() {
     Statistic *keep_alive_stat = new Statistic("keep alive margin");
     Statistic::add(keep_alive_stat);
 
-#ifdef USE_RTC
-    rtc = open("/dev/rtc", 0);
-    if (rtc == -1) {
-        perror("open rtc");
-        exit(1);
-    }
     unsigned long freq = ECInterface::FREQUENCY;
-
-    int rc = ioctl(rtc, RTC_IRQP_SET, freq);
-    if (rc == -1) {
-        perror("set rtc freq");
-        exit(1);
-    }
-
-    rc = ioctl(rtc, RTC_IRQP_READ, &freq);
-    if (rc == -1) {
-        perror("ioctl");
-        exit(1);
-    }
-    std::cout << "Real time clock: freq set to : " << freq << "\n";
-
-    rc = ioctl(rtc, RTC_PIE_ON, 0);
-    if (rc == -1) {
-        perror("enable rtc pie");
-        exit(1);
-    }
+#ifdef USE_CHRONO
+    //std::thread timer_thread(timer_pipe_monitor);
 #endif
     uint64_t then = nowMicrosecs();
     ECInterface::instance()->setReferenceTime(then % 0x100000000);
@@ -674,14 +798,14 @@ void EtherCATThread::operator()() {
         usleep(100);
     }
     while (!program_done) {
-#ifdef USE_RTC
+#ifdef USE_CHRONO
+        sync();
+#elif USE_RTC
         sync(rtc);
-#else
-#ifdef USE_SIGNALLER
+#elif USE_SIGNALLER
         sync(clock_sync);
 #else
         sync();
-#endif
 #endif
         uint64_t now = nowMicrosecs();
         ECInterface::instance()->setReferenceTime(now % 0x100000000);
@@ -761,12 +885,13 @@ void EtherCATThread::operator()() {
         if (getClockworkMessage(out_sock, ec_ok) && microsecs() < next_ecat_receive - 300) {
             DBG_ETHERCAT_PACKETS << "ecat thread got clockwork message. next ecat: "
                                  << next_ecat_receive << "\n";
-            usleep(20);
         }
-        usleep(20);
 
         ECInterface::instance()->sendUpdates();
         checkAndUpdateCycleDelay();
     }
+#ifdef USE_CHRONO
+    //stop_timer_monitoring();
+#endif
     keep_alive_stat->report(std::cout);
 }
