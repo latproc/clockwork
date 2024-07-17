@@ -178,10 +178,16 @@ uint32_t IOUpdate::size() const { return size_; }
 void IOUpdate::setSize(uint32_t sz) { size_ = sz; }
 
 uint8_t *IOUpdate::data() const { return data_; }
-void IOUpdate::setData(uint8_t *dt) { data_ = dt; }
+void IOUpdate::setData(uint8_t *dt) {
+    assert("memory leak setting IO Component data" && !data_);
+    data_ = dt;
+}
 
 uint8_t *IOUpdate::mask() const { return mask_; }
-void IOUpdate::setMask(uint8_t *ms) { mask_ = ms; }
+void IOUpdate::setMask(uint8_t *ms) {
+    assert("memory leak setting IO Component data" && !mask_);
+    mask_ = ms;
+}
 
 // these components need to synchronise with clockwork
 std::set<IOComponent *> updatedComponentsIn;
