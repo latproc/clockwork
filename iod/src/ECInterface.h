@@ -142,7 +142,7 @@ class ECInterface {
     void init(); // prepare the master
     static void
     setup(void *data); // call init and link to the clockwork machine instance for ethercat
-    void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
+    //void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
     const ec_master_t *getMaster() { return master; }
     const ec_master_state_t *getMasterState() { return &master_state; }
 
@@ -158,6 +158,7 @@ class ECInterface {
     bool operational();
     static ECModule *findModule(unsigned int position);
 
+    void setDataSize(size_t);
     void setProcessData(uint8_t *pd);
     uint8_t *getProcessData() { return process_data; }
 
@@ -177,6 +178,7 @@ class ECInterface {
     void setUpdateMask(uint8_t *m);
     uint8_t *getUpdateData();
     uint8_t *getUpdateMask();
+    void report_module_state_change(ECModule *m, int i);
 
 #ifdef USE_SDO
     void beginModulePreparation();    // load the first SDO initialisation entry
@@ -196,6 +198,7 @@ class ECInterface {
   private:
     ECInterface();
     static ECInterface *instance_;
+    size_t data_size;
     uint8_t *process_data;
     uint8_t *process_mask;
     uint8_t *update_data;
@@ -225,9 +228,11 @@ class ECInterface {
     uint8_t *app_process_mask; // copy of user provided mask data
 };
 
+#ifndef EC_SIMULATOR
 #ifdef USE_ETHERCAT
 void collectEtherCatModules();
 char *collectSlaveConfig(bool reconfigure);
+#endif
 #endif
 
 struct IODCommandMasterInfo : public IODCommand {
