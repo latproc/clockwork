@@ -1420,7 +1420,7 @@ void MachineInstance::addParameter(Value param, MachineInstance *mi, ssize_t pos
 }
 
 void MachineInstance::removeParameter(size_t which) {
-    if (which < 0 || which >= (int)parameters.size()) {
+    if (which < 0 || which >= (size_t)parameters.size()) {
         return;
     }
     MachineInstance *m = parameters[which].machine;
