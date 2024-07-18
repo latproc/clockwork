@@ -12,21 +12,27 @@
 
 namespace {
 class SyncRemoteStatesActionTest : public ::testing::Test {
-    MockSystemSetup system;
+    MockSystemSetup *system = nullptr;
 
     void SetUp() override {
+        std::cout << "SyncRemoteStatesActionTest::SetUp" << std::endl;
+        system = new MockSystemSetup();
         MachineClass *fc = new MachineClass("FLAG");
         flag = MachineInstanceFactory::create("flag", "FLAG");
         flag->setStateMachine(fc);
-        system.activate();
+        system->activate();
         cd = new ChannelDefinition{"test_channel"};
         channel = cd->instantiate(9999);
         assert("channel definition is not set" && channel->definition() == cd);
     }
     void TearDown() override {
-        system.deactivate(); 
+        std::cout << "SyncRemoteStatesActionTest::TearDown" << std::endl;
         delete channel;
         delete flag;
+        system->deactivate();
+        //Dispatcher::instance()->stop();
+        //delete Dispatcher::instance();
+        delete system;
     }
   public:
 
