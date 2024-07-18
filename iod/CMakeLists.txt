@@ -217,6 +217,7 @@ set (Clockwork_Headers
     src/split_string.h src/read_file.h src/copy_environment.h
     src/exec_command.h src/debug_malloc.h
     src/json_expr_parser.h src/json_expression.h src/process.h
+    src/process_data.h
 )
 if (USE_ETHERCAT)
 	LIST (APPEND Clockwork_Headers "src/EtherCATthread.h")
@@ -254,6 +255,7 @@ set (Clockwork_SRCS
     src/split_string.c src/read_file.c src/copy_environment.c
     src/exec_command.c src/debug_malloc.c
     src/json_expr_parser.cpp src/json_expression.cpp src/process.cpp
+    src/process_data.cpp
 	)
 if (USE_ETHERCAT)
 if (USE_SOEM)

@@ -42,6 +42,7 @@
 #include "SDOEntry.h"
 #include "symboltable.h"
 #include <ecrt.h>
+#include "process_data.h"
 #endif
 
 #define VERBOSE_DEBUG 0
@@ -306,17 +307,17 @@ void SDOEntry::resolveSDOModules() {
 
 #endif
 
+
 ECInterface::ECInterface()
-    : initialised(0), data_size(0), process_data(0), process_mask(0), update_data(0), update_mask(0),
-      reference_time(0),
+    : initialised(0), reference_time(0),
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
       current_init_entry(initialisation_entries.begin()),
       current_update_entry(sdo_update_entries.begin()), sdo_entry_state(e_None),
 #endif //USE_SDO
 #endif
-      ethercat_status(0), failure_tolerance(0), failure_count(0), min_io_index(0), max_io_index(0),
-      app_process_mask(0) {
+      ethercat_status(0), failure_tolerance(0), failure_count(0)
+{
 }
 
 void ECInterface::setup(void *data) { instance()->init(); }
@@ -1132,12 +1133,6 @@ void collectEtherCatModules() {
     DBG_ETHERCAT << ss.str() << "\n";
 }
 
-bool ECInterface::prepare() {
-    DBG_ETHERCAT << "Preparing IO...";
-    assert(false);
-    return false;
-}
-
 bool ECInterface::deactivate() {
     char buf[200];
     snprintf(buf, 200, "EtherCAT interface: Deactivating the EtherCAT master");
@@ -1160,7 +1155,7 @@ bool ECInterface::deactivate() {
     MessageLog::instance()->add(buf);
     DBG_ETHERCAT << buf << "\n";
 
-    setProcessData(0);
+    data.setProcessData(nullptr, 0);
     {
         boost::recursive_mutex::scoped_lock lock(modules_mutex);
         snprintf(buf, 200, "EtherCAT interface: removing ethercat modules instances");
@@ -1419,68 +1414,6 @@ ECInterface *ECInterface::instance() {
 
 #ifndef EC_SIMULATOR
 
-void ECInterface::setMinIOIndex(unsigned int new_val) {
-    assert(min_io_index == 0); // other values untested
-    min_io_index = new_val;
-}
-
-void ECInterface::setMaxIOIndex(unsigned int new_val) { max_io_index = new_val; }
-
-uint32_t ECInterface::getProcessDataSize() { return max_io_index - min_io_index + 1; }
-
-void ECInterface::setDataSize(size_t ds) {
-    if (data_size == 0 || data_size != ds) {
-        data_size = ds;
-    }
-}
-
-void ECInterface::setProcessData(uint8_t *pd) {
-    if (process_data) {
-        delete[] process_data;
-    }
-    process_data = pd;
-#if VERBOSE_DEBUG
-    if (process_data) {
-        DBG_ETHERCAT_PACKETS << "ecrt_domain_size: set process data (" << ecrt_domain_size(domain1)
-                             << ") ";
-        display(process_data, ecrt_domain_size(domain1));
-        DBG_ETHERCAT_PACKETS << "\n";
-    }
-#endif
-}
-
-void ECInterface::setAppProcessMask(uint8_t *new_mask, size_t size) {
-    if (app_process_mask) {
-        delete app_process_mask;
-    }
-    app_process_mask = new uint8_t[size];
-    memcpy(app_process_mask, new_mask, size);
-}
-
-uint8_t *ECInterface::getProcessMask() { return app_process_mask; }
-
-void ECInterface::setProcessMask(uint8_t *m) {
-    if (process_mask) {
-        delete[] process_mask;
-    }
-    process_mask = m;
-}
-
-void ECInterface::setUpdateData(uint8_t *ud) {
-    if (update_data) {
-        delete[] update_data;
-    }
-    update_data = ud;
-}
-/*
-    void ECInterface::setUpdateMask (uint8_t *m){
-    if (update_mask) delete[] update_mask;
-    update_mask = m;
-    }
-*/
-uint8_t *ECInterface::getUpdateData() { return update_data; }
-uint8_t *ECInterface::getUpdateMask() { return update_mask; }
-
 // copy interesting bits that have changed from the supplied
 // data into the process data and the saved copy of the process data.
 // the latter is because we want to properly detect changes in the
@@ -1564,7 +1497,7 @@ void ECInterface::receiveState() {
                 update_to_recv.add(dt);
             }
             last_receive = now;
-            if (update_to_recv.getCount() >= 10000) {
+            if (update_to_recv.getCount() >= 1000) {
                 update_to_recv.report(std::cout);
                 update_to_recv.reset();
             }
@@ -1621,8 +1554,8 @@ int ECInterface::collectState() {
     DBG_ETHERCAT_CALLS << "ecrt_domain_data\n";
     uint8_t *domain1_pd = ecrt_domain_data(domain1);
 
-    unsigned int max = max_io_index;
-    unsigned int min = min_io_index;
+    unsigned int max = data.max_io_index;
+    unsigned int min = data.min_io_index;
     // we have seen the domain size have a value between zero and the expected max-min+1
     // this is to try to understand how that happens
     if (domain_size < (size_t)max - min + 1) {
@@ -1637,32 +1570,23 @@ int ECInterface::collectState() {
     for (unsigned int i = 0; i < domain_size; ++i) {
         std::cout << std::hex << std::setfill('0') << std::setw(2) << (int)*p++;
     }
-    std::cout << "\n";
+    std::cout << std::dec << "\n";
 #endif
 
-    // workout what io components need to process updates
     if (!domain1_pd) {
-        assert(instance()->getProcessData() == 0);
+        assert(instance()->data.getProcessData() == 0);
         return 0;
     }
     uint8_t *pd = domain1_pd;
-    int affected_bits = 0;
-
-    // the result of this is a list of data bits to be changed and
-    // a mask indicating which bits are important
     if ((long)domain_size < 0) {
         return 0;
     }
 
-    assert(domain_size >= (size_t)max - min + 1);
-    if (!update_data) {
-        update_data = new uint8_t[domain_size];
-    }
-    if (!update_mask) {
-        update_mask = new uint8_t[domain_size];
-    }
-    memset(update_data, 0, domain_size);
-    memset(update_mask, 0, domain_size);
+    data.reallocate_update_data_and_mask(domain_size);
+
+    int affected_bits = 0;
+    // the result of the following is a list of data bits to be changed and
+    // a mask indicating which bits are important
 
     // first time through, copy the domain process data to our local copy
     // and set the process mask to include every bit we care about
@@ -1670,9 +1594,9 @@ int ECInterface::collectState() {
     // after that, look at all bits we care about and if the bit has changed
     // copy its new value to the update data and include the bit in the
     // update mask
-    uint8_t *last_pd = instance()->getProcessData();
-    uint8_t *pm = getProcessMask(); // these are the important bits
-    uint8_t *q = update_data;       // convenience pointer
+    uint8_t *last_pd = instance()->data.getProcessData();
+    uint8_t *pm = data.getProcessMask(); // these are the important bits
+    uint8_t *q = data.update_data;       // convenience pointer
 
 #if VERBOSE_DEBUG
     if (last_pd) {
@@ -1687,10 +1611,10 @@ int ECInterface::collectState() {
     assert(pm);
     assert(min == 0);
     for (unsigned int i = 0; i < domain_size; ++i) {
-        update_mask[i] = 0;                 // assume no updates in this octet
+        data.update_mask[i] = 0;                 // assume no updates in this octet
         if (!last_pd) {                     // first time through, copy all the domain data and mask
-            update_data[i] = domain1_pd[i]; //TBD & *pm;
-            update_mask[i] = *pm;
+            data.update_data[i] = domain1_pd[i]; //TBD & *pm;
+            data.update_mask[i] = *pm;
             affected_bits++;
 #if VERBOSE_DEBUG
             DBG_ETHERCAT_PACKETS << "init update data from process byte " << i << ": " << std::hex
@@ -1719,7 +1643,7 @@ int ECInterface::collectState() {
                         else {
                             *q &= ((uint8_t)0xff - bitmask);
                         }
-                        update_mask[i] |= bitmask;
+                        data.update_mask[i] |= bitmask;
                         ++affected_bits;
                     }
                 }
@@ -1747,13 +1671,14 @@ int ECInterface::collectState() {
 #endif
     pd = new uint8_t[domain_size];
     memcpy(pd, domain1_pd, domain_size);
-    instance()->setProcessData(pd);
+    instance()->data.setDataSize(domain_size);
+    instance()->data.setProcessData(pd, domain_size);
 #if VERBOSE_DEBUG
     DBG_ETHERCAT_PACKETS << "copied new domain data: ";
     display(pd, domain_size);
     DBG_ETHERCAT_PACKETS << "\n";
 #endif
-    memcpy(update_data, domain1_pd, domain_size);
+    memcpy(data.update_data, domain1_pd, domain_size);
 #endif //EC_SIMULATOR
 
     return affected_bits;
@@ -1779,7 +1704,7 @@ void ECInterface::sendUpdates() {
             recv_to_update.add(dt);
         }
         last_update = t;
-        if (recv_to_update.getCount() >= 10000) {
+        if (recv_to_update.getCount() >= 1000) {
             recv_to_update.report(std::cout);
             recv_to_update.reset();
         }

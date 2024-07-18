@@ -415,16 +415,16 @@ void sync() {
 int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_clock) {
     // sending a four-part message, each stage may be interrupted
     // so we use a try-catch around the whole process
-    ECInterface::instance()->setMinIOIndex(IOComponent::getMinIOOffset());
-    ECInterface::instance()->setMaxIOIndex(IOComponent::getMaxIOOffset());
-    uint32_t size = ECInterface::instance()->getProcessDataSize();
+    ECInterface::instance()->data.setMinIOIndex(IOComponent::getMinIOOffset());
+    ECInterface::instance()->data.setMaxIOIndex(IOComponent::getMaxIOOffset());
+    uint32_t size = ECInterface::instance()->data.getProcessDataSize();
     DBG_ETHERCAT_PACKETS << "ecat_thread sending multipart message, size: " << size << "\n";
 
     uint8_t stage = 1;
 #if VERBOSE_DEBUG
     bool found_change = false;
 #endif
-    uint8_t *upd_data = ECInterface::instance()->getUpdateData();
+    uint8_t *upd_data = ECInterface::instance()->data.getUpdateData();
     if (upd_data == nullptr) {
         return 0;
     }
@@ -499,7 +499,7 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
                 //DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
 #endif
                 zmq::message_t iomsg(size);
-                uint8_t *mask = ECInterface::instance()->getUpdateMask();
+                uint8_t *mask = ECInterface::instance()->data.getUpdateMask();
                 memcpy(iomsg.data(), (void *)mask, size);
                 sync_sock->send(iomsg);
 #if VERBOSE_DEBUG
@@ -669,7 +669,8 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
             if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
                 //TBD. this hack removes a dependency inside ECInterface but more work is needed
                 // to cleanup this initialisation
-                ECInterface::instance()->setAppProcessMask(IOComponent::getProcessMask(),
+                ECInterface::instance()->data.setDataSize(iomsg.size());
+                ECInterface::instance()->data.setAppProcessMask(IOComponent::getProcessMask(),
                                                            iomsg.size());
             }
         }
@@ -861,7 +862,7 @@ void EtherCATThread::operator()() {
         next_ecat_receive = microsecs() + period / 2;
         ECInterface::instance()->receiveState();
 
-        if (machine_is_ready && ECInterface::instance()->getProcessMask()) {
+        if (machine_is_ready && ECInterface::instance()->data.getProcessMask()) {
             global_clock = updateClock(global_clock);
             if (status == e_collect) {
                 DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state\n";
