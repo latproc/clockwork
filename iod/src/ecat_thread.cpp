@@ -104,6 +104,7 @@ static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
 }
 
 bool EtherCATThread::checkAndUpdateCycleDelay() {
+    // FIXME: potentially not thread safe
     if (cycle_delay != get_cycle_time()) {
         cycle_delay = get_cycle_time();
         DBG_INITIALISATION << "setting cycle time to " << cycle_delay << "\n";
@@ -167,6 +168,7 @@ void sync(zmq::socket_t &clock_sync) { waitForSync(clock_sync); }
 #include <atomic>
 #include <condition_variable>
 #include <mutex>
+#include <poll.h>
 
 namespace {
 
@@ -237,6 +239,20 @@ int configure_timer() {
     return 0;
 }
 
+void flush_input(int fd) {
+    char buf[100];
+    while (true) {
+        struct pollfd pfd = { fd, POLLIN, 0 };
+        int rc = poll(&pfd, 1, 0);
+        if (rc == 0) { break; }
+        if (rc == -1) {
+            perror("poll");
+            break;
+        }
+        read(fd, buf, 100);
+    }
+}
+
 void sync() {
     static bool regular_timer_configured = false;
     static long saved_frequency = ECInterface::FREQUENCY;
@@ -245,6 +261,7 @@ void sync() {
         assert("could not configure posix timer" && !config_error);
         regular_timer_configured = true;
     }
+    flush_input(timer_pipe_fds[0]);
     char buf;
     read(timer_pipe_fds[0], &buf, 1);
     //std::unique_lock<std::mutex> lock(timer_mutex);
