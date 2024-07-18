@@ -656,7 +656,7 @@ void ProcessingThread::operator()() {
             }
         }
 
-        long machine_check_delay = 0;
+        uint64_t machine_check_delay = 0;
         machine.idle();
         last_machine_change = machine.lastUpdated();
 
