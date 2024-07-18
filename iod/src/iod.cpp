@@ -173,6 +173,13 @@ bool setupEtherCatThread() {
             MachineInstance *m = *iter++;
             if (m->_type == "MODULE") {
                 const Value &position = m->getValue("position");
+                if (position >= slaves.size()) {
+                    std::stringstream ss;
+                    ss << "No slave at position " << position;
+                    MessageLog::instance()->add(ss.str());
+                    DBG_INITIALISATION << ss.str() << "\n";
+                    continue;
+                }
                 const Value &xml_filename = m->getValue("config_file");
                 const Value &selected_sm = m->getValue("alternate_sync_manager");
                 const Value &product_code = m->getValue("ProductCode");
