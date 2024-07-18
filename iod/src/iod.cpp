@@ -263,6 +263,7 @@ bool setupEtherCatThread() {
                             module->entry_details = di->config.c_entry_details;
                             module->num_entries = di->config.num_entries;
                             auto res = ECInterface::instance()->addModule(module, true);
+                            module->link_to_machine(m);
                             if (res) {
                                 DBG_INITIALISATION << "iod: Added module " << module->name
                                         << " at position " << module->position

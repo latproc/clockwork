@@ -24,6 +24,7 @@
 #include <sys/types.h>
 
 #include "IODCommand.h"
+#include "MachineInstance.h"
 #include "tl/expected.hpp"
 #include "process_data.h"
 #ifndef EC_SIMULATOR
@@ -35,6 +36,8 @@
 #include <string>
 #include <time.h>
 #include <vector>
+
+class MachineInstance;
 
 /*  the entry details structure is used to gather extra data about
     an entry in a module that the Etherlab master structures doesn't
@@ -63,6 +66,10 @@ class ECModule {
     std::ostream &operator<<(std::ostream &) const;
     const std::string &getName() const { return name; }
 
+    void link_to_machine(MachineInstance *m);
+    MachineInstance *machine();
+    void update();
+
   public:
     ec_slave_config_t *slave_config;
     ec_slave_config_state_t slave_config_state;
@@ -81,6 +88,7 @@ class ECModule {
     std::string name;
     unsigned int num_entries;
     EntryDetails *entry_details;
+    MachineInstance *machine_instance;
 };
 
 #else // EC_SIMULATOR
@@ -105,8 +113,6 @@ typedef struct ECPDOEntryReg {
 } ec_pdo_entry_reg_t;
 
 #endif // EC_SIMULATOR
-
-class MachineInstance;
 
 class ECInterface {
   public:
