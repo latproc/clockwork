@@ -25,6 +25,7 @@
 
 #include "IODCommand.h"
 #include "tl/expected.hpp"
+#include "process_data.h"
 #ifndef EC_SIMULATOR
 #include "value.h"
 
@@ -83,7 +84,6 @@ class ECModule {
 };
 
 #else // EC_SIMULATOR
-typedef unsigned char uint8_t;
 typedef struct ECMaster {
     unsigned int reserved;
     unsigned int config_changed;
@@ -123,6 +123,7 @@ class ECInterface {
 
     bool initialised;
     static bool active;
+    ProcessData data;
 
     static ECInterface *instance();
 
@@ -148,7 +149,6 @@ class ECInterface {
 
 #ifndef EC_SIMULATOR
     std::vector<ec_slave_info_t> listSlaves();
-    bool prepare();
     bool activate();   // attempt to activate the master
     bool deactivate(); // deactivate the master
     void configureModules();
@@ -158,26 +158,9 @@ class ECInterface {
     bool operational();
     static ECModule *findModule(unsigned int position);
 
-    void setDataSize(size_t);
-    void setProcessData(uint8_t *pd);
-    uint8_t *getProcessData() { return process_data; }
-
-    void setProcessMask(uint8_t *new_mask);
-    uint8_t *getProcessMask();
-    void setAppProcessMask(uint8_t *new_mask, size_t size);
-
-    void
-    setMaxIOIndex(unsigned int new_max); // min index into user required process data (must be zero)
-    void setMinIOIndex(unsigned int new_min); // max index into user required process data
-    uint32_t getProcessDataSize();            // returns process data size of user selected data set
-
     uint32_t getReferenceTime();
     void setReferenceTime(uint32_t now);
 
-    void setUpdateData(uint8_t *ud);
-    void setUpdateMask(uint8_t *m);
-    uint8_t *getUpdateData();
-    uint8_t *getUpdateMask();
     void report_module_state_change(ECModule *m, int i);
 
 #ifdef USE_SDO
@@ -198,11 +181,6 @@ class ECInterface {
   private:
     ECInterface();
     static ECInterface *instance_;
-    size_t data_size;
-    uint8_t *process_data;
-    uint8_t *process_mask;
-    uint8_t *update_data;
-    uint8_t *update_mask;
     uint32_t reference_time;
 #ifndef EC_SIMULATOR
     static std::vector<ECModule *> modules;
@@ -221,11 +199,6 @@ class ECInterface {
     static long default_tolerance;
     const long *failure_tolerance;
     int failure_count;
-
-    unsigned int
-        min_io_index; // first byte of the process data needed by the user (must be zero currently)
-    unsigned int max_io_index; // last byte of the process data needed by the user
-    uint8_t *app_process_mask; // copy of user provided mask data
 };
 
 #ifndef EC_SIMULATOR
