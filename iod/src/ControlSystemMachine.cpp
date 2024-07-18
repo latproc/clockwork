@@ -88,7 +88,6 @@ bool ControlSystemMachine::c_active() const { return c_connected() && ECInterfac
 #endif
 
 void ControlSystemMachine::idle() {
-
     uint64_t msc = ECInterface::master_state_changed;
     unsigned int als = ECInterface::master_state.al_states;
     /*
@@ -167,6 +166,25 @@ void ControlSystemMachine::idle() {
     sync_slaves();
 }
 
+const char *al_state_to_machine_state(int state) {
+    if (state <= 1) {
+        return "INIT";
+    }
+    else if (state == 2) {
+        return "PREOP";
+    }
+    else if (state == 3) {
+        return "BOOT";
+    }
+    else if (state == 4) {
+        return "SAFEOP";
+    }
+    else if (state == 8) {
+        return "OP";
+    }
+    return "INIT";
+}
+
 void ControlSystemMachine::sync_slaves() {
 #ifndef EC_SIMULATOR
     std::list<MachineInstance *>::iterator iter = MachineInstance::io_modules_begin();
@@ -180,21 +198,7 @@ void ControlSystemMachine::sync_slaves() {
                 if (module) {
                     const char *module_state = 0;
                     int state = module->slave_config_state.al_state & 0x0f; // mask off error bit
-                    if (state == 1) {
-                        module_state = "INIT";
-                    }
-                    else if (state == 2) {
-                        module_state = "PREOP";
-                    }
-                    else if (state == 3) {
-                        module_state = "BOOT";
-                    }
-                    else if (state == 4) {
-                        module_state = "SAFEOP";
-                    }
-                    else if (state == 8) {
-                        module_state = "OP";
-                    }
+                    module_state = al_state_to_machine_state(state);
                     if (module_state && m->getCurrent().getName() != module_state) {
                         SetStateActionTemplate ssat = SetStateActionTemplate("SELF", module_state);
                         SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(m));
