@@ -155,6 +155,15 @@ bool ECModule::operational() { return slave_config_state.operational; }
 
 int ECModule::state() { return slave_config_state.al_state; }
 
+void ECModule::link_to_machine(MachineInstance *m) {
+    machine_instance = m;
+}
+MachineInstance *ECModule::machine() {
+    return machine_instance;
+}
+void ECModule::update() {
+}
+
 #ifdef USE_SDO
 SDOEntry::SDOEntry(std::string nam, uint16_t index, uint8_t subindex, const uint8_t *data,
                    size_t size, uint8_t offset)
@@ -1155,6 +1164,7 @@ bool ECInterface::deactivate() {
     MessageLog::instance()->add(buf);
     DBG_ETHERCAT << buf << "\n";
 
+    data.setDataSize(0);
     data.setProcessData(nullptr, 0);
     {
         boost::recursive_mutex::scoped_lock lock(modules_mutex);
@@ -1519,7 +1529,7 @@ void ECInterface::receiveState() {
     }
     // check for master state (optional)
     check_master_state();
-    // check for islave configuration state(s) (optional)
+    // check for slave configuration state(s) (optional)
     check_slave_config_states();
 
 #ifdef USE_SDO
