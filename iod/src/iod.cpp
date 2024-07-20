@@ -235,15 +235,9 @@ bool setupEtherCatThread() {
                     else {
                         DBG_INITIALISATION << "checking for " << *dev << "\n";
                         DeviceInfo *di = nullptr;
-                        std::list<DeviceInfo *>::iterator iter = collected_configurations.begin();
-                        while (iter != collected_configurations.end()) {
-                            DeviceInfo *item = *iter++;
-                            if (*dev == *item) {
-                                DBG_INITIALISATION << " using item " << *item << "\n";
-                                di = item;
-                                break;
-                            }
-                            DBG_INITIALISATION << "no match with " << *item << "\n";
+                        assert(collected_configurations.size() <= 1);
+                        if (collected_configurations.size() == 1) {
+                            di = *collected_configurations.begin();
                         }
                         if (di) {
                             slave_configuration[position.iValue] = di;
