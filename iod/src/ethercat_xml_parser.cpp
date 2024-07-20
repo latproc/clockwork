@@ -478,10 +478,18 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 si->index = ns++;
                 si->dir = b_cb & 0x0c ? EC_DIR_OUTPUT : EC_DIR_INPUT;
                 si->n_pdos = 0;
-                const int c_pdos_size =
-                    sizeof(ec_pdo_info_t) * ConfigurationDetails::estimated_max_pdos;
-                si->pdos = (ec_pdo_info_t *)malloc(c_pdos_size);
-                memset(si->pdos, 0, c_pdos_size);
+                auto pdos = new ec_pdo_info_t[ConfigurationDetails::estimated_max_pdos];
+                for (unsigned int i = 0; i < ConfigurationDetails::estimated_max_pdos; ++i) {
+                    auto *pdo = &pdos[i];
+                    pdo->index = 0;
+                    pdo->n_entries = 0;
+                    pdo->entries = nullptr;
+                }
+                si->pdos = pdos;
+                //const int c_pdos_size =
+                //    sizeof(ec_pdo_info_t) * ConfigurationDetails::estimated_max_pdos;
+                //si->pdos = (ec_pdo_info_t *)malloc(c_pdos_size);
+                //memset(si->pdos, 0, c_pdos_size);
 
                 si->watchdog_mode = EC_WD_DEFAULT;
                 enter(in_device);
@@ -514,8 +522,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 if (capturing_pdo) {
                     if (current_sm_index >= 0) {
                         unsigned int &n = current_device->config.c_syncs[current_sm_index].n_pdos;
-                        ec_pdo_info_t *pd =
-                            &current_device->config.c_syncs[current_sm_index].pdos[n];
+                        auto pd = (ec_pdo_info_t*)&current_device->config.c_syncs[current_sm_index].pdos[n];
                         pd->index = current_pdo_index;
                         pd->n_entries =
                             current_device->config.num_entries - current_pdo_start_entry;

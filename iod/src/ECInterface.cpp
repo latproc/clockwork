@@ -363,7 +363,7 @@ std::ostream &ECModule::operator<<(std::ostream &out) const {
             out << " PDO" << j << ": " << std::hex << syncs[i].pdos[j].index << ", " << std::dec
                 << syncs[i].pdos[j].n_entries << "\n";
             for (unsigned int k = 0; k < syncs[i].pdos[j].n_entries; ++k) {
-                ec_pdo_entry_info_t *e = syncs[i].pdos[j].entries + k;
+                const ec_pdo_entry_info_t *e = syncs[i].pdos[j].entries + k;
                 out << "       " << k << ", " << std::hex << e->index << std::dec << ", "
                     << (int)e->subindex << ", " << (int)e->bit_length << "\n";
             }
@@ -1037,7 +1037,8 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
         assert(total_syncs < estimated_max_syncs);
         for (i = 0; i < slave.sync_count; i++) {
             DBG_ETHERCAT << "ecrt_master_get_sync_manager\n";
-            assert(ecrt_master_get_sync_manager(m, slave.position, i, &c_syncs[i]) == 0);
+            int rc = ecrt_master_get_sync_manager(m, slave.position, i, &c_syncs[i]);
+            assert(rc == 0);
 
             // Copy pdo entries to c_pdos
             if (!c_syncs[i].n_pdos) {
@@ -2114,7 +2115,8 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
         for (i = 0; i < slave.sync_count; i++) {
             cJSON *json_sync = cJSON_CreateObject();
             DBG_ETHERCAT_CALLS << "ecrt_master_get_sync_manager\n";
-            assert(ecrt_master_get_sync_manager(m, slave.position, i, &c_syncs[i]) == 0);
+            int rc = ecrt_master_get_sync_manager(m, slave.position, i, &c_syncs[i]);
+            assert(rc == 0);
             char index_str[40];
             char pdo_name[40];
             snprintf(index_str, 40, "0x%04X (%d)", c_syncs[i].index, c_syncs[i].index);
