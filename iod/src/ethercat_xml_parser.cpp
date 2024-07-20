@@ -43,40 +43,41 @@ std::ostream &ConfigurationDetails::operator<<(std::ostream &out) const {
 
 using namespace std;
 
-//Statistics *statistics = NULL;
-//std::list<Statistic *> Statistic::stats;
-//ec_pdo_entry_info_t *c_entries = 0;
-//ec_pdo_info_t *c_pdos = 0;
-//ec_sync_info_t *c_syncs = 0;
-//EntryDetails *c_entry_details = 0;
-
 ConfigurationDetails::ConfigurationDetails()
-    : c_entries(0), c_syncs(0), num_syncs(0), num_entries(0) {}
+    : c_entries(nullptr), c_syncs(nullptr), num_syncs(0), num_entries(0) {}
 
 ConfigurationDetails::~ConfigurationDetails() {
-    //if (c_entries) delete[] c_entries;
-    c_entries = 0;
-    //if (c_entry_details) delete[] c_entry_details;
-    c_entry_details = 0;
-    //if (c_syncs) delete[] c_syncs;
-    c_syncs = 0;
+    // TODO: resolve this
+    //    if (c_entries) delete[] c_entries;
+    //    if (c_entry_details) delete[] c_entry_details;
+    //    if (c_syncs) delete[] c_syncs;
+    c_entries = nullptr;
+    c_entry_details = nullptr;
+    c_syncs = nullptr;
 }
 
 void ConfigurationDetails::init() {
     // add pdo entries for this slave
     // note the assumptions here about the maximum number of entries, pdos and syncs we expect
     //if (c_entries) delete[] c_entries;
-    const int c_entries_size = sizeof(ec_pdo_entry_info_t) * estimated_max_entries;
-    c_entries = (ec_pdo_entry_info_t *)malloc(c_entries_size);
-    memset(c_entries, 0, c_entries_size);
-
     //if (c_entry_details) delete[] c_entry_details;
-    c_entry_details = new EntryDetails[estimated_max_entries];
-
     //if (c_syncs) delete[] c_syncs;
+    c_entries = new ec_pdo_entry_info_t[estimated_max_entries];
+    for (unsigned int i = 0; i < estimated_max_entries; ++i) {
+         c_entries[i].bit_length = 0;
+         c_entries[i].index = 0;
+         c_entries[i].subindex = 0;
+    }
+
+    c_entry_details = new EntryDetails[estimated_max_entries];
+    for (unsigned int i = 0; i < estimated_max_entries; ++i) {
+        c_entry_details[i].entry_index = 0;
+        c_entry_details[i].pdo_index = 0;
+        c_entry_details[i].sm_index = 0;
+    }
+
     const int c_syncs_size = sizeof(ec_sync_info_t) * estimated_max_syncs;
-    c_syncs = (ec_sync_info_t *)malloc(c_syncs_size);
-    memset(c_syncs, 0, c_syncs_size);
+    c_syncs = new ec_sync_info_t[estimated_max_syncs];
     for (unsigned int i = 0; i < estimated_max_syncs; ++i) {
         c_syncs[i].index = 0xff;
     }
@@ -486,10 +487,6 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                     pdo->entries = nullptr;
                 }
                 si->pdos = pdos;
-                //const int c_pdos_size =
-                //    sizeof(ec_pdo_info_t) * ConfigurationDetails::estimated_max_pdos;
-                //si->pdos = (ec_pdo_info_t *)malloc(c_pdos_size);
-                //memset(si->pdos, 0, c_pdos_size);
 
                 si->watchdog_mode = EC_WD_DEFAULT;
                 enter(in_device);
