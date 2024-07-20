@@ -87,8 +87,6 @@ static std::list<SDOEntry *> prepared_sdo_entries;
 static std::list<SDOEntry *> new_sdo_entries;
 #endif //USE_SDO
 
-namespace {
-
 #if KEEP_STATS
 bool keep_stats = true;
 #else
