@@ -589,7 +589,7 @@ char *MessagingInterface::send(const char *txt) {
     // but is this useful without a sleep in between?
     // It seems unlikely the conditions will have changed between attempts.
     zmq::message_t msg(len);
-    strncpy((char *)msg.data(), txt, len);
+    memcpy(msg.data(), txt, len);
     int fsm_retries = 1;
     int retries = 3;
     enum { e_send, e_recover } send_state = e_send;

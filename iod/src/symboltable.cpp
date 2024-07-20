@@ -277,7 +277,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             return res;
         }
         if (strcmp("TIMESTAMP", name) == 0) {
-            char buf[40];
+            char buf[42];
             time_t now = time(nullptr);
             localtime_r(&now, &lt);
             asctime_r(&lt, buf);
@@ -287,7 +287,7 @@ const Value &SymbolTable::getKeyValue(const char *name) {
                 buf[n] = 0;
             }
             if (n + strlen(lt.tm_zone) < 39) {
-                snprintf(buf + n, 39 - n, " %s", lt.tm_zone);
+                snprintf(buf + n, 40 - n, " %s", lt.tm_zone);
             }
             res = Value(buf, Value::t_string);
             return res;
