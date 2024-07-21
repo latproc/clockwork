@@ -550,10 +550,12 @@ int main(int argc, char const *argv[]) {
     try {
         process.join();
         return 0;
-        Dispatcher::instance()->stop();
         Scheduler::instance()->stop();
         stateMonitor->stop();
         ethercat.stop();
+        ecat_thread.join();
+        Dispatcher::instance()->stop();
+        delete Dispatcher::instance();
         delete context;
     }
     catch (const zmq::error_t &ex) { // expected error when we remove the zmq context
