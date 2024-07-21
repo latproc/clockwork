@@ -127,11 +127,11 @@ class Value {
     bool bValue;
     int64_t iValue;
     double fValue;
-    cJSON *json;
+    cJSON *json = nullptr;
     std::string sValue; // used for strings and for symbols
-    MachineInstance *cached_machine;
+    MachineInstance *cached_machine = nullptr;
 
-    Value *cached_value;
+    Value *cached_value = nullptr;
     int token_id;
 
     bool numeric() const;
