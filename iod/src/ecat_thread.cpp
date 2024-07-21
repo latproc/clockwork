@@ -51,7 +51,7 @@
 #include <stdio.h>
 //#include "SetStateAction.h"
 
-#undef USE_RTC
+//#define USE_RTC 1
 #define USE_CHRONO 1
 
 #ifdef USE_CHRONO
@@ -292,19 +292,24 @@ void stop_timer_monitoring() {
 }
 
 #elif USE_RTC
-int configure_rtc() {
-    rtc = open("/dev/rtc", 0);
+int open_rtc(int rtc) {
     if (rtc == -1) {
-        perror("open rtc");
-        exit(1);
+        rtc = open("/dev/rtc", 0);
+        if (rtc == -1) {
+            perror("open rtc");
+            exit(1);
+        }
     }
+    return rtc;
+}
 
+int configure_rtc_freq(int rtc) {
+    long freq = ECInterface::FREQUENCY;
     int rc = ioctl(rtc, RTC_IRQP_SET, freq);
     if (rc == -1) {
         perror("set rtc freq");
         exit(1);
     }
-
     rc = ioctl(rtc, RTC_IRQP_READ, &freq);
     if (rc == -1) {
         perror("ioctl");
@@ -317,14 +322,17 @@ int configure_rtc() {
         perror("enable rtc pie");
         exit(1);
     }
+    return freq;
 }
 
-void sync(int rtc) {
+void sync() {
+    static int rtc = -1;
     static bool rtc_timer_configured = false;
     static long saved_frequency = ECInterface::FREQUENCY;
     if (!rtc_timer_configured || saved_frequency != ECInterface::FREQUENCY) {
-        int config_error = configure_rtc();
-        assert("could not configure posix timer" && !config_error);
+        rtc = open_rtc(rtc);
+        saved_frequency = configure_rtc_freq(rtc);
+        assert("could not configure real time clock" && rtc >= 0);
         rtc_timer_configured = true;
     }
     static uint64_t last_read_sync_check = 0;
@@ -333,20 +341,28 @@ void sync(int rtc) {
         unsigned long period = 1000000 / ECInterface::FREQUENCY;
         uint64_t t = 0;
         while (1) {
+#ifdef KEEP_STATS
+            static Statistic clock_delay("clock");
+#endif
+            auto now = microsecs();
             int nread = read(rtc, &val, sizeof(val));
+            t = microsecs();
             if (nread < 0) {
                 perror("rtc-read");
                 exit(1);
             }
-            t = microsecs();
             if (last_read_sync_check) {
-                if ((t - last_read_sync_check) * 2 < period) {
+                if ((t - last_read_sync_check) < 50) {
                     continue;
                 }
             }
-            if (t - last_read_sync_check < 100) {
-                std::cout << t - last_read_sync_check << "\n";
+#ifdef KEEP_STATS
+            clock_delay.add(t - now);
+            if (clock_delay.getCount() >= 1000) {
+                clock_delay.report(std::cout);
+                clock_delay.reset();
             }
+#endif
             last_read_sync_check = t;
             break;
         }
@@ -819,7 +835,7 @@ void EtherCATThread::operator()() {
 #ifdef USE_CHRONO
         sync();
 #elif USE_RTC
-        sync(rtc);
+        sync();
 #elif USE_SIGNALLER
         sync(clock_sync);
 #else
