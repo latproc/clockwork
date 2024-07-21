@@ -750,7 +750,7 @@ void MessageRouter::poll() {
         return;
     }
 
-#if 1
+#if 0
     if (c) {
         std::cout << "activity: ";
         for (unsigned int i = 0; i < num_socks; ++i) {
