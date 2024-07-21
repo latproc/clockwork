@@ -33,7 +33,9 @@ int getIntValue(cwpi_Scope s, const char *property_name, const int64_t **res) {
     return 1;
 }
 
-char *getStringValue(cwpi_Scope s, const char *property_name) {
+namespace {
+
+char *getStringValue_(cwpi_Scope s, const char *property_name) {
     MachineInstance *scope = static_cast<MachineInstance *>(s);
     if (!scope) {
         return 0;
@@ -43,6 +45,13 @@ char *getStringValue(cwpi_Scope s, const char *property_name) {
     const Value &val = scope->getValue(name);
     char *res = strdup(val.asString().c_str());
     return res;
+}
+
+}
+
+extern "C"
+char *getStringValue(cwpi_Scope s, const char *property_name) {
+    return getStringValue_(s, property_name);
 }
 
 void setIntValue(cwpi_Scope s, const char *property_name, int64_t new_value) {
