@@ -286,6 +286,7 @@ void sync() {
         // Warning: potentially unsafe access to the timer here.
         int config_error = adjust_timer_frequency(0, delay_ns);
         assert("could not configure posix timer" && !config_error);
+        saved_frequency = ECInterface::FREQUENCY;
         regular_timer_configured = true;
     }
 
