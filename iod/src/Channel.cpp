@@ -213,13 +213,8 @@ Channel::~Channel() {
         MachineInstance *machine = *iter++;
         machine->unpublish();
     }
-    ::machines.erase(channel_name);
-    this->channel_machines.clear();
-    SharedWorkSet::instance()->remove(this);
-    all_machines.remove(this);
-    pending_state_change.erase(this);
     remove(channel_name);
-    delete all;
+    prepare_to_remove(this);
     delete internals;
 }
 
