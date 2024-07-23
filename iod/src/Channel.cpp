@@ -627,7 +627,8 @@ void Channel::addConnection() {
 
 void Channel::dropConnection() {
     boost::mutex::scoped_lock lock(update_mutex);
-    assert(connections);
+    //assert(connections);
+    if (!connections) { return; }
 
     char buf[100];
     snprintf(buf, 100, "Channel %s [%s] lost connection %d", channel_name.c_str(),
