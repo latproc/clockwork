@@ -1100,7 +1100,7 @@ int64_t Counter::filter(int64_t val) {
         o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
                           SymbolTable::ST_REPLACE);
-        o->properties.add("VALUE", scaled_val, SymbolTable::ST_REPLACE);
+        o->properties.add("VALUE", static_cast<int64_t>(scaled_val), SymbolTable::ST_REPLACE);
         o->properties.add("Position", internals->last_sent, SymbolTable::ST_REPLACE);
         o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
                           SymbolTable::ST_REPLACE);
