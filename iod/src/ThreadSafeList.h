@@ -10,6 +10,11 @@
 template <typename T>
 class ThreadSafeList {
 public:
+
+    bool is_empty() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return list_.empty();
+    }
     void push_back(const T& value) {
         std::lock_guard<std::mutex> lock(mutex_);
         list_.push_back(value);
