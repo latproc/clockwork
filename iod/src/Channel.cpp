@@ -27,7 +27,7 @@
 std::map<std::string, Channel *> *Channel::all = 0;
 std::map<std::string, ChannelDefinition *> *ChannelDefinition::all = 0;
 
-boost::mutex Channel::update_mutex;
+boost::mutex Channel::update_mutex; // contols calls to addConnection and dropConnection
 boost::mutex CommandSocketInfo::mutex;
 
 State ChannelImplementation::CONNECTING("CONNECTING");
@@ -129,22 +129,40 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
     return true;
 }
 
+namespace {
+
+    std::string get_thread_name() {
+        std::string res;
+        char tnam[100];
+        int pgn_rc = pthread_getname_np(pthread_self(), tnam, 100);
+        assert(pgn_rc == 0);
+        res = tnam;
+        return res;
+    }
+
+} // namespace
+
 class ChannelInternals {
   public:
-    boost::mutex iod_cmd_get_mutex;
-    boost::mutex iod_cmd_put_mutex;
+    ChannelInternals() : owning_thread_name(get_thread_name()), command_sock(0), cmd_sock_info(0), last_state("undefined") { }
+    ~ChannelInternals() {
+        // TODO: delete command_sock and cmd_sock_info
+        //   if (command_sock) { delete command_sock; }
+        //   if (cmd_sock_info) { delete cmd_sock_info; }
+    }
+    std::string getCommandSocketName(bool client_endpoint);
+
+    std::string owning_thread_name;
     // used for the cmd_client/cmd_server interface to the main thread
     std::string command_sock_name;
     zmq::socket_t *command_sock;
     // used for sending commands to the main thread
     CommandSocketInfo *cmd_sock_info;
     MessageRouter router;
-    boost::thread *router_thread;
-    ChannelInternals() : command_sock(0), cmd_sock_info(0), router_thread(0), last_state("undefined") {}
-    std::string getCommandSocketName(bool client_endpoint);
     boost::thread *monitor_thread = nullptr;
     boost::thread *subscriber_thread = nullptr;
     Value last_state;
+
 };
 
 MachineRecord::MachineRecord(MachineInstance *m) : machine(m), last_sent(0) {}
@@ -163,7 +181,7 @@ Channel::Channel(const std::string &ch_name, const std::string &type)
       connections(0), aborted(false), started_(false), cmd_client(0), cmd_server(0),
       last_throttled_send(0), does_monitor(false), does_share(false), does_update(false) {
     internals = new ChannelInternals();
-    if (all == 0) {
+    if (all == nullptr) {
         all = new std::map<std::string, Channel *>;
     }
     (*all)[channel_name] = this;
@@ -478,10 +496,13 @@ Action::Status Channel::setState(const char *new_state_cstr, uint64_t authority,
 }
 
 void Channel::start() {
-    char tnam[100];
-    int pgn_rc = pthread_getname_np(pthread_self(), tnam, 100);
-    assert(pgn_rc == 0);
-    DBG_CHANNELS << "Channel " << channel_name << " starting from thread " << tnam << "\n";
+    std::string start_thread_name = get_thread_name();
+    DBG_CHANNELS << "Channel " << channel_name << " starting from thread " << start_thread_name << "\n";
+    if (start_thread_name != internals->owning_thread_name) {
+        NB_MSG << "Channel " << channel_name << " starting from thread " << start_thread_name
+                     << " owned by " << internals->owning_thread_name << "\n";
+        // TODO: assert(false);
+    }
 
     if (isClient()) {
         startSubscriber();
@@ -498,6 +519,12 @@ void Channel::start() {
 }
 
 void Channel::stop() {
+    std::string stop_thread_name = get_thread_name();
+    if (stop_thread_name != internals->owning_thread_name) {
+        NB_MSG << "Channel " << channel_name << " stopping from thread " << stop_thread_name
+                     << " owned by " << internals->owning_thread_name << "\n";
+        // TODO: assert(false);
+    }
     //TBD fix machines that publish to this channel
     disableShadows();
     if (isClient()) {
@@ -588,17 +615,17 @@ void Channel::addConnection() {
         }
     }
     else if (isClient()) {
-        assert(false);
+        assert("Cannot add a second connection to a client" && false);
     }
     else if (!definition()->isPublisher()) {
         if (current_state != ChannelImplementation::WAITSTART) {
-            snprintf(buf, 100, "Channel %s added connection %d; now waiting for start",
-                     channel_name.c_str(), connections);
-            MessageLog::instance()->add(buf);
+            std::stringstream ss;
+            ss << "Channel " << channel_name << " added another connection " << connections
+               << " when in state: " << current_state << "; now waiting for start";
+            MessageLog::instance()->add(ss.str());
             DBG_CHANNELS << buf << "\n";
             SetStateActionTemplate ssat(CStringHolder("SELF"), "WAITSTART");
-            enqueueAction(ssat.factory(
-                this)); // execute this state change once all other actions are complete
+            enqueueAction(ssat.factory( this));
         }
     }
 }
@@ -1053,13 +1080,10 @@ void Channel::operator()() {
     // start routine messages through the subscriber socket
     internals->router.setRemoteSocket(&communications_manager->subscriber());
     internals->router.addRoute(MessageHeader::SOCK_CW, internals->command_sock);
-    //usleep(50);
     DBG_CHANNELS << "Clockwork command processor on other end of "
                  << internals->cmd_sock_info->address << "\n";
     internals->router.addRoute(MessageHeader::SOCK_CHAN, cmd_server);
-    //usleep(50);
     internals->router.addRoute(MessageHeader::SOCK_CTRL, ZMQ_PAIR, sock_crtl_name);
-    //usleep(50);
 
     //internals->router.addFilter(MessageHeader::SOCK_CW, new CommandLogFilter(this, "****** "));
     //internals->router.addFilter(MessageHeader::SOCK_CHAN, new CommandLogFilter(this, "------ "));
@@ -1068,9 +1092,6 @@ void Channel::operator()() {
     //internals->router.addFilter(MessageHeader::SOCK_REMOTE, new CommandLogFilter(this, "%%%%% "));
 
     //internals->router.addFilter(MessageHeader::SOCK_CHAN, new RemoteClockworkCommandFilter(this));
-    //internals->router_thread = new boost::thread(boost::ref(internals->router));
-
-    //NB_MSG << channel_name << " setup message router\n";
 
     long poll_timeout = 1;
     while (!aborted && communications_manager) {
@@ -1287,6 +1308,11 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
             return sock;
         }
         catch (const std::exception &ex) {
+            std::stringstream ss;
+            ss << "Channel " << channel_name << " failed to bind command server socket: "
+               << ex.what();
+            MessageLog::instance()->add(ss.str());
+            std::cerr << ss.str() << "\n";
             assert(false);
             return 0;
         }
@@ -1294,14 +1320,16 @@ zmq::socket_t *Channel::createCommandSocket(bool client_endpoint) {
 }
 
 void Channel::startSubscriber() {
+    std::string start_subs_thread_name = get_thread_name();
+    if (start_subs_thread_name != internals->owning_thread_name) {
+        NB_MSG << "Channel " << channel_name << " starting subscriber from thread "
+                     << start_subs_thread_name << " owned by " << internals->owning_thread_name
+                     << "\n";
+        // TODO: assert(false);
+    }
+
     assert(!communications_manager);
     assert(!definition()->isPublisher()); // publishers use startServer()
-
-    // A clockwork to clockwork connection uses its own thread to manage a subscription
-    char tnam[100];
-    int pgn_rc = pthread_getname_np(pthread_self(), tnam, 100);
-    assert(pgn_rc == 0);
-    //DBG_CHANNELS << "Channel " << channel_name << " setting up subscriber thread and client side connection from thread " << tnam << "\n";
 
     internals->subscriber_thread = new boost::thread(boost::ref(*this));
 
@@ -1331,6 +1359,13 @@ void Channel::startSubscriber() {
 
 // NOTE this method is not currently called
 void Channel::stopSubscriber() {
+    std::string stop_subs_thread_name = get_thread_name();
+    if (stop_subs_thread_name != internals->owning_thread_name) {
+        NB_MSG << "Channel " << channel_name << " stopping subscriber from thread "
+                     << stop_subs_thread_name << " owned by " << internals->owning_thread_name
+                     << "\n";
+        // TODO: assert(false);
+    }
     delete communications_manager;
     communications_manager = 0;
 }
@@ -1448,42 +1483,6 @@ Channel *Channel::create(unsigned int port, ChannelDefinition *defn) {
 void ChannelImplementation::modified() { last_modified = microsecs(); }
 
 void ChannelImplementation::checked() { last_checked = microsecs(); }
-
-static void copyJSONArrayToSet(cJSON *obj, const char *key, std::set<std::string> &res) {
-    cJSON *items = cJSON_GetObjectItem(obj, key);
-    if (items && items->type == cJSON_Array) {
-        cJSON *item = items->child;
-        while (item) {
-            if (item->type == cJSON_String) {
-                res.insert(item->valuestring);
-            }
-            item = item->next;
-        }
-    }
-}
-
-static void copyJSONArrayToMap(cJSON *obj, const char *key, std::map<std::string, Value> &res,
-                               const char *key_name = "property", const char *value_name = "type") {
-    cJSON *items = cJSON_GetObjectItem(obj, key);
-    if (items && items->type == cJSON_Array) {
-        cJSON *item = items->child;
-        while (item) {
-            // we only collect items from the array that match our expected format of
-            // property,value pairs
-            if (item->type == cJSON_Object) {
-                cJSON *js_prop = cJSON_GetObjectItem(item, key_name);
-                cJSON *js_type = cJSON_GetObjectItem(item, value_name);
-                cJSON *js_val = cJSON_GetObjectItem(item, "value");
-                if (js_prop->type == cJSON_String) {
-                    res[js_prop->valuestring] =
-                        MessageEncoding::valueFromJSONObject(js_val, js_type);
-                }
-            }
-            item = item->next;
-        }
-    }
-}
-
 #if 0
 ChannelDefinition *ChannelDefinition::fromJSON(const char *json)
 {
@@ -1526,35 +1525,7 @@ ChannelDefinition *ChannelDefinition::fromJSON(const char *json)
     cJSON_Delete(obj);
     return defn;
 }
-#endif
 
-static cJSON *StringSetToJSONArray(std::set<std::string> &items) {
-    cJSON *res = cJSON_CreateArray();
-    std::set<std::string>::iterator iter = items.begin();
-    while (iter != items.end()) {
-        const std::string &str = *iter++;
-        cJSON_AddItemToArray(res, cJSON_CreateString(str.c_str()));
-    }
-    return res;
-}
-
-static cJSON *MapToJSONArray(std::map<std::string, Value> &items, const char *key_name = "property",
-                             const char *value_name = "type") {
-    cJSON *res = cJSON_CreateArray();
-    std::map<std::string, Value>::iterator iter = items.begin();
-    while (iter != items.end()) {
-        const std::pair<std::string, Value> item = *iter++;
-        cJSON *js_item = cJSON_CreateObject();
-        cJSON_AddItemToObject(js_item, key_name, cJSON_CreateString(item.first.c_str()));
-        cJSON_AddStringToObject(js_item, value_name,
-                                MessageEncoding::valueType(item.second).c_str());
-        MessageEncoding::addValueToJSONObject(js_item, "value", item.second);
-        cJSON_AddItemToArray(res, js_item);
-    }
-    return res;
-}
-
-#if 0
 char *ChannelDefinition::toJSON()
 {
     cJSON *obj = cJSON_CreateObject();
@@ -2606,27 +2577,32 @@ void Channel::setupCommandSockets() {
         Channel *chn = item.second;
         if (chn->internals->cmd_sock_info) {
             ProcessingThread::instance()->addCommandChannel(chn->internals->cmd_sock_info);
-            NB_MSG << "channel " << chn->getName() << " already has a command socket.. using it\n";
+            DBG_CHANNELS << "channel " << chn->getName() << " already has a command socket.. using it\n";
             continue;
         }
         if (!chn->definition()) {
-            NB_MSG << "channel " << chn->getName()
+            DBG_CHANNELS << "channel " << chn->getName()
                    << " does not have a definition structure.. skipping\n";
         }
-        if (chn->definition() && !chn->definition()->isPublisher()) {
-            try {
-                chn->internals->cmd_sock_info =
-                    ProcessingThread::instance()->addCommandChannel(chn);
-                NB_MSG << tnam << " " << chn->channel_name << " remote end bound to socket "
-                       << chn->internals->cmd_sock_info->address << "\n";
-                usleep(50);
-            }
-            catch (std::exception &ex) {
-                NB_MSG << "setupCommandSockets " << ex.what() << "\n";
-            }
-        }
         else {
-            NB_MSG << chn->channel_name << " s a publisher. not using a command socket\n";
+            if (!chn->definition()->isPublisher()) {
+                try {
+                    chn->internals->cmd_sock_info =
+                        ProcessingThread::instance()->addCommandChannel(chn);
+                    DBG_CHANNELS << tnam << " " << chn->channel_name << " remote end bound to socket "
+                           << chn->internals->cmd_sock_info->address << "\n";
+                    usleep(50);
+                }
+                catch (std::exception &ex) {
+                    std::stringstream ss;
+                    ss << "setupCommandSockets " << ex.what();
+                    MessageLog::instance()->add(ss.str());
+                    std::cerr << ss.str() << "\n";
+                }
+            }
+            else {
+                DBG_CHANNELS << chn->channel_name << " s a publisher. not using a command socket\n";
+            }
         }
     }
 }
