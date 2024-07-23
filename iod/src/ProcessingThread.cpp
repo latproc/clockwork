@@ -656,6 +656,7 @@ void ProcessingThread::operator()() {
             }
         }
 
+        MachineInstance::remove_pending();
         uint64_t machine_check_delay = 0;
         machine.idle();
         last_machine_change = machine.lastUpdated();
