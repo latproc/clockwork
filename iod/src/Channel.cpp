@@ -2585,24 +2585,24 @@ void Channel::setupCommandSockets() {
                    << " does not have a definition structure.. skipping\n";
         }
         else {
-            if (!chn->definition()->isPublisher()) {
-                try {
-                    chn->internals->cmd_sock_info =
-                        ProcessingThread::instance()->addCommandChannel(chn);
-                    DBG_CHANNELS << tnam << " " << chn->channel_name << " remote end bound to socket "
-                           << chn->internals->cmd_sock_info->address << "\n";
-                    usleep(50);
-                }
-                catch (std::exception &ex) {
-                    std::stringstream ss;
-                    ss << "setupCommandSockets " << ex.what();
-                    MessageLog::instance()->add(ss.str());
-                    std::cerr << ss.str() << "\n";
-                }
-            }
-            else {
-                DBG_CHANNELS << chn->channel_name << " s a publisher. not using a command socket\n";
-            }
+           if (!chn->definition()->isPublisher()) {
+               try {
+                   chn->internals->cmd_sock_info =
+                       ProcessingThread::instance()->addCommandChannel(chn);
+                   DBG_CHANNELS << tnam << " " << chn->channel_name << " remote end bound to socket "
+                          << chn->internals->cmd_sock_info->address << "\n";
+                   usleep(50);
+               }
+               catch (std::exception &ex) {
+                   std::stringstream ss;
+                   ss << "setupCommandSockets " << ex.what();
+                   MessageLog::instance()->add(ss.str());
+                   std::cerr << ss.str() << "\n";
+               }
+           }
+           else {
+               DBG_CHANNELS << chn->channel_name << " s a publisher. not using a command socket\n";
+           }
         }
     }
 }

@@ -49,6 +49,7 @@
 #include <sstream>
 #include <sys/time.h>
 #include <vector>
+#include "ThreadSafeList.h"
 
 extern SymbolTable globals;
 
@@ -83,10 +84,14 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     class SharedCache;
     class Cache;
+    static ThreadSafeList<MachineInstance *> to_remove;
 
   public:
     virtual ~MachineInstance();
     virtual Receiver *asReceiver() { return this; }
+
+    static void prepare_to_remove(MachineInstance *m) { to_remove.push_back(m); }
+    static void remove_pending();
 
     void triggerFired(Trigger *trig);
 

@@ -132,6 +132,10 @@ std::list<Package *> MachineInstance::pending_events;
 std::set<MachineInstance *> MachineInstance::pending_state_change;
 std::map<std::string, HardwareAddress> MachineInstance::hw_names;
 
+// The above lists need to be reorganised.. in the meantime
+// this is a temporary list of machines that need to be removed
+ThreadSafeList<MachineInstance *> MachineInstance::to_remove;
+
 /* Factory methods */
 
 MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::string &type,
@@ -149,6 +153,7 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::s
         MachineClass *cls = MachineClass::find(type.c_str());
         ChannelDefinition *defn = dynamic_cast<ChannelDefinition *>(cls);
         if (defn) {
+            // TODO: Shouldn't this use Channel::create?
             Channel *chn = new Channel(name.get(), type);
             chn->properties.add(defn->getProperties()); // load default properties
             chn->setDefinition(defn);
@@ -729,6 +734,20 @@ MachineInstance::~MachineInstance() {
     active_machines.remove(this);
     Dispatcher::instance()->removeReceiver(this);
     delete cache;
+}
+
+void MachineInstance::remove_pending() {
+    while (!to_remove.is_empty()) {
+        MachineInstance *m;
+        if (to_remove.try_pop_front(m)) {
+            all_machines.remove(m);
+            automatic_machines.remove(m);
+            active_machines.remove(m);
+            ::machines.erase(m->getName());
+            SharedWorkSet::instance()->remove(m);
+            pending_state_change.erase(m);
+        }
+    }
 }
 
 void MachineInstance::describe(std::ostream &out) {
