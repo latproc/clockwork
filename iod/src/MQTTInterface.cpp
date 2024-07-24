@@ -35,6 +35,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include "Dispatcher.h"
 
 void mqttif_signal_handler(int signum);
 
@@ -50,13 +51,13 @@ void my_message_callback(struct mosquitto *mosq, void *obj,
         char *payload = new char[message->payloadlen + 1];
         memcpy(payload, message->payload, message->payloadlen);
         payload[message->payloadlen] = 0;
-        std::stringstream ss;
-        ss << message->topic << ": " << payload;
-        MessageLog::instance()->add(ss.str());
         std::map<std::string, MachineInstance *>::iterator pos =
             device->handlers.find(message->topic);
+        MachineInstance *m = nullptr;
         if (pos != device->handlers.end()) {
-            MachineInstance *m = (*pos).second;
+            m = (*pos).second;
+        }
+        if (m && m->enabled()) {
             m->setValue("topic", Value(message->topic, Value::t_string));
             char *tmp = 0;
             int64_t val = strtol(payload, &tmp, 10);
@@ -79,14 +80,18 @@ void my_message_callback(struct mosquitto *mosq, void *obj,
             }
             if (m->_type == "POINT" && (event == "on_enter" || event == "off_enter")) {
                 Message msg(event.c_str(), Message::ENTERMSG);
-                m->execute(msg, device);
+                Package *p = new Package(device, m, msg, false);
+                Dispatcher::instance()->deliver(p);
             }
             else {
                 std::set<MachineInstance *>::iterator iter = m->depends.begin();
                 while (iter != m->depends.end()) {
                     MachineInstance *mi = *iter++;
+                    if (!mi->enabled()) { continue; }
+                    if (mi->_type == "LIST") { continue; }
                     Message msg(event.c_str(), (is_enter) ? Message::ENTERMSG : Message::SIMPLEMSG);
-                    mi->execute(msg, m);
+                    Package *p = new Package(device, mi, msg, false);
+                    Dispatcher::instance()->deliver(p);
                 }
             }
         }
