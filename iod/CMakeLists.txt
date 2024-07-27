@@ -257,7 +257,7 @@ set (Clockwork_SRCS
     src/split_string.c src/read_file.c src/copy_environment.c
     src/exec_command.c src/debug_malloc.c
     src/json_expr_parser.cpp src/json_expression.cpp src/process.cpp
-    src/process_data.cpp
+    src/process_data.cpp src/wait_for_work.cpp
 	)
 if (USE_ETHERCAT)
 if (USE_SOEM)

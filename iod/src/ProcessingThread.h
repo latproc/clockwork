@@ -41,9 +41,6 @@ class ProcessingThread : public ClockworkProcessManager {
     static void suspend(MachineInstance *m);
     static bool is_pending(MachineInstance *m);
 
-    enum ProcessingState { eIdle, eStableStates, ePollingMachines };
-    ProcessingState poll_machines();
-
     void operator()();
 
     void stop();
@@ -62,10 +59,38 @@ class ProcessingThread : public ClockworkProcessManager {
     };
     Status status;
 
+    enum class ProcessingStates { eIdle, eStableStates, ePollingMachines };
+    enum class UpdateStates { s_update_idle, s_update_sent };
+
     int pollZMQItems(int poll_time, zmq::pollitem_t items[], int num_items,
                      zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr,
                      zmq::socket_t &sched, zmq::socket_t &ecat_out);
 
+    bool wait_for_work(
+        zmq::pollitem_t items[],
+        ControlSystemMachine * machine,
+        int & dynamic_poll_start_idx,
+        uint64_t & curr_t,
+        const int max_poll_sockets,
+        int & poll_wait,
+        bool & machines_have_work,
+        long & systems_waiting,
+        boost::recursive_mutex & runnable_mutex,
+        uint64_t & last_machine_change,
+        unsigned int num_channels,
+        unsigned int machine_check_delay,
+        zmq::socket_t & sched_sync,
+        zmq::socket_t & resource_mgr,
+        zmq::socket_t & ecat_sync,
+        zmq::socket_t & command_sync,
+        zmq::socket_t & ecat_out,
+        std::set<IOComponent *> & io_work_queue,
+        uint64_t & last_checked_cycle_time,
+        uint64_t & last_checked_plugins,
+        uint64_t & last_checked_machines,
+        uint64_t & last_sample_poll,
+        const std::list<CommandSocketInfo*> &channels
+    );
     void waitForCommandProcessing(zmq::socket_t &resource_mgr);
     static uint64_t programStartTime() { return instance()->program_start; }
 
@@ -85,6 +110,39 @@ class ProcessingThread : public ClockworkProcessManager {
 
     void HandleIncomingEtherCatData(std::set<IOComponent *> &io_work_queue, uint64_t curr_t,
                                     uint64_t last_sample_poll, AutoStatStorage &avg_io_time);
+
+    void handle_plugin_machines(ProcessingStates polling_states,
+        uint64_t curr_t, uint64_t last_checked_plugins);
+    void handle_command(zmq::pollitem_t fixed_items[],
+        unsigned int command_channel_index,
+        int dynamic_poll_start_idx,
+        unsigned int num_channels,
+        zmq::socket_t &command_sync,
+        const std::list<CommandSocketInfo*> & channels,
+        long cycle_delay
+    );
+    void handle_scheduler(
+#ifdef KEEPSTATS
+        AutoStatStorage &scheduler_delay,
+#endif
+        zmq::socket_t &sched_sync,
+        char *buf,
+        Status &status,
+        ProcessingStates &processing_state
+    );
+    void handle_hardware(
+#ifdef KEEPSTATS
+        AutoStatStorage &avg_update_time,
+#endif
+        UpdateStates & s_update_idle,
+        zmq::socket_t & ecat_out
+    );
+    void handle_machines(
+        uint64_t & last_checked_machines,
+        unsigned int & machine_check_delay,
+        ProcessingStates &processing_state,
+        uint64_t & curr_t
+    );
 
     HardwareActivation &activate_hardware;
     IODCommandThread &command_interface;
