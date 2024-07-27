@@ -3,6 +3,7 @@
 #include "AutoStats.h"
 #include "IOComponent.h"
 #include "ProcessingThread.h"
+#include "IOInterface.h"
 
 void ProcessingThread::handle_hardware(
 #ifdef KEEPSTATS
@@ -43,9 +44,9 @@ void ProcessingThread::handle_hardware(
                                 ++stage;
                             }
                             case 2: {
-                                uint8_t packet_type = 2;
+                                auto packet_type = IOInterface::MessageType::PROCESS_DATA;
                                 if (IOComponent::getHardwareState() != IOComponent::s_operational) {
-                                    packet_type = 1;
+                                    packet_type = IOInterface::MessageType::DEFAULT_DATA;
                                 }
                                 zmq::message_t iomsg(1);
                                 memcpy(iomsg.data(), (void *)&packet_type, 1);
