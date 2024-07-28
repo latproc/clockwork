@@ -19,7 +19,8 @@
 */
 
 #include <Channel.h>
-#include <boost/thread/mutex.hpp>
+#include <thread>
+#include <mutex>
 #include <iostream>
 #include <list>
 #include <map>
@@ -31,6 +32,7 @@
 #include "ClientInterface.h"
 #include "DebugExtra.h"
 #include "Dispatcher.h"
+#include "ECInterface.h"
 #include "IODCommand.h"
 #include "IODCommands.h"
 #include "Logger.h"
@@ -54,12 +56,6 @@ IODCommandThread *IODCommandThread::instance() {
     }
     return instance_;
 }
-
-class IODCommandFactory {
-  public:
-    virtual ~IODCommandFactory() {}
-    virtual IODCommand *create();
-};
 
 IODCommand *IODCommandFactory::create() { return new IODCommandUnknown(); }
 
@@ -189,9 +185,16 @@ template <class T> class CommandTable {
     typedef typename Table::iterator Iterator;
 
     Table table;
+    std::mutex mutex;
 
-    void add(const char *name, T cmd) { table.insert(std::make_pair(name, cmd)); }
-    Range find(const std::string &name) { return table.equal_range(name); }
+    void add(const char *name, T cmd) {
+        std::lock_guard<std::mutex> lock(mutex);
+        table.insert(std::make_pair(name, cmd));
+    }
+    Range find(const std::string &name) {
+        std::lock_guard<std::mutex> lock(mutex);
+        return table.equal_range(name);
+    }
 };
 
 struct CommandThreadInternals : public ClientInterfaceInternals {
@@ -199,7 +202,6 @@ struct CommandThreadInternals : public ClientInterfaceInternals {
     zmq::socket_t socket;
     //pthread_t monitor_thread;
     CommandTable<IODCommandFactory *> commands;
-    boost::mutex data_mutex;
 
     //std::list<IODCommand *>pending_commands;
     //std::list<IODCommand *>completed_commands;
