@@ -69,6 +69,10 @@ void ProcessData::setUpdateData(uint8_t *pd, size_t new_size) {
     process_data.insert(process_data.begin(), pd, pd + new_size);
 }
 
+void ProcessData::setUpdateData(std::vector<uint8_t> &data) {
+    update_data = data;
+}
+
 void ProcessData::setUpdateMask(uint8_t *new_mask, size_t new_size) {
     process_mask.clear();
     process_mask.resize(new_size);
