@@ -717,7 +717,7 @@ class InputFilterSettings {
         }
         double c[] = {0.081, 0.215, 0.541, 0.865, 1, 0.865, 0.541, 0.215, 0.081};
         double res = 0;
-        for (size_t i = 0; i < filter_length; ++i) {
+        for (ssize_t i = 0; i < filter_length; ++i) {
             double f = (double)getBufferValue(positions, i);
             //printf(" %.3f,%.3f ",f, f*c[i]);
             res += f * c[i];
@@ -947,7 +947,7 @@ class CounterInternals {
     int64_t speed;
     uint16_t buffer_len;
     FloatBuffer speeds;
-    size_t rate_len;
+    ssize_t rate_len;
 
     CounterInternals()
         : positions(0), tolerance(&default_tolerance), filter_len(&default_filter_len),
