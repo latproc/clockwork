@@ -2076,8 +2076,7 @@ ec_pdo_info_t *c_pdos = 0;
 ec_sync_info_t *c_syncs = 0;
 EntryDetails *c_entry_details = 0;
 
-cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave_info_t &slave,
-                            bool reconfigure) {
+cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave_info_t &slave) {
     unsigned int i, j, k, pdo_pos = 0, entry_pos = 0;
 
     const unsigned int estimated_max_entries = 128;
@@ -2236,29 +2235,6 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
     }
     if (c_entries) {
         delete[] c_entries;
-#warning removed what i think is dead code
-#if 0
-    if (reconfigure) {
-                DBG_ETHERCAT << "defining module " << slave.name << " sync_count: "
-                                << (int)slave.sync_count << " num entries: " << total_entries << "\n";
-        ECModule *module = new ECModule();
-        module->name = slave.name;
-        module->alias = 0;
-        module->position = slave.position;
-        module->vendor_id = slave.vendor_id;
-        module->product_code = slave.product_code;
-        module->syncs = c_syncs;
-        module->pdos = c_pdos;
-        module->pdo_entries = c_entries;
-        module->sync_count = slave.sync_count;
-        module->entry_details = c_entry_details;
-        module->num_entries = total_entries;
-        auto res = ECInterface::instance()->addModule(module, reconfigure);
-        if (!res) {
-            delete module; // module may be already registered
-            std::cerr << "Failed to add module " << slave.name << " " << res.error() << "\n";
-        }
-#endif
     }
     if (c_pdos) {
         delete[] c_pdos;
@@ -2271,8 +2247,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
     return root;
 }
 
-char *collectSlaveConfig(bool reconfigure) {
-#if 1
+cJSON *collectSlaveConfigJson(int position) {
     cJSON *root = cJSON_CreateArray();
     unsigned int pos = 0;
     int res = 0;
@@ -2282,66 +2257,57 @@ char *collectSlaveConfig(bool reconfigure) {
     while (res >= 0 && pos < master_info.slave_count) {
         ECModule *module = ECInterface::findModule(pos);
         {
-            ec_slave_info_t slave_info;
-            memset(&slave_info, 0, sizeof(ec_slave_info_t));
-            DBG_ETHERCAT_CALLS << "ecrt_master_get_slave\n";
-            res = ecrt_master_get_slave(ECInterface::master, pos, &slave_info);
+            if (position == -1 || position == static_cast<int>(pos)) {
+                ec_slave_info_t slave_info;
+                memset(&slave_info, 0, sizeof(ec_slave_info_t));
+                DBG_ETHERCAT_CALLS << "ecrt_master_get_slave\n";
+                res = ecrt_master_get_slave(ECInterface::master, pos, &slave_info);
 
-            DBG_ETHERCAT << "generating JSON slave description for: " << "pos: "
-                         << slave_info.position << ", " << "syncs: " << slave_info.sync_count
-                         << ", " << "sdos: " << slave_info.sdo_count << ")\n";
-            cJSON_AddItemToArray(
-                root, generateSlaveCStruct(ECInterface::master, module, slave_info, reconfigure));
+                DBG_ETHERCAT << "generating JSON slave description for: " << "pos: "
+                             << slave_info.position << ", " << "syncs: " << slave_info.sync_count
+                             << ", " << "sdos: " << slave_info.sdo_count << ")\n";
+                cJSON_AddItemToArray(
+                    root, generateSlaveCStruct(ECInterface::master, module, slave_info));
+            }
         }
         ++pos;
     }
-#else
-
-    cJSON *root = cJSON_CreateArray();
-    MasterDevice m(0);
-    m.open(MasterDevice::Read);
-
-    ec_ioctl_master_t master;
-    ec_ioctl_slave_t slave;
-
-    memset(&master, 0, sizeof(ec_ioctl_master_t));
-    memset(&slave, 0, sizeof(ec_ioctl_slave_t));
-    m.getMaster(&master);
-
-    for (unsigned int i = 0; i < master.slave_count; i++) {
-        ECModule *module = ECInterface::findModule(i);
-        if (!module) {
-            m.getSlave(&slave, i);
-            cJSON_AddItemToArray(root, generateSlaveCStruct(m, slave, true));
-        }
-        else {
-            std::cout << "Skipped scanning of module at position " << i << " already loaded\n";
-        }
+    if (position == -1) {
+        char *json = cJSON_Print(root);
+        /* save a description of the bus configuration */
+        std::ofstream logfile;
+        logfile.open("/tmp/ecat.log", std::ofstream::out /* | std::ofstream::app */);
+        logfile << json << "\n";
+        logfile.close();
+        free(json);
     }
-#endif
-    char *json = cJSON_Print(root);
-    cJSON_Delete(root);
 
-    /* save a description of the bus configuration */
-    std::ofstream logfile;
-    logfile.open("/tmp/ecat.log", std::ofstream::out /* | std::ofstream::app */);
-    logfile << json << "\n";
-    logfile.close();
-
-    return json;
+    return root;
 }
 
 bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
-    char *res = collectSlaveConfig(false);
-    if (res) {
-        result_str = res;
-        free(res);
-        return true;
+    cJSON *root = nullptr;
+    std::cout << params[0] << "\n";
+    if (params.size() == 2) {
+        int64_t val;
+        if (params[1].asInteger(val)) {
+            root = collectSlaveConfigJson(val);
+        }
     }
     else {
-        error_str = "JSON Error";
-        return false;
+        root = collectSlaveConfigJson();
     }
+    if (root) {
+        char *json = cJSON_PrintUnformatted(root);
+        cJSON_Delete(root);
+        if (json) {
+            result_str = json;
+            free(json);
+            return true;
+        }
+    }
+    error_str = "JSON Error";
+    return false;
 }
 
 bool IODCommandMasterInfo::run(std::vector<Value> &params) {
@@ -2375,7 +2341,7 @@ bool IODCommandMasterInfo::run(std::vector<Value> &params) {
     return done;
 }
 
-#else
+#else // ifndef EC_SIMULATOR
 
 bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
     cJSON *root = cJSON_CreateObject();

@@ -525,8 +525,9 @@ int main(int argc, char const *argv[]) {
     ECInterface::FREQUENCY = 1000;
 
 #ifndef EC_SIMULATOR
-    collectSlaveConfig(
-        true); // load slave information from the EtherCAT master and configure the domain
+    // load slave information from the EtherCAT master and configure the domain
+    auto root = collectSlaveConfigJson();
+    cJSON_Delete(root);
     IOComponent::setupIOMap();
     ECInterface::instance()->activate();
 #endif

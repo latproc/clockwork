@@ -298,9 +298,9 @@ bool setupEtherCatThread() {
 
         ECInterface::instance()->configureModules();
         ECInterface::instance()->registerModules();
-        char *slave_config = collectSlaveConfig(false);
+        cJSON *slave_config = collectSlaveConfigJson();
         if (slave_config) {
-            free(slave_config);
+            cJSON_Delete(slave_config);
         }
     }
 #endif
