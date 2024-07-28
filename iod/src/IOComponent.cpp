@@ -169,24 +169,32 @@ void copyMaskedBits(uint8_t *dest, uint8_t *src, uint8_t *mask, size_t len) {
 #endif
 }
 
-IOUpdate::~IOUpdate() {
-    assert(mask_);
-    //  delete mask_;
+uint64_t IOUpdate::global_clock() const { return global_clock_; }
+
+void IOUpdate::clear() {
+    global_clock_ = 0;
+    data_.clear();
+    mask_.clear();
 }
 
-uint32_t IOUpdate::size() const { return size_; }
-void IOUpdate::setSize(uint32_t sz) { size_ = sz; }
+void IOUpdate::setGlobalClock(uint64_t clock) { global_clock_ = clock; }
 
-uint8_t *IOUpdate::data() const { return data_; }
-void IOUpdate::setData(uint8_t *dt) {
-    assert("memory leak setting IO Component data" && !data_);
-    data_ = dt;
+uint32_t IOUpdate::data_size() const { return data_.size(); }
+//void IOUpdate::setSize(uint32_t sz) { size_ = sz; }
+
+const uint8_t *IOUpdate::data() const { return data_.data(); }
+void IOUpdate::setData(uint8_t *dt, size_t size) {
+    data_.clear();
+    data_.insert(data_.end(), &dt[0], &dt[size]);
 }
 
-uint8_t *IOUpdate::mask() const { return mask_; }
-void IOUpdate::setMask(uint8_t *ms) {
-    assert("memory leak setting IO Component data" && !mask_);
-    mask_ = ms;
+void IOUpdate::setData(std::vector<uint8_t> &&dt) { data_ = dt; }
+void IOUpdate::setMask(std::vector<uint8_t> &&dt) { mask_ = dt; }
+
+const uint8_t *IOUpdate::mask() const { return mask_.data(); }
+void IOUpdate::setMask(uint8_t *ms, size_t size) {
+    mask_.clear();
+    mask_.insert(mask_.end(), &ms[0], &ms[size]);
 }
 
 // these components need to synchronise with clockwork
@@ -322,18 +330,15 @@ static void display(const uint8_t *p, unsigned int count) {
 }
 #endif
 
-uint8_t *IOComponent::getUpdateData() {
-    assert(io_process_data);
-    if (!update_data) {
-        update_data = new uint8_t[process_data_size];
-        memcpy(update_data, io_process_data, process_data_size);
-    }
-    return update_data;
+std::vector<uint8_t> IOComponent::getUpdateData() {
+    std::vector<uint8_t> res;
+    res.insert(res.end(), io_process_data, io_process_data + process_data_size);
+    return res;
 }
 
-void IOComponent::processAll(const Update &update, std::set<IOComponent *> &updated_machines) {
-    processAll(update.global_clock, update.incoming_data_size, &update.incoming_process_mask[0],
-               &update.incoming_process_data[0], updated_machines);
+void IOComponent::processAll(const IOUpdate &update, std::set<IOComponent *> &updated_machines) {
+    processAll(update.global_clock(), update.data_size(), update.mask(),
+               update.data(), updated_machines);
 }
 
 void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *mask,
@@ -1357,20 +1362,19 @@ bool IOComponent::ownersEnabled() const {
     return false;
 }
 
-static uint8_t *generateUpdateMask() {
+static std::vector<uint8_t> generateUpdateMask() {
     //  returns null if there are no updates, otherwise returns
     // a mask for the update data
 
+    std::vector<uint8_t> res;
     //std::cout << "generating mask\n";
     if (updatedComponentsOut.empty()) {
-        return 0;
+        return res;
     }
 
     unsigned int min = IOComponent::getMinIOOffset();
     unsigned int max = IOComponent::getMaxIOOffset();
-    uint8_t *res = new uint8_t[max + 1];
-    memset(res, 0, max + 1);
-    //std::cout << "mask is " << (max+1) << " bytes\n";
+    res.reserve(max - min + 1);
 
     std::set<IOComponent *>::iterator iter = updatedComponentsOut.begin();
     while (iter != updatedComponentsOut.end()) {
@@ -1411,26 +1415,18 @@ static uint8_t *generateUpdateMask() {
 
 IOUpdate *IOComponent::getUpdates() {
     //outputs_waiting = 0; // reset work indicator flag
-    uint8_t *mask = ::generateUpdateMask();
-    if (!mask) {
-        return 0;
-    }
-    //MEMCHECK();
+    auto mask = ::generateUpdateMask();
+    if (mask.size() == 0) { return 0; }
     IOUpdate *res = new IOUpdate;
-    //MEMCHECK();
-    res->setSize(max_offset - min_offset + 1);
     res->setData(getUpdateData());
-    //MEMCHECK();
-    res->setMask(mask);
-    //MEMCHECK();
+    res->setMask(std::move(mask));
 #if VERBOSE_DEBUG
     std::cout << std::flush << "IOComponent::getUpdates preparing to send " << res->size() << " d:";
-    display(res->data(), process_data_size);
+    display(res->data(), res->size());
     std::cout << " m:";
-    display(res->mask(), process_data_size);
+    display(res->mask(), res->size());
     std::cout << "\n" << std::flush;
 #endif
-    //MEMCHECK();
     return res;
 }
 
@@ -1439,14 +1435,14 @@ IOUpdate *IOComponent::getDefaults() {
         return 0;
     }
     IOUpdate *res = new IOUpdate;
-    res->setSize(max_offset - min_offset + 1);
+    size_t size = max_offset - min_offset + 1;
     assert(io_process_data);
     assert(process_data_size);
     assert(default_data);
     assert(default_mask);
     copyMaskedBits(io_process_data, default_data, default_mask, process_data_size);
-    res->setData(getProcessData());
-    res->setMask(default_mask);
+    res->setData(getProcessData(), size);
+    res->setMask(default_mask, size);
 
 #if VERBOSE_DEBUG
     std::cout << "preparing to send defaults " << res->size() << " bytes\n";

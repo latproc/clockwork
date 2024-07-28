@@ -31,7 +31,7 @@ void ProcessingThread::handle_hardware(
                     upd = IOComponent::getUpdates();
                 }
                 if (upd) {
-                    uint32_t size = upd->size();
+                    uint32_t size = upd->data_size();
                     uint8_t stage = 1;
                     while (true) {
                         try {

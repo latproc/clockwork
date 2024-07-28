@@ -78,7 +78,7 @@ class ProcessingThreadInternals {
   public:
     int sequence;
     long cycle_delay;
-    Update update;
+    IOUpdate update;
 
     static const int ECAT_ITEM = 0;       // ethercat data incoming
     static const int CMD_ITEM = 1;        // client interface time sync
@@ -213,7 +213,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int nu
             }
             if (!item_count) { return 0; }
             if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
-                Update update;
+                IOUpdate update;
                 // the EtherCAT message carries a mask and data
 
                 int64_t more;
@@ -229,8 +229,8 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int nu
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
                             DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == sizeof(update.global_clock));
-                            memcpy(&update.global_clock, message.data(), msglen);
+                            assert(msglen == sizeof(update.global_clock()));
+                            update.setGlobalClock(reinterpret_cast<uint64_t>(update.data()));
                             ++stage;
                         }
                         case 2: { // data size
@@ -239,15 +239,15 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int nu
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
                             DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == sizeof(update.incoming_data_size));
-                            memcpy(&update.incoming_data_size, message.data(), msglen);
-                            len = update.incoming_data_size;
-                            if (len == 0) {
+                            size_t data_size = reinterpret_cast<size_t>(message.data());
+                            if (msglen == 0) {
                                 stage = 4;
                                 break;
                             }
-                            update.incoming_process_data.resize(update.incoming_data_size);
-                            update.incoming_process_mask.resize(update.incoming_data_size);
+                            if (data_size != update.data_size()) {
+                                std::cerr << "Process data size updated. Was: " << update.data_size()
+                                          << " now: " << data_size << "\n";
+                            }
                             ++stage;
                         }
                         case 3: { // data
@@ -257,11 +257,10 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int nu
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
                             DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == update.incoming_data_size);
-                            memcpy(&update.incoming_process_data[0], message.data(), msglen);
+                            update.setData(static_cast<uint8_t*>(message.data()), msglen);
 #if VERBOSE_DEBUG
                             DBG_PROCESSING << std::flush << "got data: ";
-                            display(std::cout, update.incoming_process_data);
+                            display(std::cout, update.data());
                             DBG_PROCESSING << "\n" << std::flush;
 #endif
                             ++stage;
@@ -273,11 +272,10 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int nu
                             ecat_sync.recv(&message);
                             size_t msglen = message.size();
                             DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == update.incoming_data_size);
-                            memcpy(&update.incoming_process_mask[0], message.data(), msglen);
+                            update.setMask(static_cast<uint8_t*>(message.data()), msglen);
 #if VERBOSE_DEBUG
                             std::cout << "got mask: ";
-                            display(std::cout, update.incoming_process_mask);
+                            display(std::cout, update.mask());
                             std::cout << "\n";
 #endif
                             ++stage;
@@ -488,10 +486,8 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     static unsigned long mp_count = 0;
 #endif
     int mask_p = 0;
-    uint32_t n = internals->update.incoming_data_size;
-    assert(internals->update.incoming_process_data.size() >= n);
-    assert(internals->update.incoming_process_mask.size() >= n);
-    while (n && internals->update.incoming_process_mask[mask_p] == 0) {
+    uint32_t n = internals->update.data_size();
+    while (n && internals->update.mask()[mask_p] == 0) {
         ++mask_p;
         --n;
     }
@@ -512,7 +508,7 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     }
     if (curr_t - last_sample_poll >= 10000) {
         last_sample_poll = curr_t;
-        handle_io_sampling(internals->update.global_clock); // devices that need a regular poll
+        handle_io_sampling(internals->update.global_clock()); // devices that need a regular poll
     }
 }
 
@@ -629,8 +625,7 @@ void ProcessingThread::operator()() {
             // attempt to initialise the hardware interface. If this
             // works we move the IOComponent module's state along
             // so that IOComponents can be linked
-            internals->update.incoming_process_data.clear();
-            internals->update.incoming_process_mask.clear();
+            internals->update.clear();
             if (activate_hardware.initialiseHardware()) {
                 IOComponent::setHardwareState(IOComponent::s_hardware_init);
             }
@@ -697,7 +692,7 @@ void ProcessingThread::operator()() {
             for (int i = 0; i < dynamic_poll_start_idx; ++i) {
                 items[i] = fixed_items[i];
             }
- 
+
             if (!wait_for_work(
                 items, &machine, dynamic_poll_start_idx, curr_t,
                 max_poll_sockets, poll_wait, machines_have_work,

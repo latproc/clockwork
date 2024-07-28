@@ -67,31 +67,36 @@ struct MQTTTopic {
     MQTTTopic(std::string &&t, std::string &&m) : topic(std::move(t)), message(std::move(m)) {}
 };
 
+#if 0
 struct Update {
     std::vector<uint8_t> incoming_process_data;
     std::vector<uint8_t> incoming_process_mask;
     uint64_t incoming_data_size;
     uint64_t global_clock = 0;
 };
+#endif
 
+// Non-owning pointers the the process data and mask
 class IOUpdate {
   public:
-    IOUpdate() : size_(0), data_(nullptr), mask_(nullptr) {}
-    ~IOUpdate();
+    void clear();
+    uint64_t global_clock() const;
+    void setGlobalClock(uint64_t clock);
+    uint32_t data_size() const;
+    //void setSize(uint32_t sz);
 
-    uint32_t size() const;
-    void setSize(uint32_t sz);
+    const uint8_t *data() const;
+    void setData(uint8_t *dt, size_t size);
+    void setData(std::vector<uint8_t> &&dt);
 
-    uint8_t *data() const;
-    void setData(uint8_t *dt);
-
-    uint8_t *mask() const;
-    void setMask(uint8_t *ms);
+    const uint8_t *mask() const;
+    void setMask(uint8_t *ms, size_t size);
+    void setMask(std::vector<uint8_t> &&dt);
 
   private:
-    uint32_t size_;
-    uint8_t *data_; // shared pointer to process data
-    uint8_t *mask_; // allocated pointer to current mask
+    uint64_t global_clock_ = 0;
+    std::vector<uint8_t> data_;// shared pointer to process data
+    std::vector<uint8_t> mask_;// allocated pointer to current mask
 };
 
 class MachineInstance;
@@ -107,7 +112,7 @@ class IOComponent : public Transmitter {
                                   unsigned int bit_len = 1, bool is_signed = false);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
-    static void processAll(const Update &update, std::set<IOComponent *> &updatedMachines);
+    static void processAll(const IOUpdate &update, std::set<IOComponent *> &updatedMachines);
     static void processAll(uint64_t clock, uint64_t data_size, const uint8_t *mask,
                            const uint8_t *data, std::set<IOComponent *> &updatedMachines);
     static void setupIOMap();
@@ -115,7 +120,7 @@ class IOComponent : public Transmitter {
     static int getMaxIOOffset();
     static uint8_t *getProcessData();
     static uint8_t *getProcessMask();
-    static uint8_t *getUpdateData();
+    static std::vector<uint8_t> getUpdateData();
     static uint8_t *getDefaultData();
     static uint8_t *getDefaultMask();
     static void setDefaultData(uint8_t *);
