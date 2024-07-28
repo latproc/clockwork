@@ -138,6 +138,22 @@ class ClockworkDeviceConfigurator : public DeviceConfigurator {
     }
 };
 
+// Generate /tmp/ecat.log with a dump of the current slave configurations
+void dump_slave_configuration() {
+    cJSON *slave_config = collectSlaveConfigJson();
+    if (slave_config) {
+        char *json = cJSON_Print(slave_config);
+        /* save a description of the bus configuration */
+        std::ofstream logfile;
+        logfile.open("/tmp/ecat.log", std::ofstream::out /* | std::ofstream::app */);
+        logfile << json << "\n";
+        logfile.close();
+        free(json);
+
+        cJSON_Delete(slave_config);
+    }
+}
+
 bool setupEtherCatThread() {
     if (!ECInterface::instance()->initialised) {
         DBG_INITIALISATION
@@ -282,26 +298,10 @@ bool setupEtherCatThread() {
                 }
             }
         }
-#if 0
-        // having collected a number of xml files we load the manual configurations
-        std::set<std::string>::iterator fi(xml_files.begin());
-        while (fi != xml_files.end()) {
-            const std::string &fname = *fi++;
-            parser.init();
-            DBG_INITIALISATION << "attempting to load devices from " << fname << "\n";
-            if (!parser.loadDeviceConfigurationXML(fname.c_str())) {
-                std::cerr << "Warning: failed to load module configuration from " << fname << "\n";
-            }
-        }
-        DBG_INITIALISATION << "Collected " << collected_configurations.size() << " configurations\n\n";
-#endif
 
         ECInterface::instance()->configureModules();
         ECInterface::instance()->registerModules();
-        cJSON *slave_config = collectSlaveConfigJson();
-        if (slave_config) {
-            cJSON_Delete(slave_config);
-        }
+        dump_slave_configuration();
     }
 #endif
     generateIOComponentModules(slave_configuration);
