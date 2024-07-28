@@ -591,8 +591,8 @@ class InputFilterSettings {
     uint16_t buffer_len; // the maximum length of the circular buffer
     const int64_t
         *tolerance; // some filters use a tolerance settable by the user in the "tolerance" property
-    double *filter_c_coeff;     // the Butterworth filter uses these coefficients
-    double *filter_d_coeff;     // the Butterworth filter uses these coefficients
+    std::vector<double> filter_c_coeff;     // the Butterworth filter uses these coefficients
+    std::vector<double> filter_d_coeff;     // the Butterworth filter uses these coefficients
     const int64_t *filter_len;  // adjust the filter length of some filters
     const int64_t *filter_type; // the user can select the filter using a "filter" property
     const int64_t *calc_dt;
@@ -628,22 +628,20 @@ class InputFilterSettings {
           calc_d2t(&default_calc_d2t), calc_stddev(&default_calc_stddev),
           position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
           speed(0.0), speed_scale(1.0), accel(0.0), accel_scale(1.0), speeds(4), rate_len(4),
-          input_bwf(0), vel_bwf(0), accel_bwf(0), throttle(0) {
+          input_bwf(nullptr), vel_bwf(nullptr), accel_bwf(nullptr), throttle(nullptr) {
 
         //double bw_c[] = { 0.000003756838020,0.000011270514059,0.000011270514059,0.000003756838020 };
         //double bw_d[] = { 1.000000000000,-2.937170728450,2.876299723479,-0.939098940325 };
-        double bw_c[] = {0.002898194633721, 0.008694583901164, 0.008694583901164,
+        filter_c_coeff = {0.002898194633721, 0.008694583901164, 0.008694583901164,
                          0.002898194633721};
-        double bw_d[] = {1.000000000000, -2.374094743709, 1.929355669091, -0.532075368312};
+        filter_d_coeff = {1.000000000000, -2.374094743709, 1.929355669091, -0.532075368312};
         //double c[] = {0.081,0.215,0.541,0.865,1,0.865,0.541,0.215,0.081};
-        butterworth_len = sizeof(bw_c) / sizeof(double);
-        filter_c_coeff = new double[butterworth_len];
-        memmove(filter_c_coeff, bw_c, sizeof(bw_c));
-        filter_d_coeff = new double[butterworth_len];
-        memmove(filter_d_coeff, bw_c, sizeof(bw_d));
-        input_bwf = new ButterworthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
-        vel_bwf = new ButterworthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
-        accel_bwf = new ButterworthFilter(butterworth_len, bw_c, butterworth_len, bw_d);
+        input_bwf = new ButterworthFilter(filter_c_coeff.size(), filter_c_coeff.data(),
+                        filter_d_coeff.size(), filter_d_coeff.data());
+        vel_bwf = new ButterworthFilter(filter_c_coeff.size(), filter_c_coeff.data(),
+                        filter_d_coeff.size(), filter_d_coeff.data());
+        accel_bwf = new ButterworthFilter(filter_c_coeff.size(), filter_c_coeff.data(),
+                        filter_d_coeff.size(), filter_d_coeff.data());
         positions = createBuffer(buffer_len);
     }
 
@@ -670,9 +668,7 @@ class InputFilterSettings {
 #endif
 
         // replace the raw value the positions buffer with the filtered value
-        //std::cout << read_time << " replacing pos: " << getBufferValue(positions, 0) << " with " << last_sent << "\n";
         setBufferValue(positions, last_sent);
-        //if (prev_sent == 0.0) prev_sent = last_sent; TBD wrong?
         if (last_time == 0) {
             last_time = read_time;
             prev_sent = last_sent;
@@ -739,8 +735,6 @@ int64_t InputFilterSettings::default_calc_stddev = 0;       // don't calculate s
 
 InputFilterSettings::~InputFilterSettings() {
     destroyBuffer(positions);
-    delete[] filter_c_coeff;
-    delete[] filter_d_coeff;
     delete input_bwf;
     delete vel_bwf;
     delete accel_bwf;
@@ -800,28 +794,25 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
             size_t num_d = d_coeff->parameters.size();
             if (num_c > 0 && num_c == num_d) {
                 config->butterworth_len = num_c;
-                delete[] config->filter_c_coeff;
-                delete[] config->filter_d_coeff;
-                config->filter_c_coeff = new double[num_c];
-                config->filter_d_coeff = new double[num_d];
+                config->filter_c_coeff.clear();
+                config->filter_d_coeff.clear();
                 std::cout << "C: " << (int)num_c;
                 for (unsigned int i = 0; i < num_c; ++i) {
                     double val;
-                    config->filter_c_coeff[i] = c_coeff->parameters[i].val.asFloat(val) ? val : 1.0;
+                    config->filter_c_coeff.push_back(c_coeff->parameters[i].val.asFloat(val) ? val : 1.0);
                     std::cout << " " << config->filter_c_coeff[i];
                 }
                 std::cout << "\nD: " << (int)num_d;
                 for (unsigned int i = 0; i < num_d; ++i) {
                     double val;
-                    config->filter_d_coeff[i] = d_coeff->parameters[i].val.asFloat(val) ? val : 1.0;
+                    config->filter_d_coeff.push_back(d_coeff->parameters[i].val.asFloat(val) ? val : 1.0);
                     std::cout << " " << config->filter_d_coeff[i];
                 }
                 std::cout << "\n";
                 // swap the filter, TBD copy current values from old filter?
-                ButterworthFilter *input_bwf = new ButterworthFilter(num_c, config->filter_c_coeff,
-                                                                     num_d, config->filter_d_coeff);
                 delete config->input_bwf;
-                config->input_bwf = input_bwf;
+                config->input_bwf = new ButterworthFilter(config->filter_c_coeff.size(), config->filter_c_coeff.data(),
+                        config->filter_d_coeff.size(), config->filter_d_coeff.data());
             }
             else {
                 std::cout << "filter parameters are incorrect: \n";
