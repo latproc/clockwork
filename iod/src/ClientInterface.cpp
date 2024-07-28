@@ -468,6 +468,12 @@ IODCommand *parseCommandString(const char *data) {
     else if (ds == "SHUTDOWN") {
         command = new IODCommandShutdown;
     }
+    else if (ds == "MASTER") {
+        command = new IODCommandMasterInfo;
+    }
+    else if (ds == "SLAVES" || ds == "SLAVE") {
+        command = new IODCommandGetSlaveConfig;
+    }
     else {
         FileLogger fl(program_name);
         fl.f() << "Warning: no command found for " << data << "\n";

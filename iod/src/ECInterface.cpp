@@ -26,6 +26,7 @@
 #include "cJSON.h"
 #include "clock.h"
 #include "tl/expected.hpp"
+#include "ClientInterface.h"
 #include <boost/thread/condition.hpp>
 #include <cstddef>
 #include <errno.h>
@@ -1366,10 +1367,16 @@ void ECInterface::init() {
 
     check_master_state();
 
-#if 0
-    IODCommandThread::registerCommand("EC", new IODCommandEtherCATTool);
-    IODCommandThread::registerCommand("MASTER", new IODCommandMasterInfo);
-    IODCommandThread::registerCommand("SLAVES", new IODCommandGetSlaveConfig);
+#if 1
+    //IODCommandThread::registerCommand("EC", new IODCommandEtherCATTool);
+    struct IODCommandMasterInfoFactory : public IODCommandFactory {
+        IODCommandMasterInfo *create() { return new IODCommandMasterInfo(); }
+    };
+    struct IODCommandGetSlaveConfigFactory : public IODCommandFactory {
+        IODCommandGetSlaveConfig *create() { return new IODCommandGetSlaveConfig(); }
+    };
+    IODCommandThread::registerCommand("MASTER", new IODCommandMasterInfoFactory);
+    IODCommandThread::registerCommand("SLAVES", new IODCommandGetSlaveConfigFactory);
 #endif
 #if 0
     ethercat_status = MachineInstance::find("ETHERCAT");
@@ -2316,6 +2323,7 @@ bool IODCommandMasterInfo::run(std::vector<Value> &params) {
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "slave_count", master_state->slaves_responding);
     cJSON_AddNumberToObject(root, "link_up", master_state->link_up);
+#if KEEP_STATS
     std::stringstream ss;
     statistics->io_scan_time.report(ss);
     statistics->points_processing.report(ss);
@@ -2325,8 +2333,9 @@ bool IODCommandMasterInfo::run(std::vector<Value> &params) {
     Statistic::reportAll(ss);
     ss << std::flush;
     cJSON_AddStringToObject(root, "statistics", ss.str().c_str());
+#endif
 
-    char *res = cJSON_Print(root);
+    char *res = cJSON_PrintUnformatted(root);
     bool done;
     if (res) {
         result_str = res;
