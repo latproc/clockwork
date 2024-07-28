@@ -23,6 +23,8 @@
 #include "Logger.h"
 #include "MachineInstance.h"
 #include "MessagingInterface.h"
+#include "process_data.h"
+#include "bit_ops.h"
 #include <algorithm>
 #include <boost/thread/mutex.hpp>
 #include <iomanip>
@@ -74,13 +76,8 @@ std::map<std::string, IOAddress> IOComponent::io_names;
 static uint64_t current_time;
 uint64_t IOComponent::io_clock;     // clock value when ProcessAll is called
 uint64_t IOComponent::global_clock; // clock value last received
-size_t IOComponent::process_data_size = 0;
-uint8_t *IOComponent::io_process_data = 0;
-uint8_t *IOComponent::io_process_mask = 0;
-uint8_t *IOComponent::update_data = 0;
-uint8_t *IOComponent::default_data = 0;
-uint8_t *IOComponent::default_mask = 0;
-static uint8_t *last_process_data = 0;
+static ProcessData process_data;
+std::vector<uint8_t> IOComponent::last_process_data;
 size_t IOComponent::outputs_waiting = 0;
 
 boost::recursive_mutex processing_queue_mutex;
@@ -123,52 +120,6 @@ void handle_io_sampling(uint64_t io_clock) {
 static void display(const uint8_t *p, unsigned int count = 0);
 #endif
 
-void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
-    uint8_t bitmask = 1 << bitpos;
-    if (val) {
-        *q |= bitmask;
-    }
-    else {
-        *q &= (uint8_t)(0xff - bitmask);
-    }
-}
-
-void copyMaskedBits(uint8_t *dest, uint8_t *src, uint8_t *mask, size_t len) {
-
-    uint8_t *result = dest;
-#if VERBOSE_DEBUG
-    std::cout << "copying masked bits: \n";
-    display(dest, len);
-    std::cout << "\n";
-    display(src, len);
-    std::cout << "\n";
-    display(mask, len);
-    std::cout << "\n";
-#endif
-    size_t count = len;
-    while (count--) {
-        uint8_t bitmask = 0x80;
-        for (int i = 0; i < 8; ++i) {
-            if (*mask & bitmask) {
-                if (*src & bitmask) {
-                    *dest |= bitmask;
-                }
-                else {
-                    *dest &= (uint8_t)(0xff - bitmask);
-                }
-            }
-            bitmask = bitmask >> 1;
-        }
-        ++src;
-        ++dest;
-        ++mask;
-    }
-#if VERBOSE_DEBUG
-    display(result, len);
-    std::cout << "\n";
-#endif
-}
-
 uint64_t IOUpdate::global_clock() const { return global_clock_; }
 
 void IOUpdate::clear() {
@@ -188,8 +139,8 @@ void IOUpdate::setData(uint8_t *dt, size_t size) {
     data_.insert(data_.end(), &dt[0], &dt[size]);
 }
 
-void IOUpdate::setData(std::vector<uint8_t> &&dt) { data_ = dt; }
-void IOUpdate::setMask(std::vector<uint8_t> &&dt) { mask_ = dt; }
+void IOUpdate::setData(std::vector<uint8_t> &dt) { data_ = dt; }
+void IOUpdate::setMask(std::vector<uint8_t> &dt) { mask_ = dt; }
 
 const uint8_t *IOUpdate::mask() const { return mask_.data(); }
 void IOUpdate::setMask(uint8_t *ms, size_t size) {
@@ -217,21 +168,8 @@ void IOComponent::setHardwareState(IOComponent::HardwareState state) {
 
 IOComponent::DeviceList IOComponent::devices;
 
-uint8_t *IOComponent::getProcessData() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-    return io_process_data;
-}
-uint8_t *IOComponent::getProcessMask() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-    return io_process_mask;
-}
-uint8_t *IOComponent::getDefaultData() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-    return default_data;
-}
-uint8_t *IOComponent::getDefaultMask() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-    return default_mask;
+ProcessData &IOComponent::getProcessData() {
+    return process_data;
 }
 
 void IOComponent::reset() {
@@ -246,30 +184,7 @@ void IOComponent::reset() {
             m->io_interface = 0;
         }
     }
-    if (io_process_data) {
-        delete[] io_process_data;
-    }
-    io_process_data = 0;
-    if (io_process_mask) {
-        delete[] io_process_mask;
-    }
-    io_process_mask = 0;
-    if (update_data) {
-        delete[] update_data;
-    }
-    update_data = 0;
-    if (default_data) {
-        delete[] default_data;
-    }
-    default_data = 0;
-    if (default_mask) {
-        delete[] default_mask;
-    }
-    default_mask = 0;
-    if (last_process_data) {
-        delete[] last_process_data;
-    }
-    last_process_data = 0;
+    process_data.clear();
 }
 
 IOComponent::IOComponent(IOAddress addr)
@@ -330,12 +245,6 @@ static void display(const uint8_t *p, unsigned int count) {
 }
 #endif
 
-std::vector<uint8_t> IOComponent::getUpdateData() {
-    std::vector<uint8_t> res;
-    res.insert(res.end(), io_process_data, io_process_data + process_data_size);
-    return res;
-}
-
 void IOComponent::processAll(const IOUpdate &update, std::set<IOComponent *> &updated_machines) {
     processAll(update.global_clock(), update.data_size(), update.mask(),
                update.data(), updated_machines);
@@ -346,8 +255,6 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
     io_clock = clock;
     // receive process data updates and mask to yield updated components
     current_time = microsecs();
-
-    assert(data != io_process_data);
 
 #if VERBOSE_DEBUG
     for (size_t ii = 0; ii < data_size; ++ii)
@@ -369,24 +276,21 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             break;
         }
 #endif
-
-    assert(data_size == process_data_size);
-
     if (hardware_state == s_hardware_preinit) {
         // the initial process data has arrived from EtherCAT. keep the previous data as the defaults
         // so they can be applied asap
-        memcpy(io_process_data, data, process_data_size);
-        //setHardwareState(s_hardware_init);
+        process_data.setProcessData((uint8_t *)data, data_size);
         return;
     }
 
     // step through the incoming mask and update bits in process data
     const uint8_t *p = data;
     const uint8_t *m = mask;
-    uint8_t *q = io_process_data;
+    auto pd = process_data.getProcessData();
+    uint8_t *q = pd.data();
     IOComponent *just_added = 0;
-    for (unsigned int i = 0; i < process_data_size; ++i) {
-        if (!last_process_data) {
+    for (unsigned int i = 0; i < pd.size(); ++i) {
+        if (last_process_data.empty()) {
             if (*m) {
                 notifyComponentsAt(i);
             }
@@ -462,10 +366,9 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
 
     if (hardware_state == s_operational) {
         // save the domain data for the next check
-        if (!last_process_data) {
-            last_process_data = new uint8_t[process_data_size];
+        if (last_process_data.empty()) {
+            last_process_data = process_data.getProcessData();
         }
-        memcpy(last_process_data, io_process_data, process_data_size);
     }
 
     {
@@ -559,8 +462,8 @@ std::ostream &operator<<(std::ostream &out, const IOAddress &address) {
 
 std::ostream &IOComponent::operator<<(std::ostream &out) const {
     out << "readtime: " << (io_clock - read_time) << address;
-    if (address.bitlen == 1 && io_process_data) {
-        out << " (" << (bool)(io_process_data[address.io_offset] & (1 << address.io_bitpos)) << ")";
+    if (address.bitlen == 1 && !process_data.getProcessData().empty()) {
+        out << " (" << (bool)(process_data.getProcessData().at(address.io_offset) & (1 << address.io_bitpos)) << ")";
     }
     return out;
 }
@@ -1252,17 +1155,10 @@ bool IOComponent::hasUpdates() {
     return !updatedComponentsOut.empty();
 }
 
-uint8_t *generateProcessMask(uint8_t *res, size_t len) {
-    unsigned int max = IOComponent::getMaxIOOffset();
-    // process data size
-    if (res && len != max + 1) {
-        delete[] res;
-        res = 0;
-    }
-    if (!res) {
-        res = new uint8_t[max + 1];
-    }
-    memset(res, 0, max + 1);
+std::vector<uint8_t> generateProcessMask() {
+    std::vector<uint8_t> result;
+    unsigned int max = IOComponent::getMaxIOOffset() - IOComponent::getMinIOOffset() + 1;
+    result.resize(max+1);
 
     IOComponent::Iterator iter = IOComponent::begin();
     while (iter != IOComponent::end()) {
@@ -1274,7 +1170,7 @@ uint8_t *generateProcessMask(uint8_t *res, size_t len) {
         uint8_t mask = 0x01 << bitpos;
         // set  a bit in the mask for each bit of this value
         for (unsigned int i = 0; i < ioc->address.bitlen; ++i) {
-            res[offset] |= mask;
+            result[offset] |= mask;
             mask = mask << 1;
             if (!mask) {
                 mask = 0x01;
@@ -1282,45 +1178,13 @@ uint8_t *generateProcessMask(uint8_t *res, size_t len) {
             }
         }
     }
-#if VERBOSE_DEBUG
-    std::cout << " Process Mask: ";
-    display(res, len);
-    std::cout << "\n";
-#endif
-    return res;
+    return result;
 }
 
-// copy the provied data to the default data block
-void IOComponent::setDefaultData(uint8_t *data) {
-#if VERBOSE_DEBUG
-    std::cout << "Setting default data to : \n";
-    display(data, process_data_size);
-    std::cout << "\n";
-#endif
-    if (!default_data) {
-        default_data = new uint8_t[process_data_size];
-    }
-    memcpy(default_data, data, process_data_size);
-}
-
-// copy the provided mask to the default data mask
-void IOComponent::setDefaultMask(uint8_t *mask) {
-#if VERBOSE_DEBUG
-    std::cout << "Setting default mask to : \n";
-    display(mask, process_data_size);
-    std::cout << "\n";
-#endif
-    if (!default_mask) {
-        default_mask = new uint8_t[process_data_size];
-    }
-    memcpy(default_mask, mask, process_data_size);
-}
-
-uint8_t *IOComponent::generateMask(std::list<MachineInstance *> &outputs) {
-    unsigned int max = IOComponent::getMaxIOOffset();
-    // process data size
-    uint8_t *res = new uint8_t[max + 1];
-    memset(res, 0, max + 1);
+std::vector<uint8_t> IOComponent::generateMask(std::list<MachineInstance *> &outputs) {
+    std::vector<uint8_t> result;
+    unsigned int max = IOComponent::getMaxIOOffset() - IOComponent::getMinIOOffset() + 1;
+    result.resize(max+1);
 
     std::list<MachineInstance *>::iterator iter = outputs.begin();
     while (iter != outputs.end()) {
@@ -1334,7 +1198,7 @@ uint8_t *IOComponent::generateMask(std::list<MachineInstance *> &outputs) {
             uint8_t mask = 0x01 << bitpos;
             // set  a bit in the mask for each bit of this value
             for (unsigned int i = 0; i < ioc->address.bitlen; ++i) {
-                res[offset] |= mask;
+                result[offset] |= mask;
                 mask = mask << 1;
                 if (!mask) {
                     mask = 0x01;
@@ -1343,7 +1207,7 @@ uint8_t *IOComponent::generateMask(std::list<MachineInstance *> &outputs) {
             }
         }
     }
-    return res;
+    return result;
 }
 
 bool IOComponent::ownersEnabled() const {
@@ -1418,8 +1282,8 @@ IOUpdate *IOComponent::getUpdates() {
     auto mask = ::generateUpdateMask();
     if (mask.size() == 0) { return 0; }
     IOUpdate *res = new IOUpdate;
-    res->setData(getUpdateData());
-    res->setMask(std::move(mask));
+    res->setData(process_data.getProcessData());
+    res->setMask(mask);
 #if VERBOSE_DEBUG
     std::cout << std::flush << "IOComponent::getUpdates preparing to send " << res->size() << " d:";
     display(res->data(), res->size());
@@ -1435,14 +1299,12 @@ IOUpdate *IOComponent::getDefaults() {
         return 0;
     }
     IOUpdate *res = new IOUpdate;
+    auto pd = process_data.getProcessData();
     size_t size = max_offset - min_offset + 1;
-    assert(io_process_data);
-    assert(process_data_size);
-    assert(default_data);
-    assert(default_mask);
-    copyMaskedBits(io_process_data, default_data, default_mask, process_data_size);
-    res->setData(getProcessData(), size);
-    res->setMask(default_mask, size);
+    assert("size mismatch" && size == pd.size());
+    copyMaskedBits(pd.data(), process_data.getDefaultData().data(), process_data.getDefaultMask().data(), pd.size());
+    res->setData(pd);
+    res->setMask(process_data.getDefaultMask());
 
 #if VERBOSE_DEBUG
     std::cout << "preparing to send defaults " << res->size() << " bytes\n";
@@ -1494,13 +1356,6 @@ void IOComponent::setupIOMap() {
 
     indexed_components = new std::vector<IOComponent *>((max_offset + 1) * 8);
 
-    if (io_process_data) {
-        delete[] io_process_data;
-    }
-    process_data_size = max_offset + 1;
-    io_process_data = new uint8_t[process_data_size];
-    memset(io_process_data, 0, process_data_size);
-
     io_map.resize(max_offset + 1);
     for (unsigned int i = 0; i <= max_offset; ++i) {
         io_map[i] = 0;
@@ -1528,16 +1383,13 @@ void IOComponent::setupIOMap() {
             //std::cout << "offset: " << (offset + i) << " io name: " << ioc->io_name << "\n";
         }
     }
-    if (io_process_mask) { delete io_process_mask; }
-    io_process_mask = generateProcessMask(io_process_mask, process_data_size);
+    auto pd = generateProcessMask();
+    process_data.setProcessMask(pd.data(), pd.size());
 }
 
 void IOComponent::markChange() {
-    assert(io_process_data);
-    if (!update_data) {
-        getUpdateData();
-    }
-    uint8_t *offset = update_data + address.io_offset;
+    auto update_data = process_data.getUpdateData();
+    uint8_t *offset = update_data.data() + address.io_offset;
     int bitpos = address.io_bitpos;
     offset += (bitpos / 8);
     bitpos = bitpos % 8;
@@ -1592,8 +1444,8 @@ void IOComponent::markChange() {
 }
 
 void IOComponent::handleChange(std::list<Package *> &work_queue) {
-    assert(io_process_data);
-    uint8_t *offset = io_process_data + address.io_offset;
+    auto pd = process_data.getProcessData();
+    uint8_t *offset = pd.data() + address.io_offset;
     int bitpos = address.io_bitpos;
     offset += (bitpos / 8);
     bitpos = bitpos % 8;

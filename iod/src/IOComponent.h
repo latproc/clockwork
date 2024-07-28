@@ -25,6 +25,7 @@
 #include "Message.h"
 #include "State.h"
 #include "filtering.h"
+#include "process_data.h"
 #include <boost/thread/mutex.hpp>
 #include <list>
 #include <map>
@@ -76,29 +77,6 @@ struct Update {
 };
 #endif
 
-// Non-owning pointers the the process data and mask
-class IOUpdate {
-  public:
-    void clear();
-    uint64_t global_clock() const;
-    void setGlobalClock(uint64_t clock);
-    uint32_t data_size() const;
-    //void setSize(uint32_t sz);
-
-    const uint8_t *data() const;
-    void setData(uint8_t *dt, size_t size);
-    void setData(std::vector<uint8_t> &&dt);
-
-    const uint8_t *mask() const;
-    void setMask(uint8_t *ms, size_t size);
-    void setMask(std::vector<uint8_t> &&dt);
-
-  private:
-    uint64_t global_clock_ = 0;
-    std::vector<uint8_t> data_;// shared pointer to process data
-    std::vector<uint8_t> mask_;// allocated pointer to current mask
-};
-
 class MachineInstance;
 class IOComponent : public Transmitter {
   public:
@@ -118,18 +96,12 @@ class IOComponent : public Transmitter {
     static void setupIOMap();
     static int getMinIOOffset();
     static int getMaxIOOffset();
-    static uint8_t *getProcessData();
-    static uint8_t *getProcessMask();
-    static std::vector<uint8_t> getUpdateData();
-    static uint8_t *getDefaultData();
-    static uint8_t *getDefaultMask();
-    static void setDefaultData(uint8_t *);
-    static void setDefaultMask(uint8_t *);
+    static ProcessData &getProcessData();
     static int notifyComponentsAt(unsigned int offset);
     static bool hasUpdates();
     static IOUpdate *getUpdates();
     static IOUpdate *getDefaults();
-    static uint8_t *generateMask(std::list<MachineInstance *> &outputs);
+    static std::vector<uint8_t> generateMask(std::list<MachineInstance *> &outputs);
     static uint64_t getClock() { return global_clock; }
     static void remove_io_module(int pos);
     static void lock();   // block others from resetting io
@@ -189,8 +161,8 @@ class IOComponent : public Transmitter {
     void addOwner(MachineInstance *m) { owners.push_back(m); }
     bool ownersEnabled() const;
 
-    virtual void setupProperties(
-        MachineInstance *m); // link properties in the component to the MachineInstance properties
+    // link properties in the component to the MachineInstance properties
+    virtual void setupProperties(MachineInstance *m);
 
     virtual int64_t filter(int64_t);
 
@@ -220,16 +192,11 @@ class IOComponent : public Transmitter {
     int io_index; // the index of the first bit in this component's address space
     int64_t raw_value;
     static size_t outputs_waiting; // this many outputs are waiting to change
-    static size_t process_data_size;
-    static uint8_t *io_process_data;
-    static uint8_t *io_process_mask;
-    static uint8_t *update_data;
     static unsigned int max_offset;
     static unsigned int min_offset;
+    static std::vector<uint8_t> last_process_data;
     Direction direction_;
     static HardwareState hardware_state;
-    static uint8_t *default_data;
-    static uint8_t *default_mask;
     static bool updates_sent;
     std::list<MachineInstance *> owners;
 };
