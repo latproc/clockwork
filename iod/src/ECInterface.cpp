@@ -24,6 +24,7 @@
 #include "Statistic.h"
 #include "Statistics.h"
 #include "cJSON.h"
+#include "clock.h"
 #include "tl/expected.hpp"
 #include <boost/thread/condition.hpp>
 #include <cstddef>
@@ -1222,6 +1223,8 @@ bool ECInterface::activate() {
     }
     DBG_ETHERCAT << "Activating master...";
     char buf[200];
+    DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
+    ecrt_master_application_time(master, Clock::nanosecs());
     DBG_ETHERCAT_CALLS << "ecrt_master_activate\n";
     if ((res = ecrt_master_activate(master))) {
         snprintf(buf, 200, "EtherCAT interface: Activating master failed with code: %d", res);
@@ -1707,12 +1710,11 @@ void ECInterface::sendUpdates() {
     }
 
     if (keep_stats) {
-        uint64_t t = microsecs();
-        int64_t dt = t - last_receive;
+        int64_t dt = now - last_receive;
         if (last_receive != 0) {
             recv_to_update.add(dt);
         }
-        last_update = t;
+        last_update = now;
         if (recv_to_update.getCount() >= 1000) {
             recv_to_update.report(std::cout);
             recv_to_update.reset();
@@ -1721,9 +1723,9 @@ void ECInterface::sendUpdates() {
     }
 
 #ifndef EC_SIMULATOR
-#ifdef USE_DC
     DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
-    ecrt_master_application_time(master, EC_TIMEVAL2NANO(now));
+    ecrt_master_application_time(master, Clock::nanosecs());
+#ifdef USE_DC
     DBG_ETHERCAT_CALLS << "ecrt_master_sync_reference_clock\n";
     ecrt_master_sync_reference_clock(master);
     DBG_ETHERCAT_CALLS << "ecrt_master_sync_slave_clocks\n";
