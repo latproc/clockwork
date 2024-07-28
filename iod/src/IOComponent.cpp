@@ -1238,7 +1238,7 @@ static std::vector<uint8_t> generateUpdateMask() {
 
     unsigned int min = IOComponent::getMinIOOffset();
     unsigned int max = IOComponent::getMaxIOOffset();
-    res.reserve(max - min + 1);
+    res.resize(max - min + 1);
 
     std::set<IOComponent *>::iterator iter = updatedComponentsOut.begin();
     while (iter != updatedComponentsOut.end()) {
@@ -1301,7 +1301,7 @@ IOUpdate *IOComponent::getDefaults() {
     IOUpdate *res = new IOUpdate;
     auto pd = process_data.getProcessData();
     size_t size = max_offset - min_offset + 1;
-    assert("size mismatch" && size == pd.size());
+    assert("size mismatch" && (pd.size() == 0 || size == pd.size()));
     copyMaskedBits(pd.data(), process_data.getDefaultData().data(), process_data.getDefaultMask().data(), pd.size());
     res->setData(pd);
     res->setMask(process_data.getDefaultMask());
@@ -1389,6 +1389,14 @@ void IOComponent::setupIOMap() {
 
 void IOComponent::markChange() {
     auto update_data = process_data.getUpdateData();
+    if (update_data.empty()) {
+        auto pd = process_data.getProcessData();
+        if (pd.empty()) {
+            std::cerr << "asked to mark a change but there is no process data\n";
+            return;
+        }
+        process_data.setUpdateData(pd);
+    }
     uint8_t *offset = update_data.data() + address.io_offset;
     int bitpos = address.io_bitpos;
     offset += (bitpos / 8);

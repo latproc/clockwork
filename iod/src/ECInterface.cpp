@@ -1597,7 +1597,7 @@ int ECInterface::collectState() {
 #endif
 
     if (!domain1_pd) {
-        assert(instance()->data.getProcessData() == 0);
+        assert(!instance()->data.getProcessData().empty());
         return 0;
     }
     uint8_t *pd = domain1_pd;
@@ -1617,9 +1617,9 @@ int ECInterface::collectState() {
     // after that, look at all bits we care about and if the bit has changed
     // copy its new value to the update data and include the bit in the
     // update mask
-    uint8_t *last_pd = instance()->data.getProcessData();
-    uint8_t *pm = data.getProcessMask(); // these are the important bits
-    uint8_t *q = data.update_data;       // convenience pointer
+    auto last_pd = instance()->data.getProcessData();
+    auto pm = data.getProcessMask().data(); // these are the important bits
+    uint8_t *q = data.getUpdateData().data();       // convenience pointer
 
 #if VERBOSE_DEBUG
     if (last_pd) {
@@ -1631,11 +1631,10 @@ int ECInterface::collectState() {
     DBG_ETHERCAT_PACKETS << "\n";
 #endif
 
-    assert(pm);
     assert(min == 0);
     for (unsigned int i = 0; i < domain_size; ++i) {
         data.update_mask[i] = 0;                 // assume no updates in this octet
-        if (!last_pd) {                     // first time through, copy all the domain data and mask
+        if (!last_pd.empty()) {                     // first time through, copy all the domain data and mask
             data.update_data[i] = domain1_pd[i]; //TBD & *pm;
             data.update_mask[i] = *pm;
             affected_bits++;
@@ -1701,7 +1700,7 @@ int ECInterface::collectState() {
     display(pd, domain_size);
     DBG_ETHERCAT_PACKETS << "\n";
 #endif
-    memcpy(data.update_data, domain1_pd, domain_size);
+    data.setUpdateData(domain1_pd, domain_size);
 #endif //EC_SIMULATOR
 
     return affected_bits;

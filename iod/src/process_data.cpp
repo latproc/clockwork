@@ -43,6 +43,18 @@ void ProcessData::setProcessData(uint8_t *pd, size_t new_size) {
     process_data.insert(process_data.begin(), pd, pd + new_size);
 }
 
+void ProcessData::setProcessMask(std::vector<uint8_t> &data) {
+    process_data = data;
+}
+
+void ProcessData::setDefaultData(std::vector<uint8_t> &data) {
+    default_data = data;
+}
+
+void ProcessData::setDefaultMask(std::vector<uint8_t> &data) {
+    default_mask = data;
+}
+
 void ProcessData::setProcessMask(uint8_t *new_mask, size_t new_size) {
     process_mask.clear();
     process_mask.resize(new_size);
@@ -63,12 +75,6 @@ void ProcessData::setUpdateMask(uint8_t *new_mask, size_t new_size) {
     process_mask.insert(process_mask.begin(), new_mask, new_mask + new_size);
 }
 
-/*
-void ProcessData::setUpdateMask (uint8_t *m){
-    if (update_mask) { delete[] update_mask;
-    update_mask = m;
-}
-*/
 std::vector<uint8_t> &ProcessData::getUpdateData() { return update_data; }
 std::vector<uint8_t> &ProcessData::getUpdateMask() { return update_mask; }
 

@@ -18,7 +18,6 @@ public:
     void setProcessMask(uint8_t *new_mask, size_t new_size);
     void setProcessMask(std::vector<uint8_t> &new_mask);
     std::vector<uint8_t> &getProcessMask();
-    void setAppProcessMask(std::vector<uint8_t> &new_mask);
 
     void
     setMaxIOIndex(unsigned int new_max); // min index into user required process data (must be zero)
