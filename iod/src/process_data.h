@@ -11,11 +11,11 @@ public:
     void clear();
 
     void setDataSize(size_t);
-    void setProcessData(uint8_t *pd, size_t new_size);
+    void setProcessData(const uint8_t *pd, size_t new_size);
     void setProcessData(std::vector<uint8_t> &pd);
     std::vector<uint8_t> &getProcessData();
 
-    void setProcessMask(uint8_t *new_mask, size_t new_size);
+    void setProcessMask(const uint8_t *new_mask, size_t new_size);
     void setProcessMask(std::vector<uint8_t> &new_mask);
     std::vector<uint8_t> &getProcessMask();
 
@@ -24,9 +24,9 @@ public:
     void setMinIOIndex(unsigned int new_min); // max index into user required process data
     uint32_t getProcessDataSize();            // returns process data size of user selected data set
 
-    void setUpdateData(uint8_t *pd, size_t new_size);
+    void setUpdateData(const uint8_t *pd, size_t new_size);
     void setUpdateData(std::vector<uint8_t> &ud);
-    void setUpdateMask(uint8_t *pd, size_t new_size);
+    void setUpdateMask(const uint8_t *pd, size_t new_size);
     void setUpdateMask(std::vector<uint8_t> &m);
     std::vector<uint8_t> &getUpdateData();
     std::vector<uint8_t> &getUpdateMask();

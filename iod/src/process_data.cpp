@@ -3,6 +3,7 @@
 #include <cassert>
 #include <iostream>
 #include <string.h>
+#include "DebugExtra.h"
 
 ProcessData::ProcessData(): data_size(0), process_data(0), process_mask(0), update_data(0), update_mask(0),
       min_io_index(0), max_io_index(0), app_process_mask(0)
@@ -30,53 +31,68 @@ std::vector<uint8_t> &ProcessData::getDefaultMask() { return default_mask; }
 
 void ProcessData::setDataSize(size_t ds) {
     if (data_size == 0 || data_size != ds) {
-        std::stringstream ss;
-        ss << "setting process data size: " << data_size << " -> " << ds;
-        std::cout << ss.str() << "\n";
+        DBG_ETHERCAT_PACKETS << "setting process data size: " << data_size << " -> " << ds;
         data_size = ds;
     }
 }
 
-void ProcessData::setProcessData(uint8_t *pd, size_t new_size) {
+void ProcessData::setProcessData(const uint8_t *pd, size_t new_size) {
+    DBG_ETHERCAT_PACKETS  << "set process data " << new_size << "\n";
     process_data.clear();
-    process_data.resize(new_size);
+    setDataSize(new_size);
     process_data.insert(process_data.begin(), pd, pd + new_size);
 }
 
-void ProcessData::setProcessMask(std::vector<uint8_t> &data) {
+void ProcessData::setProcessData(std::vector<uint8_t> &data) {
+    DBG_ETHERCAT_PACKETS << "set process data " << data.size() << "\n";
     process_data = data;
 }
 
+
+void ProcessData::setProcessMask(std::vector<uint8_t> &data) {
+    DBG_ETHERCAT_PACKETS << "set process mask " << data.size() << "\n";
+    process_mask = data;
+}
+
 void ProcessData::setDefaultData(std::vector<uint8_t> &data) {
+    DBG_ETHERCAT_PACKETS << "set default data" << data.size() << "\n";
     default_data = data;
 }
 
 void ProcessData::setDefaultMask(std::vector<uint8_t> &data) {
+    DBG_ETHERCAT_PACKETS << "set default mask" << data.size() << "\n";
     default_mask = data;
 }
 
-void ProcessData::setProcessMask(uint8_t *new_mask, size_t new_size) {
+void ProcessData::setProcessMask(const uint8_t *new_mask, size_t new_size) {
+    DBG_ETHERCAT_PACKETS << "set update mask" << new_size << "\n";
     process_mask.clear();
-    process_mask.resize(new_size);
+    setDataSize(new_size);
     process_mask.insert(process_mask.begin(), new_mask, new_mask + new_size);
 }
 
 std::vector<uint8_t> &ProcessData::getProcessMask() { return process_mask; }
 
-void ProcessData::setUpdateData(uint8_t *pd, size_t new_size) {
+void ProcessData::setUpdateData(const uint8_t *pd, size_t new_size) {
+    DBG_ETHERCAT_PACKETS << "set update data" << new_size << "\n";
     process_data.clear();
-    process_data.resize(new_size);
     process_data.insert(process_data.begin(), pd, pd + new_size);
 }
 
 void ProcessData::setUpdateData(std::vector<uint8_t> &data) {
+    DBG_ETHERCAT_PACKETS << "set update data" << data.size() << "\n";
     update_data = data;
 }
 
-void ProcessData::setUpdateMask(uint8_t *new_mask, size_t new_size) {
+void ProcessData::setUpdateMask(const uint8_t *new_mask, size_t new_size) {
+    DBG_ETHERCAT_PACKETS << "set update mask" << new_size << "\n";
     process_mask.clear();
-    process_mask.resize(new_size);
     process_mask.insert(process_mask.begin(), new_mask, new_mask + new_size);
+}
+
+void ProcessData::setUpdateMask(std::vector<uint8_t> &data) {
+    DBG_ETHERCAT_PACKETS << "set update data" << data.size() << "\n";
+    update_mask = data;
 }
 
 std::vector<uint8_t> &ProcessData::getUpdateData() { return update_data; }
@@ -87,6 +103,6 @@ void ProcessData::reallocate_update_data_and_mask(size_t new_size) {
     unsigned int min = min_io_index;
     assert(new_size >= (size_t)max - min + 1);
     update_data.resize(new_size);
-    update_data.resize(new_size);
+    update_mask.resize(new_size);
 }
 
