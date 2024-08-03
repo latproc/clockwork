@@ -34,7 +34,7 @@ class MockSystemSetup {
         Dispatcher::start(); // start the dispatcher thread and wait for the start message
         ControlSystemMachine csm;
         IODCommandThread *ict = IODCommandThread::instance();
-        auto &thread{ProcessingThread::create(&csm, iod_activation, *ict, queue)};
+        auto &thread{ProcessingThread::create(csm, iod_activation, *ict, queue)};
         pt = &thread;
         iod_activation();
     }

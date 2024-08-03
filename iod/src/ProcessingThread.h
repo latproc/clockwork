@@ -27,7 +27,7 @@ class MachineInstance;
 class ProcessingThread : public ClockworkProcessManager {
   public:
     ProcessingThreadInternals *internals;
-    static ProcessingThread &create(ControlSystemMachine *m, HardwareActivation &activator,
+    static ProcessingThread &create(ControlSystemMachine &m, HardwareActivation &activator,
                                     IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue);
 
     ~ProcessingThread();
@@ -103,7 +103,7 @@ class ProcessingThread : public ClockworkProcessManager {
 
   private:
     static ProcessingThread *instance_;
-    ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator,
+    ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator,
                      IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &message_queue);
     ProcessingThread(const ProcessingThread &other);
     ProcessingThread &operator=(const ProcessingThread &other);

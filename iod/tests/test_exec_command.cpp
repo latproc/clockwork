@@ -112,7 +112,7 @@ int main(int, char **) {
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
     ProcessingThread &processMonitor(
-        ProcessingThread::create(&machine, iod_activation, *stateMonitor, queue));
+        ProcessingThread::create(machine, iod_activation, *stateMonitor, queue));
     processMonitor.setProcessingThreadInstance(&processMonitor);
     boost::thread process(boost::ref(processMonitor));
 

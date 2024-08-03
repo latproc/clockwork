@@ -684,7 +684,7 @@ int main(int argc, char const *argv[]) {
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
     ProcessingThread &processMonitor(
-        ProcessingThread::create(&machine, iod_activation, *stateMonitor, processing_queue));
+        ProcessingThread::create(machine, iod_activation, *stateMonitor, processing_queue));
 
     zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
     sim_io.bind("inproc://ethercat_sync");

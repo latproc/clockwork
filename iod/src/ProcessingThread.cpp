@@ -94,7 +94,7 @@ class ProcessingThreadInternals {
         : sequence(0), cycle_delay(1000), processing_wd("Processing Loop Watchdog", 2000) {}
 };
 
-ProcessingThread &ProcessingThread::create(ControlSystemMachine *m, HardwareActivation &activator,
+ProcessingThread &ProcessingThread::create(ControlSystemMachine &m, HardwareActivation &activator,
                                            IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue) {
     if (!instance_) {
         instance_ = new ProcessingThread(m, activator, cmd_interface, queue);
@@ -102,9 +102,9 @@ ProcessingThread &ProcessingThread::create(ControlSystemMachine *m, HardwareActi
     return *instance_;
 }
 
-ProcessingThread::ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator,
+ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator,
                                    IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue)
-    : internals(0), machine(*m), status(e_waiting), activate_hardware(activator),
+    : internals(0), machine(m), status(e_waiting), activate_hardware(activator),
       command_interface(cmd_interface), message_queue(queue), program_start(0) {
     program_start = microsecs();
     internals = new ProcessingThreadInternals();
