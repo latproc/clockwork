@@ -60,7 +60,7 @@
 
 #define VERBOSE_DEBUG 0
 
-extern bool machine_is_ready;
+extern bool machine_is_ready; // unsafe?
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
 static bool machine_was_ready = false;
 uint64_t next_ecat_receive = 0;
@@ -104,14 +104,7 @@ bool EtherCATThread::checkAndUpdateCycleDelay() {
     return false;
 }
 
-#if VERBOSE_DEBUG
-static void display(uint8_t *p, size_t len) {
-    for (size_t i = 0; i < len; ++i) {
-        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
-                  << std::dec;
-    }
-}
-#endif
+namespace {
 
 enum DriverState { s_driver_init, s_driver_operational };
 DriverState driver_state = s_driver_init;
@@ -119,9 +112,10 @@ DriverState driver_state = s_driver_init;
 size_t default_data_size = 0;
 uint8_t *default_data = 0;
 uint8_t *default_mask = 0;
-uint8_t *last_data = 0;
-uint8_t *dbg_mask = 0;
-uint8_t *cmp_data = 0;
+
+namespace ecat_debug {
+
+} // ecat_debug
 
 void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
     if (default_data) {
@@ -204,33 +198,7 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
                 sync_sock->send(iomsg, ZMQ_SNDMORE);
                 ++stage;
 #if VERBOSE_DEBUG
-                if (size && last_data == 0) {
-                    last_data = new uint8_t[size];
-                    memset(last_data, 0, size);
-                    dbg_mask = new uint8_t[size];
-                    memset(dbg_mask, 0xff, size);
-                    cmp_data = new uint8_t[size];
-                    memset(cmp_data, 0, size);
-                }
-                if (size) {
-                    uint8_t *p = upd_data, *q = cmp_data, *msk = dbg_mask;
-                    for (size_t ii = 0; ii < size; ++ii) {
-                        *q++ = *p++ & *msk++;
-                    }
-                    if (memcmp(cmp_data, last_data, size) != 0) {
-                        found_change = true;
-                        std::cout << "ec ";
-                        display(dbg_mask, size);
-                        std::cout << "\n";
-                        std::cout << "ec>";
-                        display(upd_data, size);
-                        std::cout << "\n";
-                    }
-                    else {
-                        found_change = false;
-                    }
-                    memcpy(last_data, cmp_data, size);
-                }
+                display_data_changes();
 #endif
             }
             case 4: {
@@ -339,7 +307,7 @@ bool EtherCATThread::getEtherCatResponse(zmq::socket_t *sync_sock, uint64_t glob
         return false;
     }
 }
-bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
+bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_process_data) {
     zmq::message_t output_update;
     IOInterface::MessageType packet_type;
     uint32_t len = 0;
@@ -359,8 +327,6 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
     out_sock.getsockopt(ZMQ_RCVMORE, &more, &more_size);
     assert(more);
 
-    uint8_t *cw_data = nullptr;
-    uint8_t *cw_mask = nullptr;
     // Packet Type
     {
         zmq::message_t iomsg;
@@ -398,33 +364,13 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         {
             zmq::message_t iomsg;
             recv(out_sock, iomsg);
-            if (cw_data) {
-                delete[] cw_data;
-            }
-            cw_data = new uint8_t[iomsg.size()];
-            memcpy(cw_data, iomsg.data(), iomsg.size());
-            assert(iomsg.size() == len);
-
+            auto & data = ECInterface::instance()->data;
+            data.setDataSize(iomsg.size());
+            data.setProcessData(static_cast<uint8_t*>(iomsg.data()), iomsg.size());
             if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
-                //TBD. this hack removes a dependency inside ECInterface but more work is needed
-                // to cleanup this initialisation
-                ECInterface::instance()->data.setDataSize(iomsg.size());
-                ECInterface::instance()->data.setProcessMask(IOComponent::getProcessData().getProcessMask());
+                data.setDefaultData(data.getDefaultData());
             }
         }
-#if VERBOSE_DEBUG
-        if (!default_data) {
-            assert(packet_type == IOInterface::MessageType::DEFAULT_DATA);
-            DBG_ETHERCAT_PACKETS << "received default data from driver\n";
-            display(cw_data, len);
-            DBG_ETHERCAT_PACKETS << "\n";
-        }
-        else if (packet_type == IOInterface::MessageType::PROCESS_DATA) {
-            std::cout << "p:";
-            display(cw_data, len);
-            DBG_ETHERCAT_PACKETS << "\n";
-        }
-#endif
 
         more = 0;
         more_size = sizeof(more);
@@ -434,11 +380,10 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
             zmq::message_t iomsg;
             recv(out_sock, iomsg);
             size_t msglen = iomsg.size();
-            assert(msglen == len);
-            if (msglen > 0) {
-                assert(!cw_mask);
-                cw_mask = new uint8_t[msglen];
-                memcpy(cw_mask, iomsg.data(), msglen);
+            auto & data = ECInterface::instance()->data;
+            data.setProcessMask(static_cast<uint8_t*>(iomsg.data()), iomsg.size());
+            if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
+                data.setDefaultMask(data.getProcessMask());
             }
         }
     }
@@ -453,16 +398,12 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
     }
     else if (packet_type == IOInterface::MessageType::DEACTIVATE_REQUEST) {
         std::cout << "---------------- Deactivate\n";
-        IOComponent::reset();
+        IOComponent::reset(); // TODO: remove this
         assert(ECInterface::instance()->deactivate());
-        IOComponent::setHardwareState(IOComponent::s_hardware_preinit);
         safeSend(out_sock, "ok", 2);
     }
     else if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
-        setDefaultData(len, cw_data, cw_mask);
-        delete[] cw_mask;
-        delete[] cw_data;
-        cw_mask = cw_data = nullptr;
+        std::cout << "---------------- Default data received\n";
         safeSend(out_sock, "ok", 2);
     }
     else if (packet_type == IOInterface::MessageType::PROCESS_DATA) {
@@ -474,47 +415,19 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
                 driver_state = s_driver_operational;
             }
         }
-#if VERBOSE_DEBUG
-        else if (cw_data && cw_mask) {
-            std::cout << "!";
-            display(cw_mask, len);
-            std::cout << "\n";
-            std::cout << "<";
-            display(cw_data, len);
-            std::cout << "\n";
-        }
-#endif
-        if (ec_ok && default_data) { // only update the domain if default data has been setup
-            assert("updateDomain requires cw data and mask" && cw_data && cw_mask);
-            ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
+        if (exchange_process_data && default_data) { // only update the domain if default data has been setup
+            auto & data = ECInterface::instance()->data;
+            assert("updateDomain requires cw data and mask" && data.getProcessDataSize() > 0);
+            ECInterface::instance()->updateDomain();
 #if VERBOSE_DEBUG
             // check if our mask is not the same as the data that cw has
             //
-            if (last_data) {
-                bool done_header = false;
-                uint8_t *upd_data = ECInterface::instance()->getUpdateData();
-
-                for (size_t i = 0; i < len; ++i) {
-                    if (cw_data[i] != upd_data[i]) {
-                        if (!done_header) {
-                            done_header = true;
-                            std::cout << "process data diffs at bytes: ";
-                        }
-                        std::cout << i << " ";
-                    }
-                }
-                if (done_header) {
-                    std::cout << "\n";
-                }
-            }
+            void report_data_diff(cw_data, ECInterface::instance()->getUpdateData(), size_t len);
 #endif
         }
         else if (!default_data) {
             MessageLog::instance()->add("ecat_thread: no default data set yet, cannot update domain");
         }
-        delete[] cw_mask;
-        delete[] cw_data;
-        cw_mask = cw_data = nullptr;
         safeSend(out_sock, "ok", 2);
     }
     return true;
@@ -552,27 +465,19 @@ void EtherCATThread::operator()() {
         uint64_t period = 1000000 / freq;
         int num_updates = 0;
 
-        // TBD the following line was missing, preventing the ec_ok logic from working
+        // machine_was ready becomes true once the machine becomes ready for the
+        // first time and stays that way.
         if (machine_is_ready && !machine_was_ready) {
             machine_was_ready = true;
         }
 
+        // If ethercat has changed state since the machine first became ready,
+        // log the fact and set the driver state.
+        // TODO: simplify this
         if (machine_was_ready) {
             if (ec_ok != machine_is_ready) {
                 std::cout << "ethercat thread is now " << machine_is_ready << "\n";
                 ec_ok = machine_is_ready;
-                if (last_data) {
-                    delete[] last_data;
-                    last_data = 0;
-                }
-                if (dbg_mask) {
-                    delete[] dbg_mask;
-                    dbg_mask = 0;
-                }
-                if (cmp_data) {
-                    delete[] cmp_data;
-                    cmp_data = 0;
-                }
                 if (!machine_is_ready) {
                     driver_state = s_driver_init;
                 }

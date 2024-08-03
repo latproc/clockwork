@@ -96,10 +96,12 @@ plugins/*.so*
 ethercat
 ec_tool
 setup/
+tests/xml/
 
 #built tools
 iod/cw
 iod/cw_ecat
+iod/dbd
 iod/modbusd
 iod/iod
 iod/iod_sdo

@@ -3008,7 +3008,7 @@ void MachineInstance::enable() {
         io_interface->handleChange(pending_events);
     }
     std::list<MachineInstance *> sorted;
-    sortDependentMachines(this, sorted);
+    sortDependentMachines(this, sorted); // TODO: remove this expensive operation
     std::list<MachineInstance *>::iterator oi = sorted.begin();
     while (oi != sorted.end()) {
         MachineInstance *b = *oi++;

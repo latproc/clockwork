@@ -26,7 +26,9 @@
 #include "process_data.h"
 #include "bit_ops.h"
 #include <algorithm>
+#include <boost/none_t.hpp>
 #include <boost/thread/mutex.hpp>
+#include <boost/optional.hpp>
 #include <iomanip>
 #include <iostream>
 #include <netinet/in.h>
@@ -70,6 +72,39 @@
 #define toU64(m) EC_WRITE_U64(m, v)
 #define fromU64(m) EC_READ_U64(m)
 #endif
+
+namespace {
+
+void display(const uint8_t *p, size_t len) {
+    for (size_t i = 0; i < len; ++i) {
+        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
+                  << std::dec;
+    }
+}
+
+void set_mask_bits(const IOAddress & address, uint8_t *result) {
+    unsigned int offset = address.io_offset;
+    unsigned int bitpos = address.io_bitpos;
+    unsigned int bitlen = address.bitlen;
+    ::set_mask_bits(offset, bitpos, bitlen, result);
+}
+
+// Build a mask that indicates what bits in the process data are
+// relevant to IOComponents.
+std::vector<uint8_t> generateProcessMask() {
+    std::vector<uint8_t> result;
+    unsigned int max = IOComponent::getMaxIOOffset() - IOComponent::getMinIOOffset() + 1;
+    result.resize(max);
+
+    IOComponent::Iterator iter = IOComponent::begin();
+    while (iter != IOComponent::end()) {
+        IOComponent *ioc = *iter++;
+        set_mask_bits(ioc->address, result.data());
+    }
+    return result;
+}
+
+} // namespace
 
 std::list<IOComponent *> IOComponent::processing_queue;
 std::map<std::string, IOAddress> IOComponent::io_names;
@@ -173,6 +208,7 @@ ProcessData &IOComponent::getProcessData() {
 }
 
 void IOComponent::reset() {
+    setHardwareState(s_hardware_preinit);
     boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
     processing_queue.clear();
     regular_polls.clear();
@@ -215,7 +251,7 @@ size_t IOComponent::updatesWaiting() {
 }
 
 void IOComponent::updatesSent(bool which) {
-    //if (which) std::cout << "updates sent\n";
+    if (which) std::cout << "updates sent\n";
     updates_sent = which;
 }
 
@@ -262,10 +298,10 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             std::cout << "IOComponent::processAll()\n";
             std::cout << "size: " << data_size << "\n";
             std::cout << "pdta: ";
-            display(io_process_data, data_size);
+            display(process_data.getProcessData().data(), data_size);
             std::cout << "\n";
             std::cout << "pmsk: ";
-            display(io_process_mask, data_size);
+            display(process_data.getProcessMask().data(), data_size);
             std::cout << "\n";
             std::cout << "data: ";
             display(data, data_size);
@@ -276,10 +312,13 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             break;
         }
 #endif
-    if (hardware_state == s_hardware_preinit) {
+    if (hardware_state == s_hardware_init) {
         // the initial process data has arrived from EtherCAT. keep the previous data as the defaults
         // so they can be applied asap
-        process_data.setProcessData((uint8_t *)data, data_size);
+        process_data.setProcessData(data, data_size);
+        auto process_mask = generateProcessMask();
+        process_data.setUpdateData(data, data_size);
+        process_data.setUpdateMask(process_mask);
         return;
     }
 
@@ -1158,28 +1197,6 @@ bool IOComponent::hasUpdates() {
     return !updatedComponentsOut.empty();
 }
 
-void set_mask_bits(const IOAddress & address, uint8_t *result) {
-    unsigned int offset = address.io_offset;
-    unsigned int bitpos = address.io_bitpos;
-    unsigned int bitlen = address.bitlen;
-    set_mask_bits(offset, bitpos, bitlen, result);
-}
-
-// Build a mask that indicates what bits in the process data are
-// relevant to IOComponents.
-std::vector<uint8_t> generateProcessMask() {
-    std::vector<uint8_t> result;
-    unsigned int max = IOComponent::getMaxIOOffset() - IOComponent::getMinIOOffset() + 1;
-    result.resize(max);
-
-    IOComponent::Iterator iter = IOComponent::begin();
-    while (iter != IOComponent::end()) {
-        IOComponent *ioc = *iter++;
-        set_mask_bits(ioc->address, result.data());
-    }
-    return result;
-}
-
 // Build a mask that indicates what bits in the process data are
 // relevant to output MachineInstances attached to IO
 std::vector<uint8_t> IOComponent::generateMask(std::list<MachineInstance *> &outputs) {
@@ -1212,7 +1229,10 @@ bool IOComponent::ownersEnabled() const {
     return false;
 }
 
-static std::vector<uint8_t> generateUpdateMask() {
+// This has the side effect of removing items where all owners are disabled
+// owners from the updatedComponentsOut set although the mask bits are still
+// set for the item.
+static boost::optional<std::vector<uint8_t>> generateUpdateMask() {
     //  returns null if there are no updates, otherwise returns
     // a mask for the update data
 
@@ -1252,34 +1272,35 @@ static std::vector<uint8_t> generateUpdateMask() {
     return res;
 }
 
-IOUpdate *IOComponent::getUpdates() {
+IOUpdate IOComponent::getUpdates() {
+    IOUpdate res;
     //outputs_waiting = 0; // reset work indicator flag
     auto mask = ::generateUpdateMask();
-    if (mask.size() == 0) { return 0; }
-    IOUpdate *res = new IOUpdate;
-    res->setData(process_data.getProcessData());
-    res->setMask(mask);
-#if VERBOSE_DEBUG
-    std::cout << std::flush << "IOComponent::getUpdates preparing to send " << res->size() << " d:";
-    display(res->data(), res->size());
+    if (!mask.has_value()) { return res; }
+    res.setData(process_data.getUpdateData());
+    res.setMask(*mask);
+#if 1
+    std::cout << std::flush << "IOComponent::getUpdates preparing to send " << res.data_size() << " d:";
+    display(res.data(), res.data_size());
     std::cout << " m:";
-    display(res->mask(), res->size());
+    display(res.mask(), res.data_size());
     std::cout << "\n" << std::flush;
 #endif
     return res;
 }
 
-IOUpdate *IOComponent::getDefaults() {
-    if (min_offset > max_offset) {
-        return 0;
-    }
-    IOUpdate *res = new IOUpdate;
+IOUpdate IOComponent::getDefaults() {
+    IOUpdate res;
+    assert ("process data not configured" && min_offset <= max_offset);
     auto pd = process_data.getProcessData();
     size_t size = max_offset - min_offset + 1;
-    assert("size mismatch" && (pd.size() == 0 || size == pd.size()));
+    if (size != static_cast<size_t>(pd.size())) {
+        std::cerr << "process data size is " << pd.size() << " but should be " << size << "\n";
+    }
+    assert("process data size mismatch" && size == pd.size());
     copyMaskedBits(pd.data(), process_data.getDefaultData().data(), process_data.getDefaultMask().data(), pd.size());
-    res->setData(pd);
-    res->setMask(process_data.getDefaultMask());
+    res.setData(pd);
+    res.setMask(process_data.getDefaultMask());
 
 #if VERBOSE_DEBUG
     std::cout << "preparing to send defaults " << res->size() << " bytes\n";
@@ -1300,7 +1321,7 @@ void IOComponent::setupIOMap() {
     if (indexed_components) {
         delete indexed_components;
     }
-    //std::cout << "\n\n setupIOMap\n";
+    std::cout << "\n\n setupIOMap\n";
     // find the highest and lowest offset location within the process data
     std::list<IOComponent *>::iterator iter = processing_queue.begin();
     while (iter != processing_queue.end()) {
@@ -1325,13 +1346,20 @@ void IOComponent::setupIOMap() {
     if (min_offset > max_offset) {
         min_offset = max_offset;
     }
+    size_t data_size = max_offset - min_offset + 1;
     std::cout << std::dec << "min io offset: " << min_offset << "\n"
               << "max io offset: " << max_offset << "\n"
-              << ((max_offset + 1) * sizeof(IOComponent *)) << " bytes reserved for index io\n";
+              << (data_size * sizeof(IOComponent *)) << " bytes reserved for index io\n";
 
-    indexed_components = new std::vector<IOComponent *>((max_offset + 1) * 8);
+    {
+    std::vector<uint8_t> init_process_data;
+    init_process_data.resize(data_size);
+    process_data.setProcessData(init_process_data);
+    }
 
-    io_map.resize(max_offset + 1);
+    indexed_components = new std::vector<IOComponent *>(data_size * 8);
+
+    io_map.resize(data_size);
     for (unsigned int i = 0; i <= max_offset; ++i) {
         io_map[i] = 0;
     }
@@ -1360,10 +1388,17 @@ void IOComponent::setupIOMap() {
     }
     auto pd = generateProcessMask();
     process_data.setProcessMask(pd.data(), pd.size());
+    std::vector<uint8_t> defaults;
+    defaults.resize(pd.size());
+    process_data.setProcessData(defaults);
+    process_data.setDefaultData(defaults);
+    process_data.setDefaultMask(pd);
 }
 
 void IOComponent::markChange() {
-    auto update_data = process_data.getUpdateData();
+    std::cout << "marking change " << address << " on " << getName() << " " << getStateString()  << "\n";
+    std::cout << "outputs waiting: " << updatedComponentsOut.size() << "\n";
+    auto & update_data = process_data.getUpdateData();
     if (update_data.empty()) {
         auto pd = process_data.getProcessData();
         if (pd.empty()) {
@@ -1371,6 +1406,7 @@ void IOComponent::markChange() {
             return;
         }
         process_data.setUpdateData(pd);
+        update_data = process_data.getUpdateData();
     }
     uint8_t *offset = update_data.data() + address.io_offset;
     int bitpos = address.io_bitpos;
@@ -1378,11 +1414,11 @@ void IOComponent::markChange() {
     bitpos = bitpos % 8;
 
     if (address.bitlen == 1) {
-        int64_t value = (*offset & (1 << bitpos)) ? 1 : 0;
+        //int64_t value = (*offset & (1 << bitpos)) ? 1 : 0;
 
         // only outputs will have an e_on or e_off event queued,
         // if they do, set the bit accordingly, ignoring the previous value
-        if (!value && last_event == e_on) {
+        if (!value() && last_event == e_on) {
             /*
                         std::cout << "IOComponent::markChange setting bit "
                             << (offset - update_data) << ":" << bitpos
@@ -1391,9 +1427,12 @@ void IOComponent::markChange() {
             set_bit(offset, bitpos, 1);
             updatesSent(false);
         }
-        else if (value && last_event == e_off) {
+        else if (value() && last_event == e_off) {
             set_bit(offset, bitpos, 0);
             updatesSent(false);
+        }
+        else {
+            std::cout << "value not updated\n";
         }
         last_event = e_none;
     }
@@ -1414,16 +1453,20 @@ void IOComponent::markChange() {
             else if (address.bitlen == 32) {
                 toU32(offset, pending_value);
             }
+            else {
+                std::cerr << "field of size: " << address.bitlen << " not updated\n";
+            }
             last_event = e_none;
-#if VERBOSE_DEBUG
+#if 1
             std::cout << "@";
-            display(update_data);
+            display(update_data.data(), process_data.getProcessDataSize());
             std::cout << "\n";
 #endif
             updatesSent(false);
             //address.value = pending_value;
         }
     }
+    std::cout << "outputs waiting: " <<  updatedComponentsOut.size() << "\n";
 }
 
 void IOComponent::handleChange(std::list<Package *> &work_queue) {
@@ -1543,7 +1586,7 @@ void Output::turnOn() {
     last_event = e_on;
     updatedComponentsOut.insert(this);
     updatesSent(false);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
 }
 
@@ -1563,7 +1606,7 @@ void IOComponent::setValue(uint32_t new_value) {
     last_event = e_change;
     updatesSent(false);
     updatedComponentsOut.insert(this);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
 }
 
@@ -1574,7 +1617,7 @@ void IOComponent::setValue(int32_t new_value) {
     last_event = e_change;
     updatesSent(false);
     updatedComponentsOut.insert(this);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
 }
 
@@ -1585,7 +1628,7 @@ void IOComponent::setValue(uint64_t new_value) {
     last_event = e_change;
     updatesSent(false);
     updatedComponentsOut.insert(this);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
 }
 
@@ -1596,10 +1639,11 @@ void IOComponent::setValue(int64_t new_value) {
     last_event = e_change;
     updatesSent(false);
     updatedComponentsOut.insert(this);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
 }
 
 bool IOComponent::isOn() { return last_event == e_none && address.value != 0; }
 
 bool IOComponent::isOff() { return last_event == e_none && address.value == 0; }
+

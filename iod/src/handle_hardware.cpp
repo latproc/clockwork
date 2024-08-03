@@ -16,23 +16,23 @@ void ProcessingThread::handle_hardware(
             avg_update_time.start();
 #endif
             if (update_state == UpdateStates::s_update_idle) {
-                IOUpdate *upd = 0;
+                IOUpdate upd;
                 if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
                     DBG_INITIALISATION << "Sending defaults to EtherCAT\n";
                     upd = IOComponent::getDefaults();
-                    assert(upd);
 #if VERBOSE_DEBUG
-                    display(std::cout, upd->data());
+                    display(std::cout, upd.data());
                     std::cout << ":";
-                    display(std::cout, upd->mask());
+                    display(std::cout, upd.mask());
                     std::cout << "\n";
 #endif
+                    IOComponent::setHardwareState(IOComponent::s_operational);
                 }
                 else {
                     upd = IOComponent::getUpdates();
                 }
-                if (upd) {
-                    uint32_t size = upd->data_size();
+                if (upd.data_size() > 0) {
+                    uint32_t size = upd.data_size();
                     uint8_t stage = 1;
                     while (true) {
                         try {
@@ -55,18 +55,18 @@ void ProcessingThread::handle_hardware(
                             }
                             case 3: {
                                 zmq::message_t iomsg(size);
-                                memcpy(iomsg.data(), (void *)upd->data(), size);
+                                memcpy(iomsg.data(), (void *)upd.data(), size);
                                 ecat_out.send(iomsg, ZMQ_SNDMORE);
 #if VERBOSE_DEBUG
-                                DBG_ETHERCAT << "sending to EtherCAT: "; display(upd->data()); std::cout << "\n";
+                                DBG_ETHERCAT << "sending to EtherCAT: "; display(upd.data()); std::cout << "\n";
 #endif
                                 ++stage;
                             }
                             case 4: {
                                 zmq::message_t iomsg(size);
-                                memcpy(iomsg.data(), (void *)upd->mask(), size);
+                                memcpy(iomsg.data(), (void *)upd.mask(), size);
 #if VERBOSE_DEBUG
-                                DBG_ETHERCAT << "using mask: "; display(std::cout, upd->mask()); std::cout << "\n";
+                                DBG_ETHERCAT << "using mask: "; display(std::cout, upd.mask()); std::cout << "\n";
 #endif
                                 ecat_out.send(iomsg);
                                 ++stage;
@@ -87,7 +87,6 @@ void ProcessingThread::handle_hardware(
                             assert(false);
                         }
                     }
-                    delete upd;
                     update_state = UpdateStates::s_update_sent;
                     IOComponent::updatesSent(true);
                 }

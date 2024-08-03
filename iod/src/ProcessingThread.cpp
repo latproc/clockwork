@@ -194,6 +194,101 @@ class IOLockHelper {
     ~IOLockHelper() { IOComponent::unlock(); }
 };
 
+IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
+    IOUpdate update;
+    // the EtherCAT message carries a mask and data
+
+    int64_t more;
+    size_t more_size = sizeof(more);
+    uint8_t stage = 1;
+    //  Process all parts of the message
+    while (true) {
+        try {
+            switch (stage) {
+            case 1: { // global clock
+                zmq::message_t message;
+                // clock
+                ecat_sync.recv(&message);
+                size_t msglen = message.size();
+                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
+                assert(msglen == sizeof(update.global_clock()));
+                update.setGlobalClock(*reinterpret_cast<uint64_t*>(message.data()));
+                ++stage;
+            }
+            case 2: { // data size
+                zmq::message_t message;
+                // data length
+                ecat_sync.recv(&message);
+                size_t msglen = message.size();
+                if (msglen == 0) {
+                    std::cerr << "Error: Got a null value for data size receiving ecat data\n";
+                    stage = 4;
+                    break;
+                }
+                assert(msglen == 4);
+                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
+                uint32_t data_size = *reinterpret_cast<uint32_t*>(message.data());
+                if (data_size != update.data_size()) {
+                    DBG_PROCESSING << "Process data size updated. Was: " << update.data_size()
+                              << " now: " << data_size << "\n";
+                }
+                ++stage;
+            }
+            case 3: { // data
+                ecat_sync.getsockopt(ZMQ_RCVMORE, &more, &more_size);
+                assert(more);
+                zmq::message_t message;
+                ecat_sync.recv(&message);
+                size_t msglen = message.size();
+                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
+                update.setData(static_cast<uint8_t*>(message.data()), msglen);
+#if VERBOSE_DEBUG
+                DBG_PROCESSING << std::flush << "got data: ";
+                display(std::cout, update.data());
+                DBG_PROCESSING << "\n" << std::flush;
+#endif
+                ++stage;
+            }
+            case 4: { // mask
+                zmq::message_t message;
+                ecat_sync.getsockopt(ZMQ_RCVMORE, &more, &more_size);
+                assert(more);
+                ecat_sync.recv(&message);
+                size_t msglen = message.size();
+                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
+                update.setMask(static_cast<uint8_t*>(message.data()), msglen);
+#if VERBOSE_DEBUG
+                std::cout << "got mask: ";
+                display(std::cout, update.mask());
+                std::cout << "\n";
+#endif
+                ++stage;
+                break;
+            }
+            default: {
+                DBG_PROCESSING << "unexpected stage " << (int)stage << "\n";
+                assert(stage <= 4);
+            };
+            }
+            break;
+        }
+        catch (const zmq::error_t &ex) {
+            if (zmq_errno() == EINTR) {
+                std::stringstream err;
+                err << "interrupted when receiving update at stage " << stage;
+                MessageLog::instance()->add(err.str());
+                continue;
+            }
+            else {
+                NB_MSG << "Exception: " << ex.what()  << " "
+                       << __FILE__ << ":" << __LINE__ << " (" << zmq_strerror(errno)
+                       << ")\n";
+            }
+        }
+    }
+    return update;
+}
+
 int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int num_items,
                                    zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr,
                                    zmq::socket_t &scheduler, zmq::socket_t &ecat_out) {
@@ -213,99 +308,8 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int nu
             }
             if (!item_count) { return 0; }
             if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
-                IOUpdate update;
-                // the EtherCAT message carries a mask and data
-
-                int64_t more;
-                size_t more_size = sizeof(more);
-                uint8_t stage = 1;
-                //  Process all parts of the message
-                while (true) {
-                    try {
-                        switch (stage) {
-                        case 1: { // global clock
-                            zmq::message_t message;
-                            // clock
-                            ecat_sync.recv(&message);
-                            size_t msglen = message.size();
-                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == sizeof(update.global_clock()));
-                            update.setGlobalClock(reinterpret_cast<uint64_t>(update.data()));
-                            ++stage;
-                        }
-                        case 2: { // data size
-                            zmq::message_t message;
-                            // data length
-                            ecat_sync.recv(&message);
-                            size_t msglen = message.size();
-                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            size_t data_size = reinterpret_cast<size_t>(message.data());
-                            if (msglen == 0) {
-                                stage = 4;
-                                break;
-                            }
-                            if (data_size != update.data_size()) {
-                                std::cerr << "Process data size updated. Was: " << update.data_size()
-                                          << " now: " << data_size << "\n";
-                            }
-                            ++stage;
-                        }
-                        case 3: { // data
-                            ecat_sync.getsockopt(ZMQ_RCVMORE, &more, &more_size);
-                            assert(more);
-                            zmq::message_t message;
-                            ecat_sync.recv(&message);
-                            size_t msglen = message.size();
-                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            update.setData(static_cast<uint8_t*>(message.data()), msglen);
-#if VERBOSE_DEBUG
-                            DBG_PROCESSING << std::flush << "got data: ";
-                            display(std::cout, update.data());
-                            DBG_PROCESSING << "\n" << std::flush;
-#endif
-                            ++stage;
-                        }
-                        case 4: { // mask
-                            zmq::message_t message;
-                            ecat_sync.getsockopt(ZMQ_RCVMORE, &more, &more_size);
-                            assert(more);
-                            ecat_sync.recv(&message);
-                            size_t msglen = message.size();
-                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            update.setMask(static_cast<uint8_t*>(message.data()), msglen);
-#if VERBOSE_DEBUG
-                            std::cout << "got mask: ";
-                            display(std::cout, update.mask());
-                            std::cout << "\n";
-#endif
-                            ++stage;
-                            break;
-                        }
-                        default: {
-                            DBG_PROCESSING << "unexpected stage " << (int)stage << "\n";
-                            assert(stage <= 4);
-                        };
-                        }
-                        break;
-                    }
-                    catch (const zmq::error_t &ex) {
-                        if (zmq_errno() == EINTR) {
-                            std::stringstream err;
-                            err << "interrupted when sending update (" << (unsigned int)stage
-                                << ")";
-                            MessageLog::instance()->add(err.str());
-                            continue;
-                        }
-                        else {
-                            NB_MSG << "Exception: " << ex.what() << " (" << zmq_strerror(errno)
-                                   << ")\n";
-                        }
-                    }
-                }
-                {
-                    IOLockHelper io_lock;
-                    internals->update = update;
-                }
+                IOLockHelper lock;
+                internals->update = receive_ethercat_data(ecat_sync);
                 break;
             }
             break;
@@ -485,13 +489,17 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     static unsigned long total_mp_time = 0;
     static unsigned long mp_count = 0;
 #endif
+
+#if 0
     int mask_p = 0;
     uint32_t n = internals->update.data_size();
     while (n && internals->update.mask()[mask_p] == 0) {
         ++mask_p;
         --n;
     }
-    if (n) { // io has indicated a change
+#endif
+
+//    if (n) { // io has indicated a change
         if (machine_is_ready) {
 #if VERBOSE_DEBUG
             std::cout << "Processing got masked EtherCAT data at byte " << (incoming_data_size - n)
@@ -505,7 +513,7 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
         else {
             std::cout << "Processing received EtherCAT data but machine is not ready\n";
         }
-    }
+//    }
     if (curr_t - last_sample_poll >= 10000) {
         last_sample_poll = curr_t;
         handle_io_sampling(internals->update.global_clock()); // devices that need a regular poll
@@ -572,7 +580,6 @@ void ProcessingThread::operator()() {
     zmq::socket_t command_sync(*MessagingInterface::getContext(), ZMQ_PAIR);
     command_sync.connect("inproc://command_sync");
 
-    //IOComponent::setHardwareState(IOComponent::s_hardware_init);
     activate_hardware();
 
     Channel::initialiseChannels();
@@ -627,6 +634,7 @@ void ProcessingThread::operator()() {
             // so that IOComponents can be linked
             internals->update.clear();
             if (activate_hardware.initialiseHardware()) {
+                std::cout << "setting hardware state to init\n";
                 IOComponent::setHardwareState(IOComponent::s_hardware_init);
             }
         }
@@ -717,7 +725,6 @@ void ProcessingThread::operator()() {
             HandleIncomingEtherCatData(io_work_queue, curr_t, last_sample_poll, avg_io_time);
             safeSend(ecat_sync, "go", 2);
         }
-
         if (program_done) { break; }
         if (machine_is_ready && processing_state != ProcessingStates::eStableStates && !io_work_queue.empty()) {
 #ifdef KEEPSTATS
@@ -866,6 +873,7 @@ void ProcessingThread::operator()() {
                     }
                     else {
                         if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
+                            std::cout << "setting hardware state to operational\n";
                             IOComponent::setHardwareState(IOComponent::s_operational);
                         }
                     }
