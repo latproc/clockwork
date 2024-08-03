@@ -142,7 +142,7 @@ class ECInterface {
     void receiveState(); // get state from EtherCAT, use collectState() to process it
     int collectState(); // returns non-zero if there are machines that are affected by the new state
     void sendUpdates();
-    void updateDomain(uint32_t size, uint8_t *data, uint8_t *mask);
+    void updateDomain();
 
     bool start();
     bool stop();

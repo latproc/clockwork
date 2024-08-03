@@ -1451,7 +1451,11 @@ static void display(uint8_t *p, size_t n) {
 }
 #endif
 
-void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
+void ECInterface::updateDomain() {
+    uint32_t size = data.getProcessDataSize();
+    uint8_t *p = data.getProcessData().data();
+    uint8_t *m = data.getProcessMask().data();
+
     DBG_ETHERCAT_CALLS << "ecrt_domain_data\n";
     uint8_t *domain1_pd = ecrt_domain_data(domain1);
     uint8_t *pd = domain1_pd;
@@ -1459,15 +1463,15 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
     /*
         std::cerr << "updating domain (size = " << size << ")\n";
         std::cerr << "process: "; display(pd); std::cout << "\n";
-        std::cerr << "   mask: "; display(mask); std::cout << "\n";
-        std::cerr << "   data: "; display(data); std::cout << "\n";
+        std::cerr << "   mask: "; display(m);  std::cout << "\n";
+        std::cerr << "   data: "; display(p);  std::cout << "\n";
 
         if (!all_ok || master_state.al_states != 0x8) {
             std::cerr << "refusing to update the domain since all is not ok\n";
         }
     */
     for (unsigned int i = 0; i < size; ++i) {
-        if (*mask && *data != *pd) {
+        if (*m && *p != *pd) {
             /*
                         std::cout << "at " << i << " data ("
                             << (unsigned int)(*data) << ") different to domain ("
@@ -1476,9 +1480,9 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
             uint8_t bitmask = 0x01;
             int count = 0;
             while (bitmask) {
-                if (*mask & bitmask) { // we care about this bit
+                if (*m & bitmask) { // we care about this bit
                     uint8_t pdb = *pd & bitmask;
-                    uint8_t db = *data & bitmask;
+                    uint8_t db = *p & bitmask;
                     if (pdb != db) { // changed
                         //std::cout << "bit " << i << ":" << count << " changed to ";
                         if (db) {
@@ -1496,8 +1500,8 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
             }
         }
         ++pd;
-        ++mask;
-        ++data;
+        ++m;
+        ++p;
     }
 }
 
@@ -1622,7 +1626,7 @@ int ECInterface::collectState() {
     uint8_t *q = data.getUpdateData().data();       // convenience pointer
 
 #if VERBOSE_DEBUG
-    if (last_pd) {
+    if (!last_pd.empty()) {
         DBG_ETHERCAT_PACKETS << "last:";
         display(last_pd, domain_size);
     }
@@ -1634,7 +1638,7 @@ int ECInterface::collectState() {
     assert(min == 0);
     for (unsigned int i = 0; i < domain_size; ++i) {
         data.update_mask[i] = 0;                 // assume no updates in this octet
-        if (!last_pd.empty()) {                     // first time through, copy all the domain data and mask
+        if (last_pd.empty()) {                     // first time through, copy all the domain data and mask
             data.update_data[i] = domain1_pd[i]; //TBD & *pm;
             data.update_mask[i] = *pm;
             affected_bits++;
@@ -1691,13 +1695,11 @@ int ECInterface::collectState() {
 #if VERBOSE_DEBUG
     DBG_ETHERCAT_PACKETS << "setting process data\n";
 #endif
-    pd = new uint8_t[domain_size];
-    memcpy(pd, domain1_pd, domain_size);
     instance()->data.setDataSize(domain_size);
-    instance()->data.setProcessData(pd, domain_size);
+    instance()->data.setProcessData(domain1_pd, domain_size);
 #if VERBOSE_DEBUG
     DBG_ETHERCAT_PACKETS << "copied new domain data: ";
-    display(pd, domain_size);
+    display(domain1_pd, domain_size);
     DBG_ETHERCAT_PACKETS << "\n";
 #endif
     data.setUpdateData(domain1_pd, domain_size);
