@@ -25,7 +25,7 @@ class EtherCATThread {
     unsigned int keep_alive;
     uint64_t last_ping;
 
-    bool waitForSync(zmq::socket_t &sync);
+    bool waitForStart(zmq::socket_t &sync);
     int sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_clock);
     bool getEtherCatResponse(zmq::socket_t *sync_sock, uint64_t global_clock,
                              Statistic *keep_alive_stat);

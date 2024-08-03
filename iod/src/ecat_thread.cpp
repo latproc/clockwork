@@ -70,7 +70,7 @@ EtherCATThread::EtherCATThread()
 
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
 
-bool EtherCATThread::waitForSync(zmq::socket_t &sync_sock) {
+bool EtherCATThread::waitForStart(zmq::socket_t &sync_sock) {
     char buf[10];
     size_t response_len;
     return safeRecv(sync_sock, buf, 10, true, response_len, 0);
@@ -542,7 +542,7 @@ void EtherCATThread::operator()() {
     bool first_run = true;
     // assume all is ok with EtherCAT. If modules go offline this flips and we stop polling
     static bool ec_ok = true;
-    while (!program_done && !waitForSync(*sync_sock)) {
+    while (!program_done && !waitForStart(*sync_sock)) {
         usleep(100);
     }
     while (!program_done) {
