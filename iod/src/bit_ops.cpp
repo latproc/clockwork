@@ -49,3 +49,18 @@ void copyMaskedBits(uint8_t *dest, uint8_t *src, uint8_t *mask, size_t len) {
     std::cout << "\n";
 #endif
 }
+
+void set_mask_bits(unsigned int offset, unsigned int bitpos, unsigned int bitlen, uint8_t *result) {
+    offset += bitpos / 8;
+    bitpos = bitpos % 8;
+    uint8_t mask = 0x01 << bitpos;
+    // set  a bit in the mask for each bit of this value
+    for (unsigned int i = 0; i < bitlen; ++i) {
+        result[offset] |= mask;
+        mask = mask << 1;
+        if (!mask) {
+            mask = 0x01;
+            ++offset;
+        }
+    }
+}

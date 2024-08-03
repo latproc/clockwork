@@ -1123,6 +1123,9 @@ int IOComponent::getMinIOOffset() { return min_offset; }
 
 int IOComponent::getMaxIOOffset() { return max_offset; }
 
+// Add all IOComponents that have an interest in the bit
+// in the process data at a given offset to the set of
+// components to be notified.
 int IOComponent::notifyComponentsAt(unsigned int offset) {
     assert(offset <= max_offset && offset >= min_offset);
     int count = 0;
@@ -1155,57 +1158,40 @@ bool IOComponent::hasUpdates() {
     return !updatedComponentsOut.empty();
 }
 
+void set_mask_bits(const IOAddress & address, uint8_t *result) {
+    unsigned int offset = address.io_offset;
+    unsigned int bitpos = address.io_bitpos;
+    unsigned int bitlen = address.bitlen;
+    set_mask_bits(offset, bitpos, bitlen, result);
+}
+
+// Build a mask that indicates what bits in the process data are
+// relevant to IOComponents.
 std::vector<uint8_t> generateProcessMask() {
     std::vector<uint8_t> result;
     unsigned int max = IOComponent::getMaxIOOffset() - IOComponent::getMinIOOffset() + 1;
-    result.resize(max+1);
+    result.resize(max);
 
     IOComponent::Iterator iter = IOComponent::begin();
     while (iter != IOComponent::end()) {
         IOComponent *ioc = *iter++;
-        unsigned int offset = ioc->address.io_offset;
-        unsigned int bitpos = ioc->address.io_bitpos;
-        offset += bitpos / 8;
-        bitpos = bitpos % 8;
-        uint8_t mask = 0x01 << bitpos;
-        // set  a bit in the mask for each bit of this value
-        for (unsigned int i = 0; i < ioc->address.bitlen; ++i) {
-            result[offset] |= mask;
-            mask = mask << 1;
-            if (!mask) {
-                mask = 0x01;
-                ++offset;
-            }
-        }
+        set_mask_bits(ioc->address, result.data());
     }
     return result;
 }
 
+// Build a mask that indicates what bits in the process data are
+// relevant to output MachineInstances attached to IO
 std::vector<uint8_t> IOComponent::generateMask(std::list<MachineInstance *> &outputs) {
     std::vector<uint8_t> result;
     unsigned int max = IOComponent::getMaxIOOffset() - IOComponent::getMinIOOffset() + 1;
-    result.resize(max+1);
+    result.resize(max);
 
     std::list<MachineInstance *>::iterator iter = outputs.begin();
     while (iter != outputs.end()) {
         MachineInstance *m = *iter++;
         IOComponent *ioc = m->io_interface;
-        if (ioc) {
-            unsigned int offset = ioc->address.io_offset;
-            unsigned int bitpos = ioc->address.io_bitpos;
-            offset += bitpos / 8;
-            bitpos = bitpos % 8;
-            uint8_t mask = 0x01 << bitpos;
-            // set  a bit in the mask for each bit of this value
-            for (unsigned int i = 0; i < ioc->address.bitlen; ++i) {
-                result[offset] |= mask;
-                mask = mask << 1;
-                if (!mask) {
-                    mask = 0x01;
-                    ++offset;
-                }
-            }
-        }
+        if (ioc) { set_mask_bits(ioc->address, result.data()); }
     }
     return result;
 }
@@ -1240,6 +1226,7 @@ static std::vector<uint8_t> generateUpdateMask() {
     unsigned int max = IOComponent::getMaxIOOffset();
     res.resize(max - min + 1);
 
+    bool found_update = false;
     std::set<IOComponent *>::iterator iter = updatedComponentsOut.begin();
     while (iter != updatedComponentsOut.end()) {
         IOComponent *ioc = *iter; //TBD this can be null
@@ -1254,21 +1241,9 @@ static std::vector<uint8_t> generateUpdateMask() {
             ioc->direction() != IOComponent::DirBidirectional) {
             continue;
         }
-        unsigned int offset = ioc->address.io_offset;
-        unsigned int bitpos = ioc->address.io_bitpos;
-        offset += bitpos / 8;
-        bitpos = bitpos % 8;
-        uint8_t mask = 0x01 << bitpos;
-        // set  a bit in the mask for each bit of this value
-        for (unsigned int i = 0; i < ioc->address.bitlen; ++i) {
-            res[offset] |= mask;
-            mask = mask << 1;
-            if (!mask) {
-                mask = 0x01;
-                ++offset;
-            }
-        }
+        set_mask_bits(ioc->address, res.data());
     }
+    if (!found_update) { return {}; }
 #if VERBOSE_DEBUG
     std::cout << "generated mask: ";
     display(res, max - min + 1);
