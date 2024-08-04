@@ -29,7 +29,7 @@ struct IncludeActionTemplate : public ActionTemplate {
     // given by the 'name' parameter.  The names are to be evaluated in the
     // scope where the command is used.
 
-    IncludeActionTemplate(const std::string &name, Value val, Value pos = -1, bool before = false,
+    IncludeActionTemplate(const std::string &name, Value val, Value pos = Value{-1}, bool before = false,
                           bool expand = false);
     ~IncludeActionTemplate() override;
 

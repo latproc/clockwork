@@ -88,7 +88,7 @@ void initialiseOutputs() {
             std::cout << "Initialising value for " << m->getName() << " to " << val << "\n";
             int64_t i_val = 0;
             if (val.asInteger(i_val)) {
-                m->setValue("VALUE", i_val);
+                m->setValue("VALUE", Value{i_val});
                 if (m->io_interface) {
                     if (m->io_interface->address.is_signed) {
                         m->io_interface->setValue((int32_t)(i_val & 0xfffffffff));

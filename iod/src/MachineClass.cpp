@@ -102,7 +102,23 @@ MachineClass *MachineClass::find(const char *name) {
     return 0;
 }
 
+void MachineClass::setOption(const std::string &name, const char *value) {
+    options[name] = Value{value};
+}
+
+void MachineClass::setOption(const std::string &name, int64_t value) {
+    options[name] = Value{value};
+}
+
 void MachineClass::setOption(const std::string &name, const Value &value) { options[name] = value; }
+
+bool MachineClass::setProperty(const char *name, const char *val) {
+    return properties.add(name, Value{val}, SymbolTable::ST_REPLACE);
+}
+
+bool MachineClass::setProperty(const char *name, int64_t val) {
+    return properties.add(name, Value{val}, SymbolTable::ST_REPLACE);
+}
 
 bool MachineClass::setProperty(const char *name, const Value &val) {
     return properties.add(name, val, SymbolTable::ST_REPLACE);

@@ -1315,7 +1315,7 @@ Value Evaluator::evaluate(Predicate *predicate, MachineInstance *m) {
             std::stringstream ss;
             ss << m->getName() << " Predicate failed to resolve: " << *predicate << "\n";
             MessageLog::instance()->add(ss.str().c_str());
-            return false;
+            return Value{false};
         }
     std::list<ExprNode>::const_iterator work = stack.stack.begin();
     ExprNode evaluated(eval_stack(m, work));
@@ -1331,7 +1331,7 @@ Value Predicate::evaluate(MachineInstance *m) {
             std::stringstream ss;
             ss << m->getName() << " Predicate failed to resolve: " << *this << "\n";
             MessageLog::instance()->add(ss.str().c_str());
-            return false;
+            return Value{false};
         }
     //Stack work(stack);
     std::list<ExprNode>::const_iterator work = stack.stack.begin();

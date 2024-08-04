@@ -73,10 +73,14 @@ class MachineClass {
 
     const SymbolTable &getProperties() const { return properties; }
     void setProperties(const SymbolTable &props) { properties = props; }
+    bool setProperty(const char *name, const char *val);
+    bool setProperty(const char *name, int64_t);
     bool setProperty(const char *name, const Value &val);
     bool setProperty(const std::string name, const Value &val);
 
     const std::map<std::string, Value> &getOptions() const { return options; }
+    void setOption(const std::string &name, const char *value);
+    void setOption(const std::string &name, int64_t value);
     void setOption(const std::string &name, const Value &value);
 
     virtual void addProperty(const char *name); // used in interfaces to list synced properties

@@ -458,25 +458,25 @@ void SDOEntry::syncValue() {
     if (size_ == 32) {
         if (machine_instance) {
             machine_instance->setValue("VALUE",
-                                       EC_READ_U32(ecrt_sdo_request_data(realtime_request)));
+                                       Value{EC_READ_U32(ecrt_sdo_request_data(realtime_request))});
         }
     }
     else if (size_ == 16) {
         if (machine_instance) {
             machine_instance->setValue("VALUE",
-                                       EC_READ_U16(ecrt_sdo_request_data(realtime_request)));
+                                       Value{EC_READ_U16(ecrt_sdo_request_data(realtime_request))});
         }
     }
     else if (size_ == 8) {
         if (machine_instance) {
             machine_instance->setValue("VALUE",
-                                       EC_READ_U8(ecrt_sdo_request_data(realtime_request)));
+                                       Value{EC_READ_U8(ecrt_sdo_request_data(realtime_request))});
         }
     }
     else if (size_ == 1) {
         if (machine_instance) {
             machine_instance->setValue(
-                "VALUE", EC_READ_BIT(ecrt_sdo_request_data(realtime_request), offset_));
+                "VALUE", Value{EC_READ_BIT(ecrt_sdo_request_data(realtime_request), offset_)});
         }
     }
 }
@@ -484,16 +484,16 @@ void SDOEntry::syncValue() {
 Value SDOEntry::readValue() {
     DBG_ETHERCAT_CALLS << "ecrt_sdo_request_data\n";
     if (size_ == 32) {
-        return EC_READ_U32(ecrt_sdo_request_data(realtime_request));
+        return Value{EC_READ_U32(ecrt_sdo_request_data(realtime_request))};
     }
     else if (size_ == 16) {
-        return EC_READ_U16(ecrt_sdo_request_data(realtime_request));
+        return Value{EC_READ_U16(ecrt_sdo_request_data(realtime_request))};
     }
     else if (size_ == 8) {
-        return EC_READ_U8(ecrt_sdo_request_data(realtime_request));
+        return Value{EC_READ_U8(ecrt_sdo_request_data(realtime_request))};
     }
     else if (size_ == 1) {
-        return EC_READ_BIT(ecrt_sdo_request_data(realtime_request), offset_);
+        return Value{EC_READ_BIT(ecrt_sdo_request_data(realtime_request), offset_)};
     }
     return SymbolTable::Null;
 }

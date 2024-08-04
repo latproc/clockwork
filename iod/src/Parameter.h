@@ -14,6 +14,7 @@ class Parameter {
     MachineInstance *machine;
     std::string real_name;
     Parameter(Value v);
+    Parameter(const char *v);
     Parameter(const char *name, const SymbolTable &st);
     std::ostream &operator<<(std::ostream &out) const;
     Parameter(const Parameter &orig);

@@ -1,6 +1,8 @@
 #include "Parameter.h"
+#include <ostream>
 
 Parameter::Parameter(Value v) : val(v), machine(0) { ; }
+Parameter::Parameter(const char *v) : val(Value{v}), machine(0) { ; }
 Parameter::Parameter(const char *name, const SymbolTable &st)
     : val(name), properties(st), machine(0) {}
 std::ostream &Parameter::operator<<(std::ostream &out) const {

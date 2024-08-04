@@ -168,10 +168,10 @@ void ModbusAddress::message(const std::string &msg) {}
 void ModbusAddress::update(MachineInstance *owner, Group group, int addr, const char *str_value,
                            int len) {
     std::list<Value> params;
-    params.push_back(group);
-    params.push_back(addr);
+    params.push_back(Value{group});
+    params.push_back(Value{addr});
     params.push_back(Value(name.c_str(), Value::t_string));
-    params.push_back(len);
+    params.push_back(Value{len});
     params.push_back(Value(str_value, Value::t_string));
     MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
     mh.start_time = microsecs();
@@ -180,11 +180,11 @@ void ModbusAddress::update(MachineInstance *owner, Group group, int addr, const 
 
 void ModbusAddress::update(MachineInstance *owner, Group group, int addr, int new_value, int len) {
     std::list<Value> params;
-    params.push_back(group);
-    params.push_back(addr);
+    params.push_back(Value{group});
+    params.push_back(Value{addr});
     params.push_back(Value(name.c_str(), Value::t_string));
-    params.push_back(len);
-    params.push_back(new_value);
+    params.push_back(Value{len});
+    params.push_back(Value{new_value});
     MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
     mh.start_time = microsecs();
     Channel::sendCommand(owner, "UPDATE", &params, mh);
@@ -193,11 +193,11 @@ void ModbusAddress::update(MachineInstance *owner, Group group, int addr, int ne
 void ModbusAddress::update(MachineInstance *owner, Group group, int addr, double new_value,
                            int len) {
     std::list<Value> params;
-    params.push_back(group);
-    params.push_back(addr);
+    params.push_back(Value{group});
+    params.push_back(Value{addr});
     params.push_back(Value(name.c_str(), Value::t_string));
-    params.push_back(len);
-    params.push_back(new_value);
+    params.push_back(Value{len});
+    params.push_back(Value{new_value});
     MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
     mh.start_time = microsecs();
     Channel::sendCommand(owner, "UPDATE", &params, mh);

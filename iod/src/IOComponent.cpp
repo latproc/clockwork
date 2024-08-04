@@ -839,22 +839,22 @@ int64_t AnalogueInput::filter(int64_t raw) {
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
-        o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
-        o->properties.add("raw", raw, SymbolTable::ST_REPLACE);
-        o->properties.add("VALUE", static_cast<int64_t>(config->last_sent), SymbolTable::ST_REPLACE);
+        o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+        o->properties.add("DurationTolerance", Value{config->rate_len}, SymbolTable::ST_REPLACE);
+        o->properties.add("raw", Value{raw}, SymbolTable::ST_REPLACE);
+        o->properties.add("VALUE", Value{static_cast<int64_t>(config->last_sent)}, SymbolTable::ST_REPLACE);
         //double v = config->speeds.average(config->speeds.length());
         //if (fabs(v)<1.0) v = 0.0;
         if (*config->calc_stddev) {
-            o->properties.add("stddev", bufferStddev(config->positions, 5),
+            o->properties.add("stddev", Value{bufferStddev(config->positions, 5)},
                               SymbolTable::ST_REPLACE);
         }
         if (*config->calc_dt) {
-            o->properties.add("Velocity", config->speed * config->speed_scale,
+            o->properties.add("Velocity", Value{config->speed * config->speed_scale},
                               SymbolTable::ST_REPLACE);
         }
         if (*config->calc_d2t) {
-            o->properties.add("Acceleration", config->accel * config->accel_scale,
+            o->properties.add("Acceleration", Value{config->accel * config->accel_scale},
                               SymbolTable::ST_REPLACE);
         }
     }
@@ -946,8 +946,8 @@ int64_t DigitalValue::filter(int64_t val) {
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
         if (o) {
-            o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
-            o->setValue("VALUE", val);
+            o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+            o->setValue("VALUE", Value{val});
         }
     }
     return val;
@@ -1035,12 +1035,12 @@ int64_t Counter::filter(int64_t val) {
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
-        o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
+        o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+        o->properties.add("DurationTolerance", Value{static_cast<uint64_t>(internals->rate_len)},
                           SymbolTable::ST_REPLACE);
-        o->properties.add("VALUE", static_cast<int64_t>(scaled_val), SymbolTable::ST_REPLACE);
-        o->properties.add("Position", internals->last_sent, SymbolTable::ST_REPLACE);
-        o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
+        o->properties.add("VALUE", Value{static_cast<int64_t>(scaled_val)}, SymbolTable::ST_REPLACE);
+        o->properties.add("Position", Value{internals->last_sent}, SymbolTable::ST_REPLACE);
+        o->properties.add("Velocity", Value{internals->speeds.average(internals->speeds.length())},
                           SymbolTable::ST_REPLACE);
     }
 #endif

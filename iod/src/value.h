@@ -66,6 +66,13 @@ class DynamicValueBase {
 };
 std::ostream &operator<<(std::ostream &, const DynamicValue &);
 
+// Helpers
+// Lookup a property and return it as a cJSON object.
+// The caller does not own the returned value.
+cJSON *getFromJSON(cJSON *json, const std::string &key);
+Value get_value(cJSON *json); // returns a plain value if possible
+cJSON *clone_json(cJSON *json);
+
 class Value {
   public:
     enum Kind {
@@ -84,19 +91,20 @@ class Value {
     //    typedef std::map<std::string, Value> Map;
 
     Value();
-    Value(Kind k);
-    Value(bool v);
-    Value(int64_t v);
-    Value(int v);
-    Value(unsigned int v);
-    Value(uint64_t v);
-    Value(float v);
-    Value(double v);
-    Value(cJSON *v); // take ownership of the JSON
-    Value(const char *str, Kind k = t_symbol);
-    Value(std::string str, Kind k = t_symbol);
+    explicit Value(Kind k);
+    explicit Value(bool v);
+    explicit Value(int64_t v);
+    explicit Value(int v);
+    explicit Value(unsigned int v);
+    explicit Value(uint64_t v);
+    explicit Value(float v);
+    explicit Value(double v);
+    explicit Value(cJSON *v); // take ownership of the JSON
+    explicit Value(const char *str, Kind k = t_symbol);
+    explicit Value(std::string str, Kind k = t_symbol);
+    explicit Value(Value &&other);
+    explicit Value(const Value &&other);
     Value(const Value &other);
-    Value(Value &&other);
     Value(DynamicValueBase *dv);
     Value(DynamicValueBase &dv);
     virtual ~Value();
@@ -119,9 +127,6 @@ class Value {
 
     void toString(); // convert the value to a string from a symbol
     void toSymbol(); // convert the value to a symbol from a string
-    // Lookup a property and return it as a cJSON object.
-    // The caller does not own the returned value.
-    cJSON *getFromJSON(const std::string &key);
 
     Kind kind;
     bool bValue;
@@ -142,6 +147,8 @@ class Value {
     void setDynamicValue(DynamicValueBase *dv);
     void setDynamicValue(DynamicValueBase &dv);
 
+    Value getFromJSON(const std::string &key);
+
     Value &operator=(const Value &orig);
     Value &operator=(bool);
     Value &operator=(int);
@@ -157,6 +164,7 @@ class Value {
     bool operator<=(const Value &other) const;
     bool operator<(const Value &other) const { return !operator>=(other); }
     bool operator>(const Value &other) const { return !operator<=(other); }
+    bool operator==(const char *other) const;
     bool operator==(const Value &other) const;
     bool operator!=(const Value &other) const;
     bool operator&&(const Value &other) const;

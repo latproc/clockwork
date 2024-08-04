@@ -917,7 +917,7 @@ void MachineInstance::describe(std::ostream &out) {
         for (unsigned int i = 0; i < stable_states.size(); ++i) {
             out << "  " << stable_states[i].state_name << ": "
                 << stable_states[i].condition.last_evaluation << "\n";
-            if (stable_states[i].condition.last_result == true) {
+            if (stable_states[i].condition.last_result == Value{true}) {
                 if (stable_states[i].subcondition_handlers &&
                     !stable_states[i].subcondition_handlers->empty()) {
                     std::list<ConditionHandler>::iterator iter =
@@ -1549,10 +1549,10 @@ void MachineInstance::setProperties(const SymbolTable &props) {
             }
         }
         else if (p.first == "TRACEABLE") {
-            if (p.second == "TRUE") {
+            if (p.second == Value{"TRUE"}) {
                 is_traceable = true;
             }
-            if (p.second == "FALSE") {
+            if (p.second == Value{"FALSE"}) {
                 is_traceable = false;
             }
         }
@@ -1951,10 +1951,10 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
             machine_class_state->enter(0);
         }
 
-        properties.add("STATE", current_state.getName().c_str(), SymbolTable::ST_REPLACE);
+        properties.add("STATE", Value{current_state.getName().c_str()}, SymbolTable::ST_REPLACE);
         // publish the state change if we are a publisher
         if (mq_interface) {
-            if (_type == "POINT" && properties.lookup("type") == "Output") {
+            if (_type == "POINT" && properties.lookup("type") == Value{"Output"}) {
                 mq_interface->publish(properties.lookup("topic").asString(), new_state.getName(),
                                       this);
             }
@@ -2341,7 +2341,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                             }
                             if (change_state_action == 0) {
                                 MoveStateActionTemplate temp(_name.c_str(),
-                                                             t.dest.getName().c_str());
+                                                             Value{t.dest.getName().c_str()});
                                 MachineCommandTemplate mc("stable_state_test", "");
                                 mc.setActionTemplate(&temp);
                                 char buf[100];
@@ -2377,7 +2377,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                     if (!found) {
                         DBG_M_STATECHANGES << "no stable state condition test for "
                                            << t.dest.getName() << " pushing state change\n";
-                        MoveStateActionTemplate msat("SELF", t.dest.getName());
+                        MoveStateActionTemplate msat("SELF", Value{t.dest.getName()});
                         MoveStateAction *msa = new MoveStateAction(this, msat);
                         DBG_M_STATECHANGES << _name << " pushed (status: " << msa->getStatus()
                                            << ") " << *msa << "\n";
@@ -2427,11 +2427,11 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
 
                 if (state_change_ok) {
                     // no matching command, just perform the transition
-                    MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str());
+                    MoveStateActionTemplate temp(_name.c_str(), Value{t.dest.getName().c_str()});
                     return new MoveStateAction(this, temp);
                 }
                 else {
-                    SendMessageActionTemplate ssat("StateChangeFailureException", this);
+                    SendMessageActionTemplate ssat(Value{"StateChangeFailureException"}, this);
                     return new SendMessageAction(this, ssat);
                 }
             }
@@ -2463,7 +2463,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                 }
                 DBG_M_MESSAGING << _name << " received message" << m.getText()
                                 << "; pushing state change\n";
-                MoveStateActionTemplate msat("SELF", t.dest.getName());
+                MoveStateActionTemplate msat("SELF", Value{t.dest.getName()});
                 MoveStateAction *msa = new MoveStateAction(this, msat);
                 DBG_M_STATECHANGES << _name << " pushed (status: " << msa->getStatus() << ") "
                                    << *msa << "\n";
@@ -2648,7 +2648,7 @@ Action::Status MachineInstance::execute(const Message &m, Transmitter *from, Act
         }
         else if (m.getText() == "property_change") {
             //std::cout << _name << " value changed to " << io_interface->address.value << "\n";
-            setValue("VALUE", io_interface->address.value);
+            setValue("VALUE", Value{io_interface->address.value});
         }
         // a POINT won't have an actions that depend on triggers so it's safe to return now
         return Action::Complete;
@@ -2695,7 +2695,7 @@ void MachineInstance::sendMessageToReceiver(const Message &message, Receiver *r,
         addressed_message += ".";
         addressed_message += message.getText();
         std::list<Value> *params = new std::list<Value>;
-        params->push_back(addressed_message.c_str());
+        params->push_back(Value{addressed_message.c_str()});
         MachineInstance *mi = dynamic_cast<MachineInstance *>(r);
         if (mi) {
             MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
@@ -3079,7 +3079,7 @@ void MachineInstance::disable() {
         if (val.kind == Value::t_integer) {
             int64_t i_val = 0;
             if (val.asInteger(i_val)) {
-                setValue("VALUE", i_val);
+                setValue("VALUE", Value{i_val});
                 if (io_interface) {
                     if (io_interface->address.is_signed) {
                         io_interface->setValue((int32_t)(i_val & 0xffffffff));
@@ -3303,7 +3303,7 @@ bool MachineInstance::setStableState() {
                                        << ") should be in state " << s.state_name
                                        << " due to condition: " << *s.condition.predicate << "\n";
                         char *sn = strdup(s.state_name.c_str());
-                        SetStateActionTemplate ssat(CStringHolder("SELF"), s.state_name,
+                        SetStateActionTemplate ssat(CStringHolder("SELF"), Value{s.state_name},
                                                     StateChangeReason::automatic);
                         enqueueAction(ssat.factory(
                             this)); // execute this state change next time actions are processed
@@ -3461,10 +3461,10 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     // clone properties from the class into this instance but don't replace
     // properties already loaded
     properties.add(state_machine->getProperties(), SymbolTable::NO_REPLACE);
-    properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
+    properties.add("NAME", Value{_name.c_str()}, SymbolTable::ST_REPLACE);
     if (locals.size() == 0) {
         for (Parameter p : state_machine->locals) {
-            Parameter newp(p.val.sValue.c_str());
+            Parameter newp(Value{p.val.sValue.c_str()});
             if (!p.machine) {
                 MessageLog::instance()->add(_name,
                                             ": no clonable instance for parameter: ", p.val.sValue);
@@ -3621,7 +3621,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
             machine.erase((machine.find('.')));
             // if this is a parameter, copy the transition to use the real name
             for (unsigned int i = 0; i < state_machine->parameters.size(); ++i) {
-                if (parameters[i].val == machine) {
+                if (parameters[i].val == Value{machine}) {
                     std::string evt = transition.trigger.getText();
                     evt = evt.substr(evt.find('.') + 1);
                     std::string trigger = parameters[i].real_name + "." + evt;
@@ -4153,7 +4153,7 @@ bool MachineInstance::isPersistent() {
     if (persistent == SymbolTable::Null) {
         return false;
     }
-    return persistent == "true";
+    return persistent == Value{"true"};
 }
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
@@ -4270,7 +4270,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             if (isShadow()) {
                 Channel *chn = ownerChannel();
                 if (chn && chn->current_state != ChannelImplementation::DISCONNECTED) {
-                    chn->sendPropertyChangeMessage(this, fullName(), property, new_value,
+                    chn->sendPropertyChangeMessage(this, fullName(), Value{property}, new_value,
                                                    authority);
                     return true;
                     //fl.f() << _name << "forwarding property change request to owner channel\n";
@@ -4296,10 +4296,10 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             }
         }
         else if (property_val.token_id == ClockworkToken::TRACEABLE) {
-            if (new_value == "TRUE") {
+            if (new_value == Value{"TRUE"}) {
                 is_traceable = true;
             }
-            if (new_value == "FALSE") {
+            if (new_value == Value{"FALSE"}) {
                 is_traceable = false;
             }
             return true; // special case, short-circuit other tests
@@ -4341,10 +4341,10 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             state_machine && state_machine->plugin && state_machine->plugin->filter) {
             double float_value = new_value.kind == Value::t_float ? new_value.fValue : new_value.iValue;
             double filtered_value = state_machine->plugin->filter(this, float_value);
-            was_changed = (!prev_value.identical(filtered_value) ||
+            was_changed = (!prev_value.identical(Value{filtered_value}) ||
                            (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
             if (was_changed) {
-                properties.add(property, filtered_value, SymbolTable::ST_REPLACE);
+                properties.add(property, Value{filtered_value}, SymbolTable::ST_REPLACE);
             }
         }
         else {
@@ -4385,7 +4385,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
                 else {
                     io_interface->setValue((uint32_t)(value & 0xffffffff));
                 }
-                properties.add("VALUE", value, SymbolTable::ST_REPLACE);
+                properties.add("VALUE", Value{value}, SymbolTable::ST_REPLACE);
             }
             else {
                 snprintf(buf, 100, "%s: could not set value to %s", _name.c_str(),
@@ -4403,7 +4403,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
 
         std::string property_name(modbusName(property, property_val));
         if (published) {
-            Channel::sendPropertyChange(this, property.c_str(), new_value, authority);
+            Channel::sendPropertyChange(this, Value{property.c_str()}, new_value, authority);
 
             // update modbus with the new value
             if (modbus_exports.count(property_name)) {
@@ -4666,16 +4666,16 @@ void MachineInstance::setupModbusInterface() {
     bool exported = properties.exists("export");
     if (exported) {
         Value export_type_val = properties.lookup("export");
-        if (export_type_val != "false") {
+        if (export_type_val != Value{"false"}) {
             if (_type == "POINT") {
                 const Value &type = properties.lookup("type");
                 if (type != SymbolTable::Null) {
-                    if (type == "Input") {
+                    if (type == Value{"Input"}) {
                         self_discrete = true;
                         export_type = ModbusExport::discrete;
                     }
-                    else if (type == "Output") {
-                        if (export_type_val == "rw") {
+                    else if (type == Value{"Output"}) {
+                        if (export_type_val == Value{"rw"}) {
                             self_coil = true;
                             export_type = ModbusExport::coil;
                         }
@@ -4684,13 +4684,13 @@ void MachineInstance::setupModbusInterface() {
                             export_type = ModbusExport::coil;
                         }
                     }
-                    else if (type == "AnalogueInput") {
+                    else if (type == Value{"AnalogueInput"}) {
                         self_reg = true;
                         export_type = ModbusExport::reg;
                     }
-                    else if (type == "AnalogueOutput") {
+                    else if (type == Value{"AnalogueOutput"}) {
                         // default to readonly export
-                        if (export_type_val == "rw") {
+                        if (export_type_val == Value{"rw"}) {
                             self_rwreg = true;
                             export_type = ModbusExport::rw_reg;
                         }
@@ -4701,37 +4701,37 @@ void MachineInstance::setupModbusInterface() {
                     }
                 }
             }
-            else if (export_type_val == "rw") {
+            else if (export_type_val == Value{"rw"}) {
                 self_coil = true;
                 export_type = ModbusExport::coil;
             }
-            else if (export_type_val == "reg") {
+            else if (export_type_val == Value{"reg"}) {
                 self_reg = true;
                 export_type = ModbusExport::reg;
             }
-            else if (export_type_val == "rw_reg") {
+            else if (export_type_val == Value{"rw_reg"}) {
                 self_rwreg = true;
                 export_type = ModbusExport::rw_reg;
             }
-            else if (export_type_val == "reg32") {
+            else if (export_type_val == Value{"reg32"}) {
                 self_reg = true;
                 export_type = ModbusExport::reg32;
             }
-            else if (export_type_val == "rw_reg32") {
+            else if (export_type_val == Value{"rw_reg32"}) {
                 self_rwreg = true;
                 export_type = ModbusExport::rw_reg32;
             }
-            else if (export_type_val == "float32") {
+            else if (export_type_val == Value{"float32"}) {
                 self_rwreg = true;
                 export_type = ModbusExport::float32;
             }
-            else if (export_type_val == "str") {
+            else if (export_type_val == Value{"str"}) {
                 const Value &export_size = properties.lookup("strlen");
                 self_reg = true;
                 export_type = ModbusExport::str;
                 export_size.asInteger(str_length);
             }
-            else if (export_type_val == "rw_str") {
+            else if (export_type_val == Value{"rw_str"}) {
                 const Value &export_size = properties.lookup("strlen");
                 self_rwreg = true;
                 export_type = ModbusExport::str;
@@ -4911,10 +4911,10 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
         DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index
                    << " (" << addr << ")\n";
         if (property_name == _name) {
-            setValue("VALUE", new_value);
+            setValue("VALUE", Value{new_value});
         }
         else {
-            setValue(property_name, new_value);
+            setValue(property_name, Value{new_value});
         }
     }
     else {
@@ -4954,12 +4954,12 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 
             DBG_MODBUS << "setting state of " << name << " due to modbus command\n";
             if (new_value) {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "on");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"on"});
                 enqueueAction(ssat.factory(
                     this)); // execute this state change once all other actions are complete
             }
             else {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "off");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"off"});
                 enqueueAction(ssat.factory(
                     this)); // execute this state change once all other actions are complete
             }
@@ -4979,7 +4979,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
                         _name.c_str(), name.c_str(), state_name.c_str());
                     MessageLog::instance()->add(buf);
                 }
-                SetStateActionTemplate ssat(CStringHolder("SELF"), state);
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{state});
                 enqueueAction(ssat.factory(
                     this)); // execute this state change once all other actions are complete
             }
@@ -4999,10 +4999,10 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
             DBG_MODBUS << _name << " set property " << property_name << " via modbus index "
                        << index << " (" << addr << ")\n";
             if (name == _name) {
-                setValue("VALUE", new_value);
+                setValue("VALUE", Value{new_value});
             }
             else {
-                setValue(property_name, new_value);
+                setValue(property_name, Value{new_value});
             }
         }
         else {
@@ -5015,10 +5015,10 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
         DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index
                    << " (" << addr << ")\n";
         if (property_name == _name) {
-            setValue("VALUE", new_value);
+            setValue("VALUE", Value{new_value});
         }
         else {
-            setValue(property_name, new_value);
+            setValue(property_name, Value{new_value});
         }
     }
     else {
@@ -5050,10 +5050,10 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
         DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index
                    << " (" << addr << ")\n";
         if (property_name == _name) {
-            setValue("VALUE", new_value);
+            setValue("VALUE", Value{new_value});
         }
         else {
-            setValue(property_name, new_value);
+            setValue(property_name, Value{new_value});
         }
     }
     else {

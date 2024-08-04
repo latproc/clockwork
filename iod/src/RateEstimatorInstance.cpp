@@ -57,7 +57,7 @@ void RateEstimatorInstance::idle() {
                     << " vel: " << ( (delta) ? (float)(pos - last_pos) * 1000.0/ delta : 0)<< "\n";
         */
         if (pos_m && pos_m->getValue("VALUE").asInteger(pos)) {
-            setValue("VALUE", pos);
+            setValue("VALUE", Value{pos});
         }
         if (pos != settings->last_pos || settings->velocity) {
             Trigger *trigger = new Trigger(this, "RateEstimatorTimer");
@@ -130,14 +130,14 @@ bool RateEstimatorInstance::setValue(const std::string &property, const Value &u
         else {
             settings->zero_count = 0;
         }
-        if (settings->zero_count > settings->readings.BUFSIZE) {
+        if ((size_t)settings->zero_count > settings->readings.BUFSIZE) {
             // reset buffers;
             //settings->start_t = settings->update_t;
             settings->readings.reset();
         }
 
-        MachineInstance::setValue(property, (int64_t)settings->velocity);
-        MachineInstance::setValue("position", (int64_t)settings->position);
+        MachineInstance::setValue(property, Value{(int64_t)settings->velocity});
+        MachineInstance::setValue("position", Value{(int64_t)settings->position});
         return true;
     }
     else {

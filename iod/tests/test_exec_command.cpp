@@ -53,7 +53,7 @@ class ExecuteTests {
     TestResult test() {
         MachineInstance *one = MachineInstanceFactory::create("one", machine_class_->name);
         one->setStateMachine(machine_class_);
-        one->addLocal("test", scope_);
+        one->addLocal(Value{"test"}, scope_);
         one->addDependancy(scope_);
         machine_class_->addState("Done", true);
         machine_class_->addState("Error", true);
@@ -62,11 +62,11 @@ class ExecuteTests {
         machine_class_->addState("Start", true);
         machine_class_->default_state = State("Init");
         machine_class_->initial_state = State("Init");
-        one->properties.add("Command", "/bin/ls");
+        one->properties.add("Command", Value{"/bin/ls"});
         one->properties.add("CommandStatus", 0);
-        one->properties.add("Result", "");
-        one->properties.add("Errors", "");
-        MoveStateActionTemplate msat("one", "Start");
+        one->properties.add("Result", Value{""});
+        one->properties.add("Errors", Value{""});
+        MoveStateActionTemplate msat("one", Value{"Start"});
         MoveStateAction *msa = static_cast<MoveStateAction *>(msat.factory(one));
         one->enable();
         msa->start();
@@ -82,7 +82,7 @@ class ExecuteTests {
         EXPECT_TRUE(res == 0);
         res = *one->getCurrentStateVal();
         int count = 0;
-        while (res != "Done" && ++count < 10) {
+        while (res != Value{"Done"} && ++count < 10) {
             usleep(10000);
             res = *one->getCurrentStateVal();
         }

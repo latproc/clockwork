@@ -590,7 +590,7 @@ struct MatchFunction {
                 // structured messaging, pushing each match to a queue
                 if (index == 0 || index == 1) {
                     instance()->params.clear();
-                    instance()->params.push_back(Options::instance()->queue());
+                    instance()->params.push_back(Value{Options::instance()->queue()});
                 }
                 instance()->params.push_back(Value(match, Value::t_string));
                 if (index == num_sub) {
@@ -634,8 +634,8 @@ struct MatchFunction {
                     (Options::instance()->skippingRepeats() == false || last_message != res ||
                      last_send.tv_sec + 5 < now.tv_sec)) {
                     char *cmd = MessageEncoding::encodeCommand(
-                        "PROPERTY", Options::instance()->machine(), Options::instance()->property(),
-                        res.c_str());
+                        "PROPERTY", Value{Options::instance()->machine()}, Value{Options::instance()->property()},
+                        Value{res.c_str()});
                     if (cmd) {
                         std::string response;
                         if (debug) {
@@ -1013,8 +1013,8 @@ struct ConnectionThread {
             }
             bool sent = false;
             char *cmd_str = MessageEncoding::encodeCommand(
-                "PROPERTY", Options::instance()->name(), "status",
-                stringFromDeviceStatus(DeviceStatus::instance()->current()));
+                "PROPERTY", Value{Options::instance()->name()}, Value{"status"},
+                Value{stringFromDeviceStatus(DeviceStatus::instance()->current())});
             std::string response;
             if (cmd_str) {
                 sent = sendMessage(cmd_str, cmd_interface, response);

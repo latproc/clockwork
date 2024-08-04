@@ -61,7 +61,7 @@ bool ConditionHandler::check(MachineInstance *machine) {
                     }
                     else {
                         // execute this state change once all other actions are complete
-                        SetStateActionTemplate ssat("SELF", "on");
+                        SetStateActionTemplate ssat("SELF", Value{"on"});
                         flag->enqueueAction(ssat.factory(flag));
                     }
                 }
@@ -78,7 +78,7 @@ bool ConditionHandler::check(MachineInstance *machine) {
                 }
                 else {
                     // execute this state change once all other actions are complete
-                    SetStateActionTemplate ssat("SELF", "off");
+                    SetStateActionTemplate ssat("SELF", Value{"off"});
                     SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(flag));
                     flag->enqueueAction(ssa);
                 }

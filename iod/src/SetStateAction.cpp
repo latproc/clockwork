@@ -266,7 +266,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
                                 MessageLog::instance()->add(ss.str().c_str());
                                 DBG_M_ACTIONS << ss.str() << "\n";
                                 if (t.abort_on_failure) {
-                                    AbortActionTemplate aat(true, error_str.get());
+                                    AbortActionTemplate aat(true, Value{error_str.get()});
                                     AbortAction *aa = (AbortAction *)aat.factory(owner);
                                     owner->enqueueAction(aa);
                                     status = Failed;

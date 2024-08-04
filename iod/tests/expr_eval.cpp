@@ -40,7 +40,7 @@ Value Evaluator::evaluate(Predicate *predicate, MachineInstance *m) {
             std::stringstream ss;
             ss << m->getName() << " Predicate failed to resolve: " << *predicate << "\n";
             MessageLog::instance()->add(ss.str().c_str());
-            return false;
+            return Value{false};
         }
     std::list<ExprNode>::const_iterator work = stack.stack.begin();
     ExprNode evaluated(eval_stack(m, work));
@@ -89,7 +89,7 @@ class ExpressionTests {
         Predicate pred(new Predicate(0), opEQ, new Predicate(0));
         Value res = eval.evaluate(&pred, scope_);
         EXPECT_BOOL(res);
-        EXPECT_TRUE(res);
+        EXPECT_TRUE(res.bValue);
         PASS;
     }
 
@@ -98,7 +98,7 @@ class ExpressionTests {
                        new Predicate(new Predicate(1), opPlus, new Predicate(2)));
         Value res = eval.evaluate(&pred, scope_);
         EXPECT_BOOL(res);
-        EXPECT_TRUE(res);
+        EXPECT_TRUE(res.bValue);
         PASS;
     }
 
@@ -106,7 +106,7 @@ class ExpressionTests {
         Predicate pred(new Predicate(0), opEQ, new Predicate("TIMER"));
         Value res = eval.evaluate(&pred, scope_);
         EXPECT_BOOL(res);
-        EXPECT_TRUE(res);
+        EXPECT_TRUE(res.bValue);
         PASS;
     }
 
@@ -115,7 +115,7 @@ class ExpressionTests {
                        new Predicate("TIMER"));
         Value res = eval.evaluate(&pred, scope_);
         EXPECT_BOOL(res);
-        EXPECT_TRUE(res);
+        EXPECT_TRUE(res.bValue);
         PASS;
     }
 
@@ -124,7 +124,7 @@ class ExpressionTests {
                        new Predicate("TIMER"));
         Value res = eval.evaluate(&pred, scope_);
         EXPECT_BOOL(res);
-        EXPECT_TRUE(res);
+        EXPECT_TRUE(res.bValue);
         PASS;
     }
 
@@ -132,7 +132,7 @@ class ExpressionTests {
         Predicate pred(new Predicate(1), opEQ, new Predicate(0));
         Value res = eval.evaluate(&pred, scope_);
         EXPECT_BOOL(res);
-        EXPECT_FALSE(res);
+        EXPECT_FALSE(res.bValue);
         PASS;
     }
 
@@ -140,37 +140,37 @@ class ExpressionTests {
         Predicate pred(new Predicate("x"), opEQ, new Predicate(7));
         Value res = eval.evaluate(&pred, scope_);
         EXPECT_BOOL(res);
-        EXPECT_TRUE(res);
+        EXPECT_TRUE(res.bValue);
         PASS;
     }
 
     TestResult evaluates_comparison_of_properties() {
         MachineInstance *one = MachineInstanceFactory::create("one", machine_class_->name);
         one->setStateMachine(machine_class_);
-        one->addLocal("test", scope_);
+        one->addLocal(Value{"test"}, scope_);
         one->addDependancy(scope_);
-        one->properties.add("x", 7);
+        one->properties.add("x", Value{7});
         Predicate pred(new Predicate("test.x"), opEQ, new Predicate("x"));
         Value res = eval.evaluate(&pred, one);
         delete one;
         EXPECT_BOOL(res);
-        EXPECT_TRUE(res);
+        EXPECT_TRUE(res.bValue);
         PASS;
     }
 
     TestResult condition_evaluates_expressions() {
         Condition cond(new Predicate(new Predicate("x"), opEQ, new Predicate(7)));
-        Value res = cond(scope_);
+        Value res{cond(scope_)};
         EXPECT_BOOL(res);
-        EXPECT_TRUE(res);
+        EXPECT_TRUE(res.bValue);
         PASS;
     }
 
     TestResult evaluates_false_eq_false() {
         Condition cond(new Predicate(new Predicate(Value("FALSE")), opEQ, new Predicate(false)));
-        Value res = cond(scope_);
+        Value res{cond(scope_)};
         EXPECT_BOOL(res);
-        EXPECT_TRUE(res);
+        EXPECT_TRUE(res.bValue);
         PASS;
     }
 
@@ -180,7 +180,7 @@ class ExpressionTests {
         Value x = scope_->properties.lookup("x");
         std::cout << "x: " << x << std::endl;
         EXPECT_TRUE(x.kind == Value::t_integer);
-        EXPECT_TRUE(x == 1);
+        EXPECT_TRUE(x == Value{1});
         PASS;
     }
 
@@ -204,7 +204,7 @@ class ExpressionTests {
         Value x = scope_->properties.lookup("x");
         std::cout << "x: " << x << std::endl;
         EXPECT_TRUE(x.kind == Value::t_integer);
-        EXPECT_TRUE(x == 2);
+        EXPECT_TRUE(x == Value{2});
         PASS;
     }
 

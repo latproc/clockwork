@@ -97,7 +97,7 @@ char *sendIOD(int group, int addr, int new_value);
 char *sendIODMessage(const std::string &s);
 
 std::string getIODSyncCommand(int group, int addr, int new_value) {
-    char *msg = MessageEncoding::encodeCommand("MODBUS", group, addr, new_value);
+    char *msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
     sendIODMessage(msg);
 
     if (DEBUG_BASIC) {
@@ -199,7 +199,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
     std::string ds;
     std::list<Value> *param_list = 0;
     if (MessageEncoding::getCommand(data, ds, &param_list)) {
-        params.push_back(ds);
+        params.push_back(Value{ds});
         if (param_list) {
             std::list<Value>::const_iterator iter = param_list->begin();
             while (iter != param_list->end()) {
@@ -213,7 +213,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
     else {
         std::istringstream iss(data);
         while (iss >> ds) {
-            parts.push_back(ds.c_str());
+            parts.push_back(Value{ds.c_str()});
             ++count;
         }
         std::copy(parts.begin(), parts.end(), std::back_inserter(params));

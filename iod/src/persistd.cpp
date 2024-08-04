@@ -110,34 +110,34 @@ bool loadActiveData(PersistentStore &store, const char *initial_settings) {
             if (item->type == cJSON_Array) {
                 cJSON *fld = cJSON_GetArrayItem(item, 0);
                 assert(fld->type == cJSON_String);
-                Value machine = fld->valuestring;
+                Value machine{fld->valuestring};
 
                 fld = cJSON_GetArrayItem(item, 1);
                 assert(fld->type == cJSON_String);
-                Value property = fld->valuestring;
+                Value property{fld->valuestring};
 
                 if (!ignored_properties.count(property.asString())) {
                     cJSON *json_val = cJSON_GetArrayItem(item, 2);
                     switch (json_val->type) {
                     case cJSON_String:
                         store.insert(machine.asString(), property.asString(),
-                                     json_val->valuestring);
+                                     Value{json_val->valuestring});
                         break;
                     case cJSON_Number:
                         if (json_val->valueNumber.kind == cJSON_Number_int_t) {
                             store.insert(machine.asString(), property.asString(),
-                                         (int64_t)json_val->valueNumber.val._int);
+                                         Value{(int64_t)json_val->valueNumber.val._int});
                         }
                         else {
                             store.insert(machine.asString(), property.asString(),
-                                         json_val->valueNumber.val._double);
+                                         Value{json_val->valueNumber.val._double});
                         }
                         break;
                     case cJSON_True:
-                        store.insert(machine.asString(), property.asString(), true);
+                        store.insert(machine.asString(), property.asString(), Value{true});
                         break;
                     case cJSON_False:
-                        store.insert(machine.asString(), property.asString(), false);
+                        store.insert(machine.asString(), property.asString(), Value{false});
                         break;
                     default:
                         assert(false);
@@ -313,7 +313,7 @@ int main(int argc, const char *argv[]) {
                 iss >> property >> op >> value;
                 std::string machine_name;
                 store.split(machine_name, property);
-                store.insert(machine_name, property, value.c_str());
+                store.insert(machine_name, property, Value{value.c_str()});
                 store.save();
             }
             if (param_list) {

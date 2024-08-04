@@ -248,7 +248,7 @@ void cleanup() {
 
 void initialise_machine_names(char *data) {
     std::list<Value> params;
-    params.push_back("LIST");
+    params.push_back(Value{"LIST"});
     bool did_alloc = false;
     if (!data) {
         data = send_command(params);
@@ -308,7 +308,7 @@ void initialise_commands() {
 
 void check_messages() {
     std::list<Value> params;
-    params.push_back("MESSAGES");
+    params.push_back(Value{"MESSAGES"});
     char *data = send_command(params);
     if (data) {
         char *p = data + strlen(data);

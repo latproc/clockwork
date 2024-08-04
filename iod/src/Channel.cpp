@@ -100,10 +100,10 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
     *buf = nullptr;
     IODCommand *command = parseCommandString(data);
     if (command) {
-        if (command->param(0) == "STATE") {
+        if (command->param(0) == Value{"STATE"}) {
             MachineInstance *m = MachineInstance::find(command->param(1).asString().c_str());
             if (!m->isShadow()) {
-                if (command->numParams() == 4 && command->param(3) == channel->getAuthority()) {
+                if (command->numParams() == 4 && command->param(3) == Value{channel->getAuthority()}) {
                     // do nothing, this is an echo of a command we sent
                     {
                         FileLogger fl(program_name);
@@ -195,7 +195,7 @@ Channel::Channel(const std::string &ch_name, const std::string &type)
         MachineInstance *channel_list = ::machines["CHANNELS"];
         size_t i, n = channel_list->parameters.size();
         for (i = 0; i < n; i++) {
-            if (channel_list->parameters.at(i).val == ch_name) {
+            if (channel_list->parameters.at(i).val == Value{ch_name}) {
                 break;
             }
         }
@@ -260,8 +260,8 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
                 const std::string &s = *props++;
                 Value v = m->getValue(s);
                 if (v != SymbolTable::Null) {
-                    char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v,
-                                                               definition()->getAuthority());
+                    char *cmd = MessageEncoding::encodeCommand("PROPERTY", Value{m->getName()}, Value{s}, v,
+                                                               Value{definition()->getAuthority()});
                     //NB_MSG  << channel_name << " prepared command" << cmd << "\n";
                     messages.push_back(cmd);
                     //std::string response;
@@ -426,7 +426,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
                      channel_name.c_str());
             MessageLog::instance()->add(buf);
             DBG_CHANNELS << buf << "\n";
-            SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING");
+            SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"DOWNLOADING"});
             enqueueAction(
                 ssat.factory(this)); // execute this state change once all other actions are done
         }
@@ -581,14 +581,14 @@ void Channel::addConnection() {
     if (connections == 1) {
         if (isClient()) {
             if (definition()->isPublisher()) {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"ACTIVE"});
                 enqueueAction(ssat.factory(
                     this)); // execute this state change once all other actions are complete
             }
             else {
                 WaitActionTemplate *wat = new WaitActionTemplate(50);
                 SetStateActionTemplate *ssat_connected =
-                    new SetStateActionTemplate(CStringHolder("SELF"), "CONNECTED");
+                    new SetStateActionTemplate(CStringHolder("SELF"), Value{"CONNECTED"});
                 MachineCommandTemplate mc("download_channel_state", "");
                 mc.setActionTemplate(wat);
                 mc.setActionTemplate(ssat_connected);
@@ -600,11 +600,11 @@ void Channel::addConnection() {
         }
         else {
             if (definition()->isPublisher()) {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"ACTIVE"});
                 enqueueAction(ssat.factory(this));
             }
             else {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "WAITSTART");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"WAITSTART"});
                 enqueueAction(ssat.factory(this));
             }
         }
@@ -619,7 +619,7 @@ void Channel::addConnection() {
                << " when in state: " << current_state << "; now waiting for start";
             MessageLog::instance()->add(ss.str());
             DBG_CHANNELS << buf << "\n";
-            SetStateActionTemplate ssat(CStringHolder("SELF"), "WAITSTART");
+            SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"WAITSTART"});
             enqueueAction(ssat.factory( this));
         }
     }
@@ -639,7 +639,7 @@ void Channel::dropConnection() {
     --connections;
 
     if (!connections) {
-        SetStateActionTemplate ssat(CStringHolder("SELF"), "DISCONNECTED");
+        SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"DISCONNECTED"});
         enqueueAction(
             ssat.factory(this)); // execute this state change once all other actions are complete
     }
@@ -1404,7 +1404,7 @@ void ChannelDefinition::instantiateInterfaces() {
                     MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
                     m->setProperties(mc->getProperties());
                     m->setStateMachine(mc);
-                    m->setValue("startup_enabled", false);
+                    m->setValue("startup_enabled", Value{false});
                     machines[instance_name.first] = m;
                     ::machines[instance_name.first] = m;
                 }
@@ -1433,7 +1433,7 @@ void ChannelDefinition::instantiateInterfaces() {
                     MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
                     m->setProperties(mc->getProperties());
                     m->setStateMachine(mc);
-                    m->setValue("startup_enabled", false);
+                    m->setValue("startup_enabled", Value{false});
                     machines[instance_name.first] = m;
                     ::machines[instance_name.first] = m;
                 }
@@ -1635,8 +1635,8 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                 if (!m->getStateMachine()->property_names.count(key.asString())) {
                     return; //ignore properties no in the interface definition
                 }
-                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val,
-                                                     (int64_t)auth);
+                cmd = MessageEncoding::encodeCommand("PROPERTY", Value{channel_name}, key, val,
+                                                     Value{(int64_t)auth});
             }
             else {
                 //NB_MSG << "using authority " << getAuthority()
@@ -1647,12 +1647,12 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                     return; //ignore properties no in the interface definition
                 }
 
-                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val,
-                                                     definition()->getAuthority());
+                cmd = MessageEncoding::encodeCommand("PROPERTY", Value{channel_name}, key, val,
+                                                     Value{definition()->getAuthority()});
             }
         }
         else { // publishers do not use the authority system
-            cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val);
+            cmd = MessageEncoding::encodeCommand("PROPERTY", Value{channel_name}, key, val);
         }
         MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
         mh.start_time = microsecs();
@@ -1684,7 +1684,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
         MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
         mh.start_time = microsecs();
         char *cmd =
-            MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val); // send command
+            MessageEncoding::encodeCommand("PROPERTY", Value{channel_name}, key, val); // send command
         safeSend(*mif->getSocket(), cmd, strlen(cmd), mh);
         //mif->send(cmd);
         free(cmd);

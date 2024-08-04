@@ -7,7 +7,7 @@
 //void copyMaskedBits(uint8_t *dest, uint8_t*src, uint8_t *mask, size_t len);
 
 TEST(SetBitTest, SetsCorrectBit) {
-    uint8_t buf;
+    uint8_t buf = 0;
     set_bit(&buf, 0, 1);
     EXPECT_EQ(buf, 1);
     set_bit(&buf, 7, 1);

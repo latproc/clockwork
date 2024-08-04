@@ -100,27 +100,34 @@ int Tokeniser::getTokenId(const std::string &name) {
 
 int Tokeniser::getTokenId(const char *name) { return getTokenId(std::string(name)); }
 
+namespace {
+
+    void add_keyword(SymbolTable &st, const char *key, int value) { st.add(key, Value{value}); }
+    void add_keyword(SymbolTable &st, const char *key, const char *value) { st.add(key, Value{value}); }
+
+}
+
 SymbolTable::SymbolTable() {
     if (!initialised) {
         initialised = true;
         auto keyword_table = new SymbolTable();
-        keyword_table->add("NOW", 0);
-        keyword_table->add("CLOCK", 0);
-        keyword_table->add("SECONDS", 0);
-        keyword_table->add("MINUTE", 0);
-        keyword_table->add("HOUR", 0);
-        keyword_table->add("DAY", 0);
-        keyword_table->add("MONTH", 0);
-        keyword_table->add("YR", 0);
-        keyword_table->add("YEAR", 0);
-        keyword_table->add("TIMESEQ", "");
-        keyword_table->add("LOCALTIME", "");
-        keyword_table->add("UTCTIME", "");
-        keyword_table->add("TIMEZONE", "");
-        keyword_table->add("TIMESTAMP", "");
-        keyword_table->add("UTCTIMESTAMP", "");
-        keyword_table->add("ISOTIMESTAMP", "");
-        keyword_table->add("RANDOM", "");
+        add_keyword(*keyword_table, "NOW", 0);
+        add_keyword(*keyword_table, "CLOCK", 0);
+        add_keyword(*keyword_table, "SECONDS", 0);
+        add_keyword(*keyword_table, "MINUTE", 0);
+        add_keyword(*keyword_table, "HOUR", 0);
+        add_keyword(*keyword_table, "DAY", 0);
+        add_keyword(*keyword_table, "MONTH", 0);
+        add_keyword(*keyword_table, "YR", 0);
+        add_keyword(*keyword_table, "YEAR", 0);
+        add_keyword(*keyword_table, "TIMESEQ", "");
+        add_keyword(*keyword_table, "LOCALTIME", "");
+        add_keyword(*keyword_table, "UTCTIME", "");
+        add_keyword(*keyword_table, "TIMEZONE", "");
+        add_keyword(*keyword_table, "TIMESTAMP", "");
+        add_keyword(*keyword_table, "UTCTIMESTAMP", "");
+        add_keyword(*keyword_table, "ISOTIMESTAMP", "");
+        add_keyword(*keyword_table, "RANDOM", "");
         keywords = keyword_table;
         reserved = new std::set<std::string>;
         reserved->insert("NAME");

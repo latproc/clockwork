@@ -66,12 +66,12 @@ void PersistentStore::load() {
             char *endp;
             i_value = strtol(value_str.c_str(), &endp, 10);
             if (*endp == 0) {
-                insert(name, property, (uint64_t) i_value);
+                insert(name, property, Value{(uint64_t) i_value});
             }
             else {
                 d_value = strtod(value_str.c_str(), &endp);
                 if (*endp == 0) {
-                    insert(name, property, d_value);
+                    insert(name, property, Value{d_value});
                 }
                 else {
                     insert(name, property, Value(value_str.c_str(), kind));

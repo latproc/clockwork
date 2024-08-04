@@ -36,8 +36,8 @@ struct SetOperationActionTemplate : public ActionTemplate {
     // scope where the command is used.
 
     SetOperationActionTemplate(Value num, Value a, Value b, Value destination, Value property,
-                               SetOperation op, Predicate *pred, bool remove, Value start = -1,
-                               Value end = -1);
+                               SetOperation op, Predicate *pred, bool remove, Value start = Value{-1},
+                               Value end = Value{-1});
     ~SetOperationActionTemplate() override;
 
     Action *factory(MachineInstance *mi) override;

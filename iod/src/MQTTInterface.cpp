@@ -62,7 +62,7 @@ void my_message_callback(struct mosquitto *mosq, void *obj,
             char *tmp = 0;
             int64_t val = strtol(payload, &tmp, 10);
             if (tmp && *tmp == 0) {
-                m->setValue("message", val);
+                m->setValue("message", Value{val});
             }
             else {
                 m->setValue("message", Value(payload, Value::t_string));
@@ -200,7 +200,7 @@ void MQTTModule::disconnect() {
 }
 
 bool MQTTModule::publish(const std::string &topic, const std::string &message, MachineInstance *m) {
-    pubs.add(topic.c_str(), message.c_str());
+    pubs.add(topic.c_str(), Value{message.c_str()});
     const Value &msg_val = pubs.lookup(topic.c_str());
     int rc = mosquitto_publish(mosq, &mid_sent, topic.c_str(), (int)msg_val.asString().length(),
                                msg_val.asString().c_str(), 0, true);
@@ -239,7 +239,7 @@ bool MQTTModule::publish(const std::string &topic, const std::string &message, M
 }
 
 bool MQTTModule::subscribe(const std::string &topic, MachineInstance *m) {
-    subs.add(topic.c_str(), "");
+    subs.add(topic.c_str(), Value{""});
     int rc = mosquitto_subscribe(mosq, NULL, topic.c_str(), 0);
     if (rc) {
         last_error = rc;
@@ -494,13 +494,13 @@ void setup_mqtt(const std::map<std::string, MachineInstance *> &machines) {
                     std::string topic = m->parameters[1].val.asString();
                     if (m->_type != "MQTTSUBSCRIBER" && m->parameters.size() == 3) {
                         if (!module->publishes(topic)) {
-                            m->properties.add("type", "Output");
+                            m->properties.add("type", Value{"Output"});
                             module->publish(topic, m->parameters[2].val.asString(), m);
                         }
                     }
                     else if (m->_type != "MQTTPUBLISHER") {
                         if (!module->subscribes(topic)) {
-                            m->properties.add("type", "Input");
+                            m->properties.add("type", Value{"Input"});
                             module->subscribe(topic, m);
                         }
                     }

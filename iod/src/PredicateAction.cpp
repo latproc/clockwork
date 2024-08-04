@@ -108,7 +108,7 @@ Value resolve(Predicate *p, MachineInstance *m) {
         if (dv) {
             return dv->operator()(m);
         }
-        return false;
+        return Value{false};
     }
     return v;
 }
@@ -218,7 +218,7 @@ Value eval(Predicate *p, MachineInstance *m) {
             res = r;
             break; // TBD
         case opMatch:
-            return matches(l.asString().c_str(), r.asString().c_str());
+            return Value{matches(l.asString().c_str(), r.asString().c_str())};
         case opAny:
         case opAll:
         case opIncludes:

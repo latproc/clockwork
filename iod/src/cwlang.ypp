@@ -752,9 +752,9 @@ local_instantiation ';'
 			DBG_PARSER << "pushing local machine " << current_machine->getName() << " num_properties:"
 					<< current_machine->properties.size() << " num params: " << current_machine->parameters.size() << "\n";
 	    char *name = strdup(current_machine->getName().c_str());
-			Parameter p(name);
-			p.machine = current_machine;
-			current_locals.push_back(p);
+		Parameter p(Value{name});
+		p.machine = current_machine;
+		current_locals.push_back(p);
     }
 }
 ;
@@ -771,7 +771,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
     current_machineclass->state_names.insert($1);
 
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
-    MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
+    MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", Value{$1});
     mc->action_templates.push_back(state_change);
 	current_machineclass->commands.insert(std::make_pair($3, mc));
     mc->setActionTemplates(*current_actions);
@@ -795,7 +795,7 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
         }
     }
     properties.clear();
-    MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
+    MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", Value{$1});
     mc->action_templates.push_back(state_change);
     current_machineclass->commands.insert(std::make_pair($3, mc));
     mc->setActionTemplates(*current_actions);
@@ -812,62 +812,62 @@ pin_definition:
 SYMBOL DIGITALIO INTEGERVAL ';'{
   std::string name($1);
   auto x = $3;
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL DIGITALIN INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL ADC INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL TOUCH INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL SDIO INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL ETHERNET INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL DAC INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL SPI INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL PIN INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL PIN SYMBOL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL JTAG INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 | SYMBOL UART INTEGERVAL ';'{
   std::string name($1);
-  current_machineclass->setOption(name, $3);
+  current_machineclass->setOption(name, Value{$3});
   //current_machineclass->addProperty(name.c_str());
 }
 
@@ -1553,23 +1553,23 @@ SET SYMBOL TO expression error_clause  {
 }
 | SEND SYMBOL TO SYMBOL /* send a generic message/command */ {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SendMessageActionTemplate($2, $4);
+    current_action = new SendMessageActionTemplate(Value{$2}, Value{$4});
 }
 | SEND STRINGVAL TO SYMBOL /* send a generic message/command */ {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SendMessageActionTemplate($2, $4);
+    current_action = new SendMessageActionTemplate(Value{$2}, Value{$4});
 }
 | THROW SYMBOL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
 	if (current_action) current_actions->push_back(current_action);
-	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
-	current_action = new AbortActionTemplate(true, $2);
+	current_actions->push_back(new SendMessageActionTemplate(Value{$2}, Value{"SELF"}));
+	current_action = new AbortActionTemplate(true, Value{$2});
 }
 | THROW STRINGVAL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
 	if (current_action) current_actions->push_back(current_action);
-	current_actions->push_back(new SendMessageActionTemplate($2, "SELF"));
-	current_action = new AbortActionTemplate(true, $2);
+	current_actions->push_back(new SendMessageActionTemplate(Value{$2}, Value{"SELF"}));
+	current_action = new AbortActionTemplate(true, Value{$2});
 }
 | SYMBOL BECOMES COPY PATTERN FROM SYMBOL /* non-descructive copy matching chars */ {
     if (current_action) current_actions->push_back(current_action);
@@ -1602,45 +1602,45 @@ SET SYMBOL TO expression error_clause  {
 
 | ADD SYMBOL AFTER LAST OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new IncludeActionTemplate($6, $2, -1, false);
+	current_action = new IncludeActionTemplate($6, Value{$2}, Value{-1}, false);
 }
 | ADD SYMBOL BEFORE FIRST OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new IncludeActionTemplate($6, $2, 0, true);
+	current_action = new IncludeActionTemplate($6, Value{$2}, Value{0}, true);
 }
 | ADD SYMBOL AFTER ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new IncludeActionTemplate($7, $2, *$5, false);
+	current_action = new IncludeActionTemplate($7, Value{$2}, {*$5}, false);
     delete $5;
 }
 | ADD SYMBOL BEFORE ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new IncludeActionTemplate($7, $2, *$5, true);
+	current_action = new IncludeActionTemplate($7, Value{$2}, Value{*$5}, true);
     delete $5;
 }
 
 | ADD ITEMS FROM SYMBOL AFTER LAST OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new IncludeActionTemplate($8, $4, -1, false, true);
+	current_action = new IncludeActionTemplate($8, Value{$4}, Value{-1}, false, true);
 }
 | ADD ITEMS FROM SYMBOL BEFORE FIRST OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new IncludeActionTemplate($8, $4, 0, true, true);
+	current_action = new IncludeActionTemplate($8, Value{$4}, Value{0}, true, true);
 }
 | ADD ITEMS FROM SYMBOL AFTER ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new IncludeActionTemplate($9, $4, *$7, false, true);
+	current_action = new IncludeActionTemplate($9, Value{$4}, Value{*$7}, false, true);
     delete $7;
 }
 | ADD ITEMS FROM SYMBOL BEFORE ITEM basic_value OF SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new IncludeActionTemplate($9, $4, *$7, true, true);
+	current_action = new IncludeActionTemplate($9, Value{$4}, Value{*$7}, true, true);
     delete $7;
 }
 
 | INCLUDE SYMBOL IN SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new IncludeActionTemplate($4, $2);
+    current_action = new IncludeActionTemplate($4, Value{$2});
 }
 | INCLUDE value IN SYMBOL {
     if (current_action) current_actions->push_back(current_action);
@@ -1650,7 +1650,7 @@ SET SYMBOL TO expression error_clause  {
 }
 | PUSH SYMBOL TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new IncludeActionTemplate($4, $2);
+    current_action = new IncludeActionTemplate($4, Value{$2});
 }
 | PUSH value TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
@@ -1660,15 +1660,15 @@ SET SYMBOL TO expression error_clause  {
 }
 | CLEAR SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new ClearListActionTemplate($2);
+    current_action = new ClearListActionTemplate(Value{$2});
 }
 | ASSIGN SYMBOL TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new IncludeActionTemplate($4, $2);
+    current_action = new IncludeActionTemplate($4, Value{$2});
 }
 | SET ENTRIES OF SYMBOL FROM BITSET SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetListEntriesActionTemplate($7, $4);
+    current_action = new SetListEntriesActionTemplate(Value{$7}, Value{$4});
 }
 | REPLACE PATTERN IN SYMBOL WITH STRINGVAL /* replace first instance */ {
     if (current_action) current_actions->push_back(current_action);
@@ -1684,163 +1684,163 @@ SET SYMBOL TO expression error_clause  {
 }
 | LOAD PROPERTIES FROM SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new LoadPropertiesActionTemplate("", $4);
+    current_action = new LoadPropertiesActionTemplate("", Value($4));
 }
 | COPY PROPERTIES FROM SYMBOL TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new CopyPropertiesActionTemplate($4, $6);
+    current_action = new CopyPropertiesActionTemplate(Value{$4}, Value{$6});
 }
 | COPY PROPERTIES name_list FROM SYMBOL TO SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
-	CopyPropertiesActionTemplate *cpat = new CopyPropertiesActionTemplate($5, $7, current_name_list);
+	CopyPropertiesActionTemplate *cpat = new CopyPropertiesActionTemplate(Value{$5}, Value{$7}, current_name_list);
 	current_name_list.clear();
 	current_action = cpat;
 }
 | COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soIntersect, 0, false);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, Value{$6}, Value{$8}, Value{$10}, soIntersect, nullptr, false);
 }
 | COPY COMMON BETWEEN SYMBOL AND SYMBOL TO SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soIntersect, 0, false);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, Value{$6}, Value{$8}, Value{""}, soIntersect, nullptr, false);
 }
 | COPY ALL FROM SYMBOL TO SYMBOL SELECT USING SYMBOL WHERE predicate {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $9, $6, "", soIntersect, $11, false);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, Value{$9}, Value{$6}, Value{""}, soIntersect, $11, false);
 }
 | COPY value FROM SYMBOL TO SYMBOL SELECT USING SYMBOL WHERE predicate {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(*$2, $4, $9, $6, "", soIntersect, $11, false);
+    current_action = new SetOperationActionTemplate(Value{*$2}, Value{$4}, Value{$9}, Value{$6}, Value{""}, soIntersect, $11, false);
     delete $2;
 }
 | MOVE ALL FROM SYMBOL TO SYMBOL SELECT USING SYMBOL WHERE predicate {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $9, $6, "", soIntersect, $11, true);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, Value{$9}, Value{$6}, Value{""}, soIntersect, $11, true);
 }
 | MOVE value FROM SYMBOL TO SYMBOL SELECT USING SYMBOL WHERE predicate {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(*$2, $4, $9, $6, "", soIntersect, $11, true);
+    current_action = new SetOperationActionTemplate(Value{*$2}, Value{$4}, Value{$9}, Value{$6}, Value{""}, soIntersect, $11, true);
     delete $2;
 }
 | COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL  /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soDifference, 0, false);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, Value{$6}, Value{$8}, Value{""}, soDifference, nullptr, false);
 }
 | COPY DIFFERENCE BETWEEN SYMBOL AND SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soDifference, 0, false);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, Value{$6}, Value{$8}, Value{$10}, soDifference, nullptr, false);
 }
 | COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL  /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, "", soUnion, 0, false);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, Value{$6}, Value{$8}, Value{""}, soUnion, nullptr, false);
 }
 | COPY ALL IN SYMBOL OR SYMBOL TO SYMBOL USING SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, $6, $8, $10, soUnion, 0, false);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, Value{$6}, Value{$8}, Value{$10}, soUnion, nullptr, false);
 }
 | COPY ITEM value FROM SYMBOL TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $5, SymbolTable::Null, $7, "", soSelect, 0, false, *$3, *$3);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$5}, SymbolTable::Null, Value{$7}, Value{""}, soSelect, nullptr, false, *$3, *$3);
     delete $3;
 }
 | COPY ITEMS value TO value OF SYMBOL TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $7, SymbolTable::Null, $9, "", soSelect, 0, false, *$3, *$5);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$7}, SymbolTable::Null, Value{$9}, Value{""}, soSelect, nullptr, false, *$3, *$5);
     delete $3; delete $5;
 }
 | COPY ALL FROM SYMBOL TO SYMBOL /*property*/{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, 0, false);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, SymbolTable::Null, Value{$6}, Value{""}, soSelect, nullptr, false);
 }
 | COPY value FROM SYMBOL TO SYMBOL{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, 0, false);
+    current_action = new SetOperationActionTemplate(Value{*$2}, Value{$4}, SymbolTable::Null, Value{$6}, Value{""}, soSelect, nullptr, false);
     delete $2;
 }
 | COPY ALL FROM SYMBOL TO SYMBOL WHERE predicate {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, $8, false);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, SymbolTable::Null, Value{$6}, Value{""}, soSelect, $8, false);
 }
 | COPY value FROM SYMBOL TO SYMBOL WHERE predicate{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8, false);
+    current_action = new SetOperationActionTemplate(Value{*$2}, Value{$4}, SymbolTable::Null, Value{$6}, Value{""}, soSelect, $8, false);
     delete $2;
 }
 | MOVE ALL FROM SYMBOL TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, 0, true);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, SymbolTable::Null, Value{$6}, Value{""}, soSelect, 0, true);
 }
 | MOVE value FROM SYMBOL TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, 0, true);
+    current_action = new SetOperationActionTemplate(Value{*$2}, Value{$4}, SymbolTable::Null, Value{$6}, Value{""}, soSelect, 0, true);
     delete $2;
 }
 | MOVE ALL FROM SYMBOL TO SYMBOL WHERE predicate {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(-1, $4, SymbolTable::Null, $6, "", soSelect, $8, true);
+    current_action = new SetOperationActionTemplate(Value{-1}, Value{$4}, SymbolTable::Null, Value{$6}, Value{""}, soSelect, $8, true);
 }
 | MOVE value FROM SYMBOL TO SYMBOL WHERE predicate{
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetOperationActionTemplate(*$2, $4, SymbolTable::Null, $6, "", soSelect, $8, true);
+    current_action = new SetOperationActionTemplate(Value{*$2}, Value{$4}, SymbolTable::Null, Value{$6}, Value{""}, soSelect, $8, true);
     delete $2;
 }
 | MOVE ITEMS value TO value OF SYMBOL TO SYMBOL {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SetOperationActionTemplate(-1, $7, SymbolTable::Null, $9, "", soSelect, 0, true, *$3, *$5);
+	current_action = new SetOperationActionTemplate(Value{-1}, Value{$7}, SymbolTable::Null, Value{$9}, Value{""}, soSelect, 0, true, *$3, *$5);
 	delete $3; delete $5;
 }
 | SORT SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SortListActionTemplate($2, "VALUE");
+    current_action = new SortListActionTemplate(Value{$2}, Value{"VALUE"});
 }
 | SORT SYMBOL BY PROPERTY SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SortListActionTemplate($2, $5);
+    current_action = new SortListActionTemplate(Value{$2}, Value{$5});
 }
 | SORT SYMBOL ASC {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SortListActionTemplate($2, "VALUE", true);
+	current_action = new SortListActionTemplate(Value{$2}, Value{"VALUE"}, true);
 }
 | SORT SYMBOL ASCENDING {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SortListActionTemplate($2, "VALUE", true);
+	current_action = new SortListActionTemplate(Value{$2}, Value{"VALUE"}, true);
 }
 | SORT SYMBOL BY PROPERTY SYMBOL ASC {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SortListActionTemplate($2, $5, true);
+	current_action = new SortListActionTemplate(Value{$2}, Value{$5}, true);
 }
 | SORT SYMBOL BY PROPERTY SYMBOL ASCENDING {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SortListActionTemplate($2, $5, true);
+	current_action = new SortListActionTemplate(Value{$2}, Value{$5}, true);
 }
 | SORT SYMBOL DESC {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SortListActionTemplate($2, "VALUE", false);
+	current_action = new SortListActionTemplate(Value{$2}, Value{"VALUE"}, false);
 }
 | SORT SYMBOL DESCENDING {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SortListActionTemplate($2, "VALUE", false);
+	current_action = new SortListActionTemplate(Value{$2}, Value{"VALUE"}, false);
 }
 | SORT SYMBOL BY PROPERTY SYMBOL DESC {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SortListActionTemplate($2, $5, false);
+	current_action = new SortListActionTemplate(Value{$2}, Value{$5}, false);
 }
 | SORT SYMBOL BY PROPERTY SYMBOL DESCENDING {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new SortListActionTemplate($2, $5, false);
+	current_action = new SortListActionTemplate(Value{$2}, Value{$5}, false);
 }
 /*
 | TAKE LAST FROM SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new PopBackActionTemplate($4);
+    current_action = new PopBackActionTemplate(Value{$4});
 }
 | TAKE FIRST FROM SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new PopFrontActionTemplate($4);
+    current_action = new PopFrontActionTemplate(Value{$4});
 }
 | TAKE ITEM INTEGERVAL FROM SYMBOL {
     if (current_action) current_actions->push_back(current_action);
-    current_action = new GetListItemActionTemplate($5, $3);
+    current_action = new GetListItemActionTemplate(Value{$5}, Value{$3});
 }
 */
 | LOG expression /* log message to stdout */ {

@@ -24,14 +24,21 @@
 #include "cJSON.h"
 #include "symboltable.h"
 #include "value.h"
+#include <boost/none.hpp>
 #include <string>
 #include <vector>
+#include <boost/optional.hpp>
 
 struct MessageEncoding {
-    static char *encodeCommand(std::string cmd, std::list<Value> *params);
+    static char *encodeCommand(std::string cmd, const std::list<Value> *params);
     static char *encodeCommand(std::string cmd, Value p1 = SymbolTable::Null,
                                Value p2 = SymbolTable::Null, Value p3 = SymbolTable::Null,
                                Value p4 = SymbolTable::Null);
+    static char *encodeCommand(std::string cmd,
+                    boost::optional<std::string> p1 = boost::none,
+                    boost::optional<std::string> p2 = boost::none,
+                    boost::optional<std::string> p3 = boost::none,
+                    boost::optional<std::string> p4 = boost::none);
     static char *encodeState(const std::string &machine, const std::string &new_state,
                              uint64_t authority);
     static char *encodeState(const std::string &machine, const std::string &new_state);

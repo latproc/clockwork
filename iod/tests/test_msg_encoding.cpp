@@ -5,7 +5,7 @@
 
 TEST(EncodeValue, EncodesBoolean) {
     cJSON *obj = cJSON_CreateObject();
-    MessageEncoding::addValueToJSONObject(obj, "x", false);
+    MessageEncoding::addValueToJSONObject(obj, "x", Value{false});
     Value val = MessageEncoding::valueFromJSONObject(cJSON_GetObjectItem(obj, "x"), nullptr);
     EXPECT_EQ(val.kind, Value::t_bool);
     EXPECT_EQ(val.bValue, false);

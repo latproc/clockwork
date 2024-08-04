@@ -189,7 +189,7 @@ bool setupEtherCatThread() {
             MachineInstance *m = *iter++;
             if (m->_type == "MODULE") {
                 const Value &position = m->getValue("position");
-                if (position >= slaves.size()) {
+                if (position >= Value{slaves.size()}) {
                     std::stringstream ss;
                     ss << "No slave at position " << position;
                     MessageLog::instance()->add(ss.str());

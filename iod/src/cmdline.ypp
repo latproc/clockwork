@@ -48,15 +48,15 @@ command  ';' { process_command(params); params.clear();}
 
 command:
 SYMBOL { 
-	params.push_back($1); 
+	params.push_back(Value{$1}); 
 }
 | command param
 ;
 
 param:
-INTEGER		{ params.push_back(yylval.iVal); }
-| FLOAT		{ params.push_back(yylval.fVal); }
-| SYMBOL	{ params.push_back(yylval.sVal); }
+INTEGER		{ params.push_back(Value{yylval.iVal}); }
+| FLOAT		{ params.push_back(Value{yylval.fVal}); }
+| SYMBOL	{ params.push_back(Value{yylval.sVal}); }
 | STRINGVAL	{ params.push_back(Value(yylval.sVal, Value::t_string)); }
 
 %%

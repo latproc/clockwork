@@ -44,7 +44,7 @@ Value Evaluator::evaluate(Predicate *predicate, MachineInstance *m) {
             std::stringstream ss;
             ss << m->getName() << " Predicate failed to resolve: " << *predicate << "\n";
             MessageLog::instance()->add(ss.str().c_str());
-            return false;
+            return Value{false};
         }
     std::list<ExprNode>::const_iterator work = stack.stack.begin();
     ExprNode evaluated(eval_stack(m, work));
@@ -127,7 +127,7 @@ TEST_F(EvaluatorTest, convert_integer_to_float) {
     Predicate pred(0, opFloat, new Predicate(Value(3.0)));
     Value res = eval.evaluate(&pred, scope);
     EXPECT_EQ(res.kind, Value::t_float) << "converts an integer to a float";
-    EXPECT_EQ(res, 3.0) << "converts an integer to a float";
+    EXPECT_EQ(res, Value{3.0}) << "converts an integer to a float";
     delete scope;
 }
 
@@ -137,7 +137,7 @@ TEST_F(EvaluatorTest, convert_string_to_json) {
     MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
     Evaluator eval;
     std::string json_str = "[1,2,3]";
-    scope->setValue("json", json_str);
+    scope->setValue("json", Value{json_str});
     Predicate pred(0, opJson, new Predicate("json"));
     Value res = eval.evaluate(&pred, scope);
     EXPECT_EQ(res.kind, Value::t_json) << "converts a string to json";

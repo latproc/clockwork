@@ -114,6 +114,7 @@ Value assign_value(cJSON *json) {
         result.kind = Value::t_json;
         result.json = json;
     }
+    if (result.kind != Value::t_json) { cJSON_Delete(json); }
     return result;
 }
 
@@ -171,9 +172,8 @@ Value::Value(double v)
       dyn_value(0) {}
 
 Value::Value(cJSON *v)
-    : kind(t_json), fValue(0), json(nullptr), cached_machine(0), cached_value(0), token_id(0),
+    : kind(t_json), fValue(0), json(v), cached_machine(0), cached_value(0), token_id(0),
       dyn_value(0) {
-    *this = assign_value(v);
 }
 
 Value::Value(const char *str, Kind k)
@@ -417,7 +417,7 @@ Value &Value::operator=(double val) {
 }
 
 Value &Value::operator=(cJSON *val) {
-    *this = assign_value(val);
+    *this = Value(val);
     return *this;
 }
 
@@ -639,6 +639,10 @@ bool Value::operator<=(const Value &other) const {
         break;
     }
     return false;
+}
+
+bool Value::operator==(const char *other) const {
+    return operator==(Value{other});
 }
 
 bool Value::operator==(const Value &other) const {
@@ -876,31 +880,31 @@ struct Sum : public ValueOperation {
     Value operator()(const Value &a, const Value &b) const {
         if (a.kind == Value::t_integer) {
             if (b.kind == Value::t_integer) {
-                return a.iValue + b.iValue;
+                return Value(a.iValue + b.iValue);
             }
             else if (b.kind == Value::t_float) {
-                return b.fValue + (double)a.iValue;
+                return Value(b.fValue + (double)a.iValue);
             }
             else {
-                return a.iValue;
+                return Value(a.iValue);
             }
         }
         else if (a.kind == Value::t_float) {
             if (b.kind == Value::t_float) {
-                return a.fValue + b.fValue;
+                return Value(a.fValue + b.fValue);
             }
             else if (b.kind == Value::t_integer) {
-                return a.fValue + (double)b.iValue;
+                return Value(a.fValue + (double)b.iValue);
             }
             else {
-                return a.fValue;
+                return Value{a.fValue};
             }
         }
         else if (b.kind == Value::t_integer) {
-            return b.iValue;
+            return Value{b.iValue};
         }
         else if (b.kind == Value::t_float) {
-            return b.fValue;
+            return Value{b.fValue};
         }
         else if (a.kind == Value::t_string) {
             return Value(a.sValue + b.asString(), Value::t_string);
@@ -921,31 +925,31 @@ struct Minus : public ValueOperation {
     Value operator()(const Value &a, const Value &b) const {
         if (a.kind == Value::t_integer) {
             if (b.kind == Value::t_integer) {
-                return a.iValue - b.iValue;
+                return Value{a.iValue - b.iValue};
             }
             else if (b.kind == Value::t_float) {
-                return (double)a.iValue - b.fValue;
+                return Value{(double)a.iValue - b.fValue};
             }
             else {
-                return a.iValue;
+                return Value{a.iValue};
             }
         }
         else if (a.kind == Value::t_float) {
             if (b.kind == Value::t_float) {
-                return a.fValue - b.fValue;
+                return Value{a.fValue - b.fValue};
             }
             else if (b.kind == Value::t_integer) {
-                return a.fValue - (double)b.iValue;
+                return Value{a.fValue - (double)b.iValue};
             }
             else {
-                return a.fValue;
+                return Value{a.fValue};
             }
         }
         else if (b.kind == Value::t_integer) {
-            return -b.iValue;
+            return Value{-b.iValue};
         }
         else if (b.kind == Value::t_float) {
-            return -b.fValue;
+            return Value{-b.fValue};
         }
         else if (a.kind == Value::t_string) {
             return a;
@@ -966,10 +970,10 @@ struct Multiply : public ValueOperation {
     Value operator()(const Value &a, const Value &b) const {
         if (a.kind == Value::t_integer) {
             if (b.kind == Value::t_integer) {
-                return a.iValue * b.iValue;
+                return Value{a.iValue * b.iValue};
             }
             else if (b.kind == Value::t_float) {
-                return b.fValue * (double)a.iValue;
+                return Value{b.fValue * (double)a.iValue};
             }
             else {
                 return 0;
@@ -977,10 +981,10 @@ struct Multiply : public ValueOperation {
         }
         else if (a.kind == Value::t_float) {
             if (b.kind == Value::t_float) {
-                return a.fValue * b.fValue;
+                return Value{a.fValue * b.fValue};
             }
             else if (b.kind == Value::t_integer) {
-                return a.fValue * (double)b.iValue;
+                return Value{a.fValue * (double)b.iValue};
             }
             else {
                 return 0;
@@ -1004,27 +1008,27 @@ struct Divide : public ValueOperation {
             if (b.kind == Value::t_integer) {
                 if (b.iValue == 0) {
                     if (a.iValue < 0) {
-                        return INT_MIN;
+                        return Value{INT_MIN};
                     }
                     else {
-                        return INT_MAX;
+                        return Value{INT_MAX};
                     }
                 }
                 else {
-                    return a.iValue / b.iValue;
+                    return Value{a.iValue / b.iValue};
                 }
             }
             else if (b.kind == Value::t_float)
                 if (b.fValue == 0) {
                     if (a.iValue < 0) {
-                        return INT_MIN;
+                        return Value{INT_MIN};
                     }
                     else {
-                        return INT_MAX;
+                        return Value{INT_MAX};
                     }
                 }
                 else {
-                    return (double)a.iValue / b.fValue;
+                    return Value{(double)a.iValue / b.fValue};
                 }
             else {
                 return a;
@@ -1032,32 +1036,32 @@ struct Divide : public ValueOperation {
         }
         else if (a.kind == Value::t_float) {
             if (a.fValue == 0) {
-                return 0.0;
+                return Value{0.0};
             }
             if (b.kind == Value::t_float) {
                 if (b.fValue == 0.0) {
                     if (a.fValue < 0) {
-                        return INT_MIN;
+                        return Value{(double)INT_MIN};
                     }
                     else {
-                        return INT_MAX;
+                        return Value{(double)INT_MAX};
                     }
                 }
                 else {
-                    return a.fValue / b.fValue;
+                    return Value{a.fValue / b.fValue};
                 }
             }
             else if (b.kind == Value::t_integer)
                 if (b.iValue == 0) {
                     if (a.fValue < 0) {
-                        return INT_MIN;
+                        return Value{INT_MIN};
                     }
                     else {
-                        return INT_MAX;
+                        return Value{INT_MAX};
                     }
                 }
                 else {
-                    return a.fValue / b.iValue;
+                    return Value{static_cast<int64_t>(a.fValue / b.iValue)};
                 }
             else {
                 return 0;
@@ -1082,10 +1086,10 @@ struct Modulus : public ValueOperation {
         }
         else {
             if (a.kind == Value::t_integer) {
-                return a.iValue % b.iValue;
+                return Value{a.iValue % b.iValue};
             }
             else if (a.kind == Value::t_float) {
-                return (int64_t)trunc(a.fValue) % b.iValue;
+                return Value{(int64_t)trunc(a.fValue) % b.iValue};
             }
             else {
                 return 0;
@@ -1100,7 +1104,7 @@ struct Modulus : public ValueOperation {
 };
 
 struct BitAnd : public ValueOperation {
-    Value operator()(const Value &a, const Value &b) const { return a.iValue & b.iValue; }
+    Value operator()(const Value &a, const Value &b) const { return Value{a.iValue & b.iValue}; }
     std::ostream &operator<<(std::ostream &out) const {
         out << "AND";
         return out;
@@ -1109,7 +1113,7 @@ struct BitAnd : public ValueOperation {
 };
 
 struct BitOr : public ValueOperation {
-    Value operator()(const Value &a, const Value &b) const { return a.iValue | b.iValue; }
+    Value operator()(const Value &a, const Value &b) const { return Value{a.iValue | b.iValue}; }
     std::ostream &operator<<(std::ostream &out) const {
         out << "OR";
         return out;
@@ -1118,7 +1122,7 @@ struct BitOr : public ValueOperation {
 };
 
 struct BitXOr : public ValueOperation {
-    Value operator()(const Value &a, const Value &b) const { return a.iValue ^ b.iValue; }
+    Value operator()(const Value &a, const Value &b) const { return Value{a.iValue ^ b.iValue}; }
     std::ostream &operator<<(std::ostream &out) const {
         out << "XOR";
         return out;
@@ -1233,7 +1237,7 @@ Value Value::operator-(void) const {
     case t_string:
         int64_t x;
         if (stringToLong(sValue, x)) {
-            return -x;
+            return Value{-x};
         }
         char *end;
         x = strtol(sValue.c_str(), &end, 10);
@@ -1609,9 +1613,20 @@ std::string Value::asString(const char *fmt) const {
     case t_json: {
         std::string result;
         assert(json != nullptr);
-        auto json_str = cJSON_PrintUnformatted(json);
-        result = json_str;
-        free(json_str);
+        if (json->type == cJSON_String) {
+            std::string s(json->valuestring);
+            if (*s.begin() == '"' && *s.end() == '"') {
+                result = s.substr(1, s.length() - 2);
+            }
+            else {
+                result = s;
+            }
+        }
+        else {
+            auto json_str = cJSON_PrintUnformatted(json);
+            result = json_str;
+            free(json_str);
+        }
         return result;
     }
     case t_symbol:
@@ -1772,13 +1787,25 @@ cJSON *Value::asJSON() const {
     return nullptr;
 }
 
-cJSON *Value::getFromJSON(const std::string &key) { // lookup the named property
-    assert(kind == t_json);
-    if (kind != t_json)
-        return nullptr;
-    if (json == nullptr)
-        return nullptr;
-    if (json->type != cJSON_Object)
-        return nullptr;
-    return cJSON_GetObjectItem(json, key.c_str());
+cJSON *getFromJSON(cJSON *json, const std::string &key) { // lookup the named property
+    if (json->type != cJSON_Object) { return nullptr; }
+    cJSON *res = cJSON_GetObjectItem(json, key.c_str());
+    return res;
 }
+
+cJSON *clone_json(cJSON *json) {
+    auto str = cJSON_PrintUnformatted(json);
+    cJSON *res = cJSON_Parse(str);
+    free(str);
+    return res;
+}
+
+Value get_value(cJSON *json) { return assign_value(json); }
+
+Value Value::getFromJSON(const std::string &key) {
+    Value res;
+    if (kind != t_json || !json) { return res; }
+    res = assign_value(clone_json(::getFromJSON(json, key)));
+    return res;
+}
+

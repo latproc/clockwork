@@ -50,6 +50,7 @@
 #include "clockwork.h"
 #include "options.h"
 #include "symboltable.h"
+#include "MachineClass.h"
 
 #ifndef EC_SIMULATOR
 #include "ECInterface.h"
@@ -482,7 +483,7 @@ MachineClass *makeSubscriberMachineClass() {
     MachineClass *result = new MachineClass("MQTTSUBSCRIBER");
     result->parameters.push_back(Parameter("broker"));
     result->parameters.push_back(Parameter("topic"));
-    result->setOption("message", 0); //TODO: exported code cannot handle string messages
+    result->setOption("message", Value{0}); //TODO: exported code cannot handle string messages
     return result;
 }
 
@@ -603,7 +604,7 @@ MachineClass *makeSdoEntryMachineClass() {
     mc_sdo->parameters.push_back(Parameter("SUBINDEX"));
     mc_sdo->parameters.push_back(Parameter("SIZE"));
     mc_sdo->parameters.push_back(Parameter("OFFSET"));
-    mc_sdo->setOption("VALUE", 0);
+    mc_sdo->setOption("VALUE", Value{0});
     return mc_sdo;
 }
 
@@ -660,8 +661,8 @@ void predefine_special_machines() {
     MachineInstance *miec = MachineInstanceFactory::create("ETHERCAT", "ETHERCAT_BUS");
     miec->setProperties(mcec->getProperties());
     miec->setStateMachine(mcec);
-    miec->addLocal("counter", miwc);
-    miec->addLocal("link", mils);
+    miec->addLocal(Value{"counter"}, miwc);
+    miec->addLocal(Value{"link"}, mils);
     miec->setDefinitionLocation("Internal", 0);
     machines["ETHERCAT"] = miec;
 
@@ -896,7 +897,7 @@ void semantic_analysis() {
                     }
                     // no matching name in the parameter list, is a local machine being passed?
                     for (unsigned int k = 0; k < mi->locals.size(); ++k) {
-                        if (p.val == mi->locals[k].machine->getName()) {
+                        if (p.val == Value{mi->locals[k].machine->getName()}) {
                             p.real_name = mi->getName() + ".";
                             p.real_name += p.val.sValue;
                             m->parameters[j].machine = mi->locals[k].machine;
@@ -1321,7 +1322,7 @@ void enable_all_machines() {
     while (m_iter != MachineInstance::end()) {
         MachineInstance *m = *m_iter++;
         Value enable = m->getValue("startup_enabled");
-        if (enable == SymbolTable::Null || enable == true) {
+        if (enable == SymbolTable::Null || enable == Value{true}) {
             if (!only_startup || (only_startup && m->_type == "STARTUP"))
                 if (!m->isShadow()) {
                     m->enable();
@@ -1370,10 +1371,10 @@ void load_properties_file(const std::string &filename, bool only_persistent) {
                         m->setValue(node.first, node.second);
                     }
                     else if (node.second.asFloat(d)) {
-                        m->setValue(node.first, d);
+                        m->setValue(node.first, Value{d});
                     }
                     else if (node.second.asInteger(v)) {
-                        m->setValue(node.first, v);
+                        m->setValue(node.first, Value{v});
                     }
                     else {
                         m->setValue(node.first, node.second);

@@ -182,13 +182,13 @@ Action::Status SyncRemoteStatesAction::execute() {
             // execute a state change once all other actions are
 
             if (chn->isClient()) {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"ACTIVE"});
                 SetStateAction *ssa = (SetStateAction *)ssat.factory(chn);
                 chn->enqueueAction(ssa);
             }
             else {
 
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"DOWNLOADING"});
                 chn->enqueueAction(ssat.factory(chn));
             }
             return status;

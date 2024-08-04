@@ -226,11 +226,11 @@ void ControlSystemMachine::enter_connected() {
     DBG_PROCESSING << "Control System is connected\n ";
     if (ethercat_machine) {
         {
-            SetStateActionTemplate ssat = SetStateActionTemplate("ETHERCAT_LS", "UP");
+            SetStateActionTemplate ssat = SetStateActionTemplate("ETHERCAT_LS", Value{"UP"});
             SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(ethercat_machine));
             ethercat_machine->enqueueAction(ssa);
         }
-        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "CONNECTED");
+        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", Value{"CONNECTED"});
         SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(ethercat_machine));
         ethercat_machine->enqueueAction(ssa);
     }
@@ -247,11 +247,11 @@ void ControlSystemMachine::enter_disconnected() {
                    << "\n";
     if (ethercat_machine) {
         {
-            SetStateActionTemplate ssat = SetStateActionTemplate("ETHERCAT_LS", "DOWN");
+            SetStateActionTemplate ssat = SetStateActionTemplate("ETHERCAT_LS", Value{"DOWN"});
             SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(ethercat_machine));
             ethercat_machine->enqueueAction(ssa);
         }
-        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "DISCONNECTED");
+        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", Value{"DISCONNECTED"});
         SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(ethercat_machine));
         ethercat_machine->enqueueAction(ssa);
     }
@@ -263,7 +263,7 @@ void ControlSystemMachine::enter_slaves_online() {
     DBG_PROCESSING << "Control System slaves are online\n ";
 
     if (ethercat_machine) {
-        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "CONFIG");
+        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", Value{"CONFIG"});
         SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(ethercat_machine));
         ethercat_machine->enqueueAction(ssa);
     }
@@ -279,7 +279,7 @@ void ControlSystemMachine::enter_operational() {
     }
 #endif
     if (ethercat_machine) {
-        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "ACTIVE");
+        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", Value{"ACTIVE"});
         SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(ethercat_machine));
         ethercat_machine->enqueueAction(ssa);
     }

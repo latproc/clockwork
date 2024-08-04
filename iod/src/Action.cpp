@@ -179,12 +179,12 @@ Action::Status Action::operator()() {
     status = run();
     if (status == Failed) {
         if (error_msg) {
-            AbortActionTemplate aat(true, error_msg->get());
+            AbortActionTemplate aat(true, Value{error_msg->get()});
             auto *aa = (AbortAction *)aat.factory(owner);
             owner->enqueueAction(aa);
         }
         else if (timeout_msg) {
-            AbortActionTemplate aat(true, timeout_msg->get());
+            AbortActionTemplate aat(true, Value{timeout_msg->get()});
             auto *aa = (AbortAction *)aat.factory(owner);
             owner->enqueueAction(aa);
         }

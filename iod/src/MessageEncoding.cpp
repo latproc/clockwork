@@ -132,7 +132,7 @@ void MessageEncoding::addValueToJSONArray(cJSON *obj, const Value &val) {
     }
 }
 
-char *MessageEncoding::encodeCommand(std::string cmd, std::list<Value> *params) {
+char *MessageEncoding::encodeCommand(std::string cmd, const std::list<Value> *params) {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "command", cmd.c_str());
     cJSON *cjParams = cJSON_CreateArray();
@@ -166,6 +166,19 @@ char *MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value 
     if (p4 != SymbolTable::Null) {
         params.push_back(p4);
     }
+    return encodeCommand(cmd, &params);
+}
+
+char *MessageEncoding::encodeCommand(std::string cmd,
+                    boost::optional<std::string> p1,
+                    boost::optional<std::string> p2,
+                    boost::optional<std::string> p3,
+                    boost::optional<std::string> p4) {
+    std::list<Value> params;
+    if (p1) { params.push_back(Value{*p1}); }
+    if (p2) { params.push_back(Value{*p2}); }
+    if (p3) { params.push_back(Value{*p3}); }
+    if (p4) { params.push_back(Value{*p4}); }
     return encodeCommand(cmd, &params);
 }
 

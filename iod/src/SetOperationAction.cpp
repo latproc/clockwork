@@ -221,7 +221,7 @@ Action::Status IntersectSetOperation::doOperation() {
         status = Failed;
         return status;
     }
-    if (count == -1 || !count.asInteger(to_copy)) {
+    if (count == Value{-1} || !count.asInteger(to_copy)) {
         to_copy = source_a_machine->parameters.size();
     }
 #ifdef DEPENDENCYFIX
@@ -507,7 +507,7 @@ Action::Status SelectSetOperation::doOperation() {
                 ep = -1;
             }
         }
-        if (count.kind == Value::t_integer && count == -1) {
+        if (count.kind == Value::t_integer && count == Value{-1}) {
             if (ep != -1) {
                 count = ep - sp + 1;
             }
@@ -540,7 +540,7 @@ Action::Status SelectSetOperation::doOperation() {
             ++idx;
         }
 
-        auto i = sp; // start from here
+        size_t i = sp; // start from here
         while (i < source_a_machine->parameters.size()) {
             debugParameterChange(dest_machine);
             Value a(source_a_machine->parameters.at(i).val);
@@ -591,7 +591,7 @@ Action::Status SelectSetOperation::doOperation() {
                         if (dest_machine->locals.size()) {
                             dest_machine->removeLocal(0);
                         }
-                        dest_machine->addLocal("ITEM", mi);
+                        dest_machine->addLocal(Value{"ITEM"}, mi);
                         ++num_copied;
                     }
                     if (remove_selected) {

@@ -83,7 +83,7 @@ Action::Status ExpressionAction::run() {
                 error_str = "INC and DEC require an integer property";
             }
             else {
-                owner->setValue(lhs.get(), v.iValue + rhs.iValue);
+                owner->setValue(lhs.get(), Value{v.iValue + rhs.iValue});
             }
             break;
         case ExpressionActionTemplate::opSet:

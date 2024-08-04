@@ -64,11 +64,11 @@ bool CounterRateInstance::setValue(const std::string &property, const Value &upd
         settings->position = settings->last_sent;
         settings->velocity = filter(settings->position);
 
-        MachineInstance::setValue(property, (int64_t)settings->velocity);
-        MachineInstance::setValue("position", (int64_t)settings->position);
+        MachineInstance::setValue(property, Value{(int64_t)settings->velocity});
+        MachineInstance::setValue("position", Value{(int64_t)settings->position});
         MachineInstance *pos = lookup(parameters[0]);
         if (pos) {
-            pos->setValue("VALUE", (int64_t)settings->position);
+            pos->setValue("VALUE", Value{(int64_t)settings->position});
         }
     }
     else {
@@ -94,7 +94,7 @@ void CounterRateInstance::idle() {
             int64_t new_val =
                 (int64_t)((float)settings->position +
                           settings->velocity * 2 / 1000.0f); //* (now_t-update_t) / 1000000.0f );
-            setValue("VALUE", new_val);
+            setValue("VALUE", Value{new_val});
         }
     }
 }

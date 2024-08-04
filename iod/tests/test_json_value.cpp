@@ -141,7 +141,7 @@ TEST(Parser, ParsingCStringStopsAtInvalidCharacter) {
 
 TEST(Value, AssignJSON) {
     auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
-    Value val = cJSON_Parse(json_str);
+    Value val{cJSON_Parse(json_str)};
     EXPECT_EQ(val.kind, Value::t_json) << "A JSON object is an object";
 }
 
@@ -216,9 +216,9 @@ TEST(JsonExpr, SelectStringArrayElement) {
     JsonExpr expr(expr_str);
     auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
     auto doc = cJSON_Parse(json_str);
-    Value val = expr.apply(doc);
+    Value val = get_value(expr.apply(doc));
     EXPECT_EQ(val.kind, Value::t_string);
-    EXPECT_EQ(val, "hello");
+    EXPECT_EQ(val, Value{"hello"});
     cJSON_Delete(doc);
 }
 
@@ -227,9 +227,9 @@ TEST(JsonExpr, SelectNumberArrayElement) {
     JsonExpr expr(expr_str);
     auto json_str = R"JSON([1, "hello"])JSON";
     auto doc = cJSON_Parse(json_str);
-    Value val = expr.apply(doc);
+    Value val{get_value(expr.apply(doc))};
     EXPECT_EQ(val.kind, Value::t_integer);
-    EXPECT_EQ(val, 1);
+    EXPECT_EQ(val, Value{1});
     cJSON_Delete(doc);
 }
 
@@ -312,6 +312,7 @@ TEST(AssignJsonExpr, AssignDoubleNumberValue) {
     EXPECT_EQ(strcmp(updated_json_str, expected_json_str), 0);
     free(updated_json_str);
     free(expected_json_str);
+    cJSON_Delete(expected_json);
     cJSON_Delete(json);
     cJSON_Delete(doc);
 }
@@ -332,6 +333,7 @@ TEST(AssignJsonExpr, AssignJsonValue) {
     EXPECT_EQ(strcmp(updated_json_str, expected_json_str), 0);
     free(updated_json_str);
     free(expected_json_str);
+    cJSON_Delete(expected_json);
     cJSON_Delete(json);
     cJSON_Delete(doc);
 }
@@ -352,6 +354,7 @@ TEST(AssignJsonExpr, AssignArrayValue) {
     EXPECT_EQ(strcmp(updated_json_str, expected_json_str), 0);
     free(updated_json_str);
     free(expected_json_str);
+    cJSON_Delete(expected_json);
     cJSON_Delete(json);
     cJSON_Delete(doc);
 }
@@ -361,7 +364,7 @@ TEST(AssignJsonExpr, AssignIntoArray) {
     auto expr_str = "$.a[1]";
     JsonExpr expr(expr_str);
     auto doc = cJSON_Parse(json_str);
-    assign(expr_str, doc, 4);
+    cJSON *tmp = assign(expr_str, doc, 4);
     cJSON *json = expr.apply(doc);
     EXPECT_NE(json, nullptr);
     EXPECT_EQ(json->type, cJSON_Number);
@@ -372,6 +375,7 @@ TEST(AssignJsonExpr, AssignIntoArray) {
     EXPECT_EQ(strcmp(updated_json_str, expected_json_str), 0);
     free(updated_json_str);
     free(expected_json_str);
+    cJSON_Delete(expected_json);
     cJSON_Delete(json);
     cJSON_Delete(doc);
 }
@@ -380,25 +384,29 @@ TEST(JsonExpr, CanGetValueFromArrayUsingIndexProperty) {
     auto json_str = R"JSON({"a":[1,2,3],"b":"hello"})JSON";
     auto expr_str = "$.a[@index]";
     SymbolTable symbols;
-    symbols.add("index", 1);
+    symbols.add("index", Value{1});
     auto doc = cJSON_Parse(json_str);
     cJSON *json = apply(expr_str, doc, &symbols);
     EXPECT_NE(json, nullptr);
     EXPECT_EQ(json->type, cJSON_Number);
     EXPECT_EQ(json->valueint, 2);
+    cJSON_Delete(json);
+    cJSON_Delete(doc);
 }
 
 TEST(JsonExpr, CanGetValueFromObjectUsingProperty) {
     auto json_str = R"JSON({"a":1, "b": "hello"})JSON";
     auto expr_str = "$.@property";
     SymbolTable symbols;
-    symbols.add("property", "b");
+    symbols.add("property", Value{"b"});
     auto doc = cJSON_Parse(json_str);
     cJSON *json = apply(expr_str, doc, &symbols);
     EXPECT_NE(doc, nullptr);
     EXPECT_NE(json, nullptr);
     EXPECT_EQ(json->type, cJSON_String);
     EXPECT_EQ(strcmp(json->valuestring, "hello"), 0);
+    cJSON_Delete(json);
+    cJSON_Delete(doc);
 }
 
 } // namespace

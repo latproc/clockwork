@@ -63,6 +63,7 @@ TEST_F(BufferTest, bufferSum) {
     EXPECT_EQ(6.0, bufferSum(buf, 3)) << "returns the sum of the buffer samples";
     EXPECT_EQ(6.0, bufferSum(buf, 5))
         << "returns the sum when the sample count greater than the buffer size";
+    destroyBuffer(buf);
 }
 
 TEST_F(BufferTest, bufferAverage) {

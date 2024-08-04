@@ -50,7 +50,7 @@ std::ostream &AbortAction::operator<<(std::ostream &out) const {
 Action::Status AbortAction::run() {
     owner->start(this);
     if (message.length() > 0) {
-        SendMessageActionTemplate smat(this->message.c_str(), owner);
+        SendMessageActionTemplate smat(Value{this->message.c_str()}, owner);
         Action *sma = smat.factory(owner);
         (*sma)();
         delete sma;

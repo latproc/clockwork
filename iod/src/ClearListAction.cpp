@@ -44,7 +44,7 @@ std::ostream &ClearListAction::operator<<(std::ostream &out) const {
 Action::Status ClearListAction::run() {
     owner->start(this);
     // Handle the special case: CLEAR MESSAGES if needed
-    if (dest == "MESSAGES") {
+    if (dest == Value{"MESSAGES"}) {
         MessageLog::instance()->purge();
         status = Complete;
         owner->stop(this);
