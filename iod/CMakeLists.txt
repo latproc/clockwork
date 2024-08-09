@@ -258,7 +258,8 @@ set (Clockwork_SRCS
     src/exec_command.c src/debug_malloc.c
     src/json_expr_parser.cpp src/json_expression.cpp src/process.cpp
     src/process_data.cpp src/wait_for_work.cpp src/bit_ops.cpp
-    src/clock_sync.cpp
+    src/clock_sync.cpp src/handle_command.cpp src/handle_scheduler.cpp
+    src/handle_hardware.cpp src/handle_machines.cpp
 	)
 if (USE_ETHERCAT)
 if (USE_SOEM)

@@ -58,7 +58,19 @@
 #define USE_CHRONO 1
 #include "clock_sync.h"
 
-#define VERBOSE_DEBUG 0
+#define VERBOSE_DEBUG 1
+
+namespace {
+
+void display(const uint8_t *p, size_t len) {
+    for (size_t i = 0; i < len; ++i) {
+        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
+                  << std::dec;
+    }
+}
+
+}
+
 
 extern bool machine_is_ready; // unsafe?
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
@@ -88,7 +100,12 @@ static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
             std::cerr << buf << "\n" << std::flush;
             return false;
         }
-        assert(false);
+        else {
+            std::stringstream ss;
+            ss << "ZMQ exception " << __FILE__ << ":" << __LINE__ << " "
+               << err.what() << " error " << zmq_strerror(errno) << "\n";
+            std::cerr << ss.str() << "\n";
+        }
     }
     return received;
 }
@@ -109,41 +126,6 @@ namespace {
 enum DriverState { s_driver_init, s_driver_operational };
 DriverState driver_state = s_driver_init;
 
-size_t default_data_size = 0;
-uint8_t *default_data = 0;
-uint8_t *default_mask = 0;
-
-namespace ecat_debug {
-
-} // ecat_debug
-
-void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
-    if (default_data) {
-        delete[] default_data;
-    }
-    if (default_mask) {
-        delete[] default_mask;
-    }
-    default_data_size = len;
-    if (!default_data) {
-        default_data = new uint8_t[len];
-    }
-    memcpy(default_data, data, len);
-    if (!default_mask) {
-        default_mask = new uint8_t[len];
-    }
-    memcpy(default_mask, data, len);
-
-#if VERBOSE_DEBUG
-    std::cout << "default data: ";
-    display(default_data, len);
-    std::cout << "\n";
-    std::cout << "default mask: ";
-    display(default_mask, len);
-    std::cout << "\n";
-#endif
-}
-
 } // namespace
 
 int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_clock) {
@@ -158,25 +140,19 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
     DBG_ETHERCAT_PACKETS << "ecat_thread sending multipart message, size: " << size << "\n";
 
     uint8_t stage = 1;
-    auto upd_data = ECInterface::instance()->data.getUpdateData();
+    auto upd_data = ECInterface::instance()->data.getProcessData();
     assert(!upd_data.empty());
     if (upd_data.empty()) { return 0; } // TODO: remove this
     while (true) {
         try {
             switch (stage) {
             case 1: {
-#if VERBOSE_DEBUG
-                DBG_MSG << " send stage: " << (int)stage << " " << sizeof(global_clock) << "\n";
-#endif
                 zmq::message_t iomsg(sizeof(global_clock));
                 memcpy(iomsg.data(), (void *)&global_clock, sizeof(global_clock));
                 sync_sock->send(iomsg, ZMQ_SNDMORE);
                 ++stage;
             }
             case 2: {
-#if VERBOSE_DEBUG
-                DBG_MSG << " send stage: " << (int)stage << " " << "4\n";
-#endif
                 zmq::message_t iomsg(4);
                 memcpy(iomsg.data(), (void *)&size, 4);
                 sync_sock->send(iomsg, ZMQ_SNDMORE);
@@ -184,12 +160,9 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
             }
             case 3: {
 #if VERBOSE_DEBUG
-                DBG_MSG << " send stage: " << (int)stage << " " << size << "\n";
-#endif
-#if VERBOSE_DEBUG
                 if (driver_state == s_driver_init) {
                     std::cout << "ecat_thread sending :";
-                    display(upd_data, size);
+                    display(upd_data.data(), size);
                     std::cout << ":\n";
                 }
 #endif
@@ -198,19 +171,16 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
                 sync_sock->send(iomsg, ZMQ_SNDMORE);
                 ++stage;
 #if VERBOSE_DEBUG
-                display_data_changes();
+//                display_data_changes();
 #endif
             }
             case 4: {
-#if VERBOSE_DEBUG
-                //DBG_MSG << " send stage: " << (int)stage << " " << size <<"\n";
-#endif
                 zmq::message_t iomsg(size);
                 uint8_t *mask = ECInterface::instance()->data.getUpdateMask().data();
                 memcpy(iomsg.data(), (void *)mask, size);
                 sync_sock->send(iomsg);
 #if VERBOSE_DEBUG
-                if (found_change) {
+                if (false) {
                     std::cout << "ec&";
                     display(mask, size);
                     std::cout << "\n";
@@ -275,25 +245,16 @@ uint64_t updateClock(uint64_t global_clock) {
     return global_clock;
 }
 
-bool EtherCATThread::getEtherCatResponse(zmq::socket_t *sync_sock, uint64_t global_clock,
-                                         Statistic *keep_alive_stat) {
+bool EtherCATThread::getEtherCatResponse(zmq::socket_t &sock) {
     try {
-        char buf[10];
-        int len = 0;
-        if ((len = sync_sock->recv(buf, 10, ZMQ_DONTWAIT)) > 0) {
-            if (keep_alive) {
-                uint64_t this_ping_time = nowMicrosecs();
-                if (last_ping && keep_alive_stat) {
-                    keep_alive_stat->add(keep_alive - (this_ping_time - last_ping));
-                }
-                last_ping = this_ping_time;
-            }
-            DBG_ETHERCAT_PACKETS
-                << "ecat_thread in state e_update got response from clockwork, len = " << len
-                << "\n";
-            return true;
+        zmq::message_t iomsg;
+        bool received = recv(sock, iomsg);
+        if (!received) {
+            return false;
         }
-        return false;
+        DBG_ETHERCAT_PACKETS
+            << "ecat_thread in state e_update got response from clockwork, len = " << iomsg.size() << "\n";
+        return true;
     }
     catch (const zmq::error_t &ex) {
         if (zmq_errno() != EINTR) {
@@ -335,16 +296,16 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_
             return false;
         }
 
-        DBG_ETHERCAT_PACKETS << "reading packet type " << sizeof(packet_type) << " byte(s)\n";
+        DBG_ETHERCAT << "reading packet type " << sizeof(packet_type) << " byte(s)\n";
         assert(iomsg.size() == sizeof(packet_type));
         memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
         if (driver_state == s_driver_init) {
             if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
-                DBG_ETHERCAT_PACKETS << "received initial values from clockwork; size: " << len
+                DBG_ETHERCAT << "received initial values from clockwork; size: " << len
                                      << " packet: " << (int)packet_type << "\n";
             }
             else {
-                DBG_ETHERCAT_PACKETS << "received process values from clockwork; size: " << len
+                DBG_ETHERCAT << "received process values from clockwork; size: " << len
                                      << " packet: " << (int)packet_type << "\n";
             }
         }
@@ -368,7 +329,8 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_
             data.setDataSize(iomsg.size());
             data.setProcessData(static_cast<uint8_t*>(iomsg.data()), iomsg.size());
             if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
-                data.setDefaultData(data.getDefaultData());
+                std::cout << "ecat_thread setting default data\n";
+                data.setDefaultData(data.getProcessData());
             }
         }
 
@@ -407,25 +369,26 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_
         safeSend(out_sock, "ok", 2);
     }
     else if (packet_type == IOInterface::MessageType::PROCESS_DATA) {
+        auto & data = ECInterface::instance()->data;
         if (driver_state == s_driver_init) {
-            if (!default_data) {
+            if (!data.default_data) {
                 std::cerr << "WARNING: Getting process data from driver with no default set\n";
             }
             else {
                 driver_state = s_driver_operational;
             }
         }
-        if (exchange_process_data && default_data) { // only update the domain if default data has been setup
+        if (exchange_process_data && data.default_data) { // only update the domain if default data has been setup
             auto & data = ECInterface::instance()->data;
             assert("updateDomain requires cw data and mask" && data.getProcessDataSize() > 0);
             ECInterface::instance()->updateDomain();
 #if VERBOSE_DEBUG
             // check if our mask is not the same as the data that cw has
             //
-            void report_data_diff(cw_data, ECInterface::instance()->getUpdateData(), size_t len);
+//            void report_data_diff(cw_data, ECInterface::instance()->getUpdateData(), size_t len);
 #endif
         }
-        else if (!default_data) {
+        else if (!data.default_data) {
             MessageLog::instance()->add("ecat_thread: no default data set yet, cannot update domain");
         }
         safeSend(out_sock, "ok", 2);
@@ -510,16 +473,17 @@ void EtherCATThread::operator()() {
                 }
                 need_ping = false;
                 int stage = sendMultiPart(sync_sock, global_clock);
-#if VERBOSE_DEBUG
-                if (stage == 5) {
-                    DBG_MSG << "send done\n";
-                }
-#endif
                 assert(stage == 5);
-                status = e_update; // time to send process data to EtherCAT
+                status = e_update; // sent update to clockwork, waiting for response
             }
-            if (status == e_update &&
-                getEtherCatResponse(sync_sock, global_clock, keep_alive_stat)) {
+            if (status == e_update && getEtherCatResponse(*sync_sock)) {
+                if (keep_alive) {
+                    uint64_t this_ping_time = nowMicrosecs();
+                    if (last_ping && keep_alive_stat) {
+                        keep_alive_stat->add(keep_alive - (this_ping_time - last_ping));
+                    }
+                    last_ping = this_ping_time;
+                }
                 status = e_collect;
             }
         }

@@ -40,7 +40,11 @@
 #include "ProcessingThread.h"
 #include "buffering.c"
 
-#define VERBOSE_DEBUG 0
+#define VERBOSE_DEBUG 1
+#if VERBOSE_DEBUG
+static void display(const uint8_t *p, unsigned int count = 0);
+#endif
+
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 /* byte swapping macros using either custom code or the network byte order std functions */
@@ -151,9 +155,6 @@ void handle_io_sampling(uint64_t io_clock) {
     }
 }
 
-#if VERBOSE_DEBUG
-static void display(const uint8_t *p, unsigned int count = 0);
-#endif
 
 uint64_t IOUpdate::global_clock() const { return global_clock_; }
 
@@ -251,7 +252,6 @@ size_t IOComponent::updatesWaiting() {
 }
 
 void IOComponent::updatesSent(bool which) {
-    if (which) std::cout << "updates sent\n";
     updates_sent = which;
 }
 
@@ -295,7 +295,8 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
 #if VERBOSE_DEBUG
     for (size_t ii = 0; ii < data_size; ++ii)
         if (mask[ii]) {
-            std::cout << "IOComponent::processAll()\n";
+            std::cout << "IOComponent::processAll()\n"
+                << " waiting: " << updatedComponentsOut.size() << "\n";
             std::cout << "size: " << data_size << "\n";
             std::cout << "pdta: ";
             display(process_data.getProcessData().data(), data_size);
@@ -312,7 +313,9 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             break;
         }
 #endif
+    // TODO: Get rid of this or remove its duplicate
     if (hardware_state == s_hardware_init) {
+        std::cout << "initialising from process data\n";
         // the initial process data has arrived from EtherCAT. keep the previous data as the defaults
         // so they can be applied asap
         process_data.setProcessData(data, data_size);
@@ -325,14 +328,13 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
     // step through the incoming mask and update bits in process data
     const uint8_t *p = data;
     const uint8_t *m = mask;
-    auto pd = process_data.getProcessData();
+    auto &pd = process_data.getProcessData();
     uint8_t *q = pd.data();
+    static bool first_time = true;
     IOComponent *just_added = 0;
     for (unsigned int i = 0; i < pd.size(); ++i) {
-        if (last_process_data.empty()) {
-            if (*m) {
-                notifyComponentsAt(i);
-            }
+        if (first_time) {
+            if (*m) { notifyComponentsAt(i); }
         }
         //      if (*m && *p==*q) {
         //          std::cout<<"warning: incoming_data == process_data but mask indicates a change at byte "
@@ -347,13 +349,13 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             // update the bit
             while (bitmask) {
                 if (*m & bitmask) {
-                    //std::cout << "looking up " << i << ":" << j << "\n";
+                    std::cout << "looking up " << i << ":" << j << "\n";
                     IOComponent *ioc = (*indexed_components)[i * 8 + j];
                     if (ioc && ioc != just_added) {
                         just_added = ioc;
                         //if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n";
                         //else std::cout << "found " << ioc->io_name << "\n";
-#if 0
+#if 1
                         if (ioc && ioc->last_event != e_none) {
                             // pending locally sourced change on this io
                             std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
@@ -363,7 +365,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                         if ((*p & bitmask) != (*q & bitmask)) {
                             // remotely source change on this io
                             if (ioc) {
-                                //std::cout << " adding " << ioc->io_name << " due to bit change\n";
+                                std::cout << " adding " << ioc->io_name << " due to bit change\n";
                                 boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
                                 updatedComponentsIn.insert(ioc);
                             }
@@ -375,9 +377,10 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                                 *q &= (uint8_t)(0xff - bitmask);
                             }
                         }
-                        //else {
-                        //  std::cout << "no change " << (unsigned int)*p << " vs " <<
-                        //      (unsigned int)*q << "\n";}
+                        else {
+                            std::cout << "no change " << (unsigned int)*p << " vs " <<
+                                (unsigned int)*q << "\n";
+                        }
                     }
                     else {
                         if (!ioc) {
@@ -402,33 +405,35 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
         ++q;
         ++m;
     }
+    first_time = false;
+    std::cerr << "updated components: " << updatedComponentsIn.size() << "\n";
+    std::cout << "new pdta: ";
+    display(process_data.getProcessData().data(), data_size);
+    std::cout << "\n";
 
     if (hardware_state == s_operational) {
         // save the domain data for the next check
-        if (last_process_data.empty()) {
-            last_process_data = process_data.getProcessData();
-        }
+        last_process_data = process_data.getProcessData();
     }
 
     {
         boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-        if (!updatedComponentsIn.size()) {
-            return;
-        }
-        //  std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
+        if (!updatedComponentsIn.size()) { return; }
+        std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
         // look at the components that changed and remove them from the outgoing queue as long as the
         // outputs have been sent to the hardware
         std::set<IOComponent *>::iterator iter = updatedComponentsIn.begin();
         while (iter != updatedComponentsIn.end()) {
             IOComponent *ioc = *iter++;
             ioc->read_time = io_clock;
-            //std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
+            std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
             updatedComponentsIn.erase(ioc);
             if (updates_sent && updatedComponentsOut.count(ioc)) {
-                //std::cout << "output request for " << ioc->io_name << " resolved\n";
+                std::cout << "output request for " << ioc->io_name 
+                    << " resolved. device is now: " << ioc->value() << "\n";
                 updatedComponentsOut.erase(ioc);
             }
-            //else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
+            else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
             updated_machines.insert(ioc);
         }
         // for machines with updates to send, if these machines already have the same value
@@ -439,7 +444,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             while (iter != updatedComponentsOut.end()) {
                 IOComponent *ioc = *iter++;
                 if (ioc->pending_value == ioc->address.value) {
-                    //std::cout << "output request for " << ioc->io_name << " cleared as hardware value matches\n";
+                    std::cout << "output request for " << ioc->io_name << " cleared as hardware value matches\n";
                     updatedComponentsOut.erase(ioc);
                 }
             }
@@ -1237,14 +1242,17 @@ static boost::optional<std::vector<uint8_t>> generateUpdateMask() {
     // a mask for the update data
 
     std::vector<uint8_t> res;
-    //std::cout << "generating mask\n";
-    if (updatedComponentsOut.empty()) {
-        return res;
-    }
 
     unsigned int min = IOComponent::getMinIOOffset();
     unsigned int max = IOComponent::getMaxIOOffset();
     res.resize(max - min + 1);
+
+    //std::cout << "generating mask\n";
+    if (updatedComponentsOut.empty()) {
+        std::cout << "no updates; returning empty mask\n";
+        display(res.data(), res.size());
+        return res;
+    }
 
     bool found_update = false;
     std::set<IOComponent *>::iterator iter = updatedComponentsOut.begin();
@@ -1263,10 +1271,10 @@ static boost::optional<std::vector<uint8_t>> generateUpdateMask() {
         }
         set_mask_bits(ioc->address, res.data());
     }
-    if (!found_update) { return {}; }
+    //if (!found_update) { return {}; }
 #if VERBOSE_DEBUG
     std::cout << "generated mask: ";
-    display(res, max - min + 1);
+    display(res.data(), max - min + 1);
     std::cout << "\n";
 #endif
     return res;
@@ -1298,15 +1306,16 @@ IOUpdate IOComponent::getDefaults() {
         std::cerr << "process data size is " << pd.size() << " but should be " << size << "\n";
     }
     assert("process data size mismatch" && size == pd.size());
-    copyMaskedBits(pd.data(), process_data.getDefaultData().data(), process_data.getDefaultMask().data(), pd.size());
+    assert("default data not set" && process_data.getDefaultData());
+    copyMaskedBits(pd.data(), process_data.getDefaultData()->data(), process_data.getDefaultMask()->data(), pd.size());
     res.setData(pd);
-    res.setMask(process_data.getDefaultMask());
+    res.setMask(*process_data.getDefaultMask());
 
 #if VERBOSE_DEBUG
-    std::cout << "preparing to send defaults " << res->size() << " bytes\n";
-    display(res->data(), res->size());
+    std::cout << "preparing to send defaults " << res.data_size() << " bytes\n";
+    display(res.data(), res.data_size());
     std::cout << "\n";
-    display(res->mask(), res->size());
+    display(res.mask(), res.data_size());
     std::cout << "\n";
 #endif
     return res;
@@ -1372,11 +1381,13 @@ void IOComponent::setupIOMap() {
         unsigned int offset = ioc->address.io_offset;
         unsigned int bitpos = ioc->address.io_bitpos;
         offset += bitpos / 8;
-        int bytes = 1;
         for (unsigned int i = 0; i < ioc->address.bitlen; ++i) {
             (*indexed_components)[offset * 8 + bitpos + i] = ioc;
         }
-        for (int i = 0; i < bytes; ++i) {
+        // make sure this component is registered in io_map for each byte
+        // it maps onto
+        int num_bytes = ioc->address.bitlen / 8 + 1;
+        for (int i = 0; i < num_bytes; ++i) {
             std::list<IOComponent *> *cl = io_map[offset + i];
             if (!cl) {
                 cl = new std::list<IOComponent *>();
@@ -1400,7 +1411,7 @@ void IOComponent::markChange() {
     std::cout << "outputs waiting: " << updatedComponentsOut.size() << "\n";
     auto & update_data = process_data.getUpdateData();
     if (update_data.empty()) {
-        auto pd = process_data.getProcessData();
+        auto &pd = process_data.getProcessData();
         if (pd.empty()) {
             std::cerr << "asked to mark a change but there is no process data\n";
             return;
@@ -1432,7 +1443,7 @@ void IOComponent::markChange() {
             updatesSent(false);
         }
         else {
-            std::cout << "value not updated\n";
+            std::cout << "value not updated. value:  " << value() << " last event: " << last_event  << "\n";
         }
         last_event = e_none;
     }
@@ -1476,6 +1487,7 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
     offset += (bitpos / 8);
     bitpos = bitpos % 8;
 
+    std::cout << "handling change: " << address << "\n";
     if (address.bitlen == 1) {
         int64_t value = (*offset & (1 << bitpos)) ? 1 : 0;
 
@@ -1582,6 +1594,7 @@ void IOComponent::turnOn() {}
 void IOComponent::turnOff() {}
 
 void Output::turnOn() {
+    std::cout << "Output::turnOn\n";
     last = microsecs();
     last_event = e_on;
     updatedComponentsOut.insert(this);
@@ -1591,6 +1604,7 @@ void Output::turnOn() {
 }
 
 void Output::turnOff() {
+    std::cout << "Output::turnOff\n";
     last = microsecs();
     last_event = e_off;
     updatedComponentsOut.insert(this);

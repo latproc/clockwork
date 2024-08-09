@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <vector>
+#include <boost/optional.hpp>
 
 class ProcessData {
 public:
@@ -30,8 +31,8 @@ public:
     void setUpdateMask(std::vector<uint8_t> &m);
     std::vector<uint8_t> &getUpdateData();
     std::vector<uint8_t> &getUpdateMask();
-    std::vector<uint8_t> &getDefaultData();
-    std::vector<uint8_t> &getDefaultMask();
+    boost::optional<std::vector<uint8_t>> &getDefaultData();
+    boost::optional<std::vector<uint8_t>> &getDefaultMask();
     void setDefaultData(std::vector<uint8_t> &pd);
     void setDefaultMask(std::vector<uint8_t> &pd);
 
@@ -43,8 +44,8 @@ public:
     std::vector<uint8_t> process_mask;
     std::vector<uint8_t> update_data;
     std::vector<uint8_t> update_mask;
-    std::vector<uint8_t> default_data;
-    std::vector<uint8_t> default_mask;
+    boost::optional<std::vector<uint8_t>> default_data;
+    boost::optional<std::vector<uint8_t>> default_mask;
     unsigned int
         min_io_index; // first byte of the process data needed by the user (must be zero currently)
     unsigned int max_io_index; // last byte of the process data needed by the user

@@ -47,10 +47,18 @@
 #include "process_data.h"
 #endif
 
-#define VERBOSE_DEBUG 0
-#if VERBOSE_DEBUG
-static void display(uint8_t *p, size_t n);
-#endif
+#define VERBOSE_DEBUG 1
+namespace {
+
+void display(const uint8_t *p, size_t len) {
+    for (size_t i = 0; i < len; ++i) {
+        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
+                  << std::dec;
+    }
+}
+
+}
+
 
 extern Statistics *statistics;
 void signal_handler(int signum);
@@ -1590,6 +1598,7 @@ int ECInterface::collectState() {
         snprintf(buf, 200, "Warning: domain size %ld less than expected: %ld", domain_size,
                  (size_t)max - min + 1);
         MessageLog::instance()->add(buf);
+        std::cerr << buf << "\n";
         return 0;
     }
 #if 0
@@ -1621,14 +1630,15 @@ int ECInterface::collectState() {
     // after that, look at all bits we care about and if the bit has changed
     // copy its new value to the update data and include the bit in the
     // update mask
-    auto last_pd = instance()->data.getProcessData();
+    static std::vector<uint8_t> last_pd = data.getProcessData();
     auto pm = data.getProcessMask().data(); // these are the important bits
     uint8_t *q = data.getUpdateData().data();       // convenience pointer
+    uint8_t *qm = data.getUpdateMask().data();       // convenience pointer
 
 #if VERBOSE_DEBUG
     if (!last_pd.empty()) {
         DBG_ETHERCAT_PACKETS << "last:";
-        display(last_pd, domain_size);
+        display(last_pd.data(), domain_size);
     }
     DBG_ETHERCAT_PACKETS << "\ncurr:";
     display(pd, domain_size);
@@ -1636,11 +1646,12 @@ int ECInterface::collectState() {
 #endif
 
     assert(min == 0);
+    static bool first_time = true;
     for (unsigned int i = 0; i < domain_size; ++i) {
         data.update_mask[i] = 0;                 // assume no updates in this octet
-        if (last_pd.empty()) {                     // first time through, copy all the domain data and mask
-            data.update_data[i] = domain1_pd[i]; //TBD & *pm;
-            data.update_mask[i] = *pm;
+        if (first_time) {                     // first time through, copy all the domain data and mask
+            *q = domain1_pd[i]; //TBD & *pm;
+            *qm = *pm;
             affected_bits++;
 #if VERBOSE_DEBUG
             DBG_ETHERCAT_PACKETS << "init update data from process byte " << i << ": " << std::hex
@@ -1669,7 +1680,7 @@ int ECInterface::collectState() {
                         else {
                             *q &= ((uint8_t)0xff - bitmask);
                         }
-                        data.update_mask[i] |= bitmask;
+                        *qm |= bitmask;
                         ++affected_bits;
                     }
                 }
@@ -1679,14 +1690,16 @@ int ECInterface::collectState() {
         }
         ++pd;
         ++q;
+        ++qm;
         ++pm; //if (last_pd)++last_pd;
     }
+    first_time = false;
 #if 0
     if (affected_bits) {
         std::cout << "data: ";
-        display(update_data, domain_size);
+        display(data.update_data.data(), domain_size);
         std::cout << "\nmask: ";
-        display(update_mask, domain_size);
+        display(data.update_mask.data(), domain_size);
         std::cout << " " << affected_bits << " bits changed (size=" << domain_size << ")\n";
     }
 #endif
@@ -1695,8 +1708,8 @@ int ECInterface::collectState() {
 #if VERBOSE_DEBUG
     DBG_ETHERCAT_PACKETS << "setting process data\n";
 #endif
-    instance()->data.setDataSize(domain_size);
-    instance()->data.setProcessData(domain1_pd, domain_size);
+    data.setDataSize(domain_size);
+    data.setProcessData(domain1_pd, domain_size);
 #if VERBOSE_DEBUG
     DBG_ETHERCAT_PACKETS << "copied new domain data: ";
     display(domain1_pd, domain_size);

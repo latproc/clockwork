@@ -26,8 +26,12 @@ void ProcessData::setMaxIOIndex(unsigned int new_val) { max_io_index = new_val; 
 std::vector<uint8_t> &ProcessData::getProcessData() { return process_data; }
 uint32_t ProcessData::getProcessDataSize() { return max_io_index - min_io_index + 1; }
 
-std::vector<uint8_t> &ProcessData::getDefaultData() { return default_data; }
-std::vector<uint8_t> &ProcessData::getDefaultMask() { return default_mask; }
+boost::optional<std::vector<uint8_t>> &ProcessData::getDefaultData() {
+     return default_data;
+}
+boost::optional<std::vector<uint8_t>> &ProcessData::getDefaultMask() {
+    return default_mask;
+}
 
 void ProcessData::setDataSize(size_t ds) {
     if (data_size == 0 || data_size != ds) {

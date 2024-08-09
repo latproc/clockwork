@@ -3,8 +3,6 @@
 
 #include "zmq.hpp"
 
-class Statistic;
-
 class EtherCATThread {
   public:
     static const char *ZMQ_Addr;
@@ -27,8 +25,7 @@ class EtherCATThread {
 
     bool waitForStart(zmq::socket_t &sync);
     int sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_clock);
-    bool getEtherCatResponse(zmq::socket_t *sync_sock, uint64_t global_clock,
-                             Statistic *keep_alive_stat);
+    bool getEtherCatResponse(zmq::socket_t &sync_sock);
     bool getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok);
 };
 

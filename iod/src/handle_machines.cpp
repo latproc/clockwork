@@ -1,3 +1,8 @@
+#include "MachineInstance.h"
+#include "ProcessingThread.h"
+#include <stdint.h>
+#include "DebugExtra.h"
+
 void ProcessingThread::handle_machines(
         uint64_t & last_checked_machines,
         unsigned int & machine_check_delay,
