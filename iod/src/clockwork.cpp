@@ -686,6 +686,14 @@ void predefine_special_machines() {
     settings->setValue("NAME", Value(device_name(), Value::t_string));
 }
 
+void cleanup_machine_classes() {
+    for (auto &cls : MachineClass::all_machine_classes) {
+        delete cls;
+    }
+    MachineClass::all_machine_classes.clear();
+}
+
+
 void semantic_analysis() {
 
     std::map<std::string, MachineInstance *> machine_instances;

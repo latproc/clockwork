@@ -37,6 +37,7 @@ int loadOptions(int argc, char const *argv[], std::list<std::string> &files);
 int loadConfig(std::list<std::string> &files);
 
 bool initialise_machines();
+void cleanup_machine_classes();
 
 class ClockworkProcessManager {
   public:
