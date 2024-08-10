@@ -62,7 +62,7 @@ const int64_t *AutoStatStorage::setupPropertyRef(const char *machine_name,
     }
     const Value &prop(system->getValue(property_name));
     if (prop == SymbolTable::Null) {
-        system->setValue(property_name, 0);
+        system->setValue(property_name, SymbolTable::Zero);
         const Value &prop(system->getValue(property_name));
         if (prop.kind != Value::t_integer) {
             return 0;

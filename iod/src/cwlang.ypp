@@ -2285,7 +2285,7 @@ SYMBOL PROPSEP value
 }
 | SYMBOL {
     DBG_PARSER << "property: " << $1 << " = 0\n";
-    properties.add($1, 0);
+    properties.add($1, (int64_t)0);
 }
 ;
 

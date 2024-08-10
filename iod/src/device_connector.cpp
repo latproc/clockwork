@@ -594,10 +594,10 @@ struct MatchFunction {
                 }
                 instance()->params.push_back(Value(match, Value::t_string));
                 if (index == num_sub) {
-                    char *msg = MessageEncoding::encodeCommand("DATA", &instance()->params);
+                        std::string msg = MessageEncoding::encodeCommand("DATA", instance()->params);
                     if ((Options::instance()->skippingRepeats() == false || last_message != msg ||
                          last_send.tv_sec + 5 < now.tv_sec)) {
-                        if (msg) {
+                        if (!msg.empty()) {
                             if (!instance_) {
                                 MatchFunction::instance();
                                 usleep(50);
@@ -606,17 +606,13 @@ struct MatchFunction {
                             if (debug) {
                                 std::cout << "sending: " << msg << "\n" << std::flush;
                             }
-                            if (sendMessage(msg, MatchFunction::instance()->iod_interface,
+                            if (sendMessage(msg.c_str(), MatchFunction::instance()->iod_interface,
                                             response)) {
                                 last_message = msg;
                                 last_send.tv_sec = now.tv_sec;
                                 last_send.tv_usec = now.tv_usec;
                             }
-                            free(msg);
                         }
-                    }
-                    else if (msg) {
-                        free(msg);
                     }
                 }
             }
@@ -633,20 +629,19 @@ struct MatchFunction {
                 if (index == num_sub &&
                     (Options::instance()->skippingRepeats() == false || last_message != res ||
                      last_send.tv_sec + 5 < now.tv_sec)) {
-                    char *cmd = MessageEncoding::encodeCommand(
+                    auto cmd = MessageEncoding::encodeCommand(
                         "PROPERTY", Value{Options::instance()->machine()}, Value{Options::instance()->property()},
                         Value{res.c_str()});
-                    if (cmd) {
+                    if (!cmd.empty()) {
                         std::string response;
                         if (debug) {
                             std::cout << "sending: " << cmd << "\n" << std::flush;
                         }
-                        if (sendMessage(cmd, MatchFunction::instance()->iod_interface, response)) {
+                        if (sendMessage(cmd.c_str(), MatchFunction::instance()->iod_interface, response)) {
                             last_message = res;
                             last_send.tv_sec = now.tv_sec;
                             last_send.tv_usec = now.tv_usec;
                         }
-                        free(cmd);
                     }
                 }
             }
@@ -1012,13 +1007,12 @@ struct ConnectionThread {
                 last_status = DeviceStatus::instance()->current();
             }
             bool sent = false;
-            char *cmd_str = MessageEncoding::encodeCommand(
+            auto cmd_str = MessageEncoding::encodeCommand(
                 "PROPERTY", Value{Options::instance()->name()}, Value{"status"},
                 Value{stringFromDeviceStatus(DeviceStatus::instance()->current())});
             std::string response;
-            if (cmd_str) {
-                sent = sendMessage(cmd_str, cmd_interface, response);
-                free(cmd_str);
+            if (!cmd_str.empty()) {
+                sent = sendMessage(cmd_str.c_str(), cmd_interface, response);
             }
             //            sent = iod_interface.setProperty(Options::instance()->name(),
             //                                            "status", stringFromDeviceStatus(DeviceStatus::instance()->current()));

@@ -97,15 +97,13 @@ char *sendIOD(int group, int addr, int new_value);
 char *sendIODMessage(const std::string &s);
 
 std::string getIODSyncCommand(int group, int addr, int new_value) {
-    char *msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
+    auto msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
     sendIODMessage(msg);
 
     if (DEBUG_BASIC) {
         std::cout << "IOD command: " << msg << "\n";
     }
-    std::string s(msg);
-    free(msg);
-    return s;
+    return msg;
 }
 
 char *sendIOD(int group, int addr, int new_value) {
@@ -447,7 +445,7 @@ int main(int argc, const char *argv[]) {
                 catch(...) {
                     std::cerr << "Exception of unknown type!\n";
                 }
-                                                    
+
                 free(data);
                 data = 0;
             }

@@ -114,7 +114,6 @@ Value assign_value(cJSON *json) {
         result.kind = Value::t_json;
         result.json = json;
     }
-    if (result.kind != Value::t_json) { cJSON_Delete(json); }
     return result;
 }
 
@@ -870,7 +869,7 @@ static bool stringToFloat(const std::string &s, double &x) {
 
 namespace ValueOperations {
 struct ValueOperation {
-    virtual Value operator()(const Value &a, const Value &b) const { return 0; }
+    virtual Value operator()(const Value &a, const Value &b) const { return (int64_t)0; }
     virtual std::ostream &operator<<(std::ostream &out) const { return out; }
     virtual std::string toString() const { return ""; }
 };
@@ -912,7 +911,7 @@ struct Sum : public ValueOperation {
         else if (a.kind == Value::t_symbol) {
             return Value(a.sValue + b.asString(), a.kind);
         }
-        return 0;
+        return (int64_t)0;
     }
     std::ostream &operator<<(std::ostream &out) const {
         out << "add";
@@ -957,7 +956,7 @@ struct Minus : public ValueOperation {
         else if (a.kind == Value::t_symbol) {
             return a;
         }
-        return 0;
+        return (int64_t)0;
     }
     std::ostream &operator<<(std::ostream &out) const {
         out << "subtract";
@@ -976,7 +975,7 @@ struct Multiply : public ValueOperation {
                 return Value{b.fValue * (double)a.iValue};
             }
             else {
-                return 0;
+                return (int64_t)0;
             }
         }
         else if (a.kind == Value::t_float) {
@@ -987,10 +986,10 @@ struct Multiply : public ValueOperation {
                 return Value{a.fValue * (double)b.iValue};
             }
             else {
-                return 0;
+                return (int64_t)0;
             }
         }
-        return 0;
+        return (int64_t)0;
     }
     std::ostream &operator<<(std::ostream &out) const {
         out << "multiply";
@@ -1064,7 +1063,7 @@ struct Divide : public ValueOperation {
                     return Value{static_cast<int64_t>(a.fValue / b.iValue)};
                 }
             else {
-                return 0;
+                return (int64_t)0;
             }
         }
         return a;
@@ -1082,7 +1081,7 @@ struct Modulus : public ValueOperation {
             return a;
         }
         if (b.iValue == 0) {
-            return 0;
+            return (int64_t)0;
         }
         else {
             if (a.kind == Value::t_integer) {
@@ -1092,7 +1091,7 @@ struct Modulus : public ValueOperation {
                 return Value{(int64_t)trunc(a.fValue) % b.iValue};
             }
             else {
-                return 0;
+                return (int64_t)0;
             }
         }
     }

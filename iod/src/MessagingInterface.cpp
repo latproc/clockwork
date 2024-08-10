@@ -264,6 +264,10 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
     return false;
 }
 
+void safeSend(zmq::socket_t &sock, const std::string &buf, const MessageHeader &header) {
+    safeSend(sock, buf.c_str(), buf.size(), header);
+}
+
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const MessageHeader &header) {
     enum send_stage { e_sending_dest, e_sending_source, e_sending_data } stage = e_sending_data;
     if (header.dest || header.source) {
@@ -362,8 +366,8 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, in
     return false;
 }
 
-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us) {
-    safeSend(sock, msg, strlen(msg));
+bool sendMessage(const std::string &msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us) {
+    safeSend(sock, msg.c_str(), msg.size());
 
     char *buf = nullptr;
     size_t len = 0;
@@ -686,13 +690,20 @@ char *MessagingInterface::send(const char *txt) {
             }
         }
     }
-    return 0;
+    return nullptr;
 }
 
 char *MessagingInterface::send(const Message &msg) {
-    char *text = MessageEncoding::encodeCommand(msg.getText(), msg.getParams());
-    char *res = send(text);
-    free(text);
+    auto params = msg.getParams();
+    std::string text;
+    if (params) {
+        text = MessageEncoding::encodeCommand(msg.getText(), *params);
+    }
+    else {
+        std::list<Value> params;
+        text = MessageEncoding::encodeCommand(msg.getText(), params);
+    }
+    char *res = send(text.c_str());
     return res;
 }
 
@@ -718,9 +729,16 @@ bool MessagingInterface::send_raw(const char *msg) {
     return true;
 }
 char *MessagingInterface::sendCommand(std::string cmd, std::list<Value> *params) {
-    char *request = MessageEncoding::encodeCommand(cmd, params);
-    char *response = send(request);
-    free(request);
+    char *response = nullptr;
+    std::string request;
+    if (params) {
+        request = MessageEncoding::encodeCommand(cmd, *params);
+    }
+    else {
+        std::list<Value> params;
+        request = MessageEncoding::encodeCommand(cmd, params);
+    }
+    response = send(request.c_str());
     return response;
 }
 
@@ -744,12 +762,10 @@ char *MessagingInterface::sendCommand(std::string cmd, Value p1, Value p2, Value
     return sendCommand(cmd, &params);
 }
 
-char *MessagingInterface::sendState(std::string cmd, std::string name, std::string state_name) {
-    size_t msglen = name.length() + state_name.length() + 50;
-    char *buf = (char *)malloc(msglen);
-    snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\"]}", name.c_str(),
-             state_name.c_str());
-    return buf;
+std::string MessagingInterface::sendState(std::string cmd, std::string name, std::string state_name) {
+    std::stringstream ss;
+    ss << "{\"command\":\"STATE\", \"params\":[\"" << name << "\", \"" << state_name << "\"]}";
+    return ss.str();
     /*
         cJSON *msg = cJSON_CreateObject();
         cJSON_AddStringToObject(msg, "command", cmd.c_str());

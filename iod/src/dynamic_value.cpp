@@ -876,7 +876,7 @@ const Value &ExpressionValue::operator()() {
 AbsoluteValue::AbsoluteValue(const AbsoluteValue &other) { property = other.property; }
 Value &AbsoluteValue::operator()(MachineInstance *mi) {
     last_result = mi->getValue(property);
-    if (last_result < 0) {
+    if (last_result < SymbolTable::Zero) {
         last_result = -mi->getValue(property);
     }
     return last_result;

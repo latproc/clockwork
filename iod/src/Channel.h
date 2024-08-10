@@ -272,8 +272,8 @@ class Channel : public MachineInstance, public ChannelImplementation {
     void stopSubscriber();
     void stopServer();
     bool isClient(); // does this channel connect to another instance of clockwork?
-    bool syncRemoteStates(std::list<char *> &);
-    void syncInterfaceProperties(MachineInstance *m, std::list<char *> &);
+    bool syncRemoteStates(std::list<std::string> &);
+    void syncInterfaceProperties(MachineInstance *m, std::list<std::string> &);
     zmq::socket_t *createCommandSocket(bool client_endpoint);
 
     void addSocket(int route_id, const char *addr);

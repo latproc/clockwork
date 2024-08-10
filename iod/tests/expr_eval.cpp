@@ -202,6 +202,9 @@ class ExpressionTests {
         Value res = eval.evaluate(&pred, scope_);
         std::cout << "res: " << res << std::endl;
         Value x = scope_->properties.lookup("x");
+        if (x.kind == Value::t_json) {
+            x = get_value(x.json);
+        }
         std::cout << "x: " << x << std::endl;
         EXPECT_TRUE(x.kind == Value::t_integer);
         EXPECT_TRUE(x == Value{2});

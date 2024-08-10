@@ -47,6 +47,7 @@ int exec_command(void *scope) {
     char *cmd;
     char *current = 0;
     if (!data) {
+        printf("setting up state for command execution\n");
         data = (struct MyData *)debug_malloc(sizeof(struct MyData), "data");
         setInstanceData(scope, data);
         data->parameters = 0;
@@ -60,6 +61,7 @@ int exec_command(void *scope) {
             }
             goto plugin_init_error;
         }
+        assert("Failed to store state structure" && data == (struct MyData *)getInstanceData(scope));
 
         goto continue_plugin;
     plugin_init_error:
@@ -80,6 +82,7 @@ continue_plugin:
                 //assert("exec_command did not immediately change state to Running" && 0);
                 goto CommandFinished;
             }
+            printf("executing command: %s\n", cmd);
             data->parameters = split_string(cmd);
             data->environment = copy_environment();
             need_release_params += 2;
@@ -93,7 +96,7 @@ continue_plugin:
                 perror("fork");
                 setIntValue(scope, "CommandStatus", errno);
                 if (!changeState(scope, "Error")) {
-                    // assert( "exec_command did not immediately transition to error after fork() failed" && 0);
+                    assert( "exec_command did not immediately transition to error after fork() failed" && 0);
                 }
                 data->child = 0; // Does this plugin recover if the above state change fails?
                 goto CommandFinished;

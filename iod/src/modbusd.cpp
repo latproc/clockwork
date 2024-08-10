@@ -700,39 +700,33 @@ char *sendIODMessage(const std::string &s);
 
 std::string getIODSyncCommand(int group, int addr, bool which) {
     int new_value = (which) ? 1 : 0;
-    char *msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
+    auto msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
     //sendIODMessage(msg);
 
     if (DEBUG_BASIC) {
         std::cout << "IOD command: " << msg << "\n";
     }
-    std::string s(msg);
-    free(msg);
-    return s;
+    return msg;
 }
 
 std::string getIODSyncCommand(int group, int addr, int new_value) {
-    char *msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
+    auto msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
     sendIODMessage(msg);
 
     if (DEBUG_BASIC) {
         std::cout << "IOD command: " << msg << "\n";
     }
-    std::string s(msg);
-    free(msg);
-    return s;
+    return msg;
 }
 
 std::string getIODSyncCommand(int group, int addr, unsigned int new_value) {
-    char *msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
+    auto msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
     sendIODMessage(msg);
 
     if (DEBUG_BASIC) {
         std::cout << "IOD command: " << msg << "\n";
     }
-    std::string s(msg);
-    free(msg);
-    return s;
+    return msg;
 }
 
 char *sendIOD(int group, int addr, int new_value) {

@@ -113,14 +113,13 @@ char *send_command(std::list<Value> &params) {
     Value cmd_val = params.front();
     params.pop_front();
     std::string cmd = cmd_val.asString();
-    char *msg = MessageEncoding::encodeCommand(cmd, &params);
+    std::string msg = MessageEncoding::encodeCommand(cmd, params);
     if (cmd != "" && cmd != ";") {
         cmd += ";";
         write_history(history_file);
     }
-    sendMessage(*psocket, msg);
+    sendMessage(*psocket, msg.c_str());
     size_t size;
-    free(msg);
     zmq::message_t reply;
     if (psocket->recv(&reply)) {
         size = reply.size();

@@ -9,7 +9,10 @@
 
 uint64_t getIOClock(void) { return IOComponent::getClock(); }
 
-void log_message(cwpi_Scope, const char *m) { MessageLog::instance()->add(m); }
+void log_message(cwpi_Scope scope, const char *m) {
+    MessageLog::instance()->add(m);
+    std::cerr << ((MachineInstance *)scope)->getName() << ": " << m << std::endl;
+}
 
 void log_message_2(cwpi_Scope, const char *m1, const char *m2) {
     MessageLog::instance()->add(m1, m2);

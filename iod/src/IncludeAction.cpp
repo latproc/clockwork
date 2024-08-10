@@ -67,7 +67,7 @@ IncludeAction::IncludeAction()
 
 std::ostream &IncludeAction::operator<<(std::ostream &out) const {
     return out << "Include Action " << " " << entry << ((before) ? " before " : " after ");
-    if (position < 0) {
+    if (position < (int64_t)0) {
         out << "last";
     }
     else {

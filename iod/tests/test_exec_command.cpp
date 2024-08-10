@@ -51,10 +51,7 @@ class ExecuteTests {
     MachineInstance *scope_;
 
     TestResult test() {
-        MachineInstance *one = MachineInstanceFactory::create("one", machine_class_->name);
-        one->setStateMachine(machine_class_);
-        one->addLocal(Value{"test"}, scope_);
-        one->addDependancy(scope_);
+        EXPECT_TRUE(machine_class_ != nullptr);
         machine_class_->addState("Done", true);
         machine_class_->addState("Error", true);
         machine_class_->addState("Running", true);
@@ -62,8 +59,13 @@ class ExecuteTests {
         machine_class_->addState("Start", true);
         machine_class_->default_state = State("Init");
         machine_class_->initial_state = State("Init");
+
+        MachineInstance *one = MachineInstanceFactory::create("one", machine_class_->name);
+        one->setStateMachine(machine_class_);
+        one->addLocal(Value{"test"}, scope_);
+        one->addDependancy(scope_);
         one->properties.add("Command", Value{"/bin/ls"});
-        one->properties.add("CommandStatus", 0);
+        one->properties.add("CommandStatus", Value{(uint64_t)0});
         one->properties.add("Result", Value{""});
         one->properties.add("Errors", Value{""});
         MoveStateActionTemplate msat("one", Value{"Start"});
@@ -72,14 +74,22 @@ class ExecuteTests {
         msa->start();
         msa->run();
         one->idle();
+        EXPECT_TRUE(one->getCurrentStateVal() != nullptr);
+        EXPECT_TRUE(*one->getCurrentStateVal() == "Start");
         exec_command((void *)one);
-        usleep(10000);
-        one->idle();
-        exec_command((void *)one);
+        EXPECT_TRUE(*one->getCurrentStateVal() != Value{"Error"});
+        auto timer = microsecs();
+        while (one->getCurrentStateVal() != nullptr && *one->getCurrentStateVal() != Value{"Done"}) {
+            usleep(10000);
+            one->idle();
+            std::cout << "current state: " << *one->getCurrentStateVal() << "\n";
+            exec_command((void *)one);
+            EXPECT_TRUE(microsecs() - timer < 1000000);
+        }
         Value res = one->getValue("CommandStatus");
         std::cout << "CommandStatus: " << res << "\n";
         EXPECT_INT(res);
-        EXPECT_TRUE(res == 0);
+        EXPECT_TRUE(res == SymbolTable::Zero);
         res = *one->getCurrentStateVal();
         int count = 0;
         while (res != Value{"Done"} && ++count < 10) {

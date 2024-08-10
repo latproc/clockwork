@@ -93,7 +93,7 @@ class Value {
     Value();
     explicit Value(Kind k);
     explicit Value(bool v);
-    explicit Value(int64_t v);
+    Value(int64_t v);
     explicit Value(int v);
     explicit Value(unsigned int v);
     explicit Value(uint64_t v);

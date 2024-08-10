@@ -27,6 +27,10 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 
+namespace {
+        const Value zero{(int64_t)0};
+}
+
 SendMessageActionTemplate::SendMessageActionTemplate(Value msg, Value dest)
     : message(msg), target(dest), target_machine(0) {}
 
@@ -38,7 +42,7 @@ Action *SendMessageActionTemplate::factory(MachineInstance *mi) {
 }
 
 std::ostream &SendMessageActionTemplate::operator<<(std::ostream &out) const {
-    return out << "SendMessageActionTemplate " << message << " " << ((target != 0) ? target : Value{""});
+    return out << "SendMessageActionTemplate " << message << " " << ((target != zero) ? target : Value{""});
 }
 
 void SendMessageActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
@@ -59,7 +63,7 @@ SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTempl
 
 Action::Status SendMessageAction::run() {
     owner->start(this);
-    if (target != 0) {
+    if (target != zero) {
         target.cached_machine = 0; // clear cached value
         target_machine = owner->lookup(target);
         DBG_ACTIONS << *this << "\n";

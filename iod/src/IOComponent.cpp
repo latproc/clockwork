@@ -41,9 +41,6 @@
 #include "buffering.c"
 
 #define VERBOSE_DEBUG 1
-#if VERBOSE_DEBUG
-static void display(const uint8_t *p, unsigned int count = 0);
-#endif
 
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
@@ -81,9 +78,9 @@ namespace {
 
 void display(const uint8_t *p, size_t len) {
     for (size_t i = 0; i < len; ++i) {
-        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
-                  << std::dec;
+        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
     }
+    std::cout << std::dec;
 }
 
 void set_mask_bits(const IOAddress & address, uint8_t *result) {
@@ -265,22 +262,6 @@ IOComponent *IOComponent::lookup_device(const std::string &name) {
     return 0;
 }
 
-#if VERBOSE_DEBUG
-static void display(const uint8_t *p, unsigned int count) {
-    int max = IOComponent::getMaxIOOffset();
-    int min = IOComponent::getMinIOOffset();
-    if (count == 0)
-        for (int i = min; i <= max; ++i) {
-            std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
-        }
-    else
-        for (unsigned int i = 0; i < count; ++i) {
-            std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
-        }
-    std::cout << std::dec;
-}
-#endif
-
 void IOComponent::processAll(const IOUpdate &update, std::set<IOComponent *> &updated_machines) {
     processAll(update.global_clock(), update.data_size(), update.mask(),
                update.data(), updated_machines);
@@ -429,7 +410,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
             updatedComponentsIn.erase(ioc);
             if (updates_sent && updatedComponentsOut.count(ioc)) {
-                std::cout << "output request for " << ioc->io_name 
+                std::cout << "output request for " << ioc->io_name
                     << " resolved. device is now: " << ioc->value() << "\n";
                 updatedComponentsOut.erase(ioc);
             }

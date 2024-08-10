@@ -520,7 +520,7 @@ Action::Status SelectSetOperation::doOperation() {
                 to_copy = source_a_machine->parameters.size();
             }
         }
-        else if ((count.kind == Value::t_integer && count < 0) || !count.asInteger(to_copy)) {
+        else if ((count.kind == Value::t_integer && count < SymbolTable::Zero) || !count.asInteger(to_copy)) {
             to_copy = source_a_machine->parameters.size();
         }
 #ifdef DEPENDENCYFIX

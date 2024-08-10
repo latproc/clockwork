@@ -48,6 +48,7 @@ enum ProtocolType { eCLOCKWORK, eRAW, eZMQ, eCHANNEL };
 
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen);
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const MessageHeader &header);
+void safeSend(zmq::socket_t &sock, const std::string &buf, const MessageHeader &header);
 
 bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len,
               int64_t timeout);
@@ -56,8 +57,8 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
               MessageHeader &hdr);
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
-                 const MessageHeader &header, int32_t timeout_us = 0);
-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
+                 int32_t timeout_us, const MessageHeader &header);
+bool sendMessage(const std::string &msg, zmq::socket_t &sock, std::string &response,
                  int32_t timeout_us = 0);
 
 class MessagingInterface : public Receiver {
@@ -83,7 +84,7 @@ class MessagingInterface : public Receiver {
     char *sendCommand(std::string cmd, std::list<Value> *params);
     char *sendCommand(std::string cmd, Value p1 = SymbolTable::Null, Value p2 = SymbolTable::Null,
                       Value p3 = SymbolTable::Null);
-    char *sendState(std::string cmd, std::string name, std::string state_name);
+    std::string sendState(std::string cmd, std::string name, std::string state_name);
 
     //Receiver interface
     virtual bool receives(const Message &, Transmitter *t);

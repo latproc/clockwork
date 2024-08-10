@@ -1080,7 +1080,7 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     case opDivide:
         return lhs / rhs;
     case opAbsoluteValue:
-        if (rhs < 0) {
+        if (rhs < (int64_t)0) {
             return -rhs;
         }
         else {

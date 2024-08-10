@@ -776,14 +776,14 @@ void semantic_analysis() {
             if (machine_class->name == "ANALOGOUTPUT" || machine_class->name == "ANALOGINPUT" ||
                 machine_class->name == "COUNTER" || machine_class->name == "COUNTERRATE" ||
                 machine_class->name == "RATEESTIMATOR") {
-                m->properties.add("VALUE", 0, SymbolTable::NO_REPLACE);
+                m->properties.add("VALUE", SymbolTable::Zero, SymbolTable::NO_REPLACE);
             }
             if (machine_class->name == "COUNTERRATE" || machine_class->name == "RATEESTIMATOR") {
-                m->properties.add("position", 0, SymbolTable::NO_REPLACE);
+                m->properties.add("position", SymbolTable::Zero, SymbolTable::NO_REPLACE);
                 if (machine_class->name == "COUNTERRATE") {
                     MachineInstance *pos = m->lookup(m->parameters[0]);
                     if (pos) {
-                        pos->setValue("VALUE", 0);
+                        pos->setValue("VALUE", SymbolTable::Zero);
                     }
                 }
             }

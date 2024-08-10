@@ -174,7 +174,7 @@ Value eval(Predicate *p, MachineInstance *m) {
             res = l / r;
             break;
         case opAbsoluteValue:
-            if (r < 0) {
+            if (r < Value{(int64_t)0}) {
                 res = -r;
             }
             else {
@@ -229,7 +229,7 @@ Value eval(Predicate *p, MachineInstance *m) {
             }
         } break;
         case opNone:
-            res = 0;
+            res = (int64_t)0;
             break;
         default:
             std::cerr << "Error: unhandled operator " << p->op << " in evaluating predicate\n";
