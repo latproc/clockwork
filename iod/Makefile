@@ -32,7 +32,7 @@ xcode:
 
 test:
 	[ -d "build" ] || mkdir build
-	cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DRUN_TESTS=ON .. && make $(JOBS) install && make test
+	cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DRUN_TESTS=ON .. && make $(JOBS) install && make test || ctest --rerun-failed --output-on-failure
 
 style:
 ifdef ASTYLE
