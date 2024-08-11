@@ -1199,9 +1199,9 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
             if (mi->state_machine && mi->state_machine->plugin) {
                 mi->state_machine->plugin->poll_actions(mi);
             }
-            if ((mi->state_machine && mi->state_machine->plugin) ||
-                (!mi->has_work && !mi->executingCommand())) {
-                if (!mi->has_work && !mi->executingCommand()) {
+            Action *action = mi->executingCommand();
+            if ((mi->state_machine && mi->state_machine->plugin) || (!mi->has_work && !action)) {
+                if (!mi->has_work && !action) {
                     SharedWorkSet::instance()->remove(mi);
                     busy_it = to_process.erase(busy_it);
                     if (mi->is_active) {
@@ -1213,9 +1213,8 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
                     busy_it++;
                 }
             }
-            else if (mi->executingCommand() && !mi->executingCommand()->getTrigger()) {
-                Action *a = mi->executingCommand();
-                ProcessingThread::activate(mi);
+            else if (action) {
+                if (!action->getTrigger()) { ProcessingThread::activate(mi); }
                 busy_it++;
             }
             else {
@@ -1251,11 +1250,15 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
 }
 
 void MachineInstance::checkPluginStates() {
+    static bool reported = false;
     //std::list<uint64_t> stats;
     //uint64_t start_processing = nowMicrosecs();
     std::set<MachineInstance *>::iterator pl_iter = plugin_machines.begin();
     while (pl_iter != plugin_machines.end()) {
         MachineInstance *m = *pl_iter++;
+        if (!reported) {
+            std::cerr << "----------------  Plugin in use: " << m->getName() << "\n";
+        }
         if (!m->is_enabled) {
             continue;
         }
@@ -1272,6 +1275,7 @@ void MachineInstance::checkPluginStates() {
         //uint64_t delta = nowMicrosecs() - start;
         //stats.push_back(delta);
     }
+    reported = true;
 }
 
 // Warning: max_time is ignored in this method

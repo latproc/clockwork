@@ -904,7 +904,7 @@ int64_t AnalogueInput::filter(int64_t raw) {
         o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
         o->properties.add("raw", raw, SymbolTable::ST_REPLACE);
-        o->properties.add("VALUE", config->last_sent, SymbolTable::ST_REPLACE);
+        o->properties.add("VALUE", static_cast<int64_t>(config->last_sent), SymbolTable::ST_REPLACE);
         //double v = config->speeds.average(config->speeds.length());
         //if (fabs(v)<1.0) v = 0.0;
         if (*config->calc_stddev) {
@@ -1541,6 +1541,7 @@ void IOComponent::setupIOMap() {
             //std::cout << "offset: " << (offset + i) << " io name: " << ioc->io_name << "\n";
         }
     }
+    if (io_process_mask) { delete io_process_mask; }
     io_process_mask = generateProcessMask(io_process_mask, process_data_size);
 }
 
