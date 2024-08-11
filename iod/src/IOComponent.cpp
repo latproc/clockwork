@@ -30,17 +30,17 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/optional.hpp>
 #include <iomanip>
-#include <iostream>
 #include <netinet/in.h>
 #include <string.h>
 #include <string>
+#include <iostream>
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #endif
 #include "ProcessingThread.h"
 #include "buffering.c"
 
-#define VERBOSE_DEBUG 1
+#define VERBOSE_DEBUG 0
 
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
@@ -76,12 +76,14 @@
 
 namespace {
 
+#if 1
 void display(const uint8_t *p, size_t len) {
     for (size_t i = 0; i < len; ++i) {
         std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
     }
     std::cout << std::dec;
 }
+#endif
 
 void set_mask_bits(const IOAddress & address, uint8_t *result) {
     unsigned int offset = address.io_offset;
@@ -102,6 +104,8 @@ std::vector<uint8_t> generateProcessMask() {
         IOComponent *ioc = *iter++;
         set_mask_bits(ioc->address, result.data());
     }
+    display(result.data(), result.size());
+    std::cout << "\n";
     return result;
 }
 
@@ -296,7 +300,6 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
 #endif
     // TODO: Get rid of this or remove its duplicate
     if (hardware_state == s_hardware_init) {
-        std::cout << "initialising from process data\n";
         // the initial process data has arrived from EtherCAT. keep the previous data as the defaults
         // so they can be applied asap
         process_data.setProcessData(data, data_size);
@@ -313,10 +316,14 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
     uint8_t *q = pd.data();
     static bool first_time = true; // TODO: Make this resettable
     IOComponent *just_added = 0;
+    if (last_process_data.empty()) {
+        last_process_data.resize(data_size);
+    }
     auto changes = copyMaskedBitsAndReturnMaskOfChanges(q, p, m, last_process_data.data(), data_size);
     last_process_data = pd;
     if (first_time) {
         for (size_t i = 0; i < data_size; ++i) {
+            pd[i] = data[i];
             if (m[i]) {
                 notifyComponentsAt(i);
             }
@@ -332,7 +339,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                 int j = 7;
                 while (bitmask) {
                     if (*m & bitmask) {
-                        IOComponent *ioc = (*indexed_components)[i*8 + bitmask];
+                        IOComponent *ioc = (*indexed_components)[i*8 + j];
                         if (just_added == ioc) { continue; }
                         if (ioc && ioc != just_added && ch & bitmask) { // TODO: consider ioc->last_event?
                             just_added = ioc;
@@ -350,10 +357,12 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             }
         }
     }
+#if VERBOSE_DEBUG
     std::cerr << "updated components: " << updatedComponentsIn.size() << "\n";
     std::cout << "new pdta: ";
     display(process_data.getProcessData().data(), data_size);
     std::cout << "\n";
+#endif
 
     if (hardware_state == s_operational) {
         // save the domain data for the next check
@@ -362,22 +371,17 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
 
     {
         boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-        if (!updatedComponentsIn.size()) { return; }
-        std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
-        // look at the components that changed and remove them from the outgoing queue as long as the
-        // outputs have been sent to the hardware
+        //if (!updatedComponentsIn.size()) { return; }
+        // look at the components that changed and remove them from the
+        // outgoing queue as long as the outputs have been sent to the hardware
         std::set<IOComponent *>::iterator iter = updatedComponentsIn.begin();
         while (iter != updatedComponentsIn.end()) {
             IOComponent *ioc = *iter++;
             ioc->read_time = io_clock;
-            std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
             updatedComponentsIn.erase(ioc);
             if (updates_sent && updatedComponentsOut.count(ioc)) {
-                std::cout << "output request for " << ioc->io_name
-                    << " resolved. device is now: " << ioc->value() << "\n";
                 updatedComponentsOut.erase(ioc);
             }
-            else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
             updated_machines.insert(ioc);
         }
         // for machines with updates to send, if these machines already have the same value
@@ -388,7 +392,6 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             while (iter != updatedComponentsOut.end()) {
                 IOComponent *ioc = *iter++;
                 if (ioc->pending_value == ioc->address.value) {
-                    std::cout << "output request for " << ioc->io_name << " cleared as hardware value matches\n";
                     updatedComponentsOut.erase(ioc);
                 }
             }
@@ -581,11 +584,6 @@ class InputFilterSettings {
                 speed = savitsky_golay_filter(positions, smoothing_len, first_derivative_coeff,
                                               FIRST_DERIV_NORM);
                 speed = speed / dt;
-                //speed = vel_bwf->filter(speed);
-                //speed = 1000000.0 * rate(positions, (rate_len<4)? 4 : rate_len);
-                //std::cout << "computed speed " << speed << " at " << getBufferValueAt(positions, 0) << "\n";
-                //}
-                //else speed = 0.0;
                 speeds.append(speed);
             }
             if (*calc_d2t) {
@@ -660,16 +658,13 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
         double speed_scale = 1.0, accel_scale = 1.0;
         if (getFloatValue(settings, "velocity_scale", speed_scale)) {
             config->speed_scale = speed_scale;
-            std::cout << m->getName() << " set velocity scale to: " << config->speed_scale << "\n";
         }
         if (getFloatValue(settings, "acceleration_scale", accel_scale)) {
             config->accel_scale = accel_scale;
-            std::cout << m->getName() << " set accel scale to: " << config->accel_scale << "\n";
         }
         const Value &throttle_v = settings->getValue("throttle");
         if (throttle_v.kind == Value::t_integer) {
             config->throttle = &throttle_v.iValue;
-            std::cout << m->getName() << " set throtle rate to: " << *config->throttle << "ms\n";
         }
         const Value &conf_dt = settings->getValue("enable_velocity");
         if (conf_dt.kind == Value::t_integer) {
@@ -692,19 +687,14 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
                 config->butterworth_len = num_c;
                 config->filter_c_coeff.clear();
                 config->filter_d_coeff.clear();
-                std::cout << "C: " << (int)num_c;
                 for (unsigned int i = 0; i < num_c; ++i) {
                     double val;
                     config->filter_c_coeff.push_back(c_coeff->parameters[i].val.asFloat(val) ? val : 1.0);
-                    std::cout << " " << config->filter_c_coeff[i];
                 }
-                std::cout << "\nD: " << (int)num_d;
                 for (unsigned int i = 0; i < num_d; ++i) {
                     double val;
                     config->filter_d_coeff.push_back(d_coeff->parameters[i].val.asFloat(val) ? val : 1.0);
-                    std::cout << " " << config->filter_d_coeff[i];
                 }
-                std::cout << "\n";
                 // swap the filter, TBD copy current values from old filter?
                 delete config->input_bwf;
                 config->input_bwf = new ButterworthFilter(config->filter_c_coeff.size(), config->filter_c_coeff.data(),
@@ -1119,23 +1109,14 @@ int IOComponent::notifyComponentsAt(unsigned int offset) {
     int count = 0;
     std::list<IOComponent *> *cl = io_map[offset];
     if (cl) {
-        //std::cout << "component list at offset " << offset << " size: " << cl->size() << "\n";
         std::list<IOComponent *>::iterator items = cl->begin();
-        //std::cout << "items: \n";
-        //while (items != cl->end()) {
-        //  IOComponent *c = *items++;
-        //std::cout << c->io_name << "\n";
-        //}
-        //items = cl->begin();
         while (items != cl->end()) {
             IOComponent *c = *items++;
             if (c) {
-                //std::cout << "notifying " << c->io_name << "\n";
                 boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
                 updatedComponentsIn.insert(c);
                 ++count;
             }
-            //else { std::cout << "Warning: null item detected in io list at offset " << offset << "\n"; }
         }
     }
     return count;
@@ -1191,10 +1172,7 @@ static boost::optional<std::vector<uint8_t>> generateUpdateMask() {
     unsigned int max = IOComponent::getMaxIOOffset();
     res.resize(max - min + 1);
 
-    //std::cout << "generating mask\n";
     if (updatedComponentsOut.empty()) {
-        std::cout << "no updates; returning empty mask\n";
-        display(res.data(), res.size());
         return res;
     }
 
@@ -1226,18 +1204,10 @@ static boost::optional<std::vector<uint8_t>> generateUpdateMask() {
 
 IOUpdate IOComponent::getUpdates() {
     IOUpdate res;
-    //outputs_waiting = 0; // reset work indicator flag
     auto mask = ::generateUpdateMask();
     if (!mask.has_value()) { return res; }
     res.setData(process_data.getUpdateData());
     res.setMask(*mask);
-#if 1
-    std::cout << std::flush << "IOComponent::getUpdates preparing to send " << res.data_size() << " d:";
-    display(res.data(), res.data_size());
-    std::cout << " m:";
-    display(res.mask(), res.data_size());
-    std::cout << "\n" << std::flush;
-#endif
     return res;
 }
 
@@ -1274,12 +1244,10 @@ void IOComponent::setupIOMap() {
     if (indexed_components) {
         delete indexed_components;
     }
-    std::cout << "\n\n setupIOMap\n";
     // find the highest and lowest offset location within the process data
     std::list<IOComponent *>::iterator iter = processing_queue.begin();
     while (iter != processing_queue.end()) {
         IOComponent *ioc = *iter++;
-        //std::cout << ioc->getName() << " " << ioc->address << "\n";
         unsigned int offset = ioc->address.io_offset;
         unsigned int bitpos = ioc->address.io_bitpos;
         offset += bitpos / 8;
@@ -1313,15 +1281,11 @@ void IOComponent::setupIOMap() {
     indexed_components = new std::vector<IOComponent *>(data_size * 8);
 
     io_map.resize(data_size);
-    for (unsigned int i = 0; i <= max_offset; ++i) {
-        io_map[i] = 0;
-    }
     iter = processing_queue.begin();
     while (iter != processing_queue.end()) {
         IOComponent *ioc = *iter++;
-        if (ioc->io_name == "") {
-            continue;
-        }
+        //if (ioc->io_name == "") { continue; }
+        if (ioc->address.bitlen == 0) { continue; }
         unsigned int offset = ioc->address.io_offset;
         unsigned int bitpos = ioc->address.io_bitpos;
         offset += bitpos / 8;
@@ -1330,15 +1294,15 @@ void IOComponent::setupIOMap() {
         }
         // make sure this component is registered in io_map for each byte
         // it maps onto
-        int num_bytes = ioc->address.bitlen / 8 + 1;
+        int num_bytes = (ioc->address.bitlen - 1) / 8 + 1;
         for (int i = 0; i < num_bytes; ++i) {
             std::list<IOComponent *> *cl = io_map[offset + i];
             if (!cl) {
                 cl = new std::list<IOComponent *>();
             }
+            std::cout << "adding " << ioc->getName() << " " << ioc->address << " at " << (offset + i) << "\n";
             cl->push_back(ioc);
             io_map[offset + i] = cl;
-            //std::cout << "offset: " << (offset + i) << " io name: " << ioc->io_name << "\n";
         }
     }
     auto pd = generateProcessMask();
@@ -1351,8 +1315,6 @@ void IOComponent::setupIOMap() {
 }
 
 void IOComponent::markChange() {
-    std::cout << "marking change " << address << " on " << getName() << " " << getStateString()  << "\n";
-    std::cout << "outputs waiting: " << updatedComponentsOut.size() << "\n";
     auto & update_data = process_data.getUpdateData();
     if (update_data.empty()) {
         auto &pd = process_data.getProcessData();
@@ -1373,31 +1335,18 @@ void IOComponent::markChange() {
 
         // only outputs will have an e_on or e_off event queued,
         // if they do, set the bit accordingly, ignoring the previous value
-        if (!value() && last_event == e_on) {
-            /*
-                        std::cout << "IOComponent::markChange setting bit "
-                            << (offset - update_data) << ":" << bitpos
-                            << " for " << io_name << "\n";
-            */
+        if (!address.value && last_event == e_on) {
             set_bit(offset, bitpos, 1);
             updatesSent(false);
         }
-        else if (value() && last_event == e_off) {
+        else if (address.value && last_event == e_off) {
             set_bit(offset, bitpos, 0);
             updatesSent(false);
-        }
-        else {
-            std::cout << "value not updated. value:  " << value() << " last event: " << last_event  << "\n";
         }
         last_event = e_none;
     }
     else {
         if (last_event == e_change) {
-            /*
-                        std::cerr << " marking change to " << pending_value
-                            << " at offset " << (unsigned long)(offset - update_data)
-                            << " for " << io_name << "\n";
-            */
             if (address.bitlen == 8) {
                 *offset = (uint8_t)pending_value & 0xff;
             }
@@ -1412,16 +1361,9 @@ void IOComponent::markChange() {
                 std::cerr << "field of size: " << address.bitlen << " not updated\n";
             }
             last_event = e_none;
-#if 1
-            std::cout << "@";
-            display(update_data.data(), process_data.getProcessDataSize());
-            std::cout << "\n";
-#endif
             updatesSent(false);
-            //address.value = pending_value;
         }
     }
-    std::cout << "outputs waiting: " <<  updatedComponentsOut.size() << "\n";
 }
 
 void IOComponent::handleChange(std::list<Package *> &work_queue) {
@@ -1431,7 +1373,6 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
     offset += (bitpos / 8);
     bitpos = bitpos % 8;
 
-    std::cout << "handling change: " << address << "\n";
     if (address.bitlen == 1) {
         int64_t value = (*offset & (1 << bitpos)) ? 1 : 0;
 
@@ -1467,9 +1408,6 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
         address.value = value;
     }
     else {
-        //std::cout << io_name << " object of size " << address.bitlen << " val: ";
-        //display(offset, address.bitlen/8);
-        //std::cout << " bit pos: " << bitpos << " ";
         int64_t val = 0;
         if (address.bitlen < 8) {
             uint8_t bitmask = 0x8 >> bitpos;
@@ -1488,14 +1426,12 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
                 val = val >> 1;
                 bitmask = bitmask >> 1;
             }
-            //std::cout << " value: " << val << "\n";
         }
         else if (address.bitlen == 8) {
             val = *(int8_t *)(offset);
         }
         else if (address.bitlen == 16) {
             val = fromU16(offset);
-            //std::cout << " 16bit value: " << val << " " << std::hex << val << std::dec << "\n";
         }
         else if (address.bitlen == 32) {
             val = fromU32(offset);
@@ -1524,7 +1460,6 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
         }
         else if (hardware_state == s_hardware_init ||
                  (hardware_state == s_operational && raw_value != val)) {
-            //std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
             raw_value = val;
             int64_t new_val = filter(val);
             if (hardware_state == s_operational) { //&& address.value != new_val) {
@@ -1538,7 +1473,6 @@ void IOComponent::turnOn() {}
 void IOComponent::turnOff() {}
 
 void Output::turnOn() {
-    std::cout << "Output::turnOn\n";
     last = microsecs();
     last_event = e_on;
     updatedComponentsOut.insert(this);
@@ -1548,7 +1482,6 @@ void Output::turnOn() {
 }
 
 void Output::turnOff() {
-    std::cout << "Output::turnOff\n";
     last = microsecs();
     last_event = e_off;
     updatedComponentsOut.insert(this);

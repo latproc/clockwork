@@ -58,7 +58,7 @@
 #define USE_CHRONO 1
 #include "clock_sync.h"
 
-#define VERBOSE_DEBUG 1
+#define VERBOSE_DEBUG 0
 
 namespace {
 

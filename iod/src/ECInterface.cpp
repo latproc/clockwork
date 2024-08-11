@@ -40,6 +40,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include "bit_ops.h"
 #ifndef EC_SIMULATOR
 #include "SDOEntry.h"
 #include "symboltable.h"
@@ -47,18 +48,7 @@
 #include "process_data.h"
 #endif
 
-#define VERBOSE_DEBUG 1
-namespace {
-
-void display(const uint8_t *p, size_t len) {
-    for (size_t i = 0; i < len; ++i) {
-        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
-                  << std::dec;
-    }
-}
-
-}
-
+#define VERBOSE_DEBUG 0
 
 extern Statistics *statistics;
 void signal_handler(int signum);
@@ -1631,6 +1621,7 @@ int ECInterface::collectState() {
 #endif
     data.setDataSize(domain_size);
     data.setProcessData(domain1_pd, domain_size);
+    last_pd = data.getProcessData();
 #if VERBOSE_DEBUG
     DBG_ETHERCAT_PACKETS << "copied new domain data: ";
     display(domain1_pd, domain_size);

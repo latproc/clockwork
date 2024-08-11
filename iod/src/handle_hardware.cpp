@@ -5,17 +5,6 @@
 #include "ProcessingThread.h"
 #include "IOInterface.h"
 
-namespace {
-
-void display(const uint8_t *p, size_t len) {
-    for (size_t i = 0; i < len; ++i) {
-        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
-                  << std::dec;
-    }
-}
-
-}
-
 void ProcessingThread::handle_hardware(
 #ifdef KEEPSTATS
     AutoStatStorage &avg_update_time,
@@ -32,13 +21,7 @@ void ProcessingThread::handle_hardware(
             if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
                 DBG_INITIALISATION << "Sending defaults to EtherCAT\n";
                 upd = IOComponent::getDefaults();
-#if 1
-                display(upd.data(), upd.data_size());
-                std::cout << ":";
-                display(upd.mask(), upd.data_size());
-                std::cout << "\n";
-#endif
-                IOComponent::setHardwareState(IOComponent::s_operational);
+                //IOComponent::setHardwareState(IOComponent::s_operational);
             }
             else {
                 upd = IOComponent::getUpdates();

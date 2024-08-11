@@ -73,6 +73,7 @@ extern void handle_io_sampling(uint64_t clock);
 #define VERBOSE_DEBUG 0
 
 
+#if 0
 namespace {
 
 void display(const uint8_t *p, size_t len) {
@@ -83,7 +84,7 @@ void display(const uint8_t *p, size_t len) {
 }
 
 }
-
+#endif
 
 unsigned int CommandSocketInfo::last_idx = 5;
 
@@ -502,11 +503,13 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     static unsigned long total_mp_time = 0;
     static unsigned long mp_count = 0;
 #endif
+#if VERBOSE_DEBUG
     std::cout << "got ethercat data\n";
     display(internals->update.data(), internals->update.data_size());
     std::cout << " : ";
     display(internals->update.mask(), internals->update.data_size());
     std::cout << "\n";
+#endif
 
 #if 0
     int mask_p = 0;
@@ -748,7 +751,6 @@ void ProcessingThread::operator()() {
 #ifdef KEEPSTATS
             AutoStat stats(avg_iowork_time);
 #endif
-            std::cout << "Processing thread is handling change\n";
             std::set<IOComponent *>::iterator io_work = io_work_queue.begin();
             while (io_work != io_work_queue.end()) {
                 IOComponent *ioc = *io_work;
