@@ -36,3 +36,43 @@ TEST(CopyMaskedBitsTest, CopiesMaskedBits) {
     EXPECT_EQ(255 - 4, dst[2]);
     EXPECT_EQ(9, dst[3]);
 }
+
+TEST(GetChangesTest, ReturnsZeroWhenThereAreNoChanges) {
+    uint8_t src[] = {255, 255, 0, 255};
+    uint8_t dst[] = {0, 0, 255, 0};
+    uint8_t mask[] = {1, 2, 4, 9};
+    uint8_t last[] = {255, 255, 0, 255};
+    auto changes = copyMaskedBitsAndReturnMaskOfChanges(dst, src, mask, last, 4);
+    EXPECT_EQ(0, changes.count);
+    for (size_t i = 0; i < 4; i++) {
+        EXPECT_EQ(0, changes.changes[i]);
+    }
+    uint8_t expected[] = {1, 2, 255 - 4, 9};
+    for (size_t i = 0; i < 4; i++) {
+        EXPECT_EQ(dst[i], expected[i]);
+    }
+}
+
+TEST(GetChangesTest, ReturnsCorrectMaskedData) {
+    std::vector<uint8_t> src{255, 255, 0, 255};
+    std::vector<uint8_t> dst{0, 0, 255, 0};
+    std::vector<uint8_t> mask{1, 2, 4, 9};
+    std::vector<uint8_t> last{255, 255, 0, 255};
+    auto changes = copyMaskedBitsAndReturnMaskOfChanges(dst.data(), src.data(), mask.data(), last.data(), 4);
+    std::vector<uint8_t> expected{1, 2, 255 - 4, 9};
+    EXPECT_EQ(0, changes.count);
+    EXPECT_TRUE(expected ==  dst);
+}
+
+TEST(GetChangesTest, ReturnsCorrectChanges) {
+    std::vector<uint8_t>  dst{0b00000000, 0b00000000, 0b11111111, 0b00000000};
+    std::vector<uint8_t>  src{0b11111111, 0b11111111, 0b00000000, 0b11111111};
+    std::vector<uint8_t> mask{0b00000001, 0b00000011, 0b00000110, 0b00001001};
+    std::vector<uint8_t> last{0b11111110, 0b11111100, 0b00000000, 0b11111000};
+    auto changes = copyMaskedBitsAndReturnMaskOfChanges(dst.data(), src.data(), mask.data(), last.data(), 4);
+    std::vector<uint8_t> expected{1, 3, 255 - 6, 9};
+    std::vector<uint8_t> expected_changes{1, 3, 0, 1};
+    EXPECT_EQ(4, changes.count);
+    EXPECT_TRUE(expected ==  dst);
+    EXPECT_TRUE(expected_changes == changes.changes);
+}

@@ -1,8 +1,21 @@
 #include "bit_ops.h"
 #include <inttypes.h>
+#include <vector>
+
 #if VERBOSE_DEBUG
 #include <iostream>
 void display(uint8_t *, size_t len);
+#endif
+#if VERBOSE_DEBUG
+void show_buffers(uint8_t *dest, uint8_t *src, uint8_t *mask, size_t len) {
+    std::cout << "copying masked bits: \n";
+    display(dest, len);
+    std::cout << "\n";
+    display(src, len);
+    std::cout << "\n";
+    display(mask, len);
+    std::cout << "\n";
+}
 #endif
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
@@ -15,21 +28,11 @@ void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
     }
 }
 
-void copyMaskedBits(uint8_t *dest, uint8_t *src, uint8_t *mask, size_t len) {
-
-#if VERBOSE_DEBUG
-    std::cout << "copying masked bits: \n";
-    display(dest, len);
-    std::cout << "\n";
-    display(src, len);
-    std::cout << "\n";
-    display(mask, len);
-    std::cout << "\n";
-#endif
+void copyMaskedBits(uint8_t *dest, const uint8_t *src, const uint8_t *mask, size_t len) {
     size_t count = len;
     while (count--) {
         uint8_t bitmask = 0x80;
-        for (int i = 0; i < 8; ++i) {
+        while (bitmask) {
             if (*mask & bitmask) {
                 if (*src & bitmask) {
                     *dest |= bitmask;
@@ -44,10 +47,37 @@ void copyMaskedBits(uint8_t *dest, uint8_t *src, uint8_t *mask, size_t len) {
         ++dest;
         ++mask;
     }
-#if VERBOSE_DEBUG
-    display(result, len);
-    std::cout << "\n";
-#endif
+}
+
+ChangeSet copyMaskedBitsAndReturnMaskOfChanges(uint8_t *dest, const uint8_t *src, const uint8_t *mask, const uint8_t *last, size_t len) {
+    ChangeSet cs;
+    cs.changes.resize(len);
+    uint8_t *change_ptr = cs.changes.data();
+    size_t count = len;
+    while (count--) {
+        uint8_t bitmask = 0x80;
+        while (bitmask) {
+            if (*mask & bitmask) {
+                if ((*src & bitmask) != (*last & bitmask)) {
+                    *change_ptr |= bitmask;
+                    ++cs.count;
+                }
+                if (*src & bitmask) {
+                    *dest |= bitmask;
+                }
+                else {
+                    *dest &= (uint8_t)(0xff - bitmask);
+                }
+            }
+            bitmask = bitmask >> 1;
+        }
+        ++src;
+        ++dest;
+        ++mask;
+        ++last;
+        ++change_ptr;
+    }
+    return cs;
 }
 
 void set_mask_bits(unsigned int offset, unsigned int bitpos, unsigned int bitlen, uint8_t *result) {

@@ -311,82 +311,45 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
     const uint8_t *m = mask;
     auto &pd = process_data.getProcessData();
     uint8_t *q = pd.data();
-    static bool first_time = true;
+    static bool first_time = true; // TODO: Make this resettable
     IOComponent *just_added = 0;
-    for (unsigned int i = 0; i < pd.size(); ++i) {
-        if (first_time) {
-            if (*m) { notifyComponentsAt(i); }
+    auto changes = copyMaskedBitsAndReturnMaskOfChanges(q, p, m, last_process_data.data(), data_size);
+    last_process_data = pd;
+    if (first_time) {
+        for (size_t i = 0; i < data_size; ++i) {
+            if (m[i]) {
+                notifyComponentsAt(i);
+            }
         }
-        //      if (*m && *p==*q) {
-        //          std::cout<<"warning: incoming_data == process_data but mask indicates a change at byte "
-        //          << (int)(m-mask) << std::setw(2) <<  std::hex << " value: 0x" << (int)(*m) << std::dec << "\n";
-        //      }
-        if (*p != *q && *m) { // copy masked bits if any
-            uint8_t bitmask = 0x01;
-            int j = 0;
-            // check each bit against the mask and if the mask if
-            // set, check if the bit has changed. If the bit has
-            // changed, notify components that use this bit and
-            // update the bit
-            while (bitmask) {
-                if (*m & bitmask) {
-                    std::cout << "looking up " << i << ":" << j << "\n";
-                    IOComponent *ioc = (*indexed_components)[i * 8 + j];
-                    if (ioc && ioc != just_added) {
-                        just_added = ioc;
-                        //if (!ioc) std::cout << "no component at " << i << ":" << j << " found\n";
-                        //else std::cout << "found " << ioc->io_name << "\n";
-#if 1
-                        if (ioc && ioc->last_event != e_none) {
-                            // pending locally sourced change on this io
-                            std::cout << " adding " << ioc->io_name << " due to event " << ioc->last_event << "\n";
+        first_time = false;
+    }
+    else {
+        IOComponent *just_added = nullptr;
+        for (size_t i = 0; i < changes.changes.size(); ++i) {
+            if (changes.changes[i]) {
+                auto ch = changes.changes[i];
+                uint8_t bitmask = 0x80;
+                int j = 7;
+                while (bitmask) {
+                    if (*m & bitmask) {
+                        IOComponent *ioc = (*indexed_components)[i*8 + bitmask];
+                        if (just_added == ioc) { continue; }
+                        if (ioc && ioc != just_added && ch & bitmask) { // TODO: consider ioc->last_event?
+                            just_added = ioc;
+                            boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
                             updatedComponentsIn.insert(ioc);
                         }
-#endif
-                        if ((*p & bitmask) != (*q & bitmask)) {
-                            // remotely source change on this io
-                            if (ioc) {
-                                std::cout << " adding " << ioc->io_name << " due to bit change\n";
-                                boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-                                updatedComponentsIn.insert(ioc);
-                            }
-
-                            if (*p & bitmask) {
-                                *q |= bitmask;
-                            }
-                            else {
-                                *q &= (uint8_t)(0xff - bitmask);
-                            }
-                        }
-                        else {
-                            std::cout << "no change " << (unsigned int)*p << " vs " <<
-                                (unsigned int)*q << "\n";
-                        }
-                    }
-                    else {
-                        if (!ioc) {
+                        else if (!ioc) {
                             std::cout << "IOComponent::processAll(): no io component at " << i
                                       << ":" << j << " but mask bit is set\n";
                         }
-                        if ((*p & bitmask) != (*q & bitmask)) {
-                            if (*p & bitmask) {
-                                *q |= bitmask;
-                            }
-                            else {
-                                *q &= (uint8_t)(0xff - bitmask);
-                            }
-                        }
                     }
+                    --j;
+                    bitmask = bitmask >> 1;
                 }
-                bitmask = bitmask << 1;
-                ++j;
             }
         }
-        ++p;
-        ++q;
-        ++m;
     }
-    first_time = false;
     std::cerr << "updated components: " << updatedComponentsIn.size() << "\n";
     std::cout << "new pdta: ";
     display(process_data.getProcessData().data(), data_size);

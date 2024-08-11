@@ -1468,49 +1468,13 @@ void ECInterface::updateDomain() {
     uint8_t *domain1_pd = ecrt_domain_data(domain1);
     uint8_t *pd = domain1_pd;
 
-    /*
-        std::cerr << "updating domain (size = " << size << ")\n";
-        std::cerr << "process: "; display(pd); std::cout << "\n";
-        std::cerr << "   mask: "; display(m);  std::cout << "\n";
-        std::cerr << "   data: "; display(p);  std::cout << "\n";
+    copyMaskedBits(pd, p, m, size);
 
+    /*
         if (!all_ok || master_state.al_states != 0x8) {
             std::cerr << "refusing to update the domain since all is not ok\n";
         }
     */
-    for (unsigned int i = 0; i < size; ++i) {
-        if (*m && *p != *pd) {
-            /*
-                        std::cout << "at " << i << " data ("
-                            << (unsigned int)(*data) << ") different to domain ("
-                            << (unsigned int)(*pd) << ")\n";
-            */
-            uint8_t bitmask = 0x01;
-            int count = 0;
-            while (bitmask) {
-                if (*m & bitmask) { // we care about this bit
-                    uint8_t pdb = *pd & bitmask;
-                    uint8_t db = *p & bitmask;
-                    if (pdb != db) { // changed
-                        //std::cout << "bit " << i << ":" << count << " changed to ";
-                        if (db) {
-                            *pd |= bitmask;
-                            //std::cout << "on";
-                        }
-                        else {
-                            *pd &= (uint8_t)(0xff - bitmask);
-                            //std::cout << "off";
-                        }
-                    }
-                }
-                bitmask = bitmask << 1;
-                ++count;
-            }
-        }
-        ++pd;
-        ++m;
-        ++p;
-    }
 }
 
 void ECInterface::receiveState() {
@@ -1613,7 +1577,6 @@ int ECInterface::collectState() {
         assert(!instance()->data.getProcessData().empty());
         return 0;
     }
-    uint8_t *pd = domain1_pd;
     if ((long)domain_size < 0) {
         return 0;
     }
@@ -1622,7 +1585,7 @@ int ECInterface::collectState() {
 
     int affected_bits = 0;
     // the result of the following is a list of data bits to be changed and
-    // a mask indicating which bits are important
+    // a mask indicating which of the bits we care about have changed.
 
     // first time through, copy the domain process data to our local copy
     // and set the process mask to include every bit we care about
@@ -1631,7 +1594,8 @@ int ECInterface::collectState() {
     // copy its new value to the update data and include the bit in the
     // update mask
     static std::vector<uint8_t> last_pd = data.getProcessData();
-    auto pm = data.getProcessMask().data(); // these are the important bits
+    uint8_t *pd = domain1_pd;
+    uint8_t *pm = data.getProcessMask().data(); // these are the important bits
     uint8_t *q = data.getUpdateData().data();       // convenience pointer
     uint8_t *qm = data.getUpdateMask().data();       // convenience pointer
 
@@ -1647,62 +1611,19 @@ int ECInterface::collectState() {
 
     assert(min == 0);
     static bool first_time = true;
-    for (unsigned int i = 0; i < domain_size; ++i) {
-        data.update_mask[i] = 0;                 // assume no updates in this octet
-        if (first_time) {                     // first time through, copy all the domain data and mask
+    if (first_time) {
+        for (unsigned int i = 0; i < domain_size; ++i) {
             *q = domain1_pd[i]; //TBD & *pm;
             *qm = *pm;
-            affected_bits++;
-#if VERBOSE_DEBUG
-            DBG_ETHERCAT_PACKETS << "init update data from process byte " << i << ": " << std::hex
-                                 << (int)domain1_pd[i] << std::dec << "\n";
-#endif
+            affected_bits += 8;
         }
-        else if (last_pd[i] != domain1_pd[i]) {
-            uint8_t bitmask = 0x01;
-            int count = 0;
-#if VERBOSE_DEBUG
-            DBG_ETHERCAT_PACKETS << " offset " << i << " data 0x" << std::hex << (int)*pd
-                                 << " (was " << (int)last_pd[i] << ")" << " process mask: 0x"
-                                 << (int)*pm << std::dec << "\n";
-#endif
-            while (bitmask) {
-                if (*pm & bitmask) { // we care about this bit
-                    if (((*pd) & bitmask) != ((last_pd[i]) & bitmask)) { // changed
-#if VERBOSE_DEBUG
-                        DBG_ETHERCAT_PACKETS << "incoming bit " << i << ":" << count
-                                             << " changed to " << (((*pd) & bitmask) ? 1 : 0)
-                                             << "\n";
-#endif
-                        if ((*pd) & bitmask) {
-                            *q |= bitmask;
-                        }
-                        else {
-                            *q &= ((uint8_t)0xff - bitmask);
-                        }
-                        *qm |= bitmask;
-                        ++affected_bits;
-                    }
-                }
-                bitmask = bitmask << 1;
-                ++count;
-            }
-        }
-        ++pd;
-        ++q;
-        ++qm;
-        ++pm; //if (last_pd)++last_pd;
+        first_time = false;
     }
-    first_time = false;
-#if 0
-    if (affected_bits) {
-        std::cout << "data: ";
-        display(data.update_data.data(), domain_size);
-        std::cout << "\nmask: ";
-        display(data.update_mask.data(), domain_size);
-        std::cout << " " << affected_bits << " bits changed (size=" << domain_size << ")\n";
+    else {
+        auto updated = copyMaskedBitsAndReturnMaskOfChanges(q, pd, pm, last_pd.data(), domain_size);
+        data.setUpdateMask(updated.changes);
+        affected_bits = updated.count;
     }
-#endif
 
     // save the domain data for the next check
 #if VERBOSE_DEBUG
