@@ -199,8 +199,13 @@ void ControlSystemMachine::sync_slaves() {
                     const char *module_state = 0;
                     int state = module->slave_config_state.al_state & 0x0f; // mask off error bit
                     module_state = al_state_to_machine_state(state);
-                    if (module_state && m->getCurrent().getName() != module_state) {
-                        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", module_state);
+                    if (!module->slave_config_state.online) {
+                        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", Value{"ERROR"});
+                        SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(m));
+                        m->enqueueAction(ssa);
+                    }
+                    else if (module_state && m->getCurrent().getName() != module_state) {
+                        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", Value{module_state});
                         SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(m));
                         m->enqueueAction(ssa);
                     }

@@ -460,6 +460,7 @@ MachineClass *makeModuleMachineClass() {
     result->addState("BOOT");
     result->addState("SAFEOP");
     result->addState("OP");
+    result->addState("ERROR");
 #ifdef EC_SIMULATOR
     result->transitions.push_back(Transition(State("INIT"), State("OP"), Message("turnOn")));
     result->transitions.push_back(Transition(State("INIT"), State("PREOP"), Message("powerUp")));

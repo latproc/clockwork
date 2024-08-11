@@ -1819,6 +1819,10 @@ void ECInterface::check_master_state(void) {
 #endif
             }
         }
+        ethercat_status = MachineInstance::find("ETHERCAT");
+        if (ethercat_status) {
+            ethercat_status->setValue("slave_count", Value{(uint64_t)ms.slaves_responding});
+        }
     }
     if (ms.al_states != master_state.al_states) {
         master_state_changed = now;
@@ -1828,6 +1832,11 @@ void ECInterface::check_master_state(void) {
                  ms.al_states);
         MessageLog::instance()->add(buf);
         std::cout << buf << "\n";
+        ethercat_status = MachineInstance::find("ETHERCAT");
+        if (ethercat_status) {
+            const Value &states_v = ethercat_status->getValue("slave_states");
+            ethercat_status->setValue("slave_states", Value{(uint64_t)ms.al_states});
+        }
     }
     if (master_was_running && ms.al_states != 0x8) {
         if (failure_tolerance && all_ok && ++failure_count > *failure_tolerance) {
@@ -1855,7 +1864,7 @@ void ECInterface::check_master_state(void) {
         MessageLog::instance()->add(buf);
         std::cout << buf << "\n";
 
-#if 0
+#if 1
         // copy link state change through to clockwork
         MachineInstance *link_status = MachineInstance::find("ETHERCAT_LS");
         if (link_status) {
@@ -1863,7 +1872,7 @@ void ECInterface::check_master_state(void) {
                 link_status->enable();
             }
             const char *state = ms.link_up ? "UP" : "DOWN";
-            SetStateActionTemplate ssat = SetStateActionTemplate("SELF", state);
+            SetStateActionTemplate ssat = SetStateActionTemplate("SELF", Value{state});
             SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(link_status));
             link_status->enqueueAction(ssa);
 
