@@ -1,19 +1,30 @@
 #include "bit_ops.h"
 #include <inttypes.h>
-#include <vector>
+#include <sstream>
+#include <iomanip>
+#include <stdint.h>
 
-#if VERBOSE_DEBUG
-#include <iostream>
-void display(uint8_t *, size_t len);
-#endif
+std::string buffer_to_string(const uint8_t *p, size_t len) {
+    std::stringstream ss;
+    for (size_t i = 0; i < len; ++i) {
+        ss << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
+                  << std::dec;
+    }
+    return ss.str();
+}
+
+std::string buffer_to_string(const std::vector<uint8_t> &buf) {
+    return buffer_to_string(buf.data(), buf.size());
+}
+
 #if VERBOSE_DEBUG
 void show_buffers(uint8_t *dest, uint8_t *src, uint8_t *mask, size_t len) {
     std::cout << "copying masked bits: \n";
-    display(dest, len);
+    std::cout << buffer_to_string(dest, len);
     std::cout << "\n";
-    display(src, len);
+    std::cout << buffer_to_string(src, len);
     std::cout << "\n";
-    display(mask, len);
+    std::cout << buffer_to_string(mask, len);
     std::cout << "\n";
 }
 #endif

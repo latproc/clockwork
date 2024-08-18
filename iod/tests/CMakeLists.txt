@@ -62,7 +62,7 @@ add_executable(test_bit_ops test_bit_ops.cpp
    ${PROJECT_SOURCE_DIR}/src/bit_ops.cpp
 )
 set_target_properties (test_bit_ops PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
-target_link_libraries(test_bit_ops gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+target_link_libraries(test_bit_ops gmock_main cw_client cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_bit_ops COMMAND test_bit_ops)
 

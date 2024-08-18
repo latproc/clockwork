@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <zmq.hpp>
 
+#include "bit_ops.h"
 #include "cJSON.h"
 #include <boost/thread/mutex.hpp>
 #include <list>
@@ -70,21 +71,6 @@ extern void handle_io_sampling(uint64_t clock);
 
 //#define KEEPSTATS
 
-#define VERBOSE_DEBUG 0
-
-
-#if 0
-namespace {
-
-void display(const uint8_t *p, size_t len) {
-    for (size_t i = 0; i < len; ++i) {
-        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
-                  << std::dec;
-    }
-}
-
-}
-#endif
 
 unsigned int CommandSocketInfo::last_idx = 5;
 
@@ -192,16 +178,6 @@ bool ProcessingThread::checkAndUpdateCycleDelay() {
     }
 */
 
-#if VERBOSE_DEBUG
-static void display(std::ostream &out, uint8_t *p) {
-    int max = IOComponent::getMaxIOOffset();
-    int min = IOComponent::getMinIOOffset();
-    for (int i = min; i <= max; ++i) {
-        out << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
-    }
-}
-#endif
-
 class IOLockHelper {
   public:
     IOLockHelper() { IOComponent::lock(); }
@@ -258,7 +234,7 @@ IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
                 update.setData(static_cast<uint8_t*>(message.data()), msglen);
 #if VERBOSE_DEBUG
                 DBG_PROCESSING << std::flush << "got data: ";
-                display(std::cout, update.data());
+                DBG_PROCESSING << buffer_to_string(update.data(), update.data_size());
                 DBG_PROCESSING << "\n" << std::flush;
 #endif
                 ++stage;
@@ -273,7 +249,7 @@ IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
                 update.setMask(static_cast<uint8_t*>(message.data()), msglen);
 #if VERBOSE_DEBUG
                 std::cout << "got mask: ";
-                display(std::cout, update.mask());
+                DBG_PROCESSING << buffer_to_string(update.mask(), update.data_size());
                 std::cout << "\n";
 #endif
                 ++stage;
@@ -505,9 +481,9 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
 #endif
 #if VERBOSE_DEBUG
     std::cout << "got ethercat data\n";
-    display(internals->update.data(), internals->update.data_size());
+    std::cout << buffer_to_string(internals->update.data(), internals->update.data_size());
     std::cout << " : ";
-    display(internals->update.mask(), internals->update.data_size());
+    std::cout << buffer_to_string(internals->update.mask(), internals->update.data_size());
     std::cout << "\n";
 #endif
 
@@ -522,10 +498,6 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
 
 //    if (n) { // io has indicated a change
         if (machine_is_ready) {
-#if VERBOSE_DEBUG
-            std::cout << "Processing got masked EtherCAT data at byte " << (incoming_data_size - n)
-                      << "\n";
-#endif
 #ifdef KEEPSTATS
             AutoStat stats(avg_io_time);
 #endif
@@ -555,11 +527,6 @@ void ProcessingThread::handle_plugin_machines(ProcessingStates processing_state,
         last_checked_plugins = curr_t;
     }
 }
-
-//#include "handle_command.cpp"
-//#include "handle_scheduler.cpp"
-//#include "handle_hardware.cpp"
-//#include "handle_machines.cpp"
 
 void ProcessingThread::operator()() {
 

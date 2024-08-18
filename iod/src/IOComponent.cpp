@@ -76,15 +76,6 @@
 
 namespace {
 
-#if 1
-void display(const uint8_t *p, size_t len) {
-    for (size_t i = 0; i < len; ++i) {
-        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
-    }
-    std::cout << std::dec;
-}
-#endif
-
 void set_mask_bits(const IOAddress & address, uint8_t *result) {
     unsigned int offset = address.io_offset;
     unsigned int bitpos = address.io_bitpos;
@@ -104,7 +95,7 @@ std::vector<uint8_t> generateProcessMask() {
         IOComponent *ioc = *iter++;
         set_mask_bits(ioc->address, result.data());
     }
-    display(result.data(), result.size());
+    std::cout << buffer_to_string(result.data(), result.size());
     std::cout << "\n";
     return result;
 }
@@ -284,16 +275,16 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                 << " waiting: " << updatedComponentsOut.size() << "\n";
             std::cout << "size: " << data_size << "\n";
             std::cout << "pdta: ";
-            display(process_data.getProcessData().data(), data_size);
+            std::cout << buffer_to_string(process_data.getProcessData().data(), data_size);
             std::cout << "\n";
             std::cout << "pmsk: ";
-            display(process_data.getProcessMask().data(), data_size);
+            std::cout << buffer_to_string(process_data.getProcessMask().data(), data_size);
             std::cout << "\n";
             std::cout << "data: ";
-            display(data, data_size);
+            std::cout << buffer_to_string(data, data_size);
             std::cout << "\n";
             std::cout << "mask: ";
-            display(mask, data_size);
+            std::cout << buffer_to_string(mask, data_size);
             std::cout << "\n";
             break;
         }
@@ -360,7 +351,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
 #if VERBOSE_DEBUG
     std::cerr << "updated components: " << updatedComponentsIn.size() << "\n";
     std::cout << "new pdta: ";
-    display(process_data.getProcessData().data(), data_size);
+    std::cout << buffer_to_string(process_data.getProcessData().data(), data_size);
     std::cout << "\n";
 #endif
 
@@ -1196,7 +1187,7 @@ static boost::optional<std::vector<uint8_t>> generateUpdateMask() {
     //if (!found_update) { return {}; }
 #if VERBOSE_DEBUG
     std::cout << "generated mask: ";
-    display(res.data(), max - min + 1);
+    std::cout << buffer_to_string(res.data(), max - min + 1);
     std::cout << "\n";
 #endif
     return res;
@@ -1227,9 +1218,9 @@ IOUpdate IOComponent::getDefaults() {
 
 #if VERBOSE_DEBUG
     std::cout << "preparing to send defaults " << res.data_size() << " bytes\n";
-    display(res.data(), res.data_size());
+    std::cout << buffer_to_string(res.data(), res.data_size());
     std::cout << "\n";
-    display(res.mask(), res.data_size());
+    std::cout << buffer_to_string(res.mask(), res.data_size());
     std::cout << "\n";
 #endif
     return res;

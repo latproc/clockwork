@@ -1440,15 +1440,6 @@ ECInterface *ECInterface::instance() {
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#if VERBOSE_DEBUG
-static void display(uint8_t *p, size_t n) {
-    for (unsigned int i = 0; i < n; ++i) {
-        DBG_ETHERCAT_PACKETS << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
-    }
-    DBG_ETHERCAT_PACKETS << std::dec;
-}
-#endif
-
 void ECInterface::updateDomain() {
     uint32_t size = data.getProcessDataSize();
     uint8_t *p = data.getProcessData().data();
@@ -1592,10 +1583,10 @@ int ECInterface::collectState() {
 #if VERBOSE_DEBUG
     if (!last_pd.empty()) {
         DBG_ETHERCAT_PACKETS << "last:";
-        display(last_pd.data(), domain_size);
+        DBG_ETHERCAT_PACKETS << buffer_to_string(last_pd.data(), domain_size);
     }
     DBG_ETHERCAT_PACKETS << "\ncurr:";
-    display(pd, domain_size);
+    DBG_ETHERCAT_PACKETS << buffer_to_string(pd, domain_size);
     DBG_ETHERCAT_PACKETS << "\n";
 #endif
 
@@ -1624,7 +1615,7 @@ int ECInterface::collectState() {
     last_pd = data.getProcessData();
 #if VERBOSE_DEBUG
     DBG_ETHERCAT_PACKETS << "copied new domain data: ";
-    display(domain1_pd, domain_size);
+    DBG_ETHERCAT_PACKETS << buffer_to_string(domain1_pd, domain_size);
     DBG_ETHERCAT_PACKETS << "\n";
 #endif
     data.setUpdateData(domain1_pd, domain_size);

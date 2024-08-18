@@ -58,20 +58,6 @@
 #define USE_CHRONO 1
 #include "clock_sync.h"
 
-#define VERBOSE_DEBUG 0
-
-namespace {
-
-void display(const uint8_t *p, size_t len) {
-    for (size_t i = 0; i < len; ++i) {
-        std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i]
-                  << std::dec;
-    }
-}
-
-}
-
-
 extern bool machine_is_ready; // unsafe?
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
 static bool machine_was_ready = false;
@@ -162,7 +148,7 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
 #if VERBOSE_DEBUG
                 if (driver_state == s_driver_init) {
                     std::cout << "ecat_thread sending :";
-                    display(upd_data.data(), size);
+                    std::cout << buffer_to_string(upd_data.data(), size);
                     std::cout << ":\n";
                 }
 #endif
@@ -182,7 +168,7 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
 #if VERBOSE_DEBUG
                 if (false) {
                     std::cout << "ec&";
-                    display(mask, size);
+                    std::cout << buffer_to_string(mask, size);
                     std::cout << "\n";
                 }
 #endif

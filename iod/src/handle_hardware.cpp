@@ -53,7 +53,9 @@ void ProcessingThread::handle_hardware(
                             memcpy(iomsg.data(), (void *)upd.data(), size);
                             ecat_out.send(iomsg, ZMQ_SNDMORE);
 #if VERBOSE_DEBUG
-                            DBG_ETHERCAT << "sending to EtherCAT: "; display(upd.data()); std::cout << "\n";
+                            DBG_ETHERCAT << "sending to EtherCAT: ";
+                            DBG_ETHERCAT << buffer_to_string(upd.data());
+                            DBG_ETHERCAT << "\n";
 #endif
                             ++stage;
                         }
@@ -61,7 +63,9 @@ void ProcessingThread::handle_hardware(
                             zmq::message_t iomsg(size);
                             memcpy(iomsg.data(), (void *)upd.mask(), size);
 #if VERBOSE_DEBUG
-                            DBG_ETHERCAT << "using mask: "; display(std::cout, upd.mask()); std::cout << "\n";
+                            DBG_ETHERCAT << "using mask: ";
+                            DBG_ETHERCAT << buffer_to_string(std::cout, upd.mask());
+                            DBG_ETHERCAT << "\n";
 #endif
                             ecat_out.send(iomsg);
                             ++stage;
