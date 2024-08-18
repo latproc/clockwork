@@ -562,7 +562,7 @@ void ProcessingThread::operator()() {
     zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_PAIR);
     resource_mgr.connect("inproc://resource_mgr");
 
-    zmq::socket_t ecat_sync(*MessagingInterface::getContext(), ZMQ_REQ);
+    zmq::socket_t ecat_sync(*MessagingInterface::getContext(), ZMQ_PAIR);
     ecat_sync.connect("inproc://ethercat_sync");
 
     zmq::socket_t command_sync(*MessagingInterface::getContext(), ZMQ_PAIR);
@@ -583,7 +583,7 @@ void ProcessingThread::operator()() {
     safeSend(ecat_sync, "go", 2); // collect state
     usleep(10000);
 
-    zmq::socket_t ecat_out(*MessagingInterface::getContext(), ZMQ_REQ);
+    zmq::socket_t ecat_out(*MessagingInterface::getContext(), ZMQ_PAIR);
     ecat_out.connect("inproc://ethercat_output");
 
     checkAndUpdateCycleDelay();
@@ -711,7 +711,6 @@ void ProcessingThread::operator()() {
         */
         if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
             HandleIncomingEtherCatData(io_work_queue, curr_t, last_sample_poll, avg_io_time);
-            safeSend(ecat_sync, "go", 2);
         }
         if (program_done) { break; }
         if (machine_is_ready && processing_state != ProcessingStates::eStableStates && !io_work_queue.empty()) {

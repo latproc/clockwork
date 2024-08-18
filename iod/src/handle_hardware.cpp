@@ -21,7 +21,6 @@ void ProcessingThread::handle_hardware(
             if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
                 DBG_INITIALISATION << "Sending defaults to EtherCAT\n";
                 upd = IOComponent::getDefaults();
-                //IOComponent::setHardwareState(IOComponent::s_operational);
             }
             else {
                 upd = IOComponent::getUpdates();
@@ -42,7 +41,6 @@ void ProcessingThread::handle_hardware(
                             auto packet_type = defaults_sent
                                 ? IOInterface::MessageType::PROCESS_DATA
                                 : IOInterface::MessageType::DEFAULT_DATA;
-                            defaults_sent = true;
                             zmq::message_t iomsg(1);
                             memcpy(iomsg.data(), (void *)&packet_type, 1);
                             ecat_out.send(iomsg, ZMQ_SNDMORE);
@@ -86,11 +84,14 @@ void ProcessingThread::handle_hardware(
                         assert(false);
                     }
                 }
-                update_state = UpdateStates::s_update_sent;
                 IOComponent::updatesSent(true);
             }
             else {
                 std::cout << "update data is empty\n";
             }
+        }
+        if (!defaults_sent) {
+            defaults_sent = true;
+            IOComponent::setHardwareState(IOComponent::s_operational);
         }
 }

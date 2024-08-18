@@ -352,7 +352,6 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_
     }
     else if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
         std::cout << "---------------- Default data received\n";
-        safeSend(out_sock, "ok", 2);
     }
     else if (packet_type == IOInterface::MessageType::PROCESS_DATA) {
         auto & data = ECInterface::instance()->data;
@@ -377,7 +376,6 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_
         else if (!data.default_data) {
             MessageLog::instance()->add("ecat_thread: no default data set yet, cannot update domain");
         }
-        safeSend(out_sock, "ok", 2);
     }
     return true;
 }
@@ -393,11 +391,11 @@ void EtherCATThread::operator()() {
     uint64_t then = nowMicrosecs();
     ECInterface::instance()->setReferenceTime(then % 0x100000000);
 
-    sync_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REP);
+    sync_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
     sync_sock->bind("inproc://ethercat_sync");
 
     // when clockwork has output to send to EtherCAT it sends it here
-    zmq::socket_t out_sock(*MessagingInterface::getContext(), ZMQ_REP);
+    zmq::socket_t out_sock(*MessagingInterface::getContext(), ZMQ_PAIR);
     out_sock.bind("inproc://ethercat_output");
 
     uint64_t global_clock = 0;
@@ -435,7 +433,7 @@ void EtherCATThread::operator()() {
 
         // keep polling ethercat if we are not online but do not
         // exchange clockwork machine state
-        next_ecat_receive = microsecs() + period / 2;
+        next_ecat_receive = now + period;
         ECInterface::instance()->receiveState();
 
         if (machine_is_ready && !ECInterface::instance()->data.getProcessMask().empty()) {
@@ -460,21 +458,8 @@ void EtherCATThread::operator()() {
                 need_ping = false;
                 int stage = sendMultiPart(sync_sock, global_clock);
                 assert(stage == 5);
-                status = e_update; // sent update to clockwork, waiting for response
-            }
-            if (status == e_update && getEtherCatResponse(*sync_sock)) {
-                if (keep_alive) {
-                    uint64_t this_ping_time = nowMicrosecs();
-                    if (last_ping && keep_alive_stat) {
-                        keep_alive_stat->add(keep_alive - (this_ping_time - last_ping));
-                    }
-                    last_ping = this_ping_time;
-                }
-                status = e_collect;
             }
         }
-        //else
-        //    DBG_ETHERCAT << "machine is not ready; no state collected\n";
 
         // check for communication from clockwork
         if (getClockworkMessage(out_sock, ec_ok) && microsecs() < next_ecat_receive - 300) {
