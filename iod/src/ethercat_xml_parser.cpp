@@ -157,7 +157,7 @@ uint64_t EtherCATXMLParser::intFromHex(const char *s) {
     errno = 0;
     uint64_t res = strtoll(s, &rem, 16);
     if (errno != 0) {
-        DBG_ETHERCAT << " error " << strerror(errno) << " converting " << s << " to an integer\n";
+        DBG_ETHERCAT_INIT << " error " << strerror(errno) << " converting " << s << " to an integer\n";
         return 0;
     }
     return res;
@@ -187,12 +187,12 @@ std::string EtherCATXMLParser::entry_name(const std::string &s) {
 }
 
 void EtherCATXMLParser::enter(ParserState new_state) {
-    //DBG_ETHERCAT << state << "->" << new_state << "\n";
+    //DBG_ETHERCAT_INIT << state << "->" << new_state << "\n";
     state = new_state;
 }
 
 void EtherCATXMLParser::reenter(ParserState new_state) {
-    //DBG_ETHERCAT << state << "->" << new_state << "\n";
+    //DBG_ETHERCAT_INIT << state << "->" << new_state << "\n";
     state = new_state;
 }
 
@@ -201,10 +201,10 @@ void EtherCATXMLParser::displayAttribute(xmlTextReaderPtr reader, const char *at
     char *attr = (char *)xmlTextReaderGetAttribute(reader, BAD_CAST attr_name);
     if (attr) {
         if (label) {
-            DBG_ETHERCAT << label << attr;
+            DBG_ETHERCAT_INIT << label << attr;
         }
         else {
-            DBG_ETHERCAT << " " << attr_name << ": " << attr;
+            DBG_ETHERCAT_INIT << " " << attr_name << ": " << attr;
         }
         free(attr);
     }
@@ -222,12 +222,12 @@ void EtherCATXMLParser::displayPath() {
     std::list<std::string>::iterator iter = current_path.begin();
     while (iter != current_path.end()) {
         const std::string &s = *iter++;
-        DBG_ETHERCAT << s;
+        DBG_ETHERCAT_INIT << s;
         if (iter != current_path.end()) {
-            DBG_ETHERCAT << "/";
+            DBG_ETHERCAT_INIT << "/";
         }
     }
-    DBG_ETHERCAT << "\n";
+    DBG_ETHERCAT_INIT << "\n";
 }
 
 /*
@@ -258,7 +258,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
     std::ostream_iterator<char> out(result, "");
     if (name) {
         int kind = xmlTextReaderNodeType(reader);
-        //      if (matched_device)DBG_ETHERCAT << state << " " << kind << " " << name << "\n";
+        //      if (matched_device)DBG_ETHERCAT_INIT << state << " " << kind << " " << name << "\n";
         if (kind == XML_READER_TYPE_END_ELEMENT) {
             if (current_path.size()) {
                 current_path.pop_back();
@@ -282,10 +282,10 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 // finished the device, report the sync managers collected if any
                 if (current_device && current_device->config.num_entries) {
                     unsigned int n = current_device->config.num_syncs;
-                    DBG_ETHERCAT << n << " sync managers in configuration\n";
+                    DBG_ETHERCAT_INIT << n << " sync managers in configuration\n";
                     ec_sync_info_t *si = current_device->config.c_syncs;
                     for (unsigned int i = 0; i < n; ++i) {
-                        DBG_ETHERCAT << "sm entry: " << i << " index: " << (int)si->index
+                        DBG_ETHERCAT_INIT << "sm entry: " << i << " index: " << (int)si->index
                                      << " direction: " << si->dir << " num pdos: " << si->n_pdos
                                      << "\n";
                         ++si;
@@ -347,7 +347,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                         }
                     }
                     else {
-                        DBG_ETHERCAT << "no match for device with pc: " << std::hex << pc << "/"
+                        DBG_ETHERCAT_INIT << "no XML match for device with pc: " << std::hex << pc << "/"
                                      << rn << std::dec << " (" << attributes["ProductCode"] << "/"
                                      << attributes["RevisionNo"] << std::dec << ")\n";
                     }
@@ -392,12 +392,12 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
             }
             if (kind == XML_READER_TYPE_TEXT && matched_device) {
                 if (matched_device) {
-                    DBG_ETHERCAT << "MATCHED Type:\n";
+                    DBG_ETHERCAT_INIT << "MATCHED Type:\n";
                 }
                 if (xmlTextReaderHasValue(reader)) {
-                    DBG_ETHERCAT << xmlTextReaderConstValue(reader) << "\n";
+                    DBG_ETHERCAT_INIT << xmlTextReaderConstValue(reader) << "\n";
                 }
-                DBG_ETHERCAT << " ProductCode: " << attributes["ProductCode"] << " "
+                DBG_ETHERCAT_INIT << " ProductCode: " << attributes["ProductCode"] << " "
                              << " RevisionNo: " << attributes["RevisionNo"] << " " << "\n";
             }
             if (kind == XML_READER_TYPE_END_ELEMENT && typeKey == name) {
@@ -411,11 +411,11 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
             }
             if (matched_device && (kind == XML_READER_TYPE_TEXT || kind == XML_READER_TYPE_CDATA)) {
                 //if (attributes.find("LcId") == attributes.end())
-                DBG_ETHERCAT << " Name: ";
+                DBG_ETHERCAT_INIT << " Name: ";
                 if (xmlTextReaderHasValue(reader)) {
-                    DBG_ETHERCAT << xmlTextReaderConstValue(reader);
+                    DBG_ETHERCAT_INIT << xmlTextReaderConstValue(reader);
                 }
-                DBG_ETHERCAT << "\n";
+                DBG_ETHERCAT_INIT << "\n";
             }
             if (kind == XML_READER_TYPE_END_ELEMENT && nameKey == name) {
                 enter(in_device);
@@ -427,7 +427,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 // node but since we test matched_device we know it is occuring
                 // within a device
                 if (matched_device && altSmMappingKey == name) {
-                    DBG_ETHERCAT << "Found alternative SM mapping\n";
+                    DBG_ETHERCAT_INIT << "Found alternative SM mapping\n";
                     int num_alts = current_device->sm_alternatives.size();
                     AltSm *sm = new AltSm;
                     if (xmlTextReaderHasAttributes(reader)) {
@@ -472,7 +472,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 }
                 std::string cb = attributes["ControlByte"];
                 uint8_t b_cb = 0xff & intFromStr(cb.c_str());
-                DBG_ETHERCAT << "SM. Name: " << attributes["Name"] << " ControlByte: " << cb << " "
+                DBG_ETHERCAT_INIT << "SM. Name: " << attributes["Name"] << " ControlByte: " << cb << " "
                              << (b_cb & 0x0c ? "Output" : "Input") << "\n";
                 unsigned int &ns = current_device->config.num_syncs;
                 ec_sync_info_t *si = &current_device->config.c_syncs[ns];
@@ -525,7 +525,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                             current_device->config.num_entries - current_pdo_start_entry;
                         pd->entries = &current_device->config.c_entries[current_pdo_start_entry];
 
-                        DBG_ETHERCAT << "Added pdo entry " << std::hex << "0x" << pd->index
+                        DBG_ETHERCAT_INIT << "Added pdo entry " << std::hex << "0x" << pd->index
                                      << std::dec << ", " << pd->n_entries << " entries to sm "
                                      << current_sm_index << "\n";
                         ++n;
@@ -540,15 +540,15 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
             }
 
             if (matched_device && (kind == XML_READER_TYPE_TEXT || kind == XML_READER_TYPE_CDATA)) {
-                DBG_ETHERCAT << "PDO: ";
+                DBG_ETHERCAT_INIT << "PDO: ";
                 if (xmlTextReaderHasValue(reader)) {
                     current_pdo_name = (const char *)xmlTextReaderConstValue(reader);
-                    DBG_ETHERCAT << current_pdo_name;
+                    DBG_ETHERCAT_INIT << current_pdo_name;
                 }
                 else {
                     current_pdo_name = "UNNAMED PDO"; // unexpected.. TBD can this happen?
                 }
-                DBG_ETHERCAT << "\n";
+                DBG_ETHERCAT_INIT << "\n";
             }
 
         } break;
@@ -581,12 +581,12 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                         current_sm_index = intFromStr(attributes["Sm"].c_str());
                         capturing_pdo = true;
                     }
-                    DBG_ETHERCAT << "PDO Index: ";
-                    DBG_ETHERCAT << "0x" << std::hex << current_pdo_index << std::dec
+                    DBG_ETHERCAT_INIT << "PDO Index: ";
+                    DBG_ETHERCAT_INIT << "0x" << std::hex << current_pdo_index << std::dec
                                  << " sm index " << current_alt_sm_mapping_index << " ("
                                  << attributes["Sm"] << ") " << (capturing_pdo ? " (USE)" : "");
                 }
-                DBG_ETHERCAT << "\n";
+                DBG_ETHERCAT_INIT << "\n";
             }
         } break;
         case in_pdo_entry: {
@@ -594,19 +594,19 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 if (capturing_pdo) {
                     // && entry_attributes.find("DataType") != entry_attributes.end()) {
                     unsigned int &n(current_device->config.num_entries);
-                    DBG_ETHERCAT << "\n";
-                    DBG_ETHERCAT << "Entry " << num_device_entries << "\n";
+                    DBG_ETHERCAT_INIT << "\n";
+                    DBG_ETHERCAT_INIT << "Entry " << num_device_entries << "\n";
 
                     std::map<std::string, std::string>::iterator iter = entry_attributes.begin();
                     while (iter != entry_attributes.end()) {
                         const std::pair<std::string, std::string> &item = *iter++;
-                        DBG_ETHERCAT << "\t" << item.first << " " << item.second << "\n";
+                        DBG_ETHERCAT_INIT << "\t" << item.first << " " << item.second << "\n";
                     }
                     ec_pdo_entry_info_t *e = &current_device->config.c_entries[n];
                     e->index = intFromStr(entry_attributes["Index"].c_str());
                     e->subindex = intFromStr(entry_attributes["SubIndex"].c_str());
                     e->bit_length = intFromStr(entry_attributes["BitLen"].c_str());
-                    DBG_ETHERCAT << "Added entry: " << std::hex << "0x" << e->index << std::dec
+                    DBG_ETHERCAT_INIT << "Added entry: " << std::hex << "0x" << e->index << std::dec
                                  << ", " << (int)e->subindex << ", " << (int)e->bit_length << "\n";
 
                     EntryDetails *ed = &current_device->config.c_entry_details[n];
@@ -618,7 +618,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                     ed->pdo_index = npdos;
                     ed->sm_index = current_sm_index;
 
-                    DBG_ETHERCAT << "Added entry detail: " << ed->name << ", " << ed->entry_index
+                    DBG_ETHERCAT_INIT << "Added entry detail: " << ed->name << ", " << ed->entry_index
                                  << ", " << ed->pdo_index << ", " << ed->sm_index << "\n";
                     ++n;
                 }
@@ -626,9 +626,9 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 reenter(in_pdo);
             }
             else if (kind == XML_READER_TYPE_ELEMENT) {
-                //DBG_ETHERCAT << "\t" << name << " ";
+                //DBG_ETHERCAT_INIT << "\t" << name << " ";
                 if (xmlTextReaderHasValue(reader)) {
-                    DBG_ETHERCAT << xmlTextReaderConstValue(reader);
+                    DBG_ETHERCAT_INIT << xmlTextReaderConstValue(reader);
                 }
             }
             else if (matched_device &&
@@ -673,13 +673,13 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                     current_alt_sm->is_selected = true;
                     selected_alt_sm = current_alt_sm;
                 }
-                DBG_ETHERCAT << "SM Name: " << sm_name;
+                DBG_ETHERCAT_INIT << "SM Name: " << sm_name;
                 if (current_alt_sm && current_alt_sm->is_default) {
-                    DBG_ETHERCAT << " (Default) ";
+                    DBG_ETHERCAT_INIT << " (Default) ";
                 }
 
                 unsigned int curr_mapping = intFromStr(attributes["No"].c_str());
-                DBG_ETHERCAT << " No: " << curr_mapping
+                DBG_ETHERCAT_INIT << " No: " << curr_mapping
                              << (matched_device->selected_alt_sm_name.length() &&
                                          matched_device->selected_alt_sm_name == sm_name
                                      ? " [selected]"
@@ -689,7 +689,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 if (count) {
                     unsigned int *i = current_alt_sm->mappings[0]->pdos;
                     while (count--) {
-                        DBG_ETHERCAT << "0x" << std::hex << *i << std::dec << (count ? ", " : "\n");
+                        DBG_ETHERCAT_INIT << "0x" << std::hex << *i << std::dec << (count ? ", " : "\n");
                         ++i;
                     }
                 }
@@ -737,7 +737,7 @@ bool EtherCATXMLParser::loadDeviceConfigurationXML(const char *filename) {
         if (!info) {
             continue;
         }
-        DBG_ETHERCAT << "looking for : " << std::hex << "0x" << info->product_code << "/"
+        DBG_ETHERCAT_INIT << "looking for : " << std::hex << "0x" << info->product_code << "/"
                      << info->revision_no << std::dec << "\n";
     }
     reader = xmlReaderForFile(filename, 0, 0);

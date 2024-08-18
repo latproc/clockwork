@@ -749,22 +749,22 @@ void ECInterface::configureModules() {
     for (unsigned int mi = 0; mi < modules.size(); ++mi) {
         ECModule *m = findModule(mi);
         if (!m) {
-            DBG_ETHERCAT << __FUNCTION__ << " missing ECModule at position " << mi << "\n";
+            DBG_ETHERCAT_INIT << __FUNCTION__ << " missing ECModule at position " << mi << "\n";
         }
         assert(m);
 
         if (!m->ecrtMasterSlaveConfig(master)) {
-            DBG_ETHERCAT << "Failed to get slave configuration.\n";
+            DBG_ETHERCAT_INIT << "Failed to get slave configuration.\n";
             return;
         }
 
         if (m->sync_count == 0) {
-            DBG_ETHERCAT << "Warning: configuring module " << m->position
+            DBG_ETHERCAT_INIT << "Warning: configuring module " << m->position
                          << " with no sync managers\n";
         }
 
         assert(m->slave_config);
-        DBG_ETHERCAT << "\n\nConfiguring module " << m->position << ": " << m->name << "\n";
+        DBG_ETHERCAT_INIT << "\n\nConfiguring module " << m->position << ": " << m->name << "\n";
         unsigned int module_offset_idx = 0;
 
         for (unsigned int i = 0; i < m->sync_count; ++i) {
@@ -777,7 +777,7 @@ void ECInterface::configureModules() {
                 m->syncs[i].watchdog_mode = EC_WD_DEFAULT;
             }
 
-            DBG_ETHERCAT_CALLS << "ecrt_config_sync_manager\n";
+            DBG_ETHERCAT_INIT << "ecrt_config_sync_manager\n";
             res = ecrt_slave_config_sync_manager(m->slave_config, m->syncs[i].index,
                                                  m->syncs[i].dir, m->syncs[i].watchdog_mode);
             if (res < 0) {
@@ -786,7 +786,7 @@ void ECInterface::configureModules() {
                          "Error %d setting WD enable state on sync manager %d for module %d", res,
                          i, m->position);
                 MessageLog::instance()->add(buf);
-                DBG_ETHERCAT << buf << "\n";
+                DBG_ETHERCAT_INIT << buf << "\n";
             }
             if (m->syncs[i].n_pdos && m->syncs[i].pdos) {
                 DBG_ETHERCAT_CALLS << "ecrt_slave_config_pdo_assign_clear\n";
@@ -807,7 +807,7 @@ void ECInterface::configureModules() {
             }
 #endif
 
-            DBG_ETHERCAT << "---- adding pdo assignments for sm " << i << " " << m->syncs[i].n_pdos
+            DBG_ETHERCAT_INIT << "---- adding pdo assignments for sm " << i << " " << m->syncs[i].n_pdos
                          << " items\n";
             for (unsigned int j = 0; j < m->syncs[i].n_pdos; ++j) {
                 DBG_ETHERCAT_CALLS << "ecrt_slave_config_pdo_assign_add" << std::hex
@@ -821,7 +821,7 @@ void ECInterface::configureModules() {
                               << std::dec << "\n";
                 }
                 else {
-                    DBG_ETHERCAT << "**** added pdo assignment " << " to sm " << i
+                    DBG_ETHERCAT_INIT << "**** added pdo assignment " << " to sm " << i
                                  << " pdo: " << std::hex << "0x" << m->syncs[i].pdos[j].index
                                  << std::dec << " adding " << m->syncs[i].pdos[j].n_entries
                                  << " entries\n"
@@ -846,7 +846,7 @@ void ECInterface::configureModules() {
                         assert(false);
                     }
                     else {
-                        DBG_ETHERCAT << "Successfully added entry item " << module_offset_idx
+                        DBG_ETHERCAT_INIT << "Successfully added entry item " << module_offset_idx
                                      << " at index " << std::hex << "0x" << m->syncs[i].pdos[j].index << " " << std::dec
                                      << " subindex " << (int)m->syncs[i].pdos[j].entries[k].subindex
                                      << " length "   << (int)m->syncs[i].pdos[j].entries[k].bit_length
@@ -938,7 +938,7 @@ tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool re
 
     if (module) {
         boost::recursive_mutex::scoped_lock lock(modules_mutex);
-        DBG_ETHERCAT << "adding module " << module->name << " pos: " << module->position
+        DBG_ETHERCAT_INIT << "adding module " << module->name << " pos: " << module->position
                      << " to io\n";
         if (modules.size() == module->position) {
             modules.push_back(module);
@@ -952,7 +952,7 @@ tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool re
                     ss << "similar module at " << module->position << " replaced"
                        << "\ncompare old,new:\n"
                        << compare_modules(*m, *module);
-                    DBG_ETHERCAT << ss.str() << "\n";
+                    DBG_ETHERCAT_INIT << ss.str() << "\n";
                     delete m;
                 }
                 else {
@@ -1036,7 +1036,7 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
         total_syncs += slave.sync_count;
         assert(total_syncs < estimated_max_syncs);
         for (i = 0; i < slave.sync_count; i++) {
-            DBG_ETHERCAT << "ecrt_master_get_sync_manager\n";
+            DBG_ETHERCAT_CALLS << "ecrt_master_get_sync_manager\n";
             int rc = ecrt_master_get_sync_manager(m, slave.position, i, &c_syncs[i]);
             assert(rc == 0);
 
@@ -1055,7 +1055,7 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
                     std::flush(std::cerr);
                 }
                 for (j = 0; j < pdo_count; j++) {
-                    DBG_ETHERCAT << "ecrt_master_get_pdo(..., sm: " << i << ", pdo: " << j << ")"
+                    DBG_ETHERCAT_CALLS << "ecrt_master_get_pdo(..., sm: " << i << ", pdo: " << j << ")"
                                  << "\n";
                     ecrt_master_get_pdo(m, slave.position, i, j, &pdo);
                     c_pdos[j + pdo_pos].index = pdo.index;
@@ -1073,12 +1073,12 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
                         assert(total_entries < estimated_max_entries);
                         ec_pdo_entry_info_t entry = {};
                         for (k = 0; k < pdo.n_entries; k++) {
-                            DBG_ETHERCAT << "ecrt_master_get_pdo_entry\n";
+                            DBG_ETHERCAT_CALLS << "ecrt_master_get_pdo_entry\n";
                             ecrt_master_get_pdo_entry(m, slave.position, i, j, k, &entry);
                             char entry_name[100];
                             snprintf(entry_name, 100, "entry-%X-%X", entry.index, entry.subindex);
 
-                            DBG_ETHERCAT << " entry: " << k << "{" << entry_pos << ", " << std::hex
+                            DBG_ETHERCAT_INIT << " entry: " << k << "{" << entry_pos << ", " << std::hex
                                          << (int)entry.index << ", " << std::dec
                                          << (int)entry.subindex << ", " << (int)entry.bit_length
                                          << ", " << entry_name << "}";
@@ -1106,7 +1106,7 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
         c_pdos = 0;
         c_entries = 0;
     }
-    DBG_ETHERCAT << "ECInterface adding module " << slave.name << "\n";
+    DBG_ETHERCAT_INIT << "ECInterface adding module " << slave.name << "\n";
     ECModule *module = new ECModule();
     module->name = slave.name;
     module->alias = 0;
@@ -1138,7 +1138,7 @@ void collectEtherCatModules() {
         addEtherCatSlave(ECInterface::master, slave);
         ++pos;
     }
-    DBG_ETHERCAT << ss.str() << "\n";
+    DBG_ETHERCAT_INIT << ss.str() << "\n";
 }
 
 bool ECInterface::deactivate() {
@@ -1153,7 +1153,7 @@ bool ECInterface::deactivate() {
         ecrt_master_deactivate(master);
         snprintf(buf, 200, "EtherCAT interface: recreating domain");
         MessageLog::instance()->add(buf);
-        DBG_ETHERCAT << buf << "\n";
+        DBG_ETHERCAT_INIT << buf << "\n";
         DBG_ETHERCAT_CALLS << "ecrt_master_create_domain\n";
         domain1 = ecrt_master_create_domain(master);
         assert(domain1 != 0);

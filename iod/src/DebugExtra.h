@@ -50,6 +50,7 @@ class DebugExtra {
     int DEBUG_ETHERCAT_CALLS;
     int DEBUG_ETHERCAT_SDO;
     int DEBUG_ETHERCAT_PACKETS;
+    int DEBUG_ETHERCAT_INIT;
 
   private:
     DebugExtra();
@@ -75,6 +76,7 @@ class DebugExtra {
 #define DBG_ETHERCAT_CALLS MSG(DebugExtra::instance()->DEBUG_ETHERCAT_CALLS)
 #define DBG_ETHERCAT_SDO MSG(DebugExtra::instance()->DEBUG_ETHERCAT_SDO)
 #define DBG_ETHERCAT_PACKETS MSG(DebugExtra::instance()->DEBUG_ETHERCAT_PACKETS)
+#define DBG_ETHERCAT_INIT MSG(DebugExtra::instance()->DEBUG_ETHERCAT_INIT)
 
 #define DBG_M_PARSER M_MSG(DebugExtra::instance()->DEBUG_PARSER, this)
 #define DBG_M_PREDICATES M_MSG(DebugExtra::instance()->DEBUG_PREDICATES, this)
