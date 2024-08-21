@@ -55,7 +55,7 @@
 //#include "SetStateAction.h"
 //
 //#define USE_RTC 1
-#define USE_CHRONO 1
+//#define USE_CHRONO 1
 #include "clock_sync.h"
 
 extern bool machine_is_ready; // unsafe?
@@ -386,7 +386,7 @@ void EtherCATThread::operator()() {
     Statistic::add(keep_alive_stat);
 
     unsigned long freq = ECInterface::FREQUENCY;
-    init_clock_sync();
+    ClockSync clock_sync;
 
     uint64_t then = nowMicrosecs();
     ECInterface::instance()->setReferenceTime(then % 0x100000000);
@@ -470,6 +470,5 @@ void EtherCATThread::operator()() {
         ECInterface::instance()->sendUpdates();
         checkAndUpdateCycleDelay();
     }
-    clock_stop();
     keep_alive_stat->report(std::cout);
 }

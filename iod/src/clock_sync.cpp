@@ -1,3 +1,4 @@
+#include "clock_sync.h"
 #include <stdint.h>
 
 #ifdef USE_CHRONO
@@ -307,7 +308,11 @@ void clock_sync() {
 #endif
 #endif
 
-void init_clock_sync() {
+#ifdef USE_CHRONO
+ClockSync::ClockSync() : timer_thread(timer_thread_proc) {
+#else
+ClockSync::ClockSync() {
+#endif
 #ifdef USE_CHRONO
     if (timer_pipe_fds[0] == -1) {
         if (pipe(timer_pipe_fds) == -1) {
@@ -315,7 +320,6 @@ void init_clock_sync() {
         }
     }
 
-    std::thread timer_thread(timer_thread_proc);
 #endif
 
 #ifdef USE_SIGNALLER
@@ -324,14 +328,17 @@ void init_clock_sync() {
     int res = zmq_setsockopt(clock_sync, ZMQ_SUBSCRIBE, "", 0);
     assert(res == 0);
 #endif
-
 }
 
-void clock_stop() {
+ClockSync::~ClockSync() {
 #ifdef USE_CHRONO
     send_stop_message();
     std::lock_guard<std::mutex> lock(pipe_mtx);
     pipe_cv.notify_one();  // Wake up sync if it is waiting
     timer_thread.join();
 #endif
+}
+
+void ClockSync::operator()() {
+    clock_sync();
 }

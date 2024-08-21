@@ -1,8 +1,15 @@
 #pragma once
 
-void init_clock_sync();
+#include <thread>
+
+struct ClockSync {
+#ifdef USE_CHRONO
+    std::thread timer_thread;
+#endif
+    ClockSync();
+    ~ClockSync();
+    void operator()();
+};
 
 // block until the next clock tick
-void clock_sync();
 
-void clock_stop();
