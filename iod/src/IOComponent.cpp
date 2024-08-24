@@ -329,9 +329,9 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                 uint8_t bitmask = 0x80;
                 int j = 7;
                 while (bitmask) {
-                    if (*m & bitmask) {
+                    if (ch & bitmask) {
                         IOComponent *ioc = (*indexed_components)[i*8 + j];
-                        if (just_added == ioc) { continue; }
+                        if (just_added == ioc) {--j; bitmask >>= 1; continue; }
                         if (ioc && ioc != just_added && ch & bitmask) { // TODO: consider ioc->last_event?
                             just_added = ioc;
                             boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
