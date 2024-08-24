@@ -234,6 +234,7 @@ class CounterInternals;
 class Counter : public IOComponent {
   public:
     Counter(IOAddress addr);
+    ~Counter();
     const char *type() override { return "Counter"; }
     void update(); // clockwork uses this to notify of updates
     int64_t filter(int64_t raw) override;

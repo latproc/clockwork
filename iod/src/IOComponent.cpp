@@ -793,82 +793,6 @@ int64_t AnalogueInput::filter(int64_t raw) {
 
 void AnalogueInput::update() { config->property_changed = false; }
 
-class CounterInternals {
-  public:
-    CircularBuffer *positions;
-    const int64_t
-        *tolerance; // some filters use a tolerance settable by the user in the "tolerance" property
-    const int64_t *
-        filter_len; // the user can adjust the filter length of some filters via a "filter_len" property
-    const int64_t
-        *position_history;          // the amount of position history to use in determining movement
-    const int64_t *speed_tolerance; // the tolerance used in determining movement
-    const int64_t *input_scale;     // input readings are divided by this amount
-    int64_t last_sent;  // this is the value to send unless the read value moves away from the mean
-    int64_t prev_sent;  // this is the value to send unless the read value moves away from the mean
-    uint64_t last_time; // the last time we calculated speed;_
-    static int64_t default_tolerance;
-    static int64_t default_filter_len;
-    static int64_t default_position_history;
-    static int64_t default_speed_tolerance;
-    static int64_t default_input_scale;
-    int64_t speed;
-    uint16_t buffer_len;
-    FloatBuffer speeds;
-    ssize_t rate_len;
-
-    CounterInternals()
-        : positions(0), tolerance(&default_tolerance), filter_len(&default_filter_len),
-          position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
-          input_scale(&default_input_scale), last_sent(0), prev_sent(0), last_time(0), speed(0),
-          buffer_len(200), speeds(4), rate_len(4) {
-        positions = createBuffer(buffer_len);
-    }
-
-    void update(uint64_t read_time) {
-        if (prev_sent == 0) {
-            prev_sent = last_sent;
-        }
-        if (last_time == 0) {
-            last_time = read_time;
-            prev_sent = last_sent;
-            speed = 0.0;
-            speeds.append(speed);
-        }
-        else if (read_time - last_time >= 10000) {
-            /*
-                    double dt = (double)(read_time - last_time);
-                    double dv = (double)(last_sent - prev_sent);
-                    speed = (int64_t)( dv / dt * 1000000.0) ;
-            */
-            rate_len = findMovement(positions, 20, static_cast<size_t>(*position_history));
-            if (rate_len < *position_history) {
-                speed = 1000000.0 * rate(positions, (rate_len < 4) ? 4 : rate_len);
-            }
-            else {
-                speed = 0.0;
-            }
-            speeds.append(speed);
-            last_time = read_time;
-            prev_sent = last_sent;
-        }
-    }
-
-    double filter() {
-        if ((unsigned int)bufferLength(positions) < 9) {
-            return getBufferValue(positions, 0);
-        }
-        double c[] = {0.081, 0.215, 0.541, 0.865, 1, 0.865, 0.541, 0.215, 0.081};
-        double res = 0;
-        for (size_t i = 0; i < 9; ++i) {
-            double f = (double)getBufferValue(positions, i);
-            res += f * c[i];
-        }
-
-        return res;
-    }
-};
-
 DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {}
 
 int64_t DigitalValue::filter(int64_t val) {
@@ -883,98 +807,29 @@ int64_t DigitalValue::filter(int64_t val) {
     return val;
 }
 
-int64_t CounterInternals::default_tolerance = 1;
-int64_t CounterInternals::default_filter_len = 8;
-int64_t CounterInternals::default_position_history = 20;
-int64_t CounterInternals::default_speed_tolerance = 10;
-int64_t CounterInternals::default_input_scale = 1;
+class CounterInternals {
+    public:
+        void update(uint64_t read_time);
+        double filter();
+        const int64_t *input_divisor = nullptr;
+};
 
 Counter::Counter(IOAddress addr) : IOComponent(addr), internals(0) {
     internals = new CounterInternals;
     regular_polls.insert(this);
 }
 
+Counter::~Counter() { delete internals; }
+
 void Counter::setupProperties(MachineInstance *m) {
-    const Value &v = m->getValue("tolerance");
+    const Value &v = m->getValue("input_scale");
     if (v.kind == Value::t_integer) {
-        internals->tolerance = &v.iValue;
-    }
-    const Value &v3 = m->getValue("filter_len");
-    if (v3.kind == Value::t_integer) {
-        internals->filter_len = &v3.iValue;
-    }
-    const Value &v4 = m->getValue("speed_tolerance");
-    if (v4.kind == Value::t_integer) {
-        internals->speed_tolerance = &v4.iValue;
-    }
-    const Value &v5 = m->getValue("position_history");
-    if (v5.kind == Value::t_integer) {
-        internals->position_history = &v5.iValue;
-    }
-    const Value &v6 = m->getValue("input_scale");
-    if (v6.kind == Value::t_integer) {
-        internals->input_scale = &v6.iValue;
+        internals->input_divisor = &v.iValue;
     }
 }
 
 int64_t Counter::filter(int64_t val) {
-    double scaled_val = (double)val / (double)*internals->input_scale;
-    addSample(internals->positions, (long)read_time, scaled_val);
-
-#if 0
-    if (internals->filter_type && *internals->filter_type == 0) {
-        internals->last_sent = val;
-    }
-    else if (internals->filter_type && *internals->filter_type == 1) {
-        int64_t mean = (internals->positions.average(internals->buffer_len) + 0.5f);
-        if (internals->tolerance) {
-            internals->noise_tolerance = *internals->tolerance;
-        }
-        if ((uint64_t)abs(mean - internals->last_sent) >= internals->noise_tolerance) {
-            internals->last_sent = mean;
-        }
-    }
-    else if (internals->filter_type && *internals->filter_type == 2) {
-        long res = (long)internals->filter();
-        internals->last_sent = (int64_t)(res / internals->filter_len * 2);
-    }
-#endif
-    if (*internals->tolerance > 1) {
-        int64_t mean =
-            (bufferAverage(internals->positions, static_cast<size_t>(*internals->filter_len)) +
-             0.5f);
-        long delta = (uint64_t)abs(mean - internals->last_sent);
-        if (delta >= *internals->tolerance) {
-            internals->last_sent = mean;
-        }
-    }
-    else {
-        internals->last_sent = (*internals->input_scale == 1) ? val : (uint64_t)(scaled_val + 0.5);
-    }
-    internals->update(read_time);
-
-#if 1
-    /*  most machines reading sensor values will be prompted when the
-        sensor value changes, depending on whether this filter yields a
-        changed value. Some systems such as plugins that operate on
-        their own clock may wish to ignore the filtered value and
-        access the raw io value and read time but note that these
-        values do not cause notifications when they change
-    */
-
-    std::list<MachineInstance *>::iterator owners_iter = owners.begin();
-    while (owners_iter != owners.end()) {
-        MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
-        o->properties.add("DurationTolerance", Value{static_cast<uint64_t>(internals->rate_len)},
-                          SymbolTable::ST_REPLACE);
-        o->properties.add("VALUE", Value{static_cast<int64_t>(scaled_val)}, SymbolTable::ST_REPLACE);
-        o->properties.add("Position", Value{internals->last_sent}, SymbolTable::ST_REPLACE);
-        o->properties.add("Velocity", Value{internals->speeds.average(internals->speeds.length())},
-                          SymbolTable::ST_REPLACE);
-    }
-#endif
-    return internals->last_sent;
+    return internals->input_divisor == nullptr ? val : val / *internals->input_divisor;
 }
 
 CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(0) {
@@ -1528,4 +1383,3 @@ void IOComponent::setValue(int64_t new_value) {
 bool IOComponent::isOn() { return last_event == e_none && address.value != 0; }
 
 bool IOComponent::isOff() { return last_event == e_none && address.value == 0; }
-
