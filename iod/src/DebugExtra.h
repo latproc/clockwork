@@ -18,10 +18,10 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __DebugExtra_H__
-#define __DebugExtra_H__
+#pragma once
 
 #include "Logger.h"
+#include <functional>
 
 class DebugExtra {
   public:
@@ -91,4 +91,13 @@ class DebugExtra {
 #define DBG_M_INITIALISATION M_MSG(DebugExtra::instance()->DEBUG_INITIALISATION, this)
 #define DBG_M_MODBUS M_MSG(DebugExtra::instance()->DEBUG_MODBUS, this)
 
-#endif
+class Throttled {
+public:
+    void operator()();
+    Throttled(unsigned rate, std::function<void()> && f);
+
+private:
+    unsigned m_rate = 1;
+    std::function<void()> m_f;
+    unsigned m_counter = 0;
+};
