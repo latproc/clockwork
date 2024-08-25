@@ -34,6 +34,7 @@
 #include <string.h>
 #include <string>
 #include <iostream>
+#include <functional>
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
 #endif
@@ -42,29 +43,13 @@
 
 #define VERBOSE_DEBUG 0
 
-//static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
-
 /* byte swapping macros using either custom code or the network byte order std functions */
 #if __BIGENDIAN
-#if 0
-#define toU16(m, v)                                                                                \
-    *((uint16_t *)m) = ((((uint16_t)v) & 0xff00) >> 8) | ((((uint16_t)v) & 0x00ff) << 8)
-#define fromU16(m) (((*(uint16_t *)m) & 0xff00) >> 8) | ((*((uint16_t *)m) & 0x00ff) << 8)
-#define toU32(m, v)                                                                                \
-    *((uint32_t *)m) = ((((uint32_t)v) & 0xff000000) >> 24) |                                      \
-                       ((((uint32_t)v) & 0x00ff0000) >> 8) | ((((uint32_t)v) & 0x0000ff00) << 8) | \
-                       ((((uint32_t)v) & 0x000000ff) << 24)
-#define fromU32(m)                                                                                 \
-    (((*(uint32_t *)m) & 0xff000000) >> 24) | ((*((uint32_t *)m) & 0x00ff0000) >> 8) |             \
-        (((*(uint32_t *)m) & 0x0000ff00) << 8) | ((*((uint32_t *)m) & 0x000000ff) << 24)
-
-#else
 #include <netinet/in.h>
 #define toU16(m, v) *(uint16_t *)(m) = htons((v))
 #define fromU16(m) ntohs(*(uint16_t *)m)
 #define toU32(m, v) *(uint32_t *)(m) = htonl((v))
 #define fromU32(m) ntohl(*(uint32_t *)m)
-#endif
 #else
 #define toU16(m, v) EC_WRITE_U16(m, v)
 #define fromU16(m) EC_READ_U16(m)
@@ -83,20 +68,21 @@ void set_mask_bits(const IOAddress & address, uint8_t *result) {
     ::set_mask_bits(offset, bitpos, bitlen, result);
 }
 
+unsigned int calcIOBufferSize() {
+    return IOComponent::getMaxIOOffset() - IOComponent::getMinIOOffset() + 1;
+}
+
 // Build a mask that indicates what bits in the process data are
 // relevant to IOComponents.
-std::vector<uint8_t> generateProcessMask() {
+std::vector<uint8_t> generateProcessMask(unsigned int size) {
     std::vector<uint8_t> result;
-    unsigned int max = IOComponent::getMaxIOOffset() - IOComponent::getMinIOOffset() + 1;
-    result.resize(max);
+    result.resize(size);
 
     IOComponent::Iterator iter = IOComponent::begin();
     while (iter != IOComponent::end()) {
         IOComponent *ioc = *iter++;
         set_mask_bits(ioc->address, result.data());
     }
-    std::cout << buffer_to_string(result.data(), result.size());
-    std::cout << "\n";
     return result;
 }
 
@@ -294,34 +280,32 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
         // the initial process data has arrived from EtherCAT. keep the previous data as the defaults
         // so they can be applied asap
         process_data.setProcessData(data, data_size);
-        auto process_mask = generateProcessMask();
+        auto process_mask = generateProcessMask(calcIOBufferSize());
         process_data.setUpdateData(data, data_size);
         process_data.setUpdateMask(process_mask);
         return;
     }
 
-    // step through the incoming mask and update bits in process data
-    const uint8_t *p = data;
-    const uint8_t *m = mask;
-    auto &pd = process_data.getProcessData();
-    uint8_t *q = pd.data();
-    static bool first_time = true; // TODO: Make this resettable
-    IOComponent *just_added = 0;
     if (last_process_data.empty()) {
         last_process_data.resize(data_size);
     }
-    auto changes = copyMaskedBitsAndReturnMaskOfChanges(q, p, m, last_process_data.data(), data_size);
+    auto &pd = process_data.getProcessData();
     last_process_data = pd;
+    static bool first_time = true; // TODO: Make this resettable
     if (first_time) {
         for (size_t i = 0; i < data_size; ++i) {
             pd[i] = data[i];
-            if (m[i]) {
+            if (mask[i]) {
                 notifyComponentsAt(i);
             }
         }
         first_time = false;
     }
     else {
+        // step through the incoming mask and identify affected machines
+        const uint8_t *p = data;
+        uint8_t *q = pd.data();
+        auto changes = copyMaskedBitsAndReturnMaskOfChanges(q, p, mask, last_process_data.data(), data_size);
         IOComponent *just_added = nullptr;
         for (size_t i = 0; i < changes.changes.size(); ++i) {
             if (changes.changes[i]) {
@@ -343,7 +327,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                         }
                     }
                     --j;
-                    bitmask = bitmask >> 1;
+                    bitmask >>= 1;
                 }
             }
         }
@@ -1151,7 +1135,7 @@ void IOComponent::setupIOMap() {
             io_map[offset + i] = cl;
         }
     }
-    auto pd = generateProcessMask();
+    auto pd = generateProcessMask(calcIOBufferSize());
     process_data.setProcessMask(pd.data(), pd.size());
     std::vector<uint8_t> defaults;
     defaults.resize(pd.size());
