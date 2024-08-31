@@ -1568,15 +1568,13 @@ int ECInterface::collectState() {
     // the result of the following is a list of data bits to be changed and
     // a mask indicating which of the bits we care about have changed.
 
-    // first time through, copy the domain process data to our local copy
-    // and set the process mask to include every bit we care about
-
     // after that, look at all bits we care about and if the bit has changed
     // copy its new value to the update data and include the bit in the
     // update mask
     static std::vector<uint8_t> last_pd = data.getProcessData();
     uint8_t *pd = domain1_pd;
-    uint8_t *pm = data.getProcessMask().data(); // these are the important bits
+    // the default mask if provided identifies the important bits
+    uint8_t *pm = data.getDefaultMask() ? data.getDefaultMask()->data() : nullptr;
     uint8_t *q = data.getUpdateData().data();       // convenience pointer
     uint8_t *qm = data.getUpdateMask().data();       // convenience pointer
 
@@ -1590,21 +1588,9 @@ int ECInterface::collectState() {
     DBG_ETHERCAT_PACKETS << "\n";
 #endif
 
-    assert(min == 0);
-    static bool first_time = true;
-    if (first_time) {
-        for (unsigned int i = 0; i < domain_size; ++i) {
-            *q = domain1_pd[i]; //TBD & *pm;
-            *qm = *pm;
-            affected_bits += 8;
-        }
-        first_time = false;
-    }
-    else {
-        auto updated = copyMaskedBitsAndReturnMaskOfChanges(q, pd, pm, last_pd.data(), domain_size);
-        data.setUpdateMask(updated.changes);
-        affected_bits = updated.count;
-    }
+    auto updated = copyMaskedBitsAndReturnMaskOfChanges(q, pd, pm, last_pd.data(), domain_size);
+    data.setUpdateMask(updated.changes);
+    affected_bits = updated.count;
 
     // save the domain data for the next check
 #if VERBOSE_DEBUG
@@ -1623,6 +1609,7 @@ int ECInterface::collectState() {
 
     return affected_bits;
 }
+
 void ECInterface::sendUpdates() {
     static uint64_t last_warning = 0;
     uint64_t now = microsecs();
@@ -1938,7 +1925,6 @@ void ECInterface::check_slave_config_states(void) {
             assert(m != 0);
         }
         if (!m->slave_config) {
-            //std::cout << "module " << m->name << " not active yet..skipping\n";
             continue;
         }
         report_module_state_change(m, i);
@@ -2211,7 +2197,6 @@ cJSON *collectSlaveConfigJson(int position) {
 
 bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
     cJSON *root = nullptr;
-    std::cout << params[0] << "\n";
     if (params.size() == 2) {
         int64_t val;
         if (params[1].asInteger(val)) {
