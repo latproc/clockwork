@@ -41,8 +41,6 @@
 #include "ProcessingThread.h"
 #include "buffering.c"
 
-#define VERBOSE_DEBUG 0
-
 /* byte swapping macros using either custom code or the network byte order std functions */
 #if __BIGENDIAN
 #include <netinet/in.h>
@@ -254,27 +252,6 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
     // receive process data updates and mask to yield updated components
     current_time = microsecs();
 
-#if VERBOSE_DEBUG
-    for (size_t ii = 0; ii < data_size; ++ii)
-        if (mask[ii]) {
-            std::cout << "IOComponent::processAll()\n"
-                << " waiting: " << updatedComponentsOut.size() << "\n";
-            std::cout << "size: " << data_size << "\n";
-            std::cout << "pdta: ";
-            std::cout << buffer_to_string(process_data.getProcessData().data(), data_size);
-            std::cout << "\n";
-            std::cout << "pmsk: ";
-            std::cout << buffer_to_string(process_data.getProcessMask().data(), data_size);
-            std::cout << "\n";
-            std::cout << "data: ";
-            std::cout << buffer_to_string(data, data_size);
-            std::cout << "\n";
-            std::cout << "mask: ";
-            std::cout << buffer_to_string(mask, data_size);
-            std::cout << "\n";
-            break;
-        }
-#endif
     // TODO: Get rid of this or remove its duplicate
     if (hardware_state == s_hardware_init) {
         // the initial process data has arrived from EtherCAT. keep the previous data as the defaults
@@ -332,12 +309,6 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             }
         }
     }
-#if VERBOSE_DEBUG
-    std::cerr << "updated components: " << updatedComponentsIn.size() << "\n";
-    std::cout << "new pdta: ";
-    std::cout << buffer_to_string(process_data.getProcessData().data(), data_size);
-    std::cout << "\n";
-#endif
 
     if (hardware_state == s_operational) {
         // save the domain data for the next check
@@ -1023,12 +994,6 @@ static boost::optional<std::vector<uint8_t>> generateUpdateMask() {
         }
         set_mask_bits(ioc->address, res.data());
     }
-    //if (!found_update) { return {}; }
-#if VERBOSE_DEBUG
-    std::cout << "generated mask: ";
-    std::cout << buffer_to_string(res.data(), max - min + 1);
-    std::cout << "\n";
-#endif
     return res;
 }
 
@@ -1055,13 +1020,6 @@ IOUpdate IOComponent::getDefaults() {
     res.setData(pd);
     res.setMask(*process_data.getDefaultMask());
 
-#if VERBOSE_DEBUG
-    std::cout << "preparing to send defaults " << res.data_size() << " bytes\n";
-    std::cout << buffer_to_string(res.data(), res.data_size());
-    std::cout << "\n";
-    std::cout << buffer_to_string(res.mask(), res.data_size());
-    std::cout << "\n";
-#endif
     return res;
 }
 

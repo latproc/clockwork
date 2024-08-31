@@ -232,11 +232,6 @@ IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
                 size_t msglen = message.size();
                 DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
                 update.setData(static_cast<uint8_t*>(message.data()), msglen);
-#if VERBOSE_DEBUG
-                DBG_PROCESSING << std::flush << "got data: ";
-                DBG_PROCESSING << buffer_to_string(update.data(), update.data_size());
-                DBG_PROCESSING << "\n" << std::flush;
-#endif
                 ++stage;
             }
             case 4: { // mask
@@ -247,11 +242,6 @@ IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
                 size_t msglen = message.size();
                 DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
                 update.setMask(static_cast<uint8_t*>(message.data()), msglen);
-#if VERBOSE_DEBUG
-                std::cout << "got mask: ";
-                DBG_PROCESSING << buffer_to_string(update.mask(), update.data_size());
-                std::cout << "\n";
-#endif
                 ++stage;
                 break;
             }
@@ -479,34 +469,16 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     static unsigned long total_mp_time = 0;
     static unsigned long mp_count = 0;
 #endif
-#if VERBOSE_DEBUG
-    std::cout << "got ethercat data\n";
-    std::cout << buffer_to_string(internals->update.data(), internals->update.data_size());
-    std::cout << " : ";
-    std::cout << buffer_to_string(internals->update.mask(), internals->update.data_size());
-    std::cout << "\n";
-#endif
 
-#if 0
-    int mask_p = 0;
-    uint32_t n = internals->update.data_size();
-    while (n && internals->update.mask()[mask_p] == 0) {
-        ++mask_p;
-        --n;
-    }
-#endif
-
-//    if (n) { // io has indicated a change
-        if (machine_is_ready) {
+    if (machine_is_ready) {
 #ifdef KEEPSTATS
-            AutoStat stats(avg_io_time);
+        AutoStat stats(avg_io_time);
 #endif
-            IOComponent::processAll(internals->update, io_work_queue);
-        }
-        else {
-            std::cout << "Processing received EtherCAT data but machine is not ready\n";
-        }
-//    }
+        IOComponent::processAll(internals->update, io_work_queue);
+    }
+    else {
+        std::cout << "Processing received EtherCAT data but machine is not ready\n";
+    }
     if (curr_t - last_sample_poll >= 10000) {
         last_sample_poll = curr_t;
         handle_io_sampling(internals->update.global_clock()); // devices that need a regular poll
