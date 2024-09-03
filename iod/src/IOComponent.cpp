@@ -784,7 +784,16 @@ void Counter::setupProperties(MachineInstance *m) {
 }
 
 int64_t Counter::filter(int64_t val) {
-    return internals->input_divisor == nullptr ? val : val / *internals->input_divisor;
+    int64_t scaled = internals->input_divisor == nullptr ? val : val / *internals->input_divisor;
+    std::list<MachineInstance *>::iterator owners_iter = owners.begin();
+    while (owners_iter != owners.end()) {
+        MachineInstance *o = *owners_iter++;
+        if (o) {
+            o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+            o->setValue("VALUE", Value{scaled});
+        }
+    }
+    return scaled;
 }
 
 CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(0) {

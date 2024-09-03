@@ -372,8 +372,6 @@ MachineClass *makeCounterMachineClass() {
     result->disableAutomaticStateChanges();
     result->setProperty("IOTIME", Value(0));
     result->setProperty("VALUE", Value(0));
-    result->setProperty("Position", Value(0));
-    result->setProperty("Velocity", Value(0));
     return result;
 }
 
