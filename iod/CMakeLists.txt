@@ -18,6 +18,11 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEC_EOE")
 endif()
 
+find_program(CCACHE_FOUND ccache)
+if(CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+endif()
+
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 		  set(CMAKE_INSTALL_PREFIX "${PROJECT_SOURCE_DIR}/stage" CACHE PATH "..." FORCE)
 endif()
