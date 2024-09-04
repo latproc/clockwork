@@ -9,7 +9,6 @@ if(CCACHE_FOUND)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
 endif()
 
-
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
   set(USE_ETHERCAT true)
 	set(USE_ETHERCAT_SOURCE true)
