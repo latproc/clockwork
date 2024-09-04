@@ -4,6 +4,11 @@ project (Latproc)
 set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 9.7)
 
+find_program(CCACHE_FOUND ccache)
+if(CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+endif()
+
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
   set(USE_ETHERCAT true)
 	set(USE_ETHERCAT_SOURCE true)
@@ -67,7 +72,7 @@ FIND_PACKAGE(Mosquitto)
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
 FIND_PACKAGE(ZeroMQ REQUIRED)
-FIND_PACKAGE(LibCURL)
+FIND_PACKAGE(CURL)
 
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR} ${ZeroMQ_INCLUDE_DIR})
 
