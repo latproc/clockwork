@@ -18,6 +18,11 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#ifdef __linux__
+#define USE_CHRONO 1
+#endif
+#include "clock_sync.h"
+
 #include "ECInterface.h"
 #include "IOInterface.h"
 #include "MessageLog.h"
@@ -55,8 +60,6 @@
 //#include "SetStateAction.h"
 //
 //#define USE_RTC 1
-//#define USE_CHRONO 1
-#include "clock_sync.h"
 
 extern bool machine_is_ready; // unsafe?
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";

@@ -1,3 +1,8 @@
+
+#ifdef __linux__
+#define USE_CHRONO 1
+#endif
+
 #include "clock_sync.h"
 #include <stdint.h>
 
@@ -20,7 +25,6 @@
 #include <sys/types.h>
 
 #endif
-
 
 #ifdef USE_SIGNALLER
 void sync(zmq::socket_t &clock_sync) { waitForSync(clock_sync); }
