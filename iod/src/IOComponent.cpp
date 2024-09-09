@@ -790,7 +790,7 @@ int64_t Counter::filter(int64_t val) {
         MachineInstance *o = *owners_iter++;
         if (o) {
             o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
-            o->setValue("VALUE", Value{scaled});
+            o->properties.add("VALUE", Value{scaled}, SymbolTable::ST_REPLACE);
         }
     }
     return scaled;
