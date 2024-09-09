@@ -566,7 +566,8 @@ void ECInterface::checkSDOUpdates() {
             break;
         case EC_REQUEST_ERROR: {
             std::stringstream error;
-            error << "Failed to read SDO!" << std::hex << "0x" << entry->getIndex() << ":"
+            error << entry->getName() << " "
+                  << "Failed to read SDO!" << std::hex << "0x" << entry->getIndex() << ":"
                   << (int)entry->getSubindex() << std::dec;
             MessageLog::instance()->add(error.str());
             NB_MSG << error.str() << "\n";
@@ -703,15 +704,17 @@ void ECInterface::registerModules() {
         }
         assert(m->slave_config);
         unsigned int module_offset_idx = 0;
+        bool warned_el2535 = false;
 
         for (unsigned int i = 0; i < m->sync_count; ++i) {
             for (unsigned int j = 0; j < m->syncs[i].n_pdos; ++j) {
                 for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
                     DBG_ETHERCAT_CALLS << "ecrt_config_reg_pdo_entry_pos\n";
-                    if (std::string(m->name).substr(0, 6) == "EL2535" && i == 3 &&
-                        m->syncs[i].n_pdos == 2) {
+                    if (!warned_el2535 && std::string(m->name).substr(0, 6) == "EL2535" && i == 3 &&
+                          m->syncs[i].n_pdos == 2) {
+                        warned_el2535 = true;
                         std::stringstream ss;
-                        ss << "******* Warning: Configureing EL2535 with 2 pdos (need 4)";
+                        ss << "******* Warning: Configuring " << m->name << "with 2 pdos (usually need 4)";
                         MessageLog::instance()->add(ss.str());
                         std::cerr << ss.str() << "\n";
                     }
@@ -1014,9 +1017,9 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
     unsigned int total_entries = 0, total_pdos = 0, total_syncs = 0;
     if (slave.sync_count) {
         unsigned int i, j, k, pdo_pos = 0, entry_pos = 0;
-        const unsigned int estimated_max_entries = 128;
-        const unsigned int estimated_max_pdos = 32;
-        const unsigned int estimated_max_syncs = 32;
+        const unsigned int estimated_max_entries = 256;
+        const unsigned int estimated_max_pdos = 64;
+        const unsigned int estimated_max_syncs = 64;
         // add pdo entries for this slave
         // note the assumptions here about the maximum number of entries, pdos and syncs we expect
         const int c_entries_size = sizeof(ec_pdo_entry_info_t) * estimated_max_entries;
@@ -1989,9 +1992,9 @@ EntryDetails *c_entry_details = 0;
 cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave_info_t &slave) {
     unsigned int i, j, k, pdo_pos = 0, entry_pos = 0;
 
-    const unsigned int estimated_max_entries = 128;
-    const unsigned int estimated_max_pdos = 32;
-    const unsigned int estimated_max_syncs = 32;
+    const unsigned int estimated_max_entries = 256;
+    const unsigned int estimated_max_pdos = 64;
+    const unsigned int estimated_max_syncs = 64;
     unsigned int total_entries = 0, total_pdos = 0, total_syncs = 0;
 
     cJSON *root = cJSON_CreateObject();
@@ -2020,7 +2023,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
         // add pdo entries for this slave
         // note the assumptions here about the maximum number of entries, pdos and syncs we expect
         const int c_entries_size = sizeof(ec_pdo_entry_info_t) * estimated_max_entries;
-        c_entries = new ec_pdo_entry_info_t[c_entries_size];
+        c_entries = new ec_pdo_entry_info_t[estimated_max_entries];
         memset(c_entries, 0, c_entries_size);
 
         c_entry_details = new EntryDetails[estimated_max_entries];
@@ -2152,7 +2155,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
     if (c_syncs) {
         delete[] c_syncs;
     }
-    delete[] c_entry_details;
+    //delete[] c_entry_details;
 
     return root;
 }
