@@ -28,6 +28,7 @@ struct IOInterface {
         DEFAULT_DATA,
         PROCESS_DATA,
         ACTIVATE_REQUEST,
-        DEACTIVATE_REQUEST
+        DEACTIVATE_REQUEST,
+        RESCAN_REQUEST
     };
 };

@@ -353,6 +353,11 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_
         assert(ECInterface::instance()->deactivate());
         safeSend(out_sock, "ok", 2);
     }
+    else if (packet_type == IOInterface::MessageType::RESCAN_REQUEST) {
+        std::cout << "---------------- Rescan\n";
+        ECInterface::instance()->reset();
+        safeSend(out_sock, "ok", 2);
+    }
     else if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
         std::cout << "---------------- Default data received\n";
     }
