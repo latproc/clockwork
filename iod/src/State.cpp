@@ -23,19 +23,17 @@
 #include <iostream>
 #include <string.h>
 
-State::State(const char *msg) : text(msg), val(0), name(msg, Value::t_string), enter_proc(0) {
+State::State(const char *msg) : text(msg), val(0), name(msg, Value::t_string),
+        is_local(false), enter_proc(0) {
     token_id = Tokeniser::instance()->getTokenId(text.c_str());
 }
-
-//State::State(int v) :text("INTEGER"), val(v), name("INTEGER", Value::t_string) {
-//
-//}
 
 State::State(const State &orig) {
     text = orig.text;
     val = orig.val;
     name = Value(orig.name);
     token_id = Tokeniser::instance()->getTokenId(text.c_str());
+    is_local = orig.is_local;
 }
 
 State &State::operator=(const State &other) {
@@ -43,6 +41,7 @@ State &State::operator=(const State &other) {
     val = other.val;
     name = other.name;
     token_id = Tokeniser::instance()->getTokenId(text.c_str());
+    is_local = other.is_local;
     return *this;
 }
 

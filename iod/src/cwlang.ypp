@@ -876,6 +876,10 @@ SYMBOL STATE {
     current_machineclass->addState($1, true); // add to states to permit changes to this state
     current_machineclass->state_names.insert($1);
 }
+SYMBOL LOCAL STATE {
+    current_machineclass->addState($1, true); // add to states to permit changes to this state
+    current_machineclass->state_names.insert($1);
+}
 | SYMBOL DEFAULT {
     DBG_PARSER << " default state " << $1 << "\n" ;
     StableState ss;

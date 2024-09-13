@@ -50,6 +50,7 @@ class State {
     int val;
     Value name;
     int token_id;
+    bool is_local;
     void (*enter_proc)(void *);
 };
 
