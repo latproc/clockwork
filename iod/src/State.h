@@ -39,6 +39,7 @@ class State {
     int getId() const { return token_id; }
     bool is(int tok) { return token_id == tok; }
     Value *getNameValue() { return &name; }
+    const Value *getNameValue() const { return &name; }
     int getIntValue() { return val; }
 
     void enter(void *data) const;

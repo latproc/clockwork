@@ -570,8 +570,8 @@ MachineClass *makeEtherCatBusMachineClass() {
     {
         State *init = result->findMutableState("INIT");
         if (!init) {
-            init = new State("INIT");
-            result->states.push_back(init);
+            result->addState("INIT");
+            init = result->findMutableState("INIT");
         }
         init->setEnterFunction(ECInterface::setup);
     }

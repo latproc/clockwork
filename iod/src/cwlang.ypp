@@ -314,7 +314,7 @@ definition_header '{' definition_body '}' {
             current_locals.clear();
         }
         DBG_PARSER << "num receives: " << current_machineclass->receives.size() << "\n";
-        DBG_PARSER << "states: " << current_machineclass->states.size() << "\n";
+        DBG_PARSER << "states: " << current_machineclass->numStates() << "\n";
         DBG_PARSER << "num transitions: " << current_machineclass->transitions.size() << "\n";
 
         current_machineclass = NULL;

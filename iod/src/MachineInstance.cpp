@@ -1627,13 +1627,8 @@ std::ostream &MachineInstance::operator<<(std::ostream &out) const {
 bool MachineInstance::stateExists(State &seek) {
     //return (state_machine->state_names.count(seek.getName()) != 0);
 
-    std::list<State *>::const_iterator iter = state_machine->states.begin();
-    while (iter != state_machine->states.end()) {
-        if (*(*iter) == seek) {
-            return true;
-        }
-        iter++;
-    }
+    auto found = state_machine->findState(seek);
+    if (found) { return true; }
     for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
         if (stable_states[ss_idx].state_name == seek.getName()) {
             return true;
@@ -4067,13 +4062,9 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 const Value *MachineInstance::lookupState(const std::string &state_name) {
     //is state_name a valid state?
     if (state_machine) {
-        std::list<State *>::iterator iter = state_machine->states.begin();
-        while (iter != state_machine->states.end()) {
-            State *s = *iter++;
-            if (s->getName() == state_name) {
-                return s->getNameValue();
-            }
-        }
+        const auto found = state_machine->findState(state_name.c_str());
+        if (found) { return found->getNameValue(); }
+
         for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
             if (stable_states[ss_idx].state_name == state_name) {
                 return &stable_states[ss_idx].name;
@@ -4086,13 +4077,9 @@ const Value *MachineInstance::lookupState(const std::string &state_name) {
 const Value *MachineInstance::lookupState(const Value &state_name) {
     //is state_name a valid state?
     if (state_machine) {
-        std::list<State *>::iterator iter = state_machine->states.begin();
-        while (iter != state_machine->states.end()) {
-            State *s = *iter++;
-            if (s->getId() == state_name.token_id) {
-                return s->getNameValue();
-            }
-        }
+        const auto found = state_machine->findState(state_name.asString().c_str());
+        if (found) { return found->getNameValue(); }
+
         for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
             if (stable_states[ss_idx].name == state_name) {
                 return &stable_states[ss_idx].name;

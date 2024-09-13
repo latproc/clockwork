@@ -36,12 +36,12 @@ class Plugin;
 class MachineClass {
     SymbolTable properties;
     std::map<std::string, Value> options;
+    std::list<State *> states;
 
   public:
     std::set<std::string> local_properties;
     std::vector<Parameter> parameters;
     std::vector<Parameter> locals;
-    std::list<State *> states;
     std::set<std::string> state_names;
     std::multimap<std::string, StableState> stable_state_xref;
     std::vector<StableState> stable_states;
@@ -62,6 +62,7 @@ class MachineClass {
     void addState(const char *name, bool is_static = false);
     const State *findState(const char *name) const;
     const State *findState(const State &seek) const;
+    int numStates() { return states.size(); }
     bool isStaticState(const char *name);
     bool isStaticState(const std::string &);
     State *findMutableState(const char *name);
