@@ -122,7 +122,7 @@ void timer_thread_proc() {
         return;
     }
 
-    adjust_timer_frequency(1, 0);
+    adjust_timer_frequency(2, 100);
 
     char buf;
     while (true) {
@@ -148,9 +148,11 @@ void clock_sync() {
     static bool regular_timer_configured = false;
     static long saved_frequency = ECInterface::FREQUENCY;
     if (!regular_timer_configured || saved_frequency != ECInterface::FREQUENCY) {
-        unsigned long delay_ns = get_cycle_time() * 1000;
+        unsigned long delay_ms = get_cycle_time();
+        unsigned long delay_ns = (delay_ms % 1000000UL) * 1000;
+        unsigned long delay_s = delay_ms / 1000000UL;
         // Warning: potentially unsafe access to the timer here.
-        int config_error = adjust_timer_frequency(0, delay_ns);
+        int config_error = adjust_timer_frequency(delay_s, delay_ns);
         assert("could not configure posix timer" && !config_error);
         saved_frequency = ECInterface::FREQUENCY;
         regular_timer_configured = true;

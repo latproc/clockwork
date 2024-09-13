@@ -237,14 +237,11 @@ std::ostream &Logger::log(Level l) {
     }
 }
 std::ostream &LogState::operator<<(std::ostream &out) const {
-    std::map<std::string, int>::const_iterator iter = name_map.begin();
     const char *delim = "";
-    while (iter != name_map.end()) {
-        std::pair<std::string, int> const curr = *iter++;
-        out << delim << curr.first << " " << (state_flags.count(curr.second) ? "on" : "off");
+    for (auto item : name_map) {
+        out << delim << item.first << " " << (state_flags.count(item.second) ? "on" : "off");
         delim = "\n";
     }
-    //out << std::flush;
     return out;
 }
 

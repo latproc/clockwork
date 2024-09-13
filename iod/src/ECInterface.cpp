@@ -1352,6 +1352,8 @@ void ECInterface::init() {
     domain1 = ecrt_master_create_domain(master);
     if (!domain1) {
         snprintf(buf, 200, "EtherCAT interface: failed to create domain");
+        MessageLog::instance()->add(buf);
+        std::cerr << buf << "\n";
         initialised = false;
         return;
     }

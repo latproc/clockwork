@@ -330,8 +330,8 @@ class IODHardwareActivation : public HardwareActivation {
             return true;
         }
         else {
-            DBG_MSG << "Warning: ECInterface failed to setup the EtherCAT thread\n";
-            assert(false);
+            std::cerr << "Warning: ECInterface failed to setup the EtherCAT thread\n";
+            assert(false); // TODO: is this needed?
             return false;
         }
     }
