@@ -27,6 +27,7 @@
 #include "IOInterface.h"
 #include "MessageLog.h"
 #include "value.h"
+#include "clock.h"
 
 #include <stdint.h>
 #include <ostream>
@@ -64,7 +65,7 @@
 extern bool machine_is_ready; // unsafe?
 const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
 static bool machine_was_ready = false;
-uint64_t next_ecat_receive = 0;
+//uint64_t next_ecat_receive = 0;
 
 EtherCATThread::EtherCATThread()
     : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(4000), last_ping(0) {}
@@ -198,6 +199,7 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
     return stage;
 }
 
+#if 0
 uint64_t updateClock(uint64_t global_clock) {
 #ifdef USE_DC
     // distributed clocks. TBD
@@ -233,6 +235,7 @@ uint64_t updateClock(uint64_t global_clock) {
 #endif
     return global_clock;
 }
+#endif
 
 bool EtherCATThread::getEtherCatResponse(zmq::socket_t &sock) {
     try {
@@ -396,9 +399,6 @@ void EtherCATThread::operator()() {
     unsigned long freq = ECInterface::FREQUENCY;
     ClockSync clock_sync;
 
-    uint64_t then = nowMicrosecs();
-    ECInterface::instance()->setReferenceTime(then % 0x100000000);
-
     sync_sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
     sync_sock->bind("inproc://ethercat_sync");
 
@@ -415,9 +415,7 @@ void EtherCATThread::operator()() {
     }
     while (!program_done) {
         clock_sync();
-        uint64_t now = nowMicrosecs();
-        ECInterface::instance()->setReferenceTime(now % 0x100000000);
-        uint64_t period = 1000000 / freq;
+        //uint64_t period = 1000000 / freq;
         int num_updates = 0;
 
         // machine_was ready becomes true once the machine becomes ready for the
@@ -441,11 +439,11 @@ void EtherCATThread::operator()() {
 
         // keep polling ethercat if we are not online but do not
         // exchange clockwork machine state
-        next_ecat_receive = now + period;
+        // next_ecat_receive = now + period;
         ECInterface::instance()->receiveState();
+        global_clock = ECInterface::instance()->getApplicationTime(); //updateClock(global_clock);
 
         if (machine_is_ready && !ECInterface::instance()->data.getProcessMask().empty()) {
-            global_clock = updateClock(global_clock);
             if (status == e_collect) {
                 DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state\n";
                 num_updates = ECInterface::instance()->collectState();
@@ -455,25 +453,26 @@ void EtherCATThread::operator()() {
             // send all process domain data once the domain is operational
             // check keep-alives on the clockwork communications channel
             //   four periods: 4 * period / 1000 = period/250
-            bool need_ping =
-                keep_alive > 0 && (last_ping + keep_alive - period < now) ? true : false;
+            //bool need_ping =
+            //    keep_alive > 0 && (last_ping + keep_alive - period < now) ? true : false;
 
             // if we have collected data from EtherCAT, send it to clockwork
-            if (status == e_collect && (first_run || num_updates || need_ping)) {
+            if (status == e_collect && (first_run || num_updates /*|| need_ping*/)) {
                 if (driver_state == s_driver_operational) {
                     first_run = false;
                 }
-                need_ping = false;
+                //need_ping = false;
                 int stage = sendMultiPart(sync_sock, global_clock);
                 assert(stage == 5);
             }
         }
 
         // check for communication from clockwork
-        if (getClockworkMessage(out_sock, ec_ok) && microsecs() < next_ecat_receive - 300) {
-            DBG_ETHERCAT_PACKETS << "ecat thread got clockwork message. next ecat: "
-                                 << next_ecat_receive << "\n";
-        }
+        getClockworkMessage(out_sock, ec_ok);
+        //if (getClockworkMessage(out_sock, ec_ok) && microsecs() < next_ecat_receive - 300) {
+        //    DBG_ETHERCAT_PACKETS << "ecat thread got clockwork message. next ecat: "
+        //                         << next_ecat_receive << "\n";
+        //}
 
         ECInterface::instance()->sendUpdates();
         checkAndUpdateCycleDelay();

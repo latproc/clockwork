@@ -165,8 +165,7 @@ class ECInterface {
     bool operational();
     static ECModule *findModule(unsigned int position);
 
-    uint32_t getReferenceTime();
-    void setReferenceTime(uint32_t now);
+    uint64_t getApplicationTime();
 
     void report_module_state_change(ECModule *m, int i);
 
@@ -188,7 +187,13 @@ class ECInterface {
   private:
     ECInterface();
     static ECInterface *instance_;
+    uint64_t application_time;
     uint32_t reference_time;
+
+    uint32_t getReferenceTime();
+    void setApplicationTime(uint64_t now);
+    void setReferenceTime(uint32_t now); // automatically updates application time
+
 #ifndef EC_SIMULATOR
     static std::vector<ECModule *> modules;
     std::set<ECModule *> online_modules;

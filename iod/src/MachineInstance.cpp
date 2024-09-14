@@ -47,6 +47,7 @@
 #include <cassert>
 #include <dlfcn.h>
 #include <iostream>
+#include <sstream>
 #include <sys/time.h>
 #include <time.h>
 #include <utility>
@@ -2915,11 +2916,12 @@ void MachineInstance::setInitialState(bool resume) {
                 setState(*s, expected_authority, false);
             }
             else {
-                char buf[100];
-                snprintf(buf, 100, "Warning: setting initial state on %s to unknown state: %s\n",
-                         _name.c_str(), io_interface->getStateString());
-                MessageLog::instance()->add(buf);
-                NB_MSG << buf << "\n";
+                std::stringstream ss;
+                ss << "Warning: setting initial state on "
+                   <<_name << " (" << io_interface->address << ")) to unknown state: "
+                   << io_interface->getStateString();
+                MessageLog::instance()->add(ss.str());
+                NB_MSG << ss.str() << "\n";
             }
         }
         else {

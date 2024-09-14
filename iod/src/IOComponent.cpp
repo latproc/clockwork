@@ -724,7 +724,7 @@ int64_t AnalogueInput::filter(int64_t raw) {
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+        o->properties.add("IOTIME", Value{read_time / 1000}, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", Value{config->rate_len}, SymbolTable::ST_REPLACE);
         o->properties.add("raw", Value{raw}, SymbolTable::ST_REPLACE);
         o->properties.add("VALUE", Value{static_cast<int64_t>(config->last_sent)}, SymbolTable::ST_REPLACE);
@@ -755,7 +755,7 @@ int64_t DigitalValue::filter(int64_t val) {
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
         if (o) {
-            o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+            o->properties.add("IOTIME", Value{read_time / 1000}, SymbolTable::ST_REPLACE);
             o->setValue("VALUE", Value{val});
         }
     }
@@ -789,7 +789,7 @@ int64_t Counter::filter(int64_t val) {
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
         if (o) {
-            o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+            o->properties.add("IOTIME", Value{read_time / 1000}, SymbolTable::ST_REPLACE);
             o->properties.add("VALUE", Value{scaled}, SymbolTable::ST_REPLACE);
         }
     }
