@@ -316,7 +316,7 @@ void SDOEntry::resolveSDOModules() {
 
 
 ECInterface::ECInterface()
-    : initialised(0), application_time(0), reference_time(0),
+    : initialised(0), application_time(0),
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
       current_init_entry(initialisation_entries.begin()),
@@ -333,11 +333,7 @@ void ECInterface::setup(void *data) { instance()->init(); }
 
 void ECInterface::setApplicationTime(uint64_t now) { application_time = now; }
 
-void ECInterface::setReferenceTime(uint32_t now) { reference_time = now; }
-
 uint64_t ECInterface::getApplicationTime() { return application_time; }
-
-uint32_t ECInterface::getReferenceTime() { return reference_time; }
 
 bool ECModule::ecrtMasterSlaveConfig(ec_master_t *master) {
     if (master) {
@@ -1492,27 +1488,16 @@ void ECInterface::receiveState() {
             }
         }
 #endif
+        DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
+        application_time = Clock::nanosecs();
+        ecrt_master_application_time(master, application_time);
+
         // receive process data
         DBG_ETHERCAT_CALLS << "ecrt_master_receive\n";
         ecrt_master_receive(master);
         DBG_ETHERCAT_CALLS << "ecrt_domain_process\n";
         ecrt_domain_process(domain1);
-#ifdef EC_HAVE_REF_CLOCK_TIME
-        DBG_ETHERCAT_CALLS << "ecrt_imaster_reference_clock_time\n";
-        uint32_t low_bytes_reference_time = 0;
-        int err = ecrt_master_reference_clock_time(master, &low_bytes_reference_time);
-        if (err == -ENXIO || err == -EIO) {
-            application_time = Clock::nanosecs();
-            reference_time = static_cast<uint32_t>(application_time & 0xffffffff);
-        }
-        else {
-            auto saved = application_time;
-            if (low_bytes_reference_time < reference_time) { // wrap around
-                application_time += 0x100000000;
-            }
-            application_time = (application_time & 0x00000000) & low_bytes_reference_time;
-        }
-#endif
+
         check_domain1_state();
     }
     // check for master state (optional)
@@ -1656,12 +1641,9 @@ void ECInterface::sendUpdates() {
     }
 
 #ifndef EC_SIMULATOR
-    DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
-    application_time = Clock::nanosecs();
-    ecrt_master_application_time(master, application_time);
 #ifdef EC_HAVE_REF_CLOCK_TIME
     DBG_ETHERCAT_CALLS << "ecrt_master_sync_reference_clock\n";
-    ecrt_master_sync_reference_clock(master);
+    ecrt_master_sync_reference_clock_to(master, Clock::nanosecs());
     DBG_ETHERCAT_CALLS << "ecrt_master_sync_slave_clocks\n";
     ecrt_master_sync_slave_clocks(master);
 #endif

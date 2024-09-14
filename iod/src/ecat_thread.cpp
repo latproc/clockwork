@@ -58,6 +58,8 @@
 #include "ecat_thread.h"
 #include "options.h"
 #include <stdio.h>
+
+#include <sched.h> /* sched_setscheduler() */
 //#include "SetStateAction.h"
 //
 //#define USE_RTC 1
@@ -70,7 +72,9 @@ static bool machine_was_ready = false;
 EtherCATThread::EtherCATThread()
     : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(4000), last_ping(0) {}
 
-void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
+void EtherCATThread::setCycleDelay(long new_val) {
+    cycle_delay = new_val;
+}
 
 bool EtherCATThread::waitForStart(zmq::socket_t &sync_sock) {
     char buf[10];
@@ -102,9 +106,10 @@ static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
 
 bool EtherCATThread::checkAndUpdateCycleDelay() {
     // FIXME: potentially not thread safe
-    if (cycle_delay != get_cycle_time()) {
-        cycle_delay = get_cycle_time();
-        DBG_INITIALISATION << "setting cycle time to " << cycle_delay << "\n";
+    auto new_cycle_time = get_cycle_time();
+    if (cycle_delay != new_cycle_time) {
+        std::cerr << "setting cycle time " << cycle_delay << " -> " << new_cycle_time << "\n";
+        cycle_delay = new_cycle_time;
         ECInterface::FREQUENCY = 1000000 / cycle_delay;
         return true;
     }
@@ -198,44 +203,6 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
     }
     return stage;
 }
-
-#if 0
-uint64_t updateClock(uint64_t global_clock) {
-#ifdef USE_DC
-    // distributed clocks. TBD
-    static uint64_t last_ref_time = ECInterface::instance()->getReferenceTime();
-    uint32_t ref_time = ECInterface::instance()->getReferenceTime();
-    if (ref_time) {
-        uint32_t last_ref32 = last_ref_time % 0x100000000;
-        int64_t delta_ref = 0;
-        if (last_ref32 > ref_time) { // rollover
-            //std::cerr << "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n";
-            delta_ref = 0x100000000 + (uint64_t)ref_time;
-            //std::cerr << std::hex << std::setw(8) << ref_time << std::dec << "\n";
-            //std::cerr << std::hex << std::setw(16) << delta_ref << std::dec << "\n";
-            //std::cerr << std::hex << std::setw(16) << last_ref32 << std::dec << "\n";
-            delta_ref -= last_ref32;
-            //std::cerr << std::hex << std::setw(16) << delta_ref << std::dec << "\n";
-        }
-        else {
-            delta_ref = ref_time - last_ref_time;
-        }
-        //int64_t err = delta_ref - period;
-        //if ( fabs(err) > (float)period/10)
-        std::cerr << "ref: " << ref_time << " cycle: " << delta_ref << " error: " << err << "\n";
-        last_ref_time += delta_ref;
-        global_clock += delta_ref;
-    }
-    else {
-        global_clock += period;
-    }
-#else
-    //global_clock += period;
-    global_clock = microsecs();
-#endif
-    return global_clock;
-}
-#endif
 
 bool EtherCATThread::getEtherCatResponse(zmq::socket_t &sock) {
     try {
@@ -395,6 +362,16 @@ void EtherCATThread::operator()() {
     pthread_setname_np(pthread_self(), "iod ethercat");
     Statistic *keep_alive_stat = new Statistic("keep alive margin");
     Statistic::add(keep_alive_stat);
+
+    struct sched_param param = {};
+    param.sched_priority = sched_get_priority_max(SCHED_FIFO);
+
+    if (sched_setscheduler(0, SCHED_FIFO, &param) != -1) {
+        std::cerr << "Scheduler priority set to " << param.sched_priority << "\n";
+    }
+    else {
+        perror("sched_setscheduler");
+    }
 
     unsigned long freq = ECInterface::FREQUENCY;
     ClockSync clock_sync;

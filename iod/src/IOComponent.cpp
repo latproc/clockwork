@@ -117,16 +117,17 @@ static uint64_t last_sample = 0; // retains a timestamp for the last sample
 // as long as there has been a sufficient delay, run the filter for each
 // of the nominated components.
 // This is called regularly from the processing thread
-void handle_io_sampling(uint64_t io_clock) {
+void handle_io_sampling(uint64_t clock) {
     uint64_t now = microsecs();
     if (now - last_sample < 1000) {
         return;
     }
     last_sample = now;
+    uint64_t u_sec = clock / 1000;
     std::set<IOComponent *>::iterator iter = regular_polls.begin();
     while (iter != regular_polls.end()) {
         IOComponent *ioc = *iter++;
-        ioc->read_time = io_clock;
+        ioc->read_time = u_sec;
         ioc->filter(ioc->address.value);
     }
 }
@@ -263,6 +264,18 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
         return;
     }
 
+    // Update the IOTIME for all enabled components
+    auto usec = io_clock / 1000;
+    for (auto ioc : processing_queue) {
+        if (ioc->is_polled) continue; // regularly polled devices get updated elsewhere
+        for (auto owner : ioc->owners) {
+            if (owner->enabled()) {
+                ioc->read_time = usec;
+                owner->properties.add("IOTIME", Value{usec}, SymbolTable::ST_REPLACE);
+            }
+        }
+    }
+
     if (last_process_data.empty()) {
         last_process_data.resize(data_size);
     }
@@ -323,7 +336,6 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
         std::set<IOComponent *>::iterator iter = updatedComponentsIn.begin();
         while (iter != updatedComponentsIn.end()) {
             IOComponent *ioc = *iter++;
-            ioc->read_time = io_clock;
             updatedComponentsIn.erase(ioc);
             if (updates_sent && updatedComponentsOut.count(ioc)) {
                 updatedComponentsOut.erase(ioc);
@@ -398,7 +410,7 @@ std::ostream &operator<<(std::ostream &out, const IOAddress &address) {
 }
 
 std::ostream &IOComponent::operator<<(std::ostream &out) const {
-    out << "readtime: " << (io_clock - read_time) << address;
+    out << "readtime: " << read_time << " " << address;
     if (address.bitlen == 1 && !process_data.getProcessData().empty()) {
         out << " (" << (bool)(process_data.getProcessData().at(address.io_offset) & (1 << address.io_bitpos)) << ")";
     }
@@ -424,7 +436,15 @@ unsigned char mem[1000];
 #define EC_WRITE_U64(offset, val) 0
 #endif
 
-int64_t IOComponent::filter(int64_t val) { return val; }
+int64_t IOComponent::filter(int64_t val) {
+    for (auto owner : owners) {
+        if (owner->enabled()) {
+            read_time = io_clock / 1000; // u_sec
+            owner->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+        }
+    }
+    return val;
+}
 
 class InputFilterSettings {
   public:
@@ -584,6 +604,7 @@ AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) {
     config = new InputFilterSettings();
     direction_ = DirInput;
     regular_polls.insert(this);
+    is_polled = true;
 }
 
 static bool getFloatValue(MachineInstance *scope, const char *name, double &result) {
@@ -680,6 +701,16 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
 }
 
 int64_t AnalogueInput::filter(int64_t raw) {
+    bool is_enabled = false;
+    for (auto owner : owners) {
+        if (owner->enabled()) {
+            is_enabled = true;
+            read_time = io_clock / 1000; // u_sec
+            owner->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+        }
+    }
+    if (!is_enabled) { return raw; }
+
     if ((long)(read_time - config->last_time) <
         ((config->throttle) ? (*config->throttle * 1000L) : 10000L)) {
         return raw;
@@ -724,7 +755,6 @@ int64_t AnalogueInput::filter(int64_t raw) {
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", Value{read_time / 1000}, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", Value{config->rate_len}, SymbolTable::ST_REPLACE);
         o->properties.add("raw", Value{raw}, SymbolTable::ST_REPLACE);
         o->properties.add("VALUE", Value{static_cast<int64_t>(config->last_sent)}, SymbolTable::ST_REPLACE);
@@ -754,8 +784,8 @@ int64_t DigitalValue::filter(int64_t val) {
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        if (o) {
-            o->properties.add("IOTIME", Value{read_time / 1000}, SymbolTable::ST_REPLACE);
+        if (o && o->enabled()) {
+            o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
             o->setValue("VALUE", Value{val});
         }
     }
@@ -772,6 +802,7 @@ class CounterInternals {
 Counter::Counter(IOAddress addr) : IOComponent(addr), internals(0) {
     internals = new CounterInternals;
     regular_polls.insert(this);
+    is_polled = true;
 }
 
 Counter::~Counter() { delete internals; }
@@ -788,8 +819,9 @@ int64_t Counter::filter(int64_t val) {
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        if (o) {
-            o->properties.add("IOTIME", Value{read_time / 1000}, SymbolTable::ST_REPLACE);
+        if (o && o->enabled()) {
+            read_time = io_clock / 1000;
+            o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
             o->properties.add("VALUE", Value{scaled}, SymbolTable::ST_REPLACE);
         }
     }
@@ -919,11 +951,11 @@ int IOComponent::notifyComponentsAt(unsigned int offset) {
     int count = 0;
     std::list<IOComponent *> *cl = io_map[offset];
     if (cl) {
+        boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
         std::list<IOComponent *>::iterator items = cl->begin();
         while (items != cl->end()) {
             IOComponent *c = *items++;
             if (c) {
-                boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
                 updatedComponentsIn.insert(c);
                 ++count;
             }
@@ -1250,7 +1282,7 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
                 bitpos -= 8;
             }
         }
-        if (regular_polls.count(this)) {
+        if (is_polled) {
             // this device is polled on a regular clock, do not process here
             raw_value = val;
             address.value = val;

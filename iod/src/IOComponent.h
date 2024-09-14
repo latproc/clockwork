@@ -43,6 +43,8 @@ struct IOAddress {
     unsigned int bitlen;
     unsigned int entry_position;
     bool is_signed;
+    std::string description;
+
     IOAddress(unsigned int module_pos, unsigned int offs, int bitp, unsigned int entry_pos,
               unsigned int len = 1, bool signed_value = false)
         : module_position(module_pos), io_offset(offs), io_bitpos(bitp), value(0), bitlen(len),
@@ -55,7 +57,6 @@ struct IOAddress {
     IOAddress()
         : module_position(0), io_offset(0), io_bitpos(0), value(0), bitlen(1), entry_position(0),
           is_signed(false) {}
-    std::string description;
 };
 
 std::ostream &operator<<(std::ostream &out, const IOAddress &address);
@@ -198,6 +199,7 @@ class IOComponent : public Transmitter {
     Direction direction_;
     static HardwareState hardware_state;
     static bool updates_sent;
+    bool is_polled = false;
     std::list<MachineInstance *> owners;
 };
 std::ostream &operator<<(std::ostream &out, const IOComponent &);
