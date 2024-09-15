@@ -41,6 +41,8 @@ class State {
     Value *getNameValue() { return &name; }
     const Value *getNameValue() const { return &name; }
     int getIntValue() { return val; }
+    bool isLocal() const { return local; }
+    void setLocal(bool l) { local = l; }
 
     void enter(void *data) const;
     void setEnterFunction(void (*f)(void *));
@@ -50,7 +52,7 @@ class State {
     int val;
     Value name;
     int token_id;
-    bool is_local;
+    bool local;
     void (*enter_proc)(void *);
 };
 

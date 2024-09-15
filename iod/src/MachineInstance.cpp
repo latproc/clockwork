@@ -1867,33 +1867,35 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                 }
             }
 
-            txt = _name + "." + current_state.getName() + "_leave";
-            msg = Message(txt.c_str(), Message::LEAVEMSG);
-            std::set<MachineInstance *>::iterator dep_iter = depends.begin();
-            while (dep_iter != depends.end()) {
-                MachineInstance *dep = *dep_iter++;
-                if (this == dep) {
-                    continue;
-                }
-
-                // note that the following test prevents us from resuming a
-                // blocked action in dep and that may be bad but the test is
-                // not used in the case of the ENTER handler, below and there
-                // is no need to resume twice
-                if (!dep->receives(msg, this)) {
-                    continue;
-                }
-                Action *act = dep->executingCommand();
-                if (act) {
-                    if (act->getStatus() == Action::Suspended) {
-                        act->resume();
+            if (!machine_class_state->isLocal()) {
+                txt = _name + "." + current_state.getName() + "_leave";
+                msg = Message(txt.c_str(), Message::LEAVEMSG);
+                std::set<MachineInstance *>::iterator dep_iter = depends.begin();
+                while (dep_iter != depends.end()) {
+                    MachineInstance *dep = *dep_iter++;
+                    if (this == dep) {
+                        continue;
                     }
-                    DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]"
-                                    << " is executing " << *act << "\n";
+    
+                    // note that the following test prevents us from resuming a
+                    // blocked action in dep and that may be bad but the test is
+                    // not used in the case of the ENTER handler, below and there
+                    // is no need to resume twice
+                    if (!dep->receives(msg, this)) {
+                        continue;
+                    }
+                    Action *act = dep->executingCommand();
+                    if (act) {
+                        if (act->getStatus() == Action::Suspended) {
+                            act->resume();
+                        }
+                        DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]"
+                                        << " is executing " << *act << "\n";
+                    }
+    
+                    // execute the message on the dependant machine
+                    dep->execute(msg, this);
                 }
-
-                // execute the message on the dependant machine
-                dep->execute(msg, this);
             }
         }
 #endif
@@ -1902,7 +1904,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
         // until later, if the state actually changes
 
         // update the Modbus interface for self
-        if (published &&
+        if (published && !machine_class_state->isLocal() &&
             (modbus_exported == ModbusExport::discrete || modbus_exported == ModbusExport::coil)) {
             if (!modbus_exports.count(_name)) {
                 char buf[100];
@@ -1948,28 +1950,30 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
         }
 
         properties.add("STATE", Value{current_state.getName().c_str()}, SymbolTable::ST_REPLACE);
-        // publish the state change if we are a publisher
-        if (mq_interface) {
-            if (_type == "POINT" && properties.lookup("type") == Value{"Output"}) {
-                mq_interface->publish(properties.lookup("topic").asString(), new_state.getName(),
-                                      this);
+        if (!machine_class_state->isLocal()) {
+            // publish the state change if we are a publisher
+            if (mq_interface) {
+                if (_type == "POINT" && properties.lookup("type") == Value{"Output"}) {
+                    mq_interface->publish(properties.lookup("topic").asString(), new_state.getName(),
+                                          this);
+                }
             }
-        }
-        if (published && !modbus_exports.empty()) {
-            // update the Modbus interface for the state
-            if (modbus_exports.count(_name + "." + last)) {
-                ModbusAddress ma = modbus_exports[_name + "." + last];
-                DBG_MODBUS << _name << " leaving state " << last << " triggering a modbus message "
-                           << ma << "\n";
-                assert(ma.getSource() == ModbusAddress::state);
-                ma.update(this, 0);
-            }
-            if (modbus_exports.count(_name + "." + current_state.getName())) {
-                ModbusAddress ma = modbus_exports[_name + "." + current_state.getName()];
-                DBG_MODBUS << _name << " active state " << current_state.getName()
-                           << " triggering a modbus message " << ma << "\n";
-                assert(ma.getSource() == ModbusAddress::state);
-                ma.update(this, 1);
+            if (published && !modbus_exports.empty()) {
+                // update the Modbus interface for the state
+                if (modbus_exports.count(_name + "." + last)) {
+                    ModbusAddress ma = modbus_exports[_name + "." + last];
+                    DBG_MODBUS << _name << " leaving state " << last << " triggering a modbus message "
+                               << ma << "\n";
+                    assert(ma.getSource() == ModbusAddress::state);
+                    ma.update(this, 0);
+                }
+                if (modbus_exports.count(_name + "." + current_state.getName())) {
+                    ModbusAddress ma = modbus_exports[_name + "." + current_state.getName()];
+                    DBG_MODBUS << _name << " active state " << current_state.getName()
+                               << " triggering a modbus message " << ma << "\n";
+                    assert(ma.getSource() == ModbusAddress::state);
+                    ma.update(this, 1);
+                }
             }
         }
         /* TBD optimise the timer triggers to only schedule the earliest trigger */
@@ -2085,7 +2089,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
             DBG_M_SCHEDULER << " no state timer required\n";
         }
 
-        if (published) {
+        if (published && !machine_class_state->isLocal()) {
             /*  {
                 FileLogger fl(program_name);
                 fl.f() << "Sending state change for " << _name << " to " << new_state.getName() << "\n";
@@ -2098,7 +2102,9 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
         std::string txt = _name + "." + new_state.getName() + "_enter";
         Message msg(txt.c_str(), Message::ENTERMSG);
         stat = execute(msg, this);
-        notifyDependents(msg);
+        if (!machine_class_state->isLocal()) {
+            notifyDependents(msg);
+        }
     }
     return stat;
 }
