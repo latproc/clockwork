@@ -6,6 +6,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 set (MBM_VERSION_MAJOR 0)
 set (MBM_VERSION_MINOR 1)
 
+find_program(CCACHE_FOUND ccache)
+if(CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+endif()
+
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
@@ -86,7 +91,7 @@ TARGET_LINK_LIBRARIES(address ${MODBUS_LIBRARIES})
 TARGET_LINK_LIBRARIES(address ${CMAKE_DL_LIBS})
 
 
-add_executable (mbmon src/mbmon.cpp src/modbus_client_thread.cpp 
+add_executable (mbmon src/mbmon.cpp src/modbus_client_thread.cpp
         src/cw_interface.cpp src/plc_interface.cpp
         src/monitor.cpp src/modbus_helpers.cpp src/options.cpp)
 TARGET_LINK_LIBRARIES(mbmon ${ZMQ_LIBRARY})
