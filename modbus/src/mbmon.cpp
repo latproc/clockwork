@@ -60,15 +60,13 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
     Value cmd_val = params.front();
     params.pop_front();
     std::string cmd = cmd_val.asString();
-    char *msg = MessageEncoding::encodeCommand(cmd, &params);
+    auto msg = MessageEncoding::encodeCommand(cmd, params);
     if (options.verbose)
         std::cerr << " sending: " << msg << "\n";
-    sendMessage(sock, msg);
-    size_t size = strlen(msg);
-    free(msg);
+    sendMessage(sock, msg.c_str());
     zmq::message_t reply;
     if (sock.recv(&reply)) {
-        size = reply.size();
+        auto size = reply.size();
         char *data = (char *)malloc(size + 1);
         memcpy(data, reply.data(), size);
         data[size] = 0;
@@ -97,10 +95,10 @@ void sendStatus(const char *s) {
     }
     if (options.status_machine.length()) {
         std::list<Value> cmd;
-        cmd.push_back("PROPERTY");
-        cmd.push_back(options.status_machine.c_str());
-        cmd.push_back(options.status_property.c_str());
-        cmd.push_back(s);
+        cmd.push_back(Value{"PROPERTY"});
+        cmd.push_back(Value{options.status_machine});
+        cmd.push_back(Value{options.status_property});
+        cmd.push_back(Value{s});
         process_command(sock, cmd);
     }
     else {
@@ -114,7 +112,7 @@ void sendStatus(const char *s) {
 class ClockworkClientThread {
 
 public:
-	ClockworkClientThread(): finished(false) { 
+	ClockworkClientThread(): finished(false) {
 		int linger = 0; // do not wait at socket close time
 
 		socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
@@ -124,7 +122,7 @@ public:
 	}
 	void operator()() {
 		while (!finished) {
-			usleep(500000);	
+			usleep(500000);
 		}
 	}
 	zmq::socket_t *socket;
@@ -140,31 +138,28 @@ std::map<int, UserData *> inputs;
 
 void sendStateUpdate(zmq::socket_t *sock, ModbusMonitor *mm, bool which) {
     std::list<Value> cmd;
-    cmd.push_back("SET");
-    cmd.push_back(mm->name().c_str());
-    cmd.push_back("TO");
-    if (which)
-        cmd.push_back("on");
-    else
-        cmd.push_back("off");
+    std::array<const char *, 4> command = {"SET", mm->name().c_str(), "TO", (which) ? "on" : "off"};
+    for (auto &c : command){
+        cmd.push_back(Value{c});
+    }
     process_command(*sock, cmd);
 }
 
 void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
     std::list<Value> cmd;
     int16_t value = 0;
-    cmd.push_back("PROPERTY");
+    cmd.push_back(Value{"PROPERTY"});
     char buf[100];
     snprintf(buf, 100, "%s", mm->name().c_str());
     char *p = strrchr(buf, '.');
     if (p) {
         *p++ = 0;
-        cmd.push_back(buf);
-        cmd.push_back(p);
+        cmd.push_back(Value{buf});
+        cmd.push_back(Value{p});
     }
     else {
-        cmd.push_back(buf);
-        cmd.push_back("VALUE");
+        cmd.push_back(Value{buf});
+        cmd.push_back(Value{"VALUE"});
     }
     // note: the monitor address is in the global range grp<<16 + offset
     // this method is only using the addresses in the local range
@@ -197,7 +192,7 @@ void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
         cmd.push_back((uint32_t)value);
     }
     else {
-        cmd.push_back(0); // TBD
+        cmd.push_back(Value{0}); // TBD
     }
     process_command(*sock, cmd);
 }
@@ -226,8 +221,8 @@ void loadRemoteConfiguration(zmq::socket_t &iod, std::string &chn_instance_name,
                              MonitorConfiguration &mc) {
 
     std::list<Value> cmd;
-    cmd.push_back("REFRESH");
-    cmd.push_back(chn_instance_name.c_str());
+    cmd.push_back(Value{"REFRESH"});
+    cmd.push_back(Value{chn_instance_name});
     cJSON *obj = nullptr;
     {
         char *response = send_command(iod, cmd);
@@ -347,7 +342,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
     std::string ds;
     std::list<Value> *param_list = 0;
     if (MessageEncoding::getCommand(data, ds, &param_list)) {
-        params.push_back(ds);
+        params.push_back(Value{ds});
         if (param_list) {
             std::list<Value>::const_iterator iter = param_list->begin();
             while (iter != param_list->end()) {
@@ -363,7 +358,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
         while (iss >> ds) {
             if (options.verbose)
                 std::cerr << ds << "\n";
-            parts.push_back(ds.c_str());
+            parts.push_back(Value{ds});
             ++count;
         }
         std::copy(parts.begin(), parts.end(), std::back_inserter(params));
@@ -415,8 +410,8 @@ int main(int argc, const char *argv[]) {
         iod.connect("tcp://localhost:5555");
 
         std::list<Value> cmd;
-        cmd.push_back("CHANNEL");
-        cmd.push_back(options.channelName());
+        cmd.push_back(Value{"CHANNEL"});
+        cmd.push_back(Value{options.channelName()});
         cJSON *obj = nullptr;
         {
             char *response = send_command(iod, cmd);
@@ -640,7 +635,7 @@ int main(int argc, const char *argv[]) {
                             }
                         }
                         else {
-                            long value;
+                            int64_t value;
                             if (params[2].asString() == "VALUE" && params[3].asInteger(value)) {
                                 if (m.length() == 1) {
                                     m.setRaw((uint16_t)value);
