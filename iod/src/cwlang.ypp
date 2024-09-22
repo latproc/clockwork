@@ -135,6 +135,15 @@ static bool check_machine_type(const std::string &name) {
     return true;
 }
 
+void reset_parser() {
+    current_machine = 0;
+    current_machineclass = 0;
+    current_channelclass = 0;
+    current_channel = 0;
+    current_features = 0;
+    current_parameters.clear();
+}
+
 struct Subcondition {
   Predicate *predicate;
 	const char *name;

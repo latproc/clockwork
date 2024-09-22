@@ -51,6 +51,7 @@
 #include "options.h"
 #include "symboltable.h"
 #include "MachineClass.h"
+#include "cwlang.h"
 
 #ifndef EC_SIMULATOR
 #include "ECInterface.h"
@@ -1261,6 +1262,7 @@ int loadConfig(std::list<std::string> &files) {
             yyin = fopen(filename, "r");
             if (yyin) {
                 DBG_PARSER << "Processing file: " << filename << "\n";
+                reset_parser();
                 yylineno = 1;
                 yycharno = 1;
                 yyfilename = filename;
