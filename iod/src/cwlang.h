@@ -27,6 +27,7 @@
 #include <list>
 
 void yyerror(const char *str);
+void reset_parser(void);
 
 #ifndef __MAIN__
 extern int line_num;
