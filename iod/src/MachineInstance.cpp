@@ -67,9 +67,11 @@
 #include "RateEstimatorInstance.h"
 #include "SharedWorkSet.h"
 #include "Transition.h"
+#include <mutex>
 
 extern int num_errors;
 extern std::list<std::string> error_messages;
+static std::recursive_mutex set_needs_check_mutex;
 
 uint64_t rate_calc_process_time = 0; // used for idle calculations for rate estimation
 Value *MachineInstance::polling_delay = 0;
@@ -165,6 +167,7 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::s
 }
 
 void MachineInstance::setNeedsCheck() {
+    std::lock_guard<std::recursive_mutex> lock(set_needs_check_mutex);
     DBG_M_MESSAGING << _name << "::setNeedsCheck(), enabled: " << is_enabled
                     << " has state machine? " << ((state_machine) ? "yes" : "no") << "\n";
     if (!getStateMachine()) {
@@ -1876,7 +1879,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                     if (this == dep) {
                         continue;
                     }
-    
+
                     // note that the following test prevents us from resuming a
                     // blocked action in dep and that may be bad but the test is
                     // not used in the case of the ENTER handler, below and there
@@ -1892,7 +1895,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                         DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]"
                                         << " is executing " << *act << "\n";
                     }
-    
+
                     // execute the message on the dependant machine
                     dep->execute(msg, this);
                 }
