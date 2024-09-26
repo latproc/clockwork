@@ -178,8 +178,8 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
             }
             else {
                 char buf[150];
-                snprintf(buf, 150, "Error: Machine %s asked to change to unknown state (%s)",
-                         machine->getName().c_str(), deref.sValue.c_str());
+                snprintf(buf, 150, "Error: Machine %s asked to change to unknown state (%s) by %s",
+                         machine->getName().c_str(), deref.sValue.c_str(), owner->getName().c_str());
                 MessageLog::instance()->add(buf);
             }
         }
