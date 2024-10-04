@@ -92,6 +92,11 @@ public:
         return queue_.empty();
     }
 
+    bool size() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return queue_.size();
+    }
+
     bool try_dequeue(T& value) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (queue_.empty()) {

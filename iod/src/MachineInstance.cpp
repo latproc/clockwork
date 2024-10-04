@@ -80,6 +80,15 @@ unsigned int MachineInstance::num_machines_with_work =
     1; // machine idle processing will occur if this value is non zero
 unsigned int MachineInstance::total_machines_needing_check = 1;
 
+SharedThreadSafeQueue<MachineInstance *> *MachineInstance::shared_refresh_queue = nullptr;
+SharedThreadSafeQueue<MachineInstance *> &MachineInstance::refresh_queue() {
+    return *shared_refresh_queue;
+}
+void MachineInstance::setRefreshQueue(SharedThreadSafeQueue<MachineInstance *> *refresh_queue) {
+    assert(!shared_refresh_queue);
+    shared_refresh_queue = refresh_queue;
+}
+
 class MachineEvent {
   public:
     MachineInstance *mi;
@@ -166,7 +175,11 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::s
     }
 }
 
-void MachineInstance::setNeedsCheck() {
+void MachineInstance::setNeedsCheck(bool add_to_queue) {
+    if (add_to_queue && shared_refresh_queue) {
+        shared_refresh_queue->enqueue(this);
+        return;
+    }
     std::lock_guard<std::recursive_mutex> lock(set_needs_check_mutex);
     DBG_M_MESSAGING << _name << "::setNeedsCheck(), enabled: " << is_enabled
                     << " has state machine? " << ((state_machine) ? "yes" : "no") << "\n";

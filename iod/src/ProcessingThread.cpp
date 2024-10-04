@@ -95,17 +95,19 @@ class ProcessingThreadInternals {
 };
 
 ProcessingThread &ProcessingThread::create(ControlSystemMachine &m, HardwareActivation &activator,
-                                           IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue) {
+                                           IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
+                                           SharedThreadSafeQueue<MachineInstance*> &refresh_queue) {
     if (!instance_) {
-        instance_ = new ProcessingThread(m, activator, cmd_interface, queue);
+        instance_ = new ProcessingThread(m, activator, cmd_interface, queue, refresh_queue);
     }
     return *instance_;
 }
 
 ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator,
-                                   IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue)
+                                   IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
+                                   SharedThreadSafeQueue<MachineInstance*> &refresh_queue)
     : internals(0), machine(m), status(e_waiting), activate_hardware(activator),
-      command_interface(cmd_interface), message_queue(queue), program_start(0) {
+      command_interface(cmd_interface), message_queue(queue), refresh_queue(refresh_queue), program_start(0) {
     program_start = microsecs();
     internals = new ProcessingThreadInternals();
 }
@@ -656,6 +658,16 @@ void ProcessingThread::operator()() {
             curr_t = nowMicrosecs();
             internals->process_manager.SetTime(curr_t);
             //TBD add a guard here to detect/prevent rapid cycling
+            {
+                MachineInstance *to_refresh;
+                std::set<MachineInstance *> marked_for_refresh;
+                while (refresh_queue.try_dequeue(to_refresh)) {
+                    if (!marked_for_refresh.count(to_refresh)) {
+                        to_refresh->setNeedsCheck(false); // activate the machine, don't push it back
+                        marked_for_refresh.insert(to_refresh);
+                    }
+                }
+            }
 
             for (int i = 0; i < dynamic_poll_start_idx; ++i) {
                 items[i] = fixed_items[i];

@@ -358,6 +358,9 @@ int main(int argc, char const *argv[]) {
     boost::condition_variable_any processing_condition;
     boost::shared_mutex processing_queue_mutex;
     SharedThreadSafeQueue<Package*> processing_queue(processing_condition, processing_queue_mutex);
+    boost::condition_variable_any refresh_condition;
+    boost::shared_mutex refresh_queue_mutex;
+    SharedThreadSafeQueue<MachineInstance*> refresh_queue(refresh_condition, refresh_queue_mutex);
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
@@ -368,8 +371,9 @@ int main(int argc, char const *argv[]) {
     ControlSystemMachine machine;
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
+    MachineInstance::setRefreshQueue(&refresh_queue);
     ProcessingThread &processMonitor(
-        ProcessingThread::create(machine, iod_activation, *stateMonitor, processing_queue));
+        ProcessingThread::create(machine, iod_activation, *stateMonitor, processing_queue, refresh_queue));
 
     Logger::instance()->setLevel(Logger::Debug);
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);

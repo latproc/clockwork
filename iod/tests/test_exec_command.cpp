@@ -114,6 +114,9 @@ int main(int, char **) {
     boost::condition_variable_any m_cond_var;
     boost::shared_mutex m_mutex;
     SharedThreadSafeQueue<Package*> queue(m_cond_var, m_mutex);
+    boost::condition_variable_any refresh_cond_var;
+    boost::shared_mutex refresh_mutex;
+    SharedThreadSafeQueue<MachineInstance*> refresh_queue(refresh_cond_var, refresh_mutex);
     Dispatcher::create(queue);
     Logger::instance();
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
@@ -122,7 +125,7 @@ int main(int, char **) {
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
     ProcessingThread &processMonitor(
-        ProcessingThread::create(machine, iod_activation, *stateMonitor, queue));
+        ProcessingThread::create(machine, iod_activation, *stateMonitor, queue, refresh_queue));
     processMonitor.setProcessingThreadInstance(&processMonitor);
     boost::thread process(boost::ref(processMonitor));
 

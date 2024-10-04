@@ -8,10 +8,10 @@
 
 extern uint64_t rate_calc_process_time;
 
-void RateEstimatorInstance::setNeedsCheck() {
+void RateEstimatorInstance::setNeedsCheck(bool add_to_queue) {
     //std::cout << _name << "::setNeedsCheck(), enabled: " << is_enabled
     //  << " has state machine? " << ( (state_machine) ? "yes" : "no") << "\n";
-    MachineInstance::setNeedsCheck();
+    MachineInstance::setNeedsCheck(add_to_queue);
     SharedWorkSet::instance()->add(this);
 }
 

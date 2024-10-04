@@ -322,6 +322,7 @@ definition_header '{' definition_body '}' {
             std::copy(current_locals.begin(), current_locals.end(),back_inserter(current_machineclass->locals));
             current_locals.clear();
         }
+        DBG_PARSER << "num params: " << current_machineclass->parameters.size() << "\n";
         DBG_PARSER << "num receives: " << current_machineclass->receives.size() << "\n";
         DBG_PARSER << "states: " << current_machineclass->numStates() << "\n";
         DBG_PARSER << "num transitions: " << current_machineclass->transitions.size() << "\n";
@@ -591,7 +592,7 @@ SYMBOL value {
 
 definition_header:
 SYMBOL STATEMACHINE parameters {
-    DBG_PARSER << " machine class "  << $1 << "\n";
+    DBG_PARSER << " machine class "  << $1 << " params: " << current_parameters.size() << "\n";
     check_machine_type($1);
     current_machineclass = new MachineClass($1);
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));

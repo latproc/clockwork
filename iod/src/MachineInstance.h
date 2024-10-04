@@ -50,6 +50,7 @@
 #include <sys/time.h>
 #include <vector>
 #include "ThreadSafeList.h"
+#include "ThreadSafeQueue.h"
 
 extern SymbolTable globals;
 
@@ -204,6 +205,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     // forward the message to dependents and notify them to check their state
     void notifyDependents(Message &msg);
 
+    static SharedThreadSafeQueue<MachineInstance *> &refresh_queue();
+    static void setRefreshQueue(SharedThreadSafeQueue<MachineInstance *> *refresh_queue);
     bool needsCheck();
     void resetNeedsCheck();
     void resetTemporaryStringStream();
@@ -329,7 +332,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     static void sort();
 
-    virtual void setNeedsCheck();
+    virtual void setNeedsCheck(bool add_to_queue = true);
     Value earliestScheduleTime(const std::list<Predicate *> &predicates);
     uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
     void updateLastEvaluationTime();
@@ -421,6 +424,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     uint64_t expected_authority;
 
     std::map<std::string, Value> changes;
+    static SharedThreadSafeQueue<MachineInstance *> *shared_refresh_queue;
 
     friend struct SetStateAction;
     friend struct MoveStateAction;

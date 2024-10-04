@@ -28,7 +28,8 @@ class ProcessingThread : public ClockworkProcessManager {
   public:
     ProcessingThreadInternals *internals;
     static ProcessingThread &create(ControlSystemMachine &m, HardwareActivation &activator,
-                                    IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue);
+                                    IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
+                                    SharedThreadSafeQueue<MachineInstance*> &refresh_queue);
 
     ~ProcessingThread();
 
@@ -104,7 +105,8 @@ class ProcessingThread : public ClockworkProcessManager {
   private:
     static ProcessingThread *instance_;
     ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator,
-                     IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &message_queue);
+                     IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &message_queue,
+                     SharedThreadSafeQueue<MachineInstance*> &refresh_queue);
     ProcessingThread(const ProcessingThread &other);
     ProcessingThread &operator=(const ProcessingThread &other);
 
@@ -147,6 +149,7 @@ class ProcessingThread : public ClockworkProcessManager {
     HardwareActivation &activate_hardware;
     IODCommandThread &command_interface;
     SharedThreadSafeQueue<Package*> &message_queue;
+    SharedThreadSafeQueue<MachineInstance*> &refresh_queue;
     uint64_t program_start;
 
     boost::recursive_mutex runnable_mutex;

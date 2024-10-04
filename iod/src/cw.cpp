@@ -104,6 +104,7 @@ void load_debug_config() {
                     std::cerr << "Warning: unrecognised DEBUG Flag " << debug_flag << "\n";
                 }
             }
+            LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
         }
     }
 }
@@ -584,6 +585,9 @@ int main(int argc, char const *argv[]) {
     boost::condition_variable_any processing_condition;
     boost::shared_mutex processing_queue_mutex;
     SharedThreadSafeQueue<Package*> processing_queue(processing_condition, processing_queue_mutex);
+    boost::condition_variable_any refresh_condition;
+    boost::shared_mutex refresh_queue_mutex;
+    SharedThreadSafeQueue<MachineInstance*> refresh_queue(refresh_condition, refresh_queue_mutex);
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
@@ -683,8 +687,9 @@ int main(int argc, char const *argv[]) {
 
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
+    MachineInstance::setRefreshQueue(&refresh_queue);
     ProcessingThread &processMonitor(
-        ProcessingThread::create(machine, iod_activation, *stateMonitor, processing_queue));
+        ProcessingThread::create(machine, iod_activation, *stateMonitor, processing_queue, refresh_queue));
 
     zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
     sim_io.bind("inproc://ethercat_sync");

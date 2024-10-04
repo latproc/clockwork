@@ -828,7 +828,14 @@ void semantic_analysis() {
                 std::stringstream ss;
                 ss << "## - Error: Machine " << sm_name << " requires " << num_sm_params
                    << " parameters but instance " << mi->getName() << " has "
-                   << mi->parameters.size() << std::flush;
+                   << mi->parameters.size();
+                if (num_sm_params > 100) {
+                    ss << "\nexpected: " << mi->getStateMachine()->parameters.size() << " got: ";
+                    int i = 0;
+                    for (const auto &m : mi->parameters) {
+                        ss << i++ << ": " << m.val << " ";
+                    }
+                }
                 std::string s = ss.str();
                 ++num_errors;
                 error_messages.push_back(s);
