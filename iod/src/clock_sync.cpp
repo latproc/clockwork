@@ -165,7 +165,7 @@ void clock_sync() {
         std::unique_lock<std::mutex> lock(pipe_mtx);
         pipe_cv.wait(lock);  // Wait for the next signal
         now = microsecs();
-        if (now - last_notify < 50) { continue; } // 
+        if (std::abs(static_cast<long long>(now - last_notify)) < 50) { continue; } // 
         last_notify = now;
         break;
     }
