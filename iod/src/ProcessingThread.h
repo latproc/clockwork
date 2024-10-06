@@ -102,6 +102,9 @@ class ProcessingThread : public ClockworkProcessManager {
 
     void join();
 
+    static void block_ethercat(bool which) { debug_block_ethercat = which; }
+    static bool ethercat_is_blocked() { return debug_block_ethercat; }
+
   private:
     static ProcessingThread *instance_;
     ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator,
@@ -151,6 +154,10 @@ class ProcessingThread : public ClockworkProcessManager {
     SharedThreadSafeQueue<Package*> &message_queue;
     SharedThreadSafeQueue<MachineInstance*> &refresh_queue;
     uint64_t program_start;
+    // sometimes ethercat is not processed and the watchdog
+    // triggers. This is to check if it's the processing
+    // thread's fault
+    static bool debug_block_ethercat;
 
     boost::recursive_mutex runnable_mutex;
     std::set<MachineInstance *> runnable;

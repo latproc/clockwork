@@ -196,4 +196,8 @@ struct IODCommandToggleEtherCAT : public IODCommand {
     bool run(std::vector<Value> &params);
 };
 
+struct IODCommandBlockEtherCAT : public IODCommand {
+    bool run(std::vector<Value> &params);
+};
+
 #endif

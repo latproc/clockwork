@@ -204,6 +204,7 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
     return stage;
 }
 
+#if 0
 bool EtherCATThread::getEtherCatResponse(zmq::socket_t &sock) {
     try {
         zmq::message_t iomsg;
@@ -227,6 +228,8 @@ bool EtherCATThread::getEtherCatResponse(zmq::socket_t &sock) {
         return false;
     }
 }
+#endif
+
 bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_process_data) {
     zmq::message_t output_update;
     IOInterface::MessageType packet_type;
@@ -237,10 +240,9 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_
         if (!received) {
             return false;
         }
-        DBG_ETHERCAT_PACKETS << "received output from clockwork; size: " << iomsg.size() << "\n";
+        DBG_ETHERCAT << "received output from clockwork; size: " << iomsg.size() << "\n";
         assert(iomsg.size() == sizeof(len));
         memcpy(&len, iomsg.data(), sizeof(len));
-        DBG_ETHERCAT_PACKETS << "expecting incoming message len " << len << "\n";
     }
     int64_t more = 0;
     size_t more_size = sizeof(more);
@@ -260,11 +262,11 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_
         memcpy(&packet_type, iomsg.data(), sizeof(packet_type));
         if (driver_state == s_driver_init) {
             if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
-                DBG_ETHERCAT << "received initial values from clockwork; size: " << len
+                DBG_ETHERCAT_PACKETS << "received initial values from clockwork; size: " << len
                                      << " packet: " << (int)packet_type << "\n";
             }
             else {
-                DBG_ETHERCAT << "received process values from clockwork; size: " << len
+                DBG_ETHERCAT_PACKETS << "received process values from clockwork; size: " << len
                                      << " packet: " << (int)packet_type << "\n";
             }
         }

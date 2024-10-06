@@ -17,6 +17,10 @@ void ProcessingThread::handle_hardware(
         avg_update_time.start();
 #endif
         if (update_state == UpdateStates::s_update_idle) {
+            if (defaults_sent && debug_block_ethercat) {
+                DBG_PROCESSING << "EtherCAT is blocked for debug";
+                return;
+            }
             IOUpdate upd;
             if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
                 DBG_INITIALISATION << "Sending defaults to EtherCAT\n";
@@ -89,9 +93,9 @@ void ProcessingThread::handle_hardware(
             else {
                 std::cout << "update data is empty\n";
             }
-        }
-        if (!defaults_sent) {
-            defaults_sent = true;
-            IOComponent::setHardwareState(IOComponent::s_operational);
+            if (!defaults_sent) {
+                defaults_sent = true;
+                IOComponent::setHardwareState(IOComponent::s_operational);
+            }
         }
 }

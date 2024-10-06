@@ -66,6 +66,7 @@ extern bool machine_is_ready;
 extern Statistics *statistics;
 extern uint64_t client_watchdog_timer;
 uint64_t clockwork_watchdog_timer = 0;
+bool ProcessingThread::debug_block_ethercat = false;
 
 extern void handle_io_sampling(uint64_t clock);
 

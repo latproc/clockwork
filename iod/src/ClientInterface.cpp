@@ -474,6 +474,9 @@ IODCommand *parseCommandString(const char *data) {
     else if (ds == "SLAVES" || ds == "SLAVE") {
         command = new IODCommandGetSlaveConfig;
     }
+    else if ((count == 2 || count == 3) && ds == "BLOCK" && params[1] == "ETHERCAT") {
+        command = new IODCommandBlockEtherCAT;
+    }
     else {
         FileLogger fl(program_name);
         fl.f() << "Warning: no command found for " << data << "\n";

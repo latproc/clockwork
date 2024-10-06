@@ -27,6 +27,7 @@
 #include "MessageEncoding.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
+#include "ProcessingThread.h"
 #include "Scheduler.h"
 #include "SharedWorkSet.h"
 #include "Statistic.h"
@@ -1520,6 +1521,26 @@ bool IODCommandToggleEtherCAT::run(std::vector<Value> &params) {
     uint64_t start = microsecs();
     all_ok = !all_ok;
     result_str = "OK";
+    return true;
+}
+
+bool IODCommandBlockEtherCAT::run(std::vector<Value> &params) {
+    if (params.size() != 3) {
+        error_str = "usage: BLOCK ETHERCAT on/off";
+        return false;
+    }
+    if (params[2] == "on") {
+        ProcessingThread::block_ethercat(true);
+        result_str = "ethercat blocked";
+    }
+    else if (params[2] == "off") {
+        ProcessingThread::block_ethercat(false);
+        result_str = "ethercat unblocked";
+    }
+    else {
+        error_str = "unknown block option";
+        return false;
+    }
     return true;
 }
 
