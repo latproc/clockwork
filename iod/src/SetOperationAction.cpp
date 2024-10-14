@@ -23,6 +23,9 @@
 #include "MachineInstance.h"
 
 static void debugParameterChange(MachineInstance *dest_machine) {
+    if (!dest_machine->debug()) {
+        return;
+    }
     const char *delim = "";
     const int bufsize = 600;
     char buf[bufsize];
@@ -633,16 +636,18 @@ Action::Status SelectSetOperation::doOperation() {
         }
 #endif
     }
-    std::stringstream ss;
-    const char *delim = "";
-    ss << "[";
-    for (unsigned int i = 0; i < dest_machine->parameters.size(); ++i) {
-        ss << delim << dest_machine->parameters[i].val;
-        delim = ",";
+    if (dest_machine->debug()) {
+        std::stringstream ss;
+        const char *delim = "";
+        ss << "[";
+        for (unsigned int i = 0; i < dest_machine->parameters.size(); ++i) {
+            ss << delim << dest_machine->parameters[i].val;
+            delim = ",";
+        }
+        ss << "]";
+        dest_machine->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
     }
-    ss << "]";
     source_a_machine->localised_names.erase("ITEM");
-    dest_machine->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
     status = Complete;
     return status;
 }
