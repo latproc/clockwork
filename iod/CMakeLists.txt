@@ -18,6 +18,11 @@ if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEC_EOE")
 endif()
 
+find_program(CCACHE_FOUND ccache)
+if(CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+endif()
+
 if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
 		  set(CMAKE_INSTALL_PREFIX "${PROJECT_SOURCE_DIR}/stage" CACHE PATH "..." FORCE)
 endif()
@@ -47,7 +52,7 @@ cmake_policy(SET CMP0015 NEW)
 #set (CMAKE_VERBOSE_MAKEFILE false)
 set (CMAKE_EXPORT_COMPILE_COMMANDS true)
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -DUSE_READLINE ")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -DUSE_READLINE ")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-function")
@@ -72,6 +77,7 @@ FIND_PACKAGE(Mosquitto)
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
 FIND_PACKAGE(ZeroMQ REQUIRED)
+FIND_PACKAGE(CURL)
 
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR} ${ZeroMQ_INCLUDE_DIR})
 
@@ -224,7 +230,7 @@ set (Clockwork_Headers
     src/split_string.h src/read_file.h src/copy_environment.h
     src/exec_command.h src/debug_malloc.h
     src/json_expr_parser.h src/json_expression.h src/process.h
-    src/process_data.h
+    src/process_data.h src/bit_ops.h
 )
 if (USE_ETHERCAT)
 	LIST (APPEND Clockwork_Headers "src/EtherCATthread.h")
@@ -262,7 +268,9 @@ set (Clockwork_SRCS
     src/split_string.c src/read_file.c src/copy_environment.c
     src/exec_command.c src/debug_malloc.c
     src/json_expr_parser.cpp src/json_expression.cpp src/process.cpp
-    src/process_data.cpp
+    src/process_data.cpp src/wait_for_work.cpp src/bit_ops.cpp
+    src/handle_command.cpp src/handle_scheduler.cpp
+    src/handle_hardware.cpp src/handle_machines.cpp
 	)
 if (USE_ETHERCAT)
 if (USE_SOEM)
