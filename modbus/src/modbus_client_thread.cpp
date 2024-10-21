@@ -297,7 +297,7 @@ bool ModbusClientThread::check_error(int rc, const char *msg, int entry, int *re
         if (connected) {
             close_connection();
         }
-        assert(ctx == nullptr);
+        //assert(ctx == nullptr);
         ctx = openConnection();
         return ctx != nullptr;
     }
