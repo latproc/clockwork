@@ -114,7 +114,7 @@ class Action : public TriggerOwner {
     Status status;
     Status saved_status;       // used when an action is suspended
     Action *blocked = nullptr; // blocked on this action
-    Trigger *trigger;
+    Trigger *trigger = nullptr;
     uint64_t start_time{};
     bool started_ = false;
     bool aborted_ = false;
