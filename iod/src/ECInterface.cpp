@@ -2260,7 +2260,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
     if (c_syncs) {
         delete[] c_syncs;
     }
-    delete[] c_entry_details;
+    //delete[] c_entry_details;
 
     return root;
 }
