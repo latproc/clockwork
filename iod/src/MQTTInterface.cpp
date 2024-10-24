@@ -57,7 +57,7 @@ void my_message_callback(struct mosquitto *mosq, void *obj,
         if (pos != device->handlers.end()) {
             m = (*pos).second;
         }
-        if (m && m->enabled()) {
+        if (m ) { // && m->enabled()) {
             m->setValue("topic", Value(message->topic, Value::t_string));
             char *tmp = 0;
             int64_t val = strtol(payload, &tmp, 10);
