@@ -6,6 +6,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 set (MBM_VERSION_MAJOR 0)
 set (MBM_VERSION_MINOR 1)
 
+find_program(CCACHE_FOUND ccache)
+if(CCACHE_FOUND)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
+endif()
+
 if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 		    include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
