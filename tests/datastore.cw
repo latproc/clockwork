@@ -82,11 +82,9 @@ ItemManager MACHINE list{
 RecordManager MACHINE record {
     OPTION id 0;
     OPTION request JSON_VALUE {};
-    OPTION response JSON_VALUE {
-        "machine": "ItemManager",
-        "message": "ItemRecord",
-        "details": {"id": 0, "name": "", "email": "", "age": 0}
-    };
+    OPTION response JSON_VALUE {};
+    OPTION data JSON_VALUE {};
+
     COMMAND update {
         request := record.update;
         ITEM ${keys.id} OF request := record.id;
@@ -110,8 +108,8 @@ RecordManager MACHINE record {
         request := record.find_by_id;
         ITEM ${keys.id} OF request := record.id;
         ITEM ${auth} OF request := "xxx";
-        ITEM ${respond_to} OF request := response;
-        #customer := LOOKUP USING request TO DATABASE_CHANNEL;
+        # indicate where the result should be posted
+        ITEM ${respond_to} OF request := SELF.NAME + ".response";
         SEND request TO DATABASE_CHANNEL;
         LOG request;
     }
@@ -122,6 +120,11 @@ RecordManager MACHINE record {
         LOG request;
     }
 
-
+    # After the database service provides the result it will send an event
+    # based on the name of the respond_to field of the request:
+    RECEIVE response_changed {
+        data := ITEM ${response} OF response;
+        LOG data;
+    }
 }
 
