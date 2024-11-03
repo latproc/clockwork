@@ -1669,6 +1669,10 @@ SET SYMBOL TO expression error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new IncludeActionTemplate($4, Value{$2});
 }
+| PUSH ITEMS FROM SYMBOL TO SYMBOL {
+	if (current_action) current_actions->push_back(current_action);
+	current_action = new IncludeActionTemplate($6, Value{$4}, -1, false, true);
+}
 | PUSH value TO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     Value *v = $2;

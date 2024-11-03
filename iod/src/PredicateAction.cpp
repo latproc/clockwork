@@ -290,12 +290,30 @@ Action::Status PredicateAction::run() {
         if (predicate->right_p) {
             Value &rhs(predicate->right_p->entry);
             if (predicate->op == opGetSubExpr) {
-                assert(predicate->right_p->json_expression);
+                if (!predicate->right_p->json_expression) {
+                    std::stringstream ss;
+                    ss << "Error: missing JSON expression, got " << *predicate->right_p << " instead\n";
+                    MessageLog::instance()->add(ss.str().c_str());
+                    status = Failed;
+                    owner->stop(this);
+                    return status;
+                }
                 if (rhs.kind == Value::t_symbol) {
                     val = eval(predicate->right_p, owner);
-                    assert(val.kind == Value::t_json);
-                    cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), val.json, owner);
-                    val = Value(sub_expr);
+                    if (val.kind == Value::t_json) {
+                        cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), val.json, owner);
+                        val = Value(sub_expr);
+                    }
+                    else {
+                        std::stringstream ss;
+                        ss << "Error: expected JSON value for sub-expression, got " << val
+                           << " instead\n";
+                        MessageLog::instance()->add(ss.str().c_str());
+                        status = Failed;
+                        owner->stop(this);
+                        return status;
+                    }
+
                 }
                 else {
                     assert(rhs.kind == Value::t_json);
