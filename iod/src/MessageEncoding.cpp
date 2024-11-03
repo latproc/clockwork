@@ -29,6 +29,17 @@
 #include <string>
 #include <sstream>
 
+namespace {
+
+    cJSON *cJSON_Duplicate(cJSON *json) {
+        char *str = cJSON_PrintUnformatted(json);
+        cJSON *res = cJSON_Parse(str);
+        free(str);
+        return res;
+    }
+
+}
+
 std::string MessageEncoding::valueType(const Value &v) {
     switch (v.kind) {
     case Value::t_symbol:
@@ -42,6 +53,8 @@ std::string MessageEncoding::valueType(const Value &v) {
         return "FLOAT";
     case Value::t_bool:
         return "BOOL";
+    case Value::t_json:
+        return "JSON";
 #ifdef DYNAMIC_VALUES
     case Value::t_dynamic: {
         DynamicValue *dv = v.dynamicValue();
@@ -69,6 +82,15 @@ void MessageEncoding::addValueToJSONObject(cJSON *obj, const char *name, const V
     case Value::t_float:
         cJSON_AddItemToObject(obj, name, cJSON_CreateDouble(val.fValue));
         break;
+    case Value::t_json:
+    {
+        if (val.json->type == cJSON_Object) {
+            cJSON_AddItemToObject(obj, name, cJSON_Duplicate(val.json));
+        }
+        else if (val.json->type == cJSON_Array) {
+            cJSON_AddItemToObject(obj, name, cJSON_Duplicate(val.json));
+        }
+    }
     case Value::t_bool:
         if (val.bValue) {
             cJSON_AddTrueToObject(obj, name);
@@ -115,6 +137,15 @@ void MessageEncoding::addValueToJSONArray(cJSON *obj, const Value &val) {
             cJSON_AddItemToArray(obj, cJSON_CreateFalse());
         }
         break;
+    case Value::t_json:
+    {
+        if (val.json->type == cJSON_Object) {
+            cJSON_AddItemToArray(obj, cJSON_Duplicate(val.json));
+        }
+        else if (val.json->type == cJSON_Array) {
+            cJSON_AddItemToArray(obj, cJSON_Duplicate(val.json));
+        }
+    }
 #ifdef DYNAMIC_VALUES
     case Value::t_dynamic: {
         DynamicValue *dv = val.dynamicValue();
@@ -246,6 +277,12 @@ Value MessageEncoding::valueFromJSONObject(cJSON *obj, cJSON *cjType) {
         else {
             res = obj->valueNumber.val._double;
         }
+    }
+    else if (obj->type == cJSON_Object) {
+        res = cJSON_Duplicate(obj);
+    }
+    else if (obj->type == cJSON_Array) {
+        res = cJSON_Duplicate(obj);
     }
     else {
         res = SymbolTable::Null;
