@@ -23,8 +23,11 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include <sstream>
+#include "tl/expected.hpp"
 
-static void debugParameterChange(MachineInstance *dest_machine) {
+namespace {
+
+void debugParameterChange(MachineInstance *dest_machine) {
     const char *delim = "";
     char buf[1010];
     snprintf(buf, 1000, "[");
@@ -40,6 +43,36 @@ static void debugParameterChange(MachineInstance *dest_machine) {
     }
     snprintf(buf + n, 1000 - n, "]");
     dest_machine->setValue("DEBUG", Value(buf, Value::t_string));
+}
+
+tl::expected<bool, std::string> add_json_array(MachineInstance *list_machine, const Value &to_insert, int64_t pos,
+                        bool before) {
+    if (!to_insert.json) {
+        return tl::make_unexpected("Expected json array when inserting " + to_insert.asString());
+    }
+    if (to_insert.json->type != cJSON_Array) {
+        std::stringstream ss;
+        ss << list_machine->getName()
+           << " expected json array when inserting "
+           << to_insert << "\n";
+        MessageLog::instance()->add(ss.str());
+        return tl::make_unexpected(ss.str());
+    }
+    cJSON *next = to_insert.json->child;
+    while (next) {
+        auto str = cJSON_Print(next);
+        Value v(cJSON_Parse(str));
+        free(str);
+        list_machine->addParameter(v, nullptr, pos, before);
+        next = next->next;
+        if (pos >= 0) {
+            ++pos; // not adding at the end
+        }
+        debugParameterChange(list_machine);
+    }
+    return true;
+}
+
 }
 
 IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val, Value pos,
@@ -208,6 +241,7 @@ Action::Status IncludeAction::run() {
                         if (v.kind == Value::t_symbol) {
                             machine = owner->lookup(v.sValue);
                             if (machine) {
+                                // TODO: this isn't the right place to cache the machine
                                 if (!v.cached_machine) {
                                     v.cached_machine = machine;
                                 }
@@ -215,6 +249,14 @@ Action::Status IncludeAction::run() {
                             }
                             else {
                                 list_machine->addParameter(v, nullptr, pos, before);
+                            }
+                        }
+                        else if (to_insert.kind == Value::t_json) {
+                            auto res = add_json_array(list_machine, to_insert, pos, before);
+                            if (!res) {
+                                error_str = res.error().c_str();
+                                status = Failed;
+                                return status;
                             }
                         }
                         else {
@@ -235,6 +277,14 @@ Action::Status IncludeAction::run() {
                         else {
                             list_machine->addParameter(to_insert, machine, pos, before);
                         }
+                    }
+                }
+                else if (to_insert.kind == Value::t_json) {
+                    auto res = add_json_array(list_machine, to_insert, pos, before);
+                    if (!res) {
+                        error_str = res.error().c_str();
+                        status = Failed;
+                        return status;
                     }
                 }
                 else {
