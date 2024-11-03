@@ -13,11 +13,13 @@ Y MACHINE other {
     OPTION d 0;
     OPTION i 1;
     OPTION j 2;
+    list LIST;
     ENTER INIT {
-      other := a;
-      b := ITEM ${[@i]} OF other.b;
-      ITEM ${[@j]} OF other.b := 4;
-      d := c AS JSON;
+      other := a; # automatic assignment to the properties of another machine (not working yet)
+      b := ITEM ${[@i]} OF other.b; # assign a value from a list
+      ITEM ${[@j]} OF other.b := 4; # set the value within a JSON array
+      d := c AS JSON;               # convert a string to JSON
+      PUSH ITEMS FROM d TO list;    # push items from a JSON array to a list
     }
 }
 y Y x;
