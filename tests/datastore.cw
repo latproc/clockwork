@@ -40,6 +40,11 @@ Customer MACHINE {
          "keys": {"name": ""},
          "fields": ["id", "name", "email"]
     };
+    OPTION find_all JSON_VALUE {
+         "action": "find",
+         "type": "customer",
+         "fields": ["id", "name", "email"]
+    };
     OPTION update JSON_VALUE {
          "action": "update",
          "type": "customer",
@@ -91,8 +96,8 @@ RecordManager MACHINE record {
         ITEM ${data.name} OF request := record.name;
         ITEM ${data.email} OF request := record.email;
         ITEM ${data.age} OF request := record.age;
-        ITEM ${auth} OF request := "xxx";
         LOG request;
+        ITEM ${auth} OF request := "xxx";
         SEND request TO DATABASE_CHANNEL;
     }
     COMMAND insert {
@@ -100,31 +105,57 @@ RecordManager MACHINE record {
         ITEM ${data.name} OF request := record.name;
         ITEM ${data.email} OF request := record.email;
         ITEM ${data.age} OF request := record.age;
-        ITEM ${auth} OF request := "xxx";
         LOG request;
+        ITEM ${auth} OF request := "xxx";
+        SEND request TO DATABASE_CHANNEL;
+    }
+    COMMAND delete {
+        request := record.delete;
+        ITEM ${keys.id} OF request := record.id;
+        LOG request;
+        ITEM ${auth} OF request := "xxx";
+        SEND request TO DATABASE_CHANNEL;
+    }
+    COMMAND find_all {
+        request := record.find_all;
+        # indicate where the result should be posted
+        ITEM ${respond_to} OF request := SELF.NAME + ".response";
+        LOG request;
+        ITEM ${auth} OF request := "xxx";
         SEND request TO DATABASE_CHANNEL;
     }
     COMMAND find_by_id {
         request := record.find_by_id;
         ITEM ${keys.id} OF request := record.id;
-        ITEM ${auth} OF request := "xxx";
         # indicate where the result should be posted
         ITEM ${respond_to} OF request := SELF.NAME + ".response";
-        SEND request TO DATABASE_CHANNEL;
         LOG request;
+        ITEM ${auth} OF request := "xxx";
+        SEND request TO DATABASE_CHANNEL;
+    }
+    COMMAND find_by_name {
+        request := record.find_by_name;
+        ITEM ${keys.name} OF request := record.name;
+        # indicate where the result should be posted
+        ITEM ${respond_to} OF request := SELF.NAME + ".response";
+        LOG request;
+        ITEM ${auth} OF request := "xxx";
+        SEND request TO DATABASE_CHANNEL;
     }
     COMMAND do_sql {
         request := raw_sql.sql_statement;
         ITEM ${sql} OF request := raw_sql.sql;
-        ITEM ${auth} OF request := "xxx";
         LOG request;
+        ITEM ${auth} OF request := "xxx";
     }
 
     # After the database service provides the result it will send an event
     # based on the name of the respond_to field of the request:
+    results LIST;
     RECEIVE response_changed {
-        data := ITEM ${response} OF response;
-        LOG data;
+        data := ITEM ${response} OF response; # received an array of records
+        PUSH ITEMS FROM data TO results;
+        LOG "Received response: " + data;
     }
 }
 
