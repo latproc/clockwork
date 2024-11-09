@@ -31,6 +31,7 @@
 #include "dynamic_value.h"
 #include "json_expression.h"
 #include "regular_expressions.h"
+#include "urlencode.h"
 #include <iomanip>
 
 static int count_instances = 0;
@@ -159,6 +160,9 @@ std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
         break;
     case opIncludes:
         opstr = "INCLUDES";
+        break;
+    case opUrlEncoded:
+        opstr = "AS URLENCODED";
         break;
     }
     return out << opstr;
@@ -492,7 +496,8 @@ void Predicate::clearTimerEvents(
 std::ostream &Predicate::operator<<(std::ostream &out) const {
     if (left_p) {
         out << "(";
-        if (op != opNOT && op != opInteger && op != opFloat && op != opString && op != opJson) {
+        if (op != opNOT && op != opInteger && op != opFloat
+                        && op != opString && op != opJson && op != opUrlEncoded) {
             left_p->operator<<(out); // ignore the lhs for NOT operators
         }
         out << " " << op << " ";
@@ -1109,6 +1114,34 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
         return Value(rhs.asString(), Value::t_string);
     case opJson: {
         cJSON *json = cJSON_Parse(rhs.asString().c_str());
+        return Value(json);
+    }
+    case opUrlEncoded: {
+        if (rhs.kind == Value::t_json) {
+        {
+            std::ostringstream ss;
+            ss << "url encoding " << rhs;
+        }
+            if (rhs.json == nullptr) {
+                return Value("");
+            }
+            if (rhs.json->type != cJSON_Object) {
+                char *json_str = cJSON_PrintUnformatted(rhs.json);
+                std::string result(url_encode(json_str));
+                free(json_str);
+                return Value(result, Value::t_string);
+            }
+            auto result = url_encode_json(rhs.json);
+            if (result) {
+                return Value(*result, Value::t_string);
+            }
+            MessageLog::instance()->add(std::string("Failed to encode json object: " + result.error()));
+            char *json_str = cJSON_PrintUnformatted(rhs.json);
+            result = url_encode(json_str);
+            free(json_str);
+            return Value(*result, Value::t_string);
+        }
+        cJSON *json = cJSON_Parse(url_encode(rhs.asString()).c_str());
         return Value(json);
     }
     case opAssign:

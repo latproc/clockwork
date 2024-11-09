@@ -29,6 +29,7 @@
 #include "value.h"
 #include <iostream>
 #include "json_expression.h"
+#include "urlencode.h"
 
 void breakpoint() {}
 
@@ -214,6 +215,21 @@ Value eval(Predicate *p, MachineInstance *m) {
             res = Value(cJSON_Parse(str.c_str()));
             break;
         }
+        case opUrlEncoded:{
+            std::string str;
+            if (r.kind == Value::t_json) {
+                auto res = url_encode_json(r.json);
+                if (res) { str = *res; }
+                else {
+                    MessageLog::instance()->add(res.error().c_str());
+                }
+            }
+            else {
+                str = url_encode(r.asString());
+            }
+            res = Value(str, Value::t_string);
+        }
+            break;
         case opAssign:
             res = r;
             break; // TBD
@@ -236,7 +252,7 @@ Value eval(Predicate *p, MachineInstance *m) {
         }
 
         if (m && m->debug()) {
-            if (p->op == opNOT || p->op == opInteger || p->op == opFloat || p->op == opString) {
+            if (p->op == opNOT || p->op == opInteger || p->op == opFloat || p->op == opString || p->op == opUrlEncoded) {
                 DBG_PREDICATES << " expr: " << p->op << " " << *(p->right_p) << " returns " << res
                                << "\n";
             }

@@ -78,7 +78,12 @@ void send_response_to_clockwork(cJSON *json_request, const char *buf) {
         std::cout << "responding to " << target.machine << "." << target.property << "\n";
     }
     cJSON *msg = cJSON_Parse(buf);
+    if (!msg) {
+        std::cout << "could not parse database response: " << buf << "\n";
+        return;
+    }
     auto str = cJSON_Print(msg);
+    assert(str && "cJSON_Print returned a null pointer");
     auto cmd = MessageEncoding::encodeCommand("PROPERTY", target.machine, target.property, Value{msg});
     if (!cmd.empty()) {
         if (debug) {

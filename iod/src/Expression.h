@@ -62,7 +62,8 @@ enum PredicateOperator {
     opAbsoluteValue,
     opString,
     opGetSubExpr,
-    opPutSubExpr
+    opPutSubExpr,
+    opUrlEncoded
 };
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 void toC(std::ostream &out, const PredicateOperator op);

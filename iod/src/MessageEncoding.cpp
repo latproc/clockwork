@@ -84,7 +84,10 @@ void MessageEncoding::addValueToJSONObject(cJSON *obj, const char *name, const V
         break;
     case Value::t_json:
     {
-        if (val.json->type == cJSON_Object) {
+        if (val.json == nullptr) {
+            cJSON_AddNullToObject(obj, name);
+        }
+        else if (val.json->type == cJSON_Object) {
             cJSON_AddItemToObject(obj, name, cJSON_Duplicate(val.json));
         }
         else if (val.json->type == cJSON_Array) {
@@ -139,7 +142,10 @@ void MessageEncoding::addValueToJSONArray(cJSON *obj, const Value &val) {
         break;
     case Value::t_json:
     {
-        if (val.json->type == cJSON_Object) {
+        if (val.json == nullptr) {
+            cJSON_AddItemToArray(obj, cJSON_CreateNull());
+        }
+        else if (val.json->type == cJSON_Object) {
             cJSON_AddItemToArray(obj, cJSON_Duplicate(val.json));
         }
         else if (val.json->type == cJSON_Array) {

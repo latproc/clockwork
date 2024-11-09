@@ -10,6 +10,7 @@
 #include <symboltable.h>
 #include <value.h>
 #include <vector>
+#include <urlencode.h>
 
 #include "library_globals.cpp"
 
@@ -406,6 +407,37 @@ TEST(JsonExpr, CanGetValueFromObjectUsingProperty) {
     EXPECT_EQ(json->type, cJSON_String);
     EXPECT_EQ(strcmp(json->valuestring, "hello"), 0);
     cJSON_Delete(json);
+    cJSON_Delete(doc);
+}
+
+TEST(UrlEncode, CanEncodeStringWithSpecialCharacters) {
+    std::string str = "hello world!";
+    std::string encoded = url_encode(str);
+    EXPECT_EQ(encoded, "hello%20world%21");
+}
+
+TEST(UrlEncode, CanEncodeJSON) {
+    auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
+    auto doc = cJSON_Parse(json_str);
+    auto encoded = url_encode_json(doc);
+    EXPECT_TRUE(encoded);
+    EXPECT_EQ(*encoded, "a=1&b=hello");
+    cJSON_Delete(doc);
+}
+
+TEST(UrlEncode, CannotEncodeInvalidJSON) {
+    auto json_str = R"JSON("a"})JSON";
+    auto doc = cJSON_Parse(json_str);
+    auto encoded = url_encode_json(doc);
+    EXPECT_FALSE(encoded);
+    cJSON_Delete(doc);
+}
+
+TEST(UrlEncode, CannotEncodeNestedJSON) {
+    auto json_str = R"JSON({"a":1,"b":{"c":2}})JSON";
+    auto doc = cJSON_Parse(json_str);
+    auto encoded = url_encode_json(doc);
+    EXPECT_FALSE(encoded);
     cJSON_Delete(doc);
 }
 
