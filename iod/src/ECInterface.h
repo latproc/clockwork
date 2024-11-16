@@ -210,7 +210,7 @@ class ECInterface {
 #ifndef EC_SIMULATOR
 #ifdef USE_ETHERCAT
 void collectEtherCatModules();
-char *collectSlaveConfig(bool reconfigure);
+cJSON *collectSlaveConfigJson(int position = -1);
 #endif
 #endif
 
