@@ -47,6 +47,7 @@
 #include <cassert>
 #include <dlfcn.h>
 #include <iostream>
+#include <sstream>
 #include <sys/time.h>
 #include <time.h>
 #include <utility>
@@ -66,9 +67,11 @@
 #include "RateEstimatorInstance.h"
 #include "SharedWorkSet.h"
 #include "Transition.h"
+#include <mutex>
 
 extern int num_errors;
 extern std::list<std::string> error_messages;
+static std::recursive_mutex set_needs_check_mutex;
 
 uint64_t rate_calc_process_time = 0; // used for idle calculations for rate estimation
 Value *MachineInstance::polling_delay = 0;
@@ -164,6 +167,7 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::s
 }
 
 void MachineInstance::setNeedsCheck() {
+    std::lock_guard<std::recursive_mutex> lock(set_needs_check_mutex);
     DBG_M_MESSAGING << _name << "::setNeedsCheck(), enabled: " << is_enabled
                     << " has state machine? " << ((state_machine) ? "yes" : "no") << "\n";
     if (!getStateMachine()) {
@@ -172,7 +176,6 @@ void MachineInstance::setNeedsCheck() {
     if (!is_enabled) {
         return;
     }
-    bool already_pending = ProcessingThread::is_pending(this);
     if (!needs_check) {
         DBG_AUTOSTATES << _name << " needs check\n";
         ++total_machines_needing_check;
@@ -181,17 +184,17 @@ void MachineInstance::setNeedsCheck() {
     if (!active_actions.empty() || !mail_queue.empty()) {
         DBG_M_MESSAGING << _name << " queued for action processing\n";
         SharedWorkSet::instance()->add(this);
-        ProcessingThread::activate(this);
+        if (!is_runnable()) { ProcessingThread::activate(this); }
     }
     else if (getStateMachine()->allow_auto_states) {
         DBG_M_MESSAGING << _name << " queued for stable state checks\n";
         pending_state_change.insert(this);
-        ProcessingThread::activate(this);
+        if (!is_runnable()) { ProcessingThread::activate(this); }
     }
     else {
         DBG_M_MESSAGING << _name << " queued for action processing\n";
         SharedWorkSet::instance()->add(this);
-        ProcessingThread::activate(this);
+        if (!is_runnable()) { ProcessingThread::activate(this); }
     }
     next_poll = 0;
     if (state_machine->token_id == ClockworkToken::LIST) {
@@ -268,7 +271,7 @@ void MachineInstance::enqueueAction(Action *a) {
     DBG_ACTIONS << _name << " New Action queued: " << *a << "\n";
     has_work = true;
     SharedWorkSet::instance()->add(this);
-    ProcessingThread::activate(this);
+    if (!is_runnable()) { ProcessingThread::activate(this); }
 }
 
 void MachineInstance::enqueue(const Package &package) {
@@ -338,6 +341,7 @@ void MachineInstance::triggerFired(Trigger *trig) {
     if (trig->matches(str_publish)) {
         Channel::sendPropertyChanges(this);
     }
+    DBG_PROCESSING << "setting needs check for " << *this << "due to timer\n";
     setNeedsCheck();
 }
 
@@ -345,7 +349,7 @@ void MachineInstance::checkActions() {
     num_machines_with_work++;
     has_work = true;
     SharedWorkSet::instance()->add(this);
-    ProcessingThread::activate(this);
+    if (!is_runnable()) { ProcessingThread::activate(this); }
     DBG_AUTOSTATES << _name << " ADDED to machines with work " << SharedWorkSet::instance()->size()
                    << "\n";
 }
@@ -920,7 +924,7 @@ void MachineInstance::describe(std::ostream &out) {
         for (unsigned int i = 0; i < stable_states.size(); ++i) {
             out << "  " << stable_states[i].state_name << ": "
                 << stable_states[i].condition.last_evaluation << "\n";
-            if (stable_states[i].condition.last_result == true) {
+            if (stable_states[i].condition.last_result == Value{true}) {
                 if (stable_states[i].subcondition_handlers &&
                     !stable_states[i].subcondition_handlers->empty()) {
                     std::list<ConditionHandler>::iterator iter =
@@ -1131,7 +1135,7 @@ void MachineInstance::idle() {
     if (mail_queue.empty() && active_actions.empty()) {
         has_work = false;
     }
-    if (has_work) {
+    if (has_work && !is_runnable()) {
         ProcessingThread::activate(this);
     }
 
@@ -1173,17 +1177,16 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
         evt_iter = pending_events.erase(evt_iter);
         MachineInstance *mi = dynamic_cast<MachineInstance *>(pkg->receiver);
         if (mi) {
+            DBG_PROCESSING << "Processing pending event " << *pkg << " for " << mi->getName() << "\n";
             mi->execute(*(pkg->message), pkg->transmitter);
+            mi->setNeedsCheck();
         }
         delete pkg;
         ++total_process_calls;
-        if (mi) {
-            mi->setNeedsCheck();
-        }
     }
 
     num_machines_with_work = 0;
-    rate_calc_process_time = nowMicrosecs();
+    rate_calc_process_time = microsecs();
     //boost::recursive_mutex &mutex(SharedWorkSet::instance()->getMutex());
     {
         //boost::recursive_mutex::scoped_lock lock(mutex);
@@ -1209,7 +1212,7 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
                     busy_it = to_process.erase(busy_it);
                     if (mi->is_active) {
                         pending_state_change.insert(mi);
-                        ProcessingThread::activate(mi);
+                        if (!mi->is_runnable()) { ProcessingThread::activate(mi); }
                     }
                 }
                 else {
@@ -1217,7 +1220,7 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
                 }
             }
             else if (action) {
-                if (!action->getTrigger()) { ProcessingThread::activate(mi); }
+                if (!action->getTrigger() && !mi->is_runnable()) { ProcessingThread::activate(mi); }
                 busy_it++;
             }
             else {
@@ -1288,6 +1291,10 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
     std::set<MachineInstance *>::iterator iter = to_process.begin();
     while (iter != to_process.end()) {
         MachineInstance *mi = *iter++;
+        if (!mi->enabled()) {
+            pending_state_change.erase(mi);
+            continue;
+        }
         if (!mi->executingCommand() && mi->mail_queue.empty()) {
             // unless the machine is disabled leave the state check on the queue until it is stable
             if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states ||
@@ -1299,7 +1306,7 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
             SharedWorkSet::instance()->add(mi);
             pending_state_change.erase(
                 mi); // this machine has other work, it should no longer be on the pending state change queue
-            ProcessingThread::activate(mi);
+            if (!mi->is_runnable()) { ProcessingThread::activate(mi); }
         }
     }
     return true;
@@ -1552,10 +1559,10 @@ void MachineInstance::setProperties(const SymbolTable &props) {
             }
         }
         else if (p.first == "TRACEABLE") {
-            if (p.second == "TRUE") {
+            if (p.second == Value{"TRUE"}) {
                 is_traceable = true;
             }
-            if (p.second == "FALSE") {
+            if (p.second == Value{"FALSE"}) {
                 is_traceable = false;
             }
         }
@@ -1630,13 +1637,8 @@ std::ostream &MachineInstance::operator<<(std::ostream &out) const {
 bool MachineInstance::stateExists(State &seek) {
     //return (state_machine->state_names.count(seek.getName()) != 0);
 
-    std::list<State *>::const_iterator iter = state_machine->states.begin();
-    while (iter != state_machine->states.end()) {
-        if (*(*iter) == seek) {
-            return true;
-        }
-        iter++;
-    }
+    auto found = state_machine->findState(seek);
+    if (found) { return true; }
     for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
         if (stable_states[ss_idx].state_name == seek.getName()) {
             return true;
@@ -1883,7 +1885,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                     if (this == dep) {
                         continue;
                     }
-    
+
                     // note that the following test prevents us from resuming a
                     // blocked action in dep and that may be bad but the test is
                     // not used in the case of the ENTER handler, below and there
@@ -1899,7 +1901,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                         DBG_M_MESSAGING << dep->getName() << "[" << dep->getCurrent().getName() << "]"
                                         << " is executing " << *act << "\n";
                     }
-    
+
                     // execute the message on the dependant machine
                     dep->execute(msg, this);
                 }
@@ -2072,7 +2074,6 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 
             DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val << "ms\n";
             // prepare a new trigger. note: very short timers will still be scheduled
-            // TBD move this outside of the loop and only apply it for the earliest timer
             std::string trigger_name("SSTimer ");
             trigger_name += _name;
             trigger_name += " ";
@@ -2089,11 +2090,11 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                     new ScheduledItem(stable_state_timer_base, timer_val * 1000, s.trigger));
             }
             else if (timer_val >= -2) {
-                ProcessingThread::activate(this);
+                if (!is_runnable()) { ProcessingThread::activate(this); }
             }
         }
         else if (dbg_report_if_timer_found) {
-            DBG_M_SCHEDULER << " no state timer required\n";
+            DBG_SCHEDULER << " no state timer required for " << getName() << "\n";
         }
 
         if (published && !machine_class_state->isLocal()) {
@@ -2350,7 +2351,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                             }
                             if (change_state_action == 0) {
                                 MoveStateActionTemplate temp(_name.c_str(),
-                                                             t.dest.getName().c_str());
+                                                             Value{t.dest.getName().c_str()});
                                 MachineCommandTemplate mc("stable_state_test", "");
                                 mc.setActionTemplate(&temp);
                                 char buf[100];
@@ -2386,7 +2387,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                     if (!found) {
                         DBG_M_STATECHANGES << "no stable state condition test for "
                                            << t.dest.getName() << " pushing state change\n";
-                        MoveStateActionTemplate msat("SELF", t.dest.getName());
+                        MoveStateActionTemplate msat("SELF", Value{t.dest.getName()});
                         MoveStateAction *msa = new MoveStateAction(this, msat);
                         DBG_M_STATECHANGES << _name << " pushed (status: " << msa->getStatus()
                                            << ") " << *msa << "\n";
@@ -2436,11 +2437,11 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
 
                 if (state_change_ok) {
                     // no matching command, just perform the transition
-                    MoveStateActionTemplate temp(_name.c_str(), t.dest.getName().c_str());
+                    MoveStateActionTemplate temp(_name.c_str(), Value{t.dest.getName().c_str()});
                     return new MoveStateAction(this, temp);
                 }
                 else {
-                    SendMessageActionTemplate ssat("StateChangeFailureException", this);
+                    SendMessageActionTemplate ssat(Value{"StateChangeFailureException"}, this);
                     return new SendMessageAction(this, ssat);
                 }
             }
@@ -2472,7 +2473,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                 }
                 DBG_M_MESSAGING << _name << " received message" << m.getText()
                                 << "; pushing state change\n";
-                MoveStateActionTemplate msat("SELF", t.dest.getName());
+                MoveStateActionTemplate msat("SELF", Value{t.dest.getName()});
                 MoveStateAction *msa = new MoveStateAction(this, msat);
                 DBG_M_STATECHANGES << _name << " pushed (status: " << msa->getStatus() << ") "
                                    << *msa << "\n";
@@ -2657,7 +2658,7 @@ Action::Status MachineInstance::execute(const Message &m, Transmitter *from, Act
         }
         else if (m.getText() == "property_change") {
             //std::cout << _name << " value changed to " << io_interface->address.value << "\n";
-            setValue("VALUE", io_interface->address.value);
+            setValue("VALUE", Value{io_interface->address.value});
         }
         // a POINT won't have an actions that depend on triggers so it's safe to return now
         return Action::Complete;
@@ -2691,7 +2692,7 @@ void MachineInstance::handle(const Message &m, Transmitter *from, bool send_rece
     HandleMessageAction *hma = new HandleMessageAction(this, hmat);
     enqueueAction(hma);
     SharedWorkSet::instance()->add(this);
-    ProcessingThread::activate(this);
+    if (!is_runnable()) { ProcessingThread::activate(this); }
 }
 
 void MachineInstance::sendMessageToReceiver(const Message &message, Receiver *r,
@@ -2704,7 +2705,7 @@ void MachineInstance::sendMessageToReceiver(const Message &message, Receiver *r,
         addressed_message += ".";
         addressed_message += message.getText();
         std::list<Value> *params = new std::list<Value>;
-        params->push_back(addressed_message.c_str());
+        params->push_back(Value{addressed_message.c_str()});
         MachineInstance *mi = dynamic_cast<MachineInstance *>(r);
         if (mi) {
             MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CW, false);
@@ -2781,7 +2782,7 @@ void MachineInstance::start(Action *a) {
     Action *curr = executingCommand();
     if (a != curr) {
         active_actions.push_back(a->retain());
-        ProcessingThread::activate(this);
+        if (!is_runnable()) { ProcessingThread::activate(this); }
     }
     else if (curr) {
         setNeedsCheck();
@@ -2929,11 +2930,12 @@ void MachineInstance::setInitialState(bool resume) {
                 setState(*s, expected_authority, false);
             }
             else {
-                char buf[100];
-                snprintf(buf, 100, "Warning: setting initial state on %s to unknown state: %s\n",
-                         _name.c_str(), io_interface->getStateString());
-                MessageLog::instance()->add(buf);
-                NB_MSG << buf << "\n";
+                std::stringstream ss;
+                ss << "Warning: setting initial state on "
+                   <<_name << " (" << io_interface->address << ")) to unknown state: "
+                   << io_interface->getStateString();
+                MessageLog::instance()->add(ss.str());
+                NB_MSG << ss.str() << "\n";
             }
         }
         else {
@@ -3017,7 +3019,7 @@ void MachineInstance::enable() {
         io_interface->handleChange(pending_events);
     }
     std::list<MachineInstance *> sorted;
-    sortDependentMachines(this, sorted);
+    sortDependentMachines(this, sorted); // TODO: remove this expensive operation
     std::list<MachineInstance *>::iterator oi = sorted.begin();
     while (oi != sorted.end()) {
         MachineInstance *b = *oi++;
@@ -3088,7 +3090,7 @@ void MachineInstance::disable() {
         if (val.kind == Value::t_integer) {
             int64_t i_val = 0;
             if (val.asInteger(i_val)) {
-                setValue("VALUE", i_val);
+                setValue("VALUE", Value{i_val});
                 if (io_interface) {
                     if (io_interface->address.is_signed) {
                         io_interface->setValue((int32_t)(i_val & 0xffffffff));
@@ -3170,7 +3172,7 @@ void MachineInstance::push(Action *new_action) {
     num_machines_with_work++;
     has_work = true;
     SharedWorkSet::instance()->add(this);
-    ProcessingThread::activate(this);
+    if (!is_runnable()) { ProcessingThread::activate(this); }
     if (tracing() && isTraceable()) {
         resetTemporaryStringStream();
         ss << "starting action: " << *new_action;
@@ -3221,8 +3223,8 @@ std::string MachineInstance::firstValidStableState(const std::string state_name)
 
 bool MachineInstance::setStableState() {
     bool changed_state = false;
-    ProcessingThread::suspend(
-        this); // assume this machine will not have anything else to do after checking states
+    // assume this machine will not have anything else to do after checking states
+    ProcessingThread::suspend(this);
 
     CaptureDuration cd(stable_states_stats);
     DBG_M_AUTOSTATES << _name << " checking stable states (currently " << current_state.getName()
@@ -3312,7 +3314,7 @@ bool MachineInstance::setStableState() {
                                        << ") should be in state " << s.state_name
                                        << " due to condition: " << *s.condition.predicate << "\n";
                         char *sn = strdup(s.state_name.c_str());
-                        SetStateActionTemplate ssat(CStringHolder("SELF"), s.state_name,
+                        SetStateActionTemplate ssat(CStringHolder("SELF"), Value{s.state_name},
                                                     StateChangeReason::automatic);
                         enqueueAction(ssat.factory(
                             this)); // execute this state change next time actions are processed
@@ -3470,10 +3472,10 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     // clone properties from the class into this instance but don't replace
     // properties already loaded
     properties.add(state_machine->getProperties(), SymbolTable::NO_REPLACE);
-    properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
+    properties.add("NAME", Value{_name.c_str()}, SymbolTable::ST_REPLACE);
     if (locals.size() == 0) {
         for (Parameter p : state_machine->locals) {
-            Parameter newp(p.val.sValue.c_str());
+            Parameter newp(Value{p.val.sValue.c_str()});
             if (!p.machine) {
                 MessageLog::instance()->add(_name,
                                             ": no clonable instance for parameter: ", p.val.sValue);
@@ -3630,7 +3632,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
             machine.erase((machine.find('.')));
             // if this is a parameter, copy the transition to use the real name
             for (unsigned int i = 0; i < state_machine->parameters.size(); ++i) {
-                if (parameters[i].val == machine) {
+                if (parameters[i].val == Value{machine}) {
                     std::string evt = transition.trigger.getText();
                     evt = evt.substr(evt.find('.') + 1);
                     std::string trigger = parameters[i].real_name + "." + evt;
@@ -4076,13 +4078,9 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
 const Value *MachineInstance::lookupState(const std::string &state_name) {
     //is state_name a valid state?
     if (state_machine) {
-        std::list<State *>::iterator iter = state_machine->states.begin();
-        while (iter != state_machine->states.end()) {
-            State *s = *iter++;
-            if (s->getName() == state_name) {
-                return s->getNameValue();
-            }
-        }
+        const auto found = state_machine->findState(state_name.c_str());
+        if (found) { return found->getNameValue(); }
+
         for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
             if (stable_states[ss_idx].state_name == state_name) {
                 return &stable_states[ss_idx].name;
@@ -4095,13 +4093,9 @@ const Value *MachineInstance::lookupState(const std::string &state_name) {
 const Value *MachineInstance::lookupState(const Value &state_name) {
     //is state_name a valid state?
     if (state_machine) {
-        std::list<State *>::iterator iter = state_machine->states.begin();
-        while (iter != state_machine->states.end()) {
-            State *s = *iter++;
-            if (s->getId() == state_name.token_id) {
-                return s->getNameValue();
-            }
-        }
+        const auto found = state_machine->findState(state_name.asString().c_str());
+        if (found) { return found->getNameValue(); }
+
         for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
             if (stable_states[ss_idx].name == state_name) {
                 return &stable_states[ss_idx].name;
@@ -4162,7 +4156,7 @@ bool MachineInstance::isPersistent() {
     if (persistent == SymbolTable::Null) {
         return false;
     }
-    return persistent == "true";
+    return persistent == Value{"true"};
 }
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
@@ -4279,7 +4273,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             if (isShadow()) {
                 Channel *chn = ownerChannel();
                 if (chn && chn->current_state != ChannelImplementation::DISCONNECTED) {
-                    chn->sendPropertyChangeMessage(this, fullName(), property, new_value,
+                    chn->sendPropertyChangeMessage(this, fullName(), Value{property}, new_value,
                                                    authority);
                     return true;
                     //fl.f() << _name << "forwarding property change request to owner channel\n";
@@ -4305,10 +4299,10 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             }
         }
         else if (property_val.token_id == ClockworkToken::TRACEABLE) {
-            if (new_value == "TRUE") {
+            if (new_value == Value{"TRUE"}) {
                 is_traceable = true;
             }
-            if (new_value == "FALSE") {
+            if (new_value == Value{"FALSE"}) {
                 is_traceable = false;
             }
             return true; // special case, short-circuit other tests
@@ -4350,10 +4344,10 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             state_machine && state_machine->plugin && state_machine->plugin->filter) {
             double float_value = new_value.kind == Value::t_float ? new_value.fValue : new_value.iValue;
             double filtered_value = state_machine->plugin->filter(this, float_value);
-            was_changed = (!prev_value.identical(filtered_value) ||
+            was_changed = (!prev_value.identical(Value{filtered_value}) ||
                            (new_value != SymbolTable::Null && prev_value == SymbolTable::Null));
             if (was_changed) {
-                properties.add(property, filtered_value, SymbolTable::ST_REPLACE);
+                properties.add(property, Value{filtered_value}, SymbolTable::ST_REPLACE);
             }
         }
         else {
@@ -4394,7 +4388,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
                 else {
                     io_interface->setValue((uint32_t)(value & 0xffffffff));
                 }
-                properties.add("VALUE", value, SymbolTable::ST_REPLACE);
+                properties.add("VALUE", Value{value}, SymbolTable::ST_REPLACE);
             }
             else {
                 snprintf(buf, 100, "%s: could not set value to %s", _name.c_str(),
@@ -4412,7 +4406,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
 
         std::string property_name(modbusName(property, property_val));
         if (published) {
-            Channel::sendPropertyChange(this, property.c_str(), new_value, authority);
+            Channel::sendPropertyChange(this, Value{property.c_str()}, new_value, authority);
 
             // update modbus with the new value
             if (modbus_exports.count(property_name)) {
@@ -4675,16 +4669,16 @@ void MachineInstance::setupModbusInterface() {
     bool exported = properties.exists("export");
     if (exported) {
         Value export_type_val = properties.lookup("export");
-        if (export_type_val != "false") {
+        if (export_type_val != Value{"false"}) {
             if (_type == "POINT") {
                 const Value &type = properties.lookup("type");
                 if (type != SymbolTable::Null) {
-                    if (type == "Input") {
+                    if (type == Value{"Input"}) {
                         self_discrete = true;
                         export_type = ModbusExport::discrete;
                     }
-                    else if (type == "Output") {
-                        if (export_type_val == "rw") {
+                    else if (type == Value{"Output"}) {
+                        if (export_type_val == Value{"rw"}) {
                             self_coil = true;
                             export_type = ModbusExport::coil;
                         }
@@ -4693,13 +4687,13 @@ void MachineInstance::setupModbusInterface() {
                             export_type = ModbusExport::coil;
                         }
                     }
-                    else if (type == "AnalogueInput") {
+                    else if (type == Value{"AnalogueInput"}) {
                         self_reg = true;
                         export_type = ModbusExport::reg;
                     }
-                    else if (type == "AnalogueOutput") {
+                    else if (type == Value{"AnalogueOutput"}) {
                         // default to readonly export
-                        if (export_type_val == "rw") {
+                        if (export_type_val == Value{"rw"}) {
                             self_rwreg = true;
                             export_type = ModbusExport::rw_reg;
                         }
@@ -4710,37 +4704,37 @@ void MachineInstance::setupModbusInterface() {
                     }
                 }
             }
-            else if (export_type_val == "rw") {
+            else if (export_type_val == Value{"rw"}) {
                 self_coil = true;
                 export_type = ModbusExport::coil;
             }
-            else if (export_type_val == "reg") {
+            else if (export_type_val == Value{"reg"}) {
                 self_reg = true;
                 export_type = ModbusExport::reg;
             }
-            else if (export_type_val == "rw_reg") {
+            else if (export_type_val == Value{"rw_reg"}) {
                 self_rwreg = true;
                 export_type = ModbusExport::rw_reg;
             }
-            else if (export_type_val == "reg32") {
+            else if (export_type_val == Value{"reg32"}) {
                 self_reg = true;
                 export_type = ModbusExport::reg32;
             }
-            else if (export_type_val == "rw_reg32") {
+            else if (export_type_val == Value{"rw_reg32"}) {
                 self_rwreg = true;
                 export_type = ModbusExport::rw_reg32;
             }
-            else if (export_type_val == "float32") {
+            else if (export_type_val == Value{"float32"}) {
                 self_rwreg = true;
                 export_type = ModbusExport::float32;
             }
-            else if (export_type_val == "str") {
+            else if (export_type_val == Value{"str"}) {
                 const Value &export_size = properties.lookup("strlen");
                 self_reg = true;
                 export_type = ModbusExport::str;
                 export_size.asInteger(str_length);
             }
-            else if (export_type_val == "rw_str") {
+            else if (export_type_val == Value{"rw_str"}) {
                 const Value &export_size = properties.lookup("strlen");
                 self_rwreg = true;
                 export_type = ModbusExport::str;
@@ -4920,10 +4914,10 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
         DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index
                    << " (" << addr << ")\n";
         if (property_name == _name) {
-            setValue("VALUE", new_value);
+            setValue("VALUE", Value{new_value});
         }
         else {
-            setValue(property_name, new_value);
+            setValue(property_name, Value{new_value});
         }
     }
     else {
@@ -4963,12 +4957,12 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
 
             DBG_MODBUS << "setting state of " << name << " due to modbus command\n";
             if (new_value) {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "on");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"on"});
                 enqueueAction(ssat.factory(
                     this)); // execute this state change once all other actions are complete
             }
             else {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "off");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"off"});
                 enqueueAction(ssat.factory(
                     this)); // execute this state change once all other actions are complete
             }
@@ -4988,7 +4982,7 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
                         _name.c_str(), name.c_str(), state_name.c_str());
                     MessageLog::instance()->add(buf);
                 }
-                SetStateActionTemplate ssat(CStringHolder("SELF"), state);
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{state});
                 enqueueAction(ssat.factory(
                     this)); // execute this state change once all other actions are complete
             }
@@ -5008,10 +5002,10 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
             DBG_MODBUS << _name << " set property " << property_name << " via modbus index "
                        << index << " (" << addr << ")\n";
             if (name == _name) {
-                setValue("VALUE", new_value);
+                setValue("VALUE", Value{new_value});
             }
             else {
-                setValue(property_name, new_value);
+                setValue(property_name, Value{new_value});
             }
         }
         else {
@@ -5024,10 +5018,10 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
         DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index
                    << " (" << addr << ")\n";
         if (property_name == _name) {
-            setValue("VALUE", new_value);
+            setValue("VALUE", Value{new_value});
         }
         else {
-            setValue(property_name, new_value);
+            setValue(property_name, Value{new_value});
         }
     }
     else {
@@ -5059,10 +5053,10 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
         DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index
                    << " (" << addr << ")\n";
         if (property_name == _name) {
-            setValue("VALUE", new_value);
+            setValue("VALUE", Value{new_value});
         }
         else {
-            setValue(property_name, new_value);
+            setValue(property_name, Value{new_value});
         }
     }
     else {
