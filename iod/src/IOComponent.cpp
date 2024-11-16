@@ -705,7 +705,7 @@ class InputFilterSettings {
         }
         double c[] = {0.081, 0.215, 0.541, 0.865, 1, 0.865, 0.541, 0.215, 0.081};
         double res = 0;
-        for (size_t i = 0; i < filter_length; ++i) {
+        for (int64_t i = 0; i < filter_length; ++i) {
             double f = (double)getBufferValue(positions, i);
             //printf(" %.3f,%.3f ",f, f*c[i]);
             res += f * c[i];
