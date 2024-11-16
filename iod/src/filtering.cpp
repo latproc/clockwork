@@ -67,7 +67,7 @@ double Buffer::average(size_t n) {
     }
     //  return total_ / (double)n;
 #if 1
-    auto i = (front + BUFSIZE - n + 1) % BUFSIZE;
+    int i = (front + BUFSIZE - n + 1) % BUFSIZE;
     while (i != front) {
 #ifdef TESTING
         std::cout << i << ":" << getFloatAtIndex(i) << " ";
@@ -94,14 +94,14 @@ double Buffer::stddev(size_t n) {
     if (n == 0) {
         return 0.0;
     }
-    auto len = length();
-    if (len <= 1) {
+    size_t len = length();
+    if (len == 0) {
         return 0.0;
     }
     if (len < n) {
         n = len;
     }
-    auto i = (front + BUFSIZE - n + 1) % BUFSIZE;
+    int i = (front + BUFSIZE - n + 1) % BUFSIZE;
     do {
         double val = getFloatAtIndex(i) - avg;
         res += val * val;
@@ -142,7 +142,7 @@ size_t findMovement(FloatBuffer *buf, double amount, size_t max_len) {
         abort();
     }
     size_t n = 0;
-    size_t idx = buf->front;
+    int idx = buf->front;
     double current = buf->buf[idx];
 
     while (idx != buf->back && n < max_len) {
@@ -216,7 +216,8 @@ double FloatBuffer::movingAverage(size_t n) const {
     if (n == 0) {
         return 0.0;
     }
-    if (length() < n) {
+    size_t len = length();
+    if (len < n) {
         n = length();
     }
     double sum = 0;
@@ -242,6 +243,7 @@ double SampleBuffer::getFloatAtOffset(ssize_t offset) const {
 }
 
 double SampleBuffer::getFloatAtIndex(size_t idx) const { return values[idx]; }
+
 void SampleBuffer::quickAppend(double val, uint64_t time) {
     front = (front + 1) % BUFSIZE;
     if (front == back) {
@@ -259,20 +261,23 @@ void SampleBuffer::append(double val, uint64_t time) {
     boost::recursive_mutex::scoped_lock scoped_lock(q_mutex);
     ;
 
-    /*  if we are not running on a real time system, we may have missed samples
-        the following generates the missing samples based on past recording rates.
-    */
+    // Require that all values in the buffer are monotonically increasing
     if (front != -1 && time == times[front]) {
         return;
     }
-    ssize_t n = length();
 
+#if 0
+    // TODO: Why is this here?
+    /*  if we are not running on a real time system, we may have missed samples
+        the following generates the missing samples based on past recording rates.
+    */
+    ssize_t n = length();
     if (n > (unsigned int)BUFSIZE / 2) {
         double mean_change = ((values[front] - values[back])) / n;
         double period = ((double)(times[front] - times[back])) / n;
         ssize_t missing = ((double)(time - times[front])) / period;
         if (missing >= 3) {
-            //DBG_MSG << "synthesizing missing data: " << missing << "\n";
+            DBG_MSG << "synthesizing missing data: " << missing << "\n";
             uint64_t last_time = times[front];
             reset();
             if (missing > BUFSIZE / 2) {
@@ -283,16 +288,8 @@ void SampleBuffer::append(double val, uint64_t time) {
             }
         }
     }
-    front = (front + 1) % BUFSIZE;
-    if (front == back) {
-        total_ -= values[front];
-    }
-    if (front == back || back == -1) {
-        back = (back + 1) % BUFSIZE;
-    }
-    total_ += val;
-    values[front] = val;
-    times[front] = time;
+#endif
+    quickAppend(val, time);
 }
 
 double SampleBuffer::rate() const // returns dv/dt between the two sample positions

@@ -83,7 +83,7 @@ size_t findMovement(struct CircularBuffer *buf, double amount, size_t max_len) {
         abort();
     }
     size_t n = 0;
-    size_t idx = buf->front;
+    int idx = buf->front;
     double current = buf->values[idx];
 
     while (idx != buf->back && n < max_len) {
