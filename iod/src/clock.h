@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdint.h>
 #include <chrono>
 
 class Clock {
@@ -7,7 +8,13 @@ class Clock {
 
   public:
     static uint64_t clock() {
-        auto delta = std::chrono::steady_clock::now() - sys_start_time;
-        return std::chrono::duration_cast<std::chrono::microseconds>(delta).count();
+        using namespace std::chrono;
+        auto delta = steady_clock::now() - sys_start_time;
+        return duration_cast<microseconds>(delta).count();
     };
+    static uint64_t nanosecs() {
+        using namespace std::chrono;
+        auto delta = steady_clock::now() - sys_start_time;
+        return duration_cast<nanoseconds>(delta).count();
+    }
 };
