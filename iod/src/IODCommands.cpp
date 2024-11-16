@@ -168,7 +168,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
                 mi->setState(state_name.c_str(), auth, false);
             }
             else {
-                SetStateActionTemplate ssat("SELF", state_name);
+                SetStateActionTemplate ssat("SELF", Value{state_name});
                 mi->enqueueAction(ssat.factory(
                     mi)); // execute this state change once all other actions are complete
             }
@@ -249,7 +249,7 @@ bool IODCommandDisable::run(std::vector<Value> &params) {
 bool IODCommandDescribe::run(std::vector<Value> &params) {
     std::cout << "received iod command Describe " << params[1] << "\n";
     bool use_json = false;
-    if (params.size() == 3 && params[2] != "JSON") {
+    if (params.size() == 3 && !(params[2] == "JSON")) {
         error_str = "Usage: DESCRIBE machine [JSON]";
         return false;
     }
@@ -323,7 +323,7 @@ bool IODCommandToggle::run(std::vector<Value> &params) {
                             }
                             else {
                                 // execute this state change once all other actions are complete
-                                SetStateActionTemplate ssat("SELF", "off");
+                                SetStateActionTemplate ssat("SELF", Value{"off"});
                                 m->enqueueAction(ssat.factory(m));
                             }
                         }
@@ -342,7 +342,7 @@ bool IODCommandToggle::run(std::vector<Value> &params) {
                             }
                             else {
                                 // execute this state change once all other actions are complete
-                                SetStateActionTemplate ssat("SELF", "on");
+                                SetStateActionTemplate ssat("SELF", Value{"on"});
                                 m->enqueueAction(ssat.factory(m));
                             }
                         }
@@ -460,13 +460,13 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
                 x = strtol(params[3].asString().c_str(), &p, 10);
                 if (use_authority)
                     if (*p == 0) {
-                        changed = m->setValue(params[2].asString(), x, authority);
+                        changed = m->setValue(params[2].asString(), Value{x}, authority);
                     }
                     else {
                         changed = m->setValue(params[2].asString(), params[3], authority);
                     }
                 else if (*p == 0) {
-                    changed = m->setValue(params[2].asString(), x);
+                    changed = m->setValue(params[2].asString(), Value{x});
                 }
                 else {
                     changed = m->setValue(params[2].asString(), params[3]);
@@ -772,7 +772,7 @@ bool IODCommandSend::run(std::vector<Value> &params) {
     // message routing table. if not, continue searching
     if (!m) {
         if ((params.size() != 2 && params.size() != 4) ||
-            (params.size() == 4 && params[2] != "TO" && params[2] != "to")) {
+            (params.size() == 4 && params[2] != Value{"TO"} && params[2] != Value{"to"})) {
             error_str = "Usage: SEND machine.command | SEND command TO machine ";
             return false;
         }

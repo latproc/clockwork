@@ -31,6 +31,7 @@
 #include "ClientInterface.h"
 #include "DebugExtra.h"
 #include "Dispatcher.h"
+#include "ECInterface.h"
 #include "IODCommand.h"
 #include "IODCommands.h"
 #include "Logger.h"
@@ -459,6 +460,12 @@ IODCommand *parseCommandString(const char *data) {
     }
     else if (ds == "SHUTDOWN") {
         command = new IODCommandShutdown;
+    }
+    else if (ds == "MASTER") {
+        command = new IODCommandMasterInfo;
+    }
+    else if (ds == "SLAVES" || ds == "SLAVE") {
+        command = new IODCommandGetSlaveConfig;
     }
     else {
         FileLogger fl(program_name);
