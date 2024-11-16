@@ -41,7 +41,13 @@ struct IODCommandListenerThread {
 IODCommand *parseCommandString(const char *data);
 
 class IODCommand;
-class IODCommandFactory;
+
+class IODCommandFactory {
+  public:
+    virtual ~IODCommandFactory() = default;
+    virtual IODCommand *create();
+};
+
 class IODCommandThread {
   public:
     static IODCommandThread *instance();

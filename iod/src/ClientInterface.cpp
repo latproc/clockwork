@@ -55,12 +55,6 @@ IODCommandThread *IODCommandThread::instance() {
     return instance_;
 }
 
-class IODCommandFactory {
-  public:
-    virtual ~IODCommandFactory() {}
-    virtual IODCommand *create();
-};
-
 IODCommand *IODCommandFactory::create() { return new IODCommandUnknown(); }
 
 struct IODCommandChannelFactory : public IODCommandFactory {
