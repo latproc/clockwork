@@ -18,6 +18,8 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#pragma once
+
 #include <stdint.h>
 
 struct IOInterface {
@@ -26,6 +28,7 @@ struct IOInterface {
         DEFAULT_DATA,
         PROCESS_DATA,
         ACTIVATE_REQUEST,
-        DEACTIVATE_REQUEST
+        DEACTIVATE_REQUEST,
+        RESCAN_REQUEST
     };
 };

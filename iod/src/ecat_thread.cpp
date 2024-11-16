@@ -749,6 +749,10 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
         IOComponent::setHardwareState(IOComponent::s_hardware_preinit);
         safeSend(out_sock, "ok", 2);
     }
+    else if (packet_type == IOInterface::MessageType::RESCAN_REQUEST) {
+        std::cout << "---------------- Rescan\n";
+        ECInterface::instance()->reset();
+    }
     else if (packet_type == IOInterface::MessageType::DEFAULT_DATA) {
         setDefaultData(len, cw_data, cw_mask);
         delete[] cw_mask;

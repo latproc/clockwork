@@ -1256,6 +1256,10 @@ bool ECInterface::activate() {
     return true;
 }
 
+void ECInterface::reset() {
+    if (master) { ecrt_master_reset(master); }
+}
+
 bool ECInterface::online() {
     boost::recursive_mutex::scoped_lock lock(modules_mutex);
     std::vector<ECModule *>::iterator iter = modules.begin();

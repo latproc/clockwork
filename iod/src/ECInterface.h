@@ -156,7 +156,8 @@ class ECInterface {
 #ifndef EC_SIMULATOR
     std::vector<ec_slave_info_t> listSlaves();
     bool activate();   // attempt to activate the master
-    bool deactivate(); // deactivate the master
+    bool deactivate(); // deactivate the master and destroy all pdo registrations
+    void reset();      // attempt to bring all slaves online
     void configureModules();
     void registerModules();
     tl::expected<bool, std::string> addModule(ECModule *m, bool reset_io);
