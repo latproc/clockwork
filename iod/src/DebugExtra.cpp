@@ -20,6 +20,7 @@
 
 #include "DebugExtra.h"
 #include "Logger.h"
+#include <cassert>
 
 DebugExtra *DebugExtra::instance_ = 0;
 DebugExtra::DebugExtra() {
@@ -43,3 +44,13 @@ DebugExtra::DebugExtra() {
     DEBUG_ETHERCAT_SDO = LogState::instance()->define("DEBUG_ETHERCAT_SDO");
     DEBUG_ETHERCAT_PACKETS = LogState::instance()->define("DEBUG_ETHERCAT_PACKETS");
 }
+
+void Throttled::operator()() {
+    if (m_counter == 0) { m_f(); }
+    m_counter = (m_counter + 1) % m_rate;
+}
+
+Throttled::Throttled(unsigned rate, std::function<void()> && f) : m_rate{rate}, m_f{std::move(f)} {
+    assert("throttle rate cannot be zero" && m_rate);
+}
+
