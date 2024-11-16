@@ -767,8 +767,11 @@ void MachineInstance::describe(std::ostream &out) {
         for (unsigned int i = 0; i < parameters.size(); i++) {
             Value p_i = parameters[i].val;
             if (p_i.kind == Value::t_symbol) {
+                auto param_class = parameters[i].machine;
                 out << "  parameter " << (i + 1) << " " << p_i.sValue << " ("
-                    << parameters[i].real_name << "), state: "
+                    << parameters[i].real_name
+                    << ": " << (param_class && param_class->state_machine ? param_class->state_machine->name : "undefined")
+                    << "), state: "
                     << (parameters[i].machine ? parameters[i].machine->getCurrent().getName() : "")
                     << (parameters[i].machine && !parameters[i].machine->enabled() ? " DISABLED"
                                                                                    : "")
