@@ -62,6 +62,7 @@ extern bool machine_is_ready;
 extern Statistics *statistics;
 extern uint64_t client_watchdog_timer;
 uint64_t clockwork_watchdog_timer = 0;
+static pthread_t iod_thread_id;
 
 extern void handle_io_sampling(uint64_t clock);
 
@@ -337,23 +338,29 @@ ProcessingThread *ProcessingThread::instance_ = 0;
 ProcessingThread *ProcessingThread::instance() { return instance_; }
 void ProcessingThread::setProcessingThreadInstance(ProcessingThread *pti) { instance_ = pti; }
 
+// Activate may be called from the channels thread
 void ProcessingThread::activate(MachineInstance *m) {
     boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
+    DBG_PROCESSING << "Activating " << m->fullName() << "\n";
+    assert(!m->is_runnable() && "Machine already runnable");
     instance()->runnable.insert(m);
+    //m->set_runnable(true);
 }
 
 void ProcessingThread::suspend(MachineInstance *m) {
+    assert(iod_thread_id == pthread_self() && "suspend called from non-processing thread");
     boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
+    DBG_PROCESSING << "Suspending " << m->fullName() << "\n";
+    //assert(m->is_runnable() && "Machine not runnable");
     instance()->runnable.erase(m);
+    m->set_runnable(false);
 }
 
 bool ProcessingThread::is_pending(MachineInstance *m) {
-    boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
-    return instance()->runnable.count(m);
+    return m->is_runnable();
 }
 
 void ProcessingThread::handle_package(Package *p) {
-{
 #ifdef KEEPSTATS
     AutoStat stats(avg_dispatch_time);
 #endif
@@ -458,7 +465,7 @@ void ProcessingThread::handle_package(Package *p) {
             MachineInstance *mi = dynamic_cast<MachineInstance *>(to);
             if (mi) {
                 SharedWorkSet::instance()->add(mi);
-                ProcessingThread::activate(mi);
+                if (!mi->is_runnable()) { ProcessingThread::activate(mi); }
                 Action *curr = mi->executingCommand();
                 if (curr) {
                     DBG_DISPATCHER << mi->getName() << " currently executing "
@@ -478,7 +485,6 @@ void ProcessingThread::handle_package(Package *p) {
         }
         Dispatcher::instance()->all_receivers.unlock();
     }
-}
 }
 
 void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_work_queue,
@@ -551,6 +557,7 @@ ProcessingThread::ProcessingState ProcessingThread::poll_machines() {
 
 void ProcessingThread::operator()() {
 
+    iod_thread_id = pthread_self();
 #ifdef __APPLE__
     pthread_setname_np("iod processing");
 #else
@@ -861,13 +868,10 @@ void ProcessingThread::operator()() {
 #ifdef KEEPSTATS
             AutoStat stats(avg_channel_time);
 #endif
-            // poll channels
             Channel::handleChannels();
         }
 
-        if (program_done) {
-            break;
-        }
+        if (program_done) { break; }
         char buf[200];
         if (status == e_waiting) {
             if (items[internals->CMD_ITEM].revents & ZMQ_POLLIN) {
@@ -1061,7 +1065,11 @@ void ProcessingThread::operator()() {
         }
 
         if (machine.activationRequested()) {
-            DBG_PROCESSING << " activation requested\n";
+            DBG_PROCESSING << " activation requested\n"
+              << "status: " << status
+              << " have devices: " << !IOComponent::devices.empty()
+              << " update_status " << static_cast<int>(update_state)
+              << "\n";
         }
 
         if (status == e_waiting && machines_have_work &&
@@ -1266,6 +1274,7 @@ void ProcessingThread::operator()() {
                     }
                     else {
                         if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
+                            std::cout << "setting hardware state to operational\n";
                             IOComponent::setHardwareState(IOComponent::s_operational);
                         }
                     }
