@@ -391,9 +391,9 @@ add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 
 set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT;KEEP_STATS" )
 if(USE_ETHERCAT_SOURCE)
-target_link_libraries(iod cw_client ec_tool ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
+target_link_libraries(iod cw_interpreter cw_client ec_tool ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
 else()
-target_link_libraries(iod cw_client ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
+target_link_libraries(iod cw_interpreter cw_client ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
 endif()
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
@@ -403,9 +403,9 @@ add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 #set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
 target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 )
 if(USE_ETHERCAT_SOURCE)
-target_link_libraries(iod_sdo cw_client ec_tool ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
+target_link_libraries(iod_sdo cw_interpreter cw_client ec_tool ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
 else()
-target_link_libraries(iod_sdo cw_client ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
+target_link_libraries(iod_sdo cw_interpreter cw_client ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
 endif()
 install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
