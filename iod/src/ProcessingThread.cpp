@@ -338,28 +338,6 @@ ProcessingThread *ProcessingThread::instance_ = 0;
 ProcessingThread *ProcessingThread::instance() { return instance_; }
 void ProcessingThread::setProcessingThreadInstance(ProcessingThread *pti) { instance_ = pti; }
 
-// Activate may be called from the channels thread
-void ProcessingThread::activate(MachineInstance *m) {
-    boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
-    DBG_PROCESSING << "Activating " << m->fullName() << "\n";
-    assert(!m->is_runnable() && "Machine already runnable");
-    instance()->runnable.insert(m);
-    //m->set_runnable(true);
-}
-
-void ProcessingThread::suspend(MachineInstance *m) {
-    assert(iod_thread_id == pthread_self() && "suspend called from non-processing thread");
-    boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
-    DBG_PROCESSING << "Suspending " << m->fullName() << "\n";
-    //assert(m->is_runnable() && "Machine not runnable");
-    instance()->runnable.erase(m);
-    m->set_runnable(false);
-}
-
-bool ProcessingThread::is_pending(MachineInstance *m) {
-    return m->is_runnable();
-}
-
 void ProcessingThread::handle_package(Package *p) {
 #ifdef KEEPSTATS
     AutoStat stats(avg_dispatch_time);
@@ -465,7 +443,7 @@ void ProcessingThread::handle_package(Package *p) {
             MachineInstance *mi = dynamic_cast<MachineInstance *>(to);
             if (mi) {
                 SharedWorkSet::instance()->add(mi);
-                if (!mi->is_runnable()) { ProcessingThread::activate(mi); }
+                mi->set_runnable(true);
                 Action *curr = mi->executingCommand();
                 if (curr) {
                     DBG_DISPATCHER << mi->getName() << " currently executing "
@@ -529,7 +507,15 @@ ProcessingThread::ProcessingState ProcessingThread::poll_machines() {
 #endif
     std::set<MachineInstance *> to_process;
     {
-        boost::recursive_mutex::scoped_lock lock(runnable_mutex);
+        auto x = MachineInstance::begin();
+        while (x != MachineInstance::end()) {
+            if ((*x)->is_runnable()) {
+                runnable.insert(*x);
+                (*x)->set_runnable(false);
+            }
+            ++x;
+        }
+
         std::set<MachineInstance *>::iterator iter = runnable.begin();
         while (iter != runnable.end()) {
             MachineInstance *mi = *iter;
@@ -702,7 +688,7 @@ void ProcessingThread::operator()() {
         long systems_waiting = 0;
         uint64_t curr_t = 0;
         uint64_t last_sample_poll = 0;
-        bool machines_have_work = false;
+        bool machines_have_work = true; // TODO: determine whether machine have work
         unsigned int num_channels = 0;
         while (!program_done) {
             {
@@ -747,17 +733,6 @@ void ProcessingThread::operator()() {
                     idx - dynamic_poll_start_idx; // the number channels we are actually monitoring
             }
 
-            //machines_have_work = MachineInstance::workToDo();
-            {
-                static size_t last_runnable_count = 0;
-                boost::recursive_mutex::scoped_lock lock(runnable_mutex);
-                machines_have_work = !runnable.empty() || !MachineInstance::pendingEvents().empty();
-                size_t runnable_count = runnable.size();
-                if (runnable_count != last_runnable_count) {
-                    //DBG_PROCESSING << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
-                    last_runnable_count = runnable_count;
-                }
-            }
             if (machines_have_work || IOComponent::updatesWaiting() || !io_work_queue.empty()) {
                 poll_wait = 1;
             }
@@ -1086,7 +1061,14 @@ void ProcessingThread::operator()() {
                 if (processing_state == eStableStates) {
                     std::set<MachineInstance *> to_process;
                     {
-                        boost::recursive_mutex::scoped_lock lock(runnable_mutex);
+                        auto x = MachineInstance::begin();
+                        while (x != MachineInstance::end()) {
+                            if ((*x)->is_runnable()) {
+                                runnable.insert(*x);
+                                (*x)->set_runnable(false);
+                            }
+                            ++x;
+                        }
                         std::set<MachineInstance *>::iterator iter = runnable.begin();
                         while (iter != runnable.end()) {
                             MachineInstance *mi = *iter;
@@ -1102,12 +1084,13 @@ void ProcessingThread::operator()() {
                                 iter++;
                             }
                         }
+                        std::cout << runnable.size() << " machines runnable after check\n";
                     }
 
-                    if (!to_process.empty()) {
+                    //if (!to_process.empty()) {
                         DBG_SCHEDULER << "processing stable states\n";
                         MachineInstance::checkStableStates(to_process, 150000);
-                    }
+                    //}
                     if (i < num_loops - 1) {
                         processing_state = ePollingMachines;
                     }

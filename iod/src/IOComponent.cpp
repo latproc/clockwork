@@ -672,7 +672,7 @@ class InputFilterSettings {
         }
         double c[] = {0.081, 0.215, 0.541, 0.865, 1, 0.865, 0.541, 0.215, 0.081};
         double res = 0;
-        for (size_t i = 0; i < filter_length; ++i) {
+        for (int64_t i = 0; i < filter_length; ++i) {
             double f = (double)getBufferValue(positions, i);
             //printf(" %.3f,%.3f ",f, f*c[i]);
             res += f * c[i];
@@ -902,7 +902,7 @@ class CounterInternals {
     int64_t speed;
     uint16_t buffer_len;
     FloatBuffer speeds;
-    size_t rate_len;
+    int64_t rate_len;
 
     CounterInternals()
         : positions(0), tolerance(&default_tolerance), filter_len(&default_filter_len),
@@ -1581,7 +1581,7 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             }
             std::list<MachineInstance *>::iterator owner_iter = owners.begin();
             while (owner_iter != owners.end()) {
-                ProcessingThread::activate(*owner_iter);
+                (*owner_iter)->set_runnable(true);
                 Message m(evt, Message::LEAVEMSG);
                 work_queue.push_back(new Package(this, *owner_iter++, m));
             }
