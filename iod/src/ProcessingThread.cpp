@@ -740,6 +740,7 @@ void ProcessingThread::operator()() {
         */
         if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
             HandleIncomingEtherCatData(io_work_queue, curr_t, last_sample_poll, avg_io_time);
+            update_state = UpdateStates::s_update_idle;
         }
         if (program_done) { break; }
         //if (machine_is_ready && processing_state != eStableStates && !io_work_queue.empty()) {
@@ -1085,6 +1086,7 @@ void ProcessingThread::operator()() {
             }
         }
         else if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty() &&
+                 (update_state == UpdateStates::s_update_idle) &&
                  (IOComponent::updatesWaiting() ||
                   IOComponent::getHardwareState() != IOComponent::s_operational)) {
         static bool defaults_sent = false;
@@ -1167,6 +1169,7 @@ void ProcessingThread::operator()() {
                     defaults_sent = true;
                     IOComponent::setHardwareState(IOComponent::s_operational);
                 }
+                update_state = UpdateStates::s_update_sent;
             }
         }
         //static bool should_be_op = false;
