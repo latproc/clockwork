@@ -25,6 +25,7 @@
 #include "Message.h"
 #include "State.h"
 #include "filtering.h"
+#include "process_data.h"
 #include <boost/thread/mutex.hpp>
 #include <list>
 #include <map>
@@ -42,6 +43,8 @@ struct IOAddress {
     unsigned int bitlen;
     unsigned int entry_position;
     bool is_signed;
+    std::string description;
+
     IOAddress(unsigned int module_pos, unsigned int offs, int bitp, unsigned int entry_pos,
               unsigned int len = 1, bool signed_value = false)
         : module_position(module_pos), io_offset(offs), io_bitpos(bitp), value(0), bitlen(len),
@@ -54,7 +57,6 @@ struct IOAddress {
     IOAddress()
         : module_position(0), io_offset(0), io_bitpos(0), value(0), bitlen(1), entry_position(0),
           is_signed(false) {}
-    std::string description;
 };
 
 std::ostream &operator<<(std::ostream &out, const IOAddress &address);
@@ -67,32 +69,14 @@ struct MQTTTopic {
     MQTTTopic(std::string &&t, std::string &&m) : topic(std::move(t)), message(std::move(m)) {}
 };
 
+#if 0
 struct Update {
     std::vector<uint8_t> incoming_process_data;
     std::vector<uint8_t> incoming_process_mask;
-    uint64_t incoming_data_size;
+    uint32_t incoming_data_size;
     uint64_t global_clock = 0;
 };
-
-class IOUpdate {
-  public:
-    IOUpdate() : size_(0), data_(nullptr), mask_(nullptr) {}
-    ~IOUpdate();
-
-    uint32_t size() const;
-    void setSize(uint32_t sz);
-
-    uint8_t *data() const;
-    void setData(uint8_t *dt);
-
-    uint8_t *mask() const;
-    void setMask(uint8_t *ms);
-
-  private:
-    uint32_t size_;
-    uint8_t *data_; // shared pointer to process data
-    uint8_t *mask_; // allocated pointer to current mask
-};
+#endif
 
 class MachineInstance;
 class IOComponent : public Transmitter {
@@ -107,24 +91,18 @@ class IOComponent : public Transmitter {
                                   unsigned int bit_len = 1, bool is_signed = false);
     static void add_publisher(const char *name, const char *topic, const char *message);
     static void add_subscriber(const char *name, const char *topic);
-    static void processAll(const Update &update, std::set<IOComponent *> &updatedMachines);
+    static void processAll(const IOUpdate &update, std::set<IOComponent *> &updatedMachines);
     static void processAll(uint64_t clock, uint64_t data_size, const uint8_t *mask,
                            const uint8_t *data, std::set<IOComponent *> &updatedMachines);
     static void setupIOMap();
     static int getMinIOOffset();
     static int getMaxIOOffset();
-    static uint8_t *getProcessData();
-    static uint8_t *getProcessMask();
-    static uint8_t *getUpdateData();
-    static uint8_t *getDefaultData();
-    static uint8_t *getDefaultMask();
-    static void setDefaultData(uint8_t *);
-    static void setDefaultMask(uint8_t *);
+    static ProcessData &getProcessData();
     static int notifyComponentsAt(unsigned int offset);
     static bool hasUpdates();
-    static IOUpdate *getUpdates();
-    static IOUpdate *getDefaults();
-    static uint8_t *generateMask(std::list<MachineInstance *> &outputs);
+    static IOUpdate &getUpdates();
+    static IOUpdate &getDefaults();
+    static std::vector<uint8_t> generateMask(std::list<MachineInstance *> &outputs);
     static uint64_t getClock() { return global_clock; }
     static void remove_io_module(int pos);
     static void lock();   // block others from resetting io
@@ -184,8 +162,8 @@ class IOComponent : public Transmitter {
     void addOwner(MachineInstance *m) { owners.push_back(m); }
     bool ownersEnabled() const;
 
-    virtual void setupProperties(
-        MachineInstance *m); // link properties in the component to the MachineInstance properties
+    // link properties in the component to the MachineInstance properties
+    virtual void setupProperties(MachineInstance *m);
 
     virtual int64_t filter(int64_t);
 
@@ -215,17 +193,13 @@ class IOComponent : public Transmitter {
     int io_index; // the index of the first bit in this component's address space
     int64_t raw_value;
     static size_t outputs_waiting; // this many outputs are waiting to change
-    static size_t process_data_size;
-    static uint8_t *io_process_data;
-    static uint8_t *io_process_mask;
-    static uint8_t *update_data;
     static unsigned int max_offset;
     static unsigned int min_offset;
+    static std::vector<uint8_t> last_process_data;
     Direction direction_;
     static HardwareState hardware_state;
-    static uint8_t *default_data;
-    static uint8_t *default_mask;
     static bool updates_sent;
+    bool is_polled = false;
     std::list<MachineInstance *> owners;
 };
 std::ostream &operator<<(std::ostream &out, const IOComponent &);
@@ -262,6 +236,7 @@ class CounterInternals;
 class Counter : public IOComponent {
   public:
     Counter(IOAddress addr);
+    ~Counter();
     const char *type() override { return "Counter"; }
     void update(); // clockwork uses this to notify of updates
     int64_t filter(int64_t raw) override;

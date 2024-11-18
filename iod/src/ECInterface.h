@@ -142,7 +142,7 @@ class ECInterface {
     void receiveState(); // get state from EtherCAT, use collectState() to process it
     int collectState(); // returns non-zero if there are machines that are affected by the new state
     void sendUpdates();
-    void updateDomain(uint32_t size, uint8_t *data, uint8_t *mask);
+    void updateDomain();
 
     bool start();
     bool stop();
@@ -165,8 +165,7 @@ class ECInterface {
     bool operational();
     static ECModule *findModule(unsigned int position);
 
-    uint32_t getReferenceTime();
-    void setReferenceTime(uint32_t now);
+    uint64_t getApplicationTime();
 
     void report_module_state_change(ECModule *m, int i);
 
@@ -188,7 +187,10 @@ class ECInterface {
   private:
     ECInterface();
     static ECInterface *instance_;
-    uint32_t reference_time;
+    uint64_t application_time;
+
+    void setApplicationTime(uint64_t now);
+
 #ifndef EC_SIMULATOR
     static std::vector<ECModule *> modules;
     std::set<ECModule *> online_modules;

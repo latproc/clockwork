@@ -24,7 +24,9 @@
 #include "Statistic.h"
 #include "Statistics.h"
 #include "cJSON.h"
+#include "clock.h"
 #include "tl/expected.hpp"
+#include "ClientInterface.h"
 #include <boost/thread/condition.hpp>
 #include <cstddef>
 #include <errno.h>
@@ -38,6 +40,7 @@
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include "bit_ops.h"
 #ifndef EC_SIMULATOR
 #include "SDOEntry.h"
 #include "symboltable.h"
@@ -46,9 +49,6 @@
 #endif
 
 #define VERBOSE_DEBUG 0
-#if VERBOSE_DEBUG
-static void display(uint8_t *p, size_t n);
-#endif
 
 extern Statistics *statistics;
 void signal_handler(int signum);
@@ -316,7 +316,7 @@ void SDOEntry::resolveSDOModules() {
 
 
 ECInterface::ECInterface()
-    : initialised(0), reference_time(0),
+    : initialised(0), application_time(0),
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
       current_init_entry(initialisation_entries.begin()),
@@ -331,9 +331,9 @@ void ECInterface::setup(void *data) { instance()->init(); }
 
 #ifndef EC_SIMULATOR
 
-void ECInterface::setReferenceTime(uint32_t now) { reference_time = now; }
+void ECInterface::setApplicationTime(uint64_t now) { application_time = now; }
 
-uint32_t ECInterface::getReferenceTime() { return reference_time; }
+uint64_t ECInterface::getApplicationTime() { return application_time; }
 
 bool ECModule::ecrtMasterSlaveConfig(ec_master_t *master) {
     if (master) {
@@ -752,22 +752,22 @@ void ECInterface::configureModules() {
     for (unsigned int mi = 0; mi < modules.size(); ++mi) {
         ECModule *m = findModule(mi);
         if (!m) {
-            DBG_ETHERCAT << __FUNCTION__ << " missing ECModule at position " << mi << "\n";
+            DBG_ETHERCAT_INIT << __FUNCTION__ << " missing ECModule at position " << mi << "\n";
         }
         assert(m);
 
         if (!m->ecrtMasterSlaveConfig(master)) {
-            DBG_ETHERCAT << "Failed to get slave configuration.\n";
+            DBG_ETHERCAT_INIT << "Failed to get slave configuration.\n";
             return;
         }
 
         if (m->sync_count == 0) {
-            DBG_ETHERCAT << "Warning: configuring module " << m->position
+            DBG_ETHERCAT_INIT << "Warning: configuring module " << m->position
                          << " with no sync managers\n";
         }
 
         assert(m->slave_config);
-        DBG_ETHERCAT << "\n\nConfiguring module " << m->position << ": " << m->name << "\n";
+        DBG_ETHERCAT_INIT << "\n\nConfiguring module " << m->position << ": " << m->name << "\n";
         unsigned int module_offset_idx = 0;
 
         for (unsigned int i = 0; i < m->sync_count; ++i) {
@@ -780,7 +780,7 @@ void ECInterface::configureModules() {
                 m->syncs[i].watchdog_mode = EC_WD_DEFAULT;
             }
 
-            DBG_ETHERCAT_CALLS << "ecrt_config_sync_manager\n";
+            DBG_ETHERCAT_INIT << "ecrt_config_sync_manager\n";
             res = ecrt_slave_config_sync_manager(m->slave_config, m->syncs[i].index,
                                                  m->syncs[i].dir, m->syncs[i].watchdog_mode);
             if (res < 0) {
@@ -789,7 +789,7 @@ void ECInterface::configureModules() {
                          "Error %d setting WD enable state on sync manager %d for module %d", res,
                          i, m->position);
                 MessageLog::instance()->add(buf);
-                DBG_ETHERCAT << buf << "\n";
+                DBG_ETHERCAT_INIT << buf << "\n";
             }
             if (m->syncs[i].n_pdos && m->syncs[i].pdos) {
                 DBG_ETHERCAT_CALLS << "ecrt_slave_config_pdo_assign_clear\n";
@@ -810,7 +810,7 @@ void ECInterface::configureModules() {
             }
 #endif
 
-            DBG_ETHERCAT << "---- adding pdo assignments for sm " << i << " " << m->syncs[i].n_pdos
+            DBG_ETHERCAT_INIT << "---- adding pdo assignments for sm " << i << " " << m->syncs[i].n_pdos
                          << " items\n";
             for (unsigned int j = 0; j < m->syncs[i].n_pdos; ++j) {
                 DBG_ETHERCAT_CALLS << "ecrt_slave_config_pdo_assign_add" << std::hex
@@ -824,7 +824,7 @@ void ECInterface::configureModules() {
                               << std::dec << "\n";
                 }
                 else {
-                    DBG_ETHERCAT << "**** added pdo assignment " << " to sm " << i
+                    DBG_ETHERCAT_INIT << "**** added pdo assignment " << " to sm " << i
                                  << " pdo: " << std::hex << "0x" << m->syncs[i].pdos[j].index
                                  << std::dec << " adding " << m->syncs[i].pdos[j].n_entries
                                  << " entries\n"
@@ -849,7 +849,7 @@ void ECInterface::configureModules() {
                         assert(false);
                     }
                     else {
-                        DBG_ETHERCAT << "Successfully added entry item " << module_offset_idx
+                        DBG_ETHERCAT_INIT << "Successfully added entry item " << module_offset_idx
                                      << " at index " << std::hex << "0x" << m->syncs[i].pdos[j].index << " " << std::dec
                                      << " subindex " << (int)m->syncs[i].pdos[j].entries[k].subindex
                                      << " length "   << (int)m->syncs[i].pdos[j].entries[k].bit_length
@@ -941,7 +941,7 @@ tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool re
 
     if (module) {
         boost::recursive_mutex::scoped_lock lock(modules_mutex);
-        DBG_ETHERCAT << "adding module " << module->name << " pos: " << module->position
+        DBG_ETHERCAT_INIT << "adding module " << module->name << " pos: " << module->position
                      << " to io\n";
         if (modules.size() == module->position) {
             modules.push_back(module);
@@ -955,7 +955,7 @@ tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool re
                     ss << "similar module at " << module->position << " replaced"
                        << "\ncompare old,new:\n"
                        << compare_modules(*m, *module);
-                    DBG_ETHERCAT << ss.str() << "\n";
+                    DBG_ETHERCAT_INIT << ss.str() << "\n";
                     delete m;
                 }
                 else {
@@ -1039,7 +1039,7 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
         total_syncs += slave.sync_count;
         assert(total_syncs < estimated_max_syncs);
         for (i = 0; i < slave.sync_count; i++) {
-            DBG_ETHERCAT << "ecrt_master_get_sync_manager\n";
+            DBG_ETHERCAT_CALLS << "ecrt_master_get_sync_manager\n";
             int rc = ecrt_master_get_sync_manager(m, slave.position, i, &c_syncs[i]);
             assert(rc == 0);
 
@@ -1058,7 +1058,7 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
                     std::flush(std::cerr);
                 }
                 for (j = 0; j < pdo_count; j++) {
-                    DBG_ETHERCAT << "ecrt_master_get_pdo(..., sm: " << i << ", pdo: " << j << ")"
+                    DBG_ETHERCAT_CALLS << "ecrt_master_get_pdo(..., sm: " << i << ", pdo: " << j << ")"
                                  << "\n";
                     ecrt_master_get_pdo(m, slave.position, i, j, &pdo);
                     c_pdos[j + pdo_pos].index = pdo.index;
@@ -1076,12 +1076,12 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
                         assert(total_entries < estimated_max_entries);
                         ec_pdo_entry_info_t entry = {};
                         for (k = 0; k < pdo.n_entries; k++) {
-                            DBG_ETHERCAT << "ecrt_master_get_pdo_entry\n";
+                            DBG_ETHERCAT_CALLS << "ecrt_master_get_pdo_entry\n";
                             ecrt_master_get_pdo_entry(m, slave.position, i, j, k, &entry);
                             char entry_name[100];
                             snprintf(entry_name, 100, "entry-%X-%X", entry.index, entry.subindex);
 
-                            DBG_ETHERCAT << " entry: " << k << "{" << entry_pos << ", " << std::hex
+                            DBG_ETHERCAT_INIT << " entry: " << k << "{" << entry_pos << ", " << std::hex
                                          << (int)entry.index << ", " << std::dec
                                          << (int)entry.subindex << ", " << (int)entry.bit_length
                                          << ", " << entry_name << "}";
@@ -1109,7 +1109,7 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
         c_pdos = 0;
         c_entries = 0;
     }
-    DBG_ETHERCAT << "ECInterface adding module " << slave.name << "\n";
+    DBG_ETHERCAT_INIT << "ECInterface adding module " << slave.name << "\n";
     ECModule *module = new ECModule();
     module->name = slave.name;
     module->alias = 0;
@@ -1141,7 +1141,7 @@ void collectEtherCatModules() {
         addEtherCatSlave(ECInterface::master, slave);
         ++pos;
     }
-    DBG_ETHERCAT << ss.str() << "\n";
+    DBG_ETHERCAT_INIT << ss.str() << "\n";
 }
 
 bool ECInterface::deactivate() {
@@ -1156,7 +1156,7 @@ bool ECInterface::deactivate() {
         ecrt_master_deactivate(master);
         snprintf(buf, 200, "EtherCAT interface: recreating domain");
         MessageLog::instance()->add(buf);
-        DBG_ETHERCAT << buf << "\n";
+        DBG_ETHERCAT_INIT << buf << "\n";
         DBG_ETHERCAT_CALLS << "ecrt_master_create_domain\n";
         domain1 = ecrt_master_create_domain(master);
         assert(domain1 != 0);
@@ -1225,6 +1225,8 @@ bool ECInterface::activate() {
     }
     DBG_ETHERCAT << "Activating master...";
     char buf[200];
+    DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
+    ecrt_master_application_time(master, Clock::nanosecs());
     DBG_ETHERCAT_CALLS << "ecrt_master_activate\n";
     if ((res = ecrt_master_activate(master))) {
         snprintf(buf, 200, "EtherCAT interface: Activating master failed with code: %d", res);
@@ -1350,6 +1352,8 @@ void ECInterface::init() {
     domain1 = ecrt_master_create_domain(master);
     if (!domain1) {
         snprintf(buf, 200, "EtherCAT interface: failed to create domain");
+        MessageLog::instance()->add(buf);
+        std::cerr << buf << "\n";
         initialised = false;
         return;
     }
@@ -1366,10 +1370,16 @@ void ECInterface::init() {
 
     check_master_state();
 
-#if 0
-    IODCommandThread::registerCommand("EC", new IODCommandEtherCATTool);
-    IODCommandThread::registerCommand("MASTER", new IODCommandMasterInfo);
-    IODCommandThread::registerCommand("SLAVES", new IODCommandGetSlaveConfig);
+#if 1
+    //IODCommandThread::registerCommand("EC", new IODCommandEtherCATTool);
+    struct IODCommandMasterInfoFactory : public IODCommandFactory {
+        IODCommandMasterInfo *create() { return new IODCommandMasterInfo(); }
+    };
+    struct IODCommandGetSlaveConfigFactory : public IODCommandFactory {
+        IODCommandGetSlaveConfig *create() { return new IODCommandGetSlaveConfig(); }
+    };
+    IODCommandThread::registerCommand("MASTER", new IODCommandMasterInfoFactory);
+    IODCommandThread::registerCommand("SLAVES", new IODCommandGetSlaveConfigFactory);
 #endif
 #if 0
     ethercat_status = MachineInstance::find("ETHERCAT");
@@ -1435,63 +1445,22 @@ ECInterface *ECInterface::instance() {
 // the latter is because we want to properly detect changes in the
 // next read cycle
 
-#if VERBOSE_DEBUG
-static void display(uint8_t *p, size_t n) {
-    for (unsigned int i = 0; i < n; ++i) {
-        DBG_ETHERCAT_PACKETS << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
-    }
-    DBG_ETHERCAT_PACKETS << std::dec;
-}
-#endif
+void ECInterface::updateDomain() {
+    uint32_t size = data.getProcessDataSize();
+    uint8_t *p = data.getProcessData().data();
+    uint8_t *m = data.getProcessMask().data();
 
-void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
     DBG_ETHERCAT_CALLS << "ecrt_domain_data\n";
     uint8_t *domain1_pd = ecrt_domain_data(domain1);
     uint8_t *pd = domain1_pd;
 
-    /*
-        std::cerr << "updating domain (size = " << size << ")\n";
-        std::cerr << "process: "; display(pd); std::cout << "\n";
-        std::cerr << "   mask: "; display(mask); std::cout << "\n";
-        std::cerr << "   data: "; display(data); std::cout << "\n";
+    copyMaskedBits(pd, p, m, size);
 
+    /*
         if (!all_ok || master_state.al_states != 0x8) {
             std::cerr << "refusing to update the domain since all is not ok\n";
         }
     */
-    for (unsigned int i = 0; i < size; ++i) {
-        if (*mask && *data != *pd) {
-            /*
-                        std::cout << "at " << i << " data ("
-                            << (unsigned int)(*data) << ") different to domain ("
-                            << (unsigned int)(*pd) << ")\n";
-            */
-            uint8_t bitmask = 0x01;
-            int count = 0;
-            while (bitmask) {
-                if (*mask & bitmask) { // we care about this bit
-                    uint8_t pdb = *pd & bitmask;
-                    uint8_t db = *data & bitmask;
-                    if (pdb != db) { // changed
-                        //std::cout << "bit " << i << ":" << count << " changed to ";
-                        if (db) {
-                            *pd |= bitmask;
-                            //std::cout << "on";
-                        }
-                        else {
-                            *pd &= (uint8_t)(0xff - bitmask);
-                            //std::cout << "off";
-                        }
-                    }
-                }
-                bitmask = bitmask << 1;
-                ++count;
-            }
-        }
-        ++pd;
-        ++mask;
-        ++data;
-    }
 }
 
 void ECInterface::receiveState() {
@@ -1519,18 +1488,16 @@ void ECInterface::receiveState() {
             }
         }
 #endif
+        DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
+        application_time = Clock::nanosecs();
+        ecrt_master_application_time(master, application_time);
+
         // receive process data
         DBG_ETHERCAT_CALLS << "ecrt_master_receive\n";
         ecrt_master_receive(master);
         DBG_ETHERCAT_CALLS << "ecrt_domain_process\n";
         ecrt_domain_process(domain1);
-#ifdef USE_DC
-        DBG_ETHERCAT_CALLS << "ecrt_imaster_reference_clock_time\n";
-        int err = ecrt_master_reference_clock_time(master, &reference_time);
-        if (err == -ENXIO) {
-            reference_time = -1; // no reference clocks
-        }
-#endif
+
         check_domain1_state();
     }
     // check for master state (optional)
@@ -1579,6 +1546,7 @@ int ECInterface::collectState() {
         snprintf(buf, 200, "Warning: domain size %ld less than expected: %ld", domain_size,
                  (size_t)max - min + 1);
         MessageLog::instance()->add(buf);
+        std::cerr << buf << "\n";
         return 0;
     }
 #if 0
@@ -1590,10 +1558,9 @@ int ECInterface::collectState() {
 #endif
 
     if (!domain1_pd) {
-        assert(instance()->data.getProcessData() == 0);
+        assert(!instance()->data.getProcessData().empty());
         return 0;
     }
-    uint8_t *pd = domain1_pd;
     if ((long)domain_size < 0) {
         return 0;
     }
@@ -1602,103 +1569,50 @@ int ECInterface::collectState() {
 
     int affected_bits = 0;
     // the result of the following is a list of data bits to be changed and
-    // a mask indicating which bits are important
-
-    // first time through, copy the domain process data to our local copy
-    // and set the process mask to include every bit we care about
+    // a mask indicating which of the bits we care about have changed.
 
     // after that, look at all bits we care about and if the bit has changed
     // copy its new value to the update data and include the bit in the
     // update mask
-    uint8_t *last_pd = instance()->data.getProcessData();
-    uint8_t *pm = data.getProcessMask(); // these are the important bits
-    uint8_t *q = data.update_data;       // convenience pointer
+    static std::vector<uint8_t> last_pd = data.getProcessData();
+    uint8_t *pd = domain1_pd;
+    // the default mask if provided identifies the important bits
+    uint8_t *pm = data.getDefaultMask() ? data.getDefaultMask()->data() : nullptr;
+    uint8_t *q = data.getUpdateData().data();       // convenience pointer
+    uint8_t *qm = data.getUpdateMask().data();       // convenience pointer
 
 #if VERBOSE_DEBUG
-    if (last_pd) {
+    if (!last_pd.empty()) {
         DBG_ETHERCAT_PACKETS << "last:";
-        display(last_pd, domain_size);
+        DBG_ETHERCAT_PACKETS << buffer_to_string(last_pd.data(), domain_size);
     }
     DBG_ETHERCAT_PACKETS << "\ncurr:";
-    display(pd, domain_size);
+    DBG_ETHERCAT_PACKETS << buffer_to_string(pd, domain_size);
     DBG_ETHERCAT_PACKETS << "\n";
 #endif
 
-    assert(pm);
-    assert(min == 0);
-    for (unsigned int i = 0; i < domain_size; ++i) {
-        data.update_mask[i] = 0;                 // assume no updates in this octet
-        if (!last_pd) {                     // first time through, copy all the domain data and mask
-            data.update_data[i] = domain1_pd[i]; //TBD & *pm;
-            data.update_mask[i] = *pm;
-            affected_bits++;
-#if VERBOSE_DEBUG
-            DBG_ETHERCAT_PACKETS << "init update data from process byte " << i << ": " << std::hex
-                                 << (int)domain1_pd[i] << std::dec << "\n";
-#endif
-        }
-        else if (last_pd[i] != domain1_pd[i]) {
-            uint8_t bitmask = 0x01;
-            int count = 0;
-#if VERBOSE_DEBUG
-            DBG_ETHERCAT_PACKETS << " offset " << i << " data 0x" << std::hex << (int)*pd
-                                 << " (was " << (int)last_pd[i] << ")" << " process mask: 0x"
-                                 << (int)*pm << std::dec << "\n";
-#endif
-            while (bitmask) {
-                if (*pm & bitmask) { // we care about this bit
-                    if (((*pd) & bitmask) != ((last_pd[i]) & bitmask)) { // changed
-#if VERBOSE_DEBUG
-                        DBG_ETHERCAT_PACKETS << "incoming bit " << i << ":" << count
-                                             << " changed to " << (((*pd) & bitmask) ? 1 : 0)
-                                             << "\n";
-#endif
-                        if ((*pd) & bitmask) {
-                            *q |= bitmask;
-                        }
-                        else {
-                            *q &= ((uint8_t)0xff - bitmask);
-                        }
-                        data.update_mask[i] |= bitmask;
-                        ++affected_bits;
-                    }
-                }
-                bitmask = bitmask << 1;
-                ++count;
-            }
-        }
-        ++pd;
-        ++q;
-        ++pm; //if (last_pd)++last_pd;
-    }
-#if 0
-    if (affected_bits) {
-        std::cout << "data: ";
-        display(update_data, domain_size);
-        std::cout << "\nmask: ";
-        display(update_mask, domain_size);
-        std::cout << " " << affected_bits << " bits changed (size=" << domain_size << ")\n";
-    }
-#endif
+    auto updated = copyMaskedBitsAndReturnMaskOfChanges(q, pd, pm, last_pd.data(), domain_size);
+    data.setUpdateMask(updated.changes);
+    affected_bits = updated.count;
 
     // save the domain data for the next check
 #if VERBOSE_DEBUG
     DBG_ETHERCAT_PACKETS << "setting process data\n";
 #endif
-    pd = new uint8_t[domain_size];
-    memcpy(pd, domain1_pd, domain_size);
-    instance()->data.setDataSize(domain_size);
-    instance()->data.setProcessData(pd, domain_size);
+    data.setDataSize(domain_size);
+    data.setProcessData(domain1_pd, domain_size);
+    last_pd = data.getProcessData();
 #if VERBOSE_DEBUG
     DBG_ETHERCAT_PACKETS << "copied new domain data: ";
-    display(pd, domain_size);
+    DBG_ETHERCAT_PACKETS << buffer_to_string(domain1_pd, domain_size);
     DBG_ETHERCAT_PACKETS << "\n";
 #endif
-    memcpy(data.update_data, domain1_pd, domain_size);
+    data.setUpdateData(domain1_pd, domain_size);
 #endif //EC_SIMULATOR
 
     return affected_bits;
 }
+
 void ECInterface::sendUpdates() {
     static uint64_t last_warning = 0;
     uint64_t now = microsecs();
@@ -1714,12 +1628,11 @@ void ECInterface::sendUpdates() {
     }
 
     if (keep_stats) {
-        uint64_t t = microsecs();
-        int64_t dt = t - last_receive;
+        int64_t dt = now - last_receive;
         if (last_receive != 0) {
             recv_to_update.add(dt);
         }
-        last_update = t;
+        last_update = now;
         if (recv_to_update.getCount() >= 1000) {
             recv_to_update.report(std::cout);
             recv_to_update.reset();
@@ -1728,11 +1641,9 @@ void ECInterface::sendUpdates() {
     }
 
 #ifndef EC_SIMULATOR
-#ifdef USE_DC
-    DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
-    ecrt_master_application_time(master, EC_TIMEVAL2NANO(now));
+#ifdef EC_HAVE_REF_CLOCK_TIME
     DBG_ETHERCAT_CALLS << "ecrt_master_sync_reference_clock\n";
-    ecrt_master_sync_reference_clock(master);
+    ecrt_master_sync_reference_clock_to(master, Clock::nanosecs());
     DBG_ETHERCAT_CALLS << "ecrt_master_sync_slave_clocks\n";
     ecrt_master_sync_slave_clocks(master);
 #endif

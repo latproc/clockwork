@@ -58,6 +58,8 @@ class ProcessingThread : public ClockworkProcessManager {
     };
     Status status;
 
+    enum class UpdateStates { s_update_idle, s_update_sent };
+
     int pollZMQItems(int poll_time, zmq::pollitem_t items[], int num_items,
                      zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr,
                      zmq::socket_t &sched, zmq::socket_t &ecat_out);

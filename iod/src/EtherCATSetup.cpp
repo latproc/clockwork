@@ -86,9 +86,9 @@ void initialiseOutputs() {
         default_outputs.push_back(m);
         if (val.kind == Value::t_integer || m->_type == "ANALOGOUTPUT") {
             std::cout << "Initialising value for " << m->getName() << " to " << val << "\n";
-            long i_val = 0;
+            int64_t i_val = 0;
             if (val.asInteger(i_val)) {
-                m->setValue("VALUE", i_val);
+                m->setValue("VALUE", Value{i_val});
                 if (m->io_interface) {
                     if (m->io_interface->address.is_signed) {
                         m->io_interface->setValue((int32_t)(i_val & 0xfffffffff));
@@ -107,10 +107,10 @@ void initialiseOutputs() {
             m->setState(val.asString().c_str());
         }
     }
-    IOComponent::setDefaultData(IOComponent::getProcessData()); // takes a copy
-    uint8_t *dm = IOComponent::generateMask(default_outputs);
-    IOComponent::setDefaultMask(dm); // takes a copy
-    delete[] dm;
+    auto pd = IOComponent::getProcessData();
+    pd.setDefaultData(pd.getProcessData()); // takes a copy
+    auto dm = IOComponent::generateMask(default_outputs);
+    pd.setDefaultMask(dm); // takes a copy
 }
 
 void cleanupIOComponentModules() { IOComponent::reset(); }

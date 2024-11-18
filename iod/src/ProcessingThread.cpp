@@ -54,6 +54,7 @@
 #include <pthread.h>
 #include "SharedWorkSet.h"
 #include "Dispatcher.h"
+#include "Scheduler.h"
 
 #include <iostream>
 
@@ -76,6 +77,7 @@ class ProcessingThreadInternals {
   public:
     int sequence;
     long cycle_delay;
+    IOUpdate update;
 
     static const int ECAT_ITEM = 0;       // ethercat data incoming
     static const int CMD_ITEM = 1;        // client interface time sync
@@ -175,142 +177,118 @@ bool ProcessingThread::checkAndUpdateCycleDelay() {
     }
 */
 
-static uint8_t *incoming_process_data = 0;
-static uint8_t *incoming_process_mask = 0;
-static uint32_t incoming_data_size;
-static uint64_t global_clock = 0;
-
-#if VERBOSE_DEBUG
-static void display(std::ostream &out, uint8_t *p) {
-    int max = IOComponent::getMaxIOOffset();
-    int min = IOComponent::getMinIOOffset();
-    for (int i = min; i <= max; ++i) {
-        out << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i] << std::dec;
-    }
-}
-#endif
-
 class IOLockHelper {
   public:
     IOLockHelper() { IOComponent::lock(); }
     ~IOLockHelper() { IOComponent::unlock(); }
 };
 
-int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int num_items,
+IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
+    IOUpdate update;
+    // the EtherCAT message carries a mask and data
+
+    int64_t more;
+    size_t more_size = sizeof(more);
+    uint8_t stage = 1;
+    //  Process all parts of the message
+    while (true) {
+        try {
+            switch (stage) {
+            case 1: { // global clock
+                zmq::message_t message;
+                // clock
+                ecat_sync.recv(&message);
+                size_t msglen = message.size();
+                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
+                assert(msglen == sizeof(update.global_clock()));
+                update.setGlobalClock(*reinterpret_cast<uint64_t*>(message.data()));
+                ++stage;
+            }
+            case 2: { // data size
+                zmq::message_t message;
+                // data length
+                ecat_sync.recv(&message);
+                size_t msglen = message.size();
+                if (msglen == 0) {
+                    std::cerr << "Error: Got a null value for data size receiving ecat data\n";
+                    stage = 4;
+                    break;
+                }
+                assert(msglen == 4);
+                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
+                uint32_t data_size = *reinterpret_cast<uint32_t*>(message.data());
+                if (data_size != update.data_size()) {
+                    DBG_PROCESSING << "Process data size updated. Was: " << update.data_size()
+                              << " now: " << data_size << "\n";
+                }
+                ++stage;
+            }
+            case 3: { // data
+                ecat_sync.getsockopt(ZMQ_RCVMORE, &more, &more_size);
+                assert(more);
+                zmq::message_t message;
+                ecat_sync.recv(&message);
+                size_t msglen = message.size();
+                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
+                update.setData(static_cast<uint8_t*>(message.data()), msglen);
+                ++stage;
+            }
+            case 4: { // mask
+                zmq::message_t message;
+                ecat_sync.getsockopt(ZMQ_RCVMORE, &more, &more_size);
+                assert(more);
+                ecat_sync.recv(&message);
+                size_t msglen = message.size();
+                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
+                update.setMask(static_cast<uint8_t*>(message.data()), msglen);
+                ++stage;
+                break;
+            }
+            default: {
+                DBG_PROCESSING << "unexpected stage " << (int)stage << "\n";
+                assert(stage <= 4);
+            };
+            }
+            break;
+        }
+        catch (const zmq::error_t &ex) {
+            if (zmq_errno() == EINTR) {
+                std::stringstream err;
+                err << "interrupted when receiving update at stage " << stage;
+                MessageLog::instance()->add(err.str());
+                continue;
+            }
+            else {
+                NB_MSG << "Exception: " << ex.what()  << " "
+                       << __FILE__ << ":" << __LINE__ << " (" << zmq_strerror(errno)
+                       << ")\n";
+            }
+        }
+    }
+    return update;
+}
+
+int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int num_items,
                                    zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr,
                                    zmq::socket_t &scheduler, zmq::socket_t &ecat_out) {
     int res = 0;
     while (!program_done) {
         try {
             long len = 0;
+            int item_count = 0;
             res = zmq::poll(&items[0], num_items, poll_wait);
             if (!res) {
                 return res;
             }
-#if 0
             for (int i = 0; i < num_items; i++) {
-                if (items[i].revents && POLL_IN) {
-                    NB_MSG << "Item: " << i << " ";
+                if (items[i].revents & ZMQ_POLLIN) {
+                    ++item_count;
                 }
             }
-            NB_MSG << "\n";
-#endif
+            if (!item_count) { return 0; }
             if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
-                IOLockHelper io_lock;
-                // the EtherCAT message carries a mask and data
-
-                int64_t more;
-                size_t more_size = sizeof(more);
-                uint8_t stage = 1;
-                //  Process all parts of the message
-                while (true) {
-                    try {
-                        switch (stage) {
-                        case 1: { // global clock
-                            zmq::message_t message;
-                            // clock
-                            ecat_sync.recv(&message);
-                            size_t msglen = message.size();
-                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == sizeof(global_clock));
-                            memcpy(&global_clock, message.data(), msglen);
-                            ++stage;
-                        }
-                        case 2: { // data size
-                            zmq::message_t message;
-                            // data length
-                            ecat_sync.recv(&message);
-                            size_t msglen = message.size();
-                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == sizeof(incoming_data_size));
-                            memcpy(&incoming_data_size, message.data(), msglen);
-                            len = incoming_data_size;
-                            if (len == 0) {
-                                stage = 4;
-                                break;
-                            }
-                            ++stage;
-                        }
-                        case 3: { // data
-                            ecat_sync.getsockopt(ZMQ_RCVMORE, &more, &more_size);
-                            assert(more);
-                            zmq::message_t message;
-                            ecat_sync.recv(&message);
-                            size_t msglen = message.size();
-                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == incoming_data_size);
-                            if (!incoming_process_data) {
-                                incoming_process_data = new uint8_t[msglen];
-                            }
-                            memcpy(incoming_process_data, message.data(), msglen);
-#if VERBOSE_DEBUG
-                            DBG_PROCESSING << std::flush << "got data: ";
-                            display(std::cout, incoming_process_data);
-                            DBG_PROCESSING << "\n" << std::flush;
-#endif
-                            ++stage;
-                        }
-                        case 4: { // mask
-                            zmq::message_t message;
-                            ecat_sync.getsockopt(ZMQ_RCVMORE, &more, &more_size);
-                            assert(more);
-                            ecat_sync.recv(&message);
-                            size_t msglen = message.size();
-                            DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
-                            assert(msglen == incoming_data_size);
-                            if (!incoming_process_mask) {
-                                incoming_process_mask = new uint8_t[msglen];
-                            }
-                            memcpy(incoming_process_mask, message.data(), msglen);
-#if VERBOSE_DEBUG
-                            std::cout << "got mask: ";
-                            display(std::cout, incoming_process_mask);
-                            std::cout << "\n";
-#endif
-                            ++stage;
-                            break;
-                        }
-                        default: {
-                            DBG_PROCESSING << "unexpected stage " << (int)stage << "\n";
-                            assert(stage <= 4);
-                        };
-                        }
-                        break;
-                    }
-                    catch (const zmq::error_t &ex) {
-                        if (zmq_errno() == EINTR) {
-                            std::stringstream err;
-                            err << "interrupted when sending update (" << (unsigned int)stage
-                                << ")";
-                            MessageLog::instance()->add(err.str());
-                            continue;
-                        }
-                        else {
-                            NB_MSG << "Exception: " << ex.what() << " (" << zmq_strerror(errno)
-                                   << ")\n";
-                        }
-                    }
-                }
+                IOLockHelper lock;
+                internals->update = receive_ethercat_data(ecat_sync);
                 break;
             }
             break;
@@ -473,31 +451,17 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     static unsigned long total_mp_time = 0;
     static unsigned long mp_count = 0;
 #endif
-    uint8_t *mask_p = incoming_process_mask;
-    int n = incoming_data_size;
-    while (n && *mask_p == 0) {
-        ++mask_p;
-        --n;
+
+    if (machine_is_ready) {
+        AutoStat stats(avg_io_time);
+        IOComponent::processAll(internals->update, io_work_queue);
     }
-    if (n) { // io has indicated a change
-        if (machine_is_ready) {
-#if VERBOSE_DEBUG
-            std::cout << "Processing got masked EtherCAT data at byte " << (incoming_data_size - n)
-                      << "\n";
-#endif
-#ifdef KEEPSTATS
-            AutoStat stats(avg_io_time);
-#endif
-            IOComponent::processAll(global_clock, incoming_data_size, incoming_process_mask,
-                                    incoming_process_data, io_work_queue);
-        }
-        else {
-            std::cout << "Processing received EtherCAT data but machine is not ready\n";
-        }
+    else {
+        std::cout << "Processing received EtherCAT data but machine is not ready\n";
     }
     if (curr_t - last_sample_poll >= 10000) {
         last_sample_poll = curr_t;
-        handle_io_sampling(global_clock); // devices that need a regular poll
+        handle_io_sampling(internals->update.global_clock()); // devices that need a regular poll
     }
 }
 
@@ -538,6 +502,9 @@ ProcessingThread::ProcessingState ProcessingThread::poll_machines() {
         DBG_SCHEDULER << "processing " << to_process.size() << " machines\n";
         MachineInstance::processAll(to_process, 150000, MachineInstance::NO_BUILTINS);
     }
+    else {
+        DBG_MSG << "machines don't need poll\n";
+    }
     return eStableStates;
 }
 
@@ -552,8 +519,10 @@ void ProcessingThread::operator()() {
 
     Statistic *cycle_delay_stat = new Statistic("Cycle Delay");
     Statistic::add(cycle_delay_stat);
+    long delta, delta2;
 
     AutoStatStorage avg_io_time("AVG_IO_TIME", 0);
+    AutoStatStorage avg_update_time("AVG_UPDATE_TIME", 0);
 #ifdef KEEPSTATS
     AutoStatStorage avg_poll_time("AVG_POLL_TIME", 0);
     AutoStatStorage avg_iowork_time("AVG_IOWORK_TIME", 0);
@@ -564,7 +533,6 @@ void ProcessingThread::operator()() {
     AutoStatStorage avg_dispatch_time("AVG_DISPATCH_TIME", 0);
     AutoStatStorage avg_scheduler_time("AVG_SCHEDULER_TIME", 0);
     AutoStatStorage avg_clockwork_time("AVG_CLOCKWORK_TIME", 0);
-    AutoStatStorage avg_update_time("AVG_UPDATE_TIME", 0);
     AutoStatStorage scheduler_delay("SCHEDULER_POLL_SEPARATION", 0);
 #endif
 
@@ -575,13 +543,12 @@ void ProcessingThread::operator()() {
     zmq::socket_t resource_mgr(*MessagingInterface::getContext(), ZMQ_PAIR);
     resource_mgr.connect("inproc://resource_mgr");
 
-    zmq::socket_t ecat_sync(*MessagingInterface::getContext(), ZMQ_REQ);
+    zmq::socket_t ecat_sync(*MessagingInterface::getContext(), ZMQ_PAIR);
     ecat_sync.connect("inproc://ethercat_sync");
 
     zmq::socket_t command_sync(*MessagingInterface::getContext(), ZMQ_PAIR);
     command_sync.connect("inproc://command_sync");
 
-    //IOComponent::setHardwareState(IOComponent::s_hardware_init);
     activate_hardware();
 
     Channel::initialiseChannels();
@@ -597,7 +564,7 @@ void ProcessingThread::operator()() {
     safeSend(ecat_sync, "go", 2); // collect state
     usleep(10000);
 
-    zmq::socket_t ecat_out(*MessagingInterface::getContext(), ZMQ_REQ);
+    zmq::socket_t ecat_out(*MessagingInterface::getContext(), ZMQ_PAIR);
     ecat_out.connect("inproc://ethercat_output");
 
     checkAndUpdateCycleDelay();
@@ -606,12 +573,10 @@ void ProcessingThread::operator()() {
     uint64_t last_checked_plugins = 0;
     uint64_t last_checked_machines = 0;
 
-#ifdef KEEP_STATS
     unsigned long total_cmd_time = 0;
     unsigned long cmd_count = 0;
     unsigned long total_sched_time = 0;
     unsigned long sched_count = 0;
-#endif
 
     uint64_t start_cmd = 0;
     uint64_t last_machine_change = 0;
@@ -619,7 +584,7 @@ void ProcessingThread::operator()() {
     MachineInstance *system = MachineInstance::find("SYSTEM");
     assert(system);
 
-    enum { s_update_idle, s_update_sent } update_state = s_update_idle;
+    UpdateStates update_state = UpdateStates::s_update_idle;
 
     bool commands_started = false;
 
@@ -636,15 +601,9 @@ void ProcessingThread::operator()() {
             // attempt to initialise the hardware interface. If this
             // works we move the IOComponent module's state along
             // so that IOComponents can be linked
-            if (incoming_process_data) {
-                delete incoming_process_data;
-                incoming_process_data = 0;
-            }
-            if (incoming_process_mask) {
-                delete incoming_process_mask;
-                incoming_process_mask = 0;
-            }
+            internals->update.clear();
             if (activate_hardware.initialiseHardware()) {
+                std::cout << "setting hardware state to init\n";
                 IOComponent::setHardwareState(IOComponent::s_hardware_init);
             }
         }
@@ -772,32 +731,8 @@ void ProcessingThread::operator()() {
 
 #ifdef KEEPSTATS
         avg_poll_time.update();
+        avg_poll_time.start();
 #endif
-
-#if 0
-        // debug code to work out what machines or systems tend to need processing
-        {
-            if (systems_waiting > 0 || !io_work_queue.empty() || (machines_have_work || processing_state != eIdle || status != e_waiting)) {
-                DBG_PROCESSING << "handling activity. zmq: " << systems_waiting << " state: " << processing_state << " substate: " << status
-                        << ((items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) ? " ethercat" : "")
-                        << ((IOComponent::updatesWaiting()) ? " io components" : "")
-                        << ((!io_work_queue.empty()) ? " io work" : "")
-                        << ((machines_have_work) ? " machines" : "")
-                        << ((!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) ? " plugins" : "")
-                        << "\n";
-            }
-            if (IOComponent::updatesWaiting()) {
-                extern std::set<IOComponent *> updatedComponentsOut;
-                std::set<IOComponent *>::iterator iter = updatedComponentsOut.begin();
-                std::cout << updatedComponentsOut.size() << " entries in updatedComponentsOut:\n";
-                while (iter != updatedComponentsOut.end()) {
-                    std::cout << " " << (*iter++)->io_name;
-                }
-                std::cout << " \n";
-            }
-        }
-#endif
-
         /*  this loop prioritises ethercat processing but if a certain
             number of ethercat cycles have been processed with no
             other activities being given time, we give other jobs
@@ -805,21 +740,18 @@ void ProcessingThread::operator()() {
         */
         if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
             HandleIncomingEtherCatData(io_work_queue, curr_t, last_sample_poll, avg_io_time);
-            safeSend(ecat_sync, "go", 2);
         }
-
-        if (program_done) {
-            break;
-        }
-        if (machine_is_ready && processing_state != eStableStates && !io_work_queue.empty()) {
+        if (program_done) { break; }
+        //if (machine_is_ready && processing_state != eStableStates && !io_work_queue.empty()) {
+        if (machine_is_ready && !io_work_queue.empty()) {
 #ifdef KEEPSTATS
             AutoStat stats(avg_iowork_time);
 #endif
             std::set<IOComponent *>::iterator io_work = io_work_queue.begin();
             while (io_work != io_work_queue.end()) {
                 IOComponent *ioc = *io_work;
-                ioc->handleChange(MachineInstance::pendingEvents());
                 io_work = io_work_queue.erase(io_work);
+                ioc->handleChange(MachineInstance::pendingEvents());
             }
         }
 
@@ -1084,7 +1016,6 @@ void ProcessingThread::operator()() {
                                 iter++;
                             }
                         }
-                        std::cout << runnable.size() << " machines runnable after check\n";
                     }
 
                     //if (!to_process.empty()) {
@@ -1107,12 +1038,12 @@ void ProcessingThread::operator()() {
         if (machine.activationRequested()) {
             DBG_MSG << "activation requested, status == e_waiting?: " << (status == e_waiting)
                     << " device list empty?: " << IOComponent::devices.empty()
-                    << " update_state == s_update_idle?: " << (update_state == s_update_idle)
+                    << " update_state == s_update_idle?: " << (update_state == UpdateStates::s_update_idle)
                     << "\n";
         }
         // send a message to the ethercat thread requesting activation
         // or deactivation of the master
-        if (status == e_waiting && !IOComponent::devices.empty() && update_state == s_update_idle &&
+        if (status == e_waiting && !IOComponent::devices.empty() && update_state == UpdateStates::s_update_idle &&
             (machine.activationRequested() || machine.deactivationRequested())) {
             DBG_INITIALISATION << "activation/deactivation requested\n";
             uint32_t size = 0;
@@ -1120,23 +1051,24 @@ void ProcessingThread::operator()() {
             while (true) {
                 try {
                     switch (stage) {
-                    case 1: {
-                        zmq::message_t iomsg(4);
-                        memcpy(iomsg.data(), (void *)&size, 4);
-                        ecat_out.send(iomsg, ZMQ_SNDMORE);
-                        ++stage;
+                        case 1: {
+                            zmq::message_t iomsg(4);
+                            memcpy(iomsg.data(), (void *)&size, 4);
+                            ecat_out.send(iomsg, ZMQ_SNDMORE);
+                            ++stage;
+                        }
+                        case 2: {
+                            auto packet_type = machine.activationRequested()
+                                                   ? IOInterface::MessageType::ACTIVATE_REQUEST
+                                                   : IOInterface::MessageType::DEACTIVATE_REQUEST;
+                            zmq::message_t iomsg(1);
+                            memcpy(iomsg.data(), (void *)&packet_type, 1);
+                            ecat_out.send(iomsg);
+                            ++stage;
+                        }
                     }
-                    case 2: {
-                        auto packet_type = machine.activationRequested()
-                                               ? IOInterface::MessageType::ACTIVATE_REQUEST
-                                               : IOInterface::MessageType::DEACTIVATE_REQUEST;
-                        zmq::message_t iomsg(1);
-                        memcpy(iomsg.data(), (void *)&packet_type, 1);
-                        ecat_out.send(iomsg);
-                        ++stage;
-                    }
-                    }
-                    update_state = s_update_sent;
+                    std::cout << "Send hardware activate/deactivate request\n";
+                    update_state = UpdateStates::s_update_sent;
                     break;
                 }
                 catch (const zmq::error_t &err) {
@@ -1155,27 +1087,19 @@ void ProcessingThread::operator()() {
         else if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty() &&
                  (IOComponent::updatesWaiting() ||
                   IOComponent::getHardwareState() != IOComponent::s_operational)) {
-#ifdef KEEPSTATS
+        static bool defaults_sent = false;
             avg_update_time.start();
-#endif
-            if (update_state == s_update_idle) {
-                IOUpdate *upd = 0;
+            if (update_state == UpdateStates::s_update_idle) {
+                IOUpdate &upd = internals->update;
                 if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
                     DBG_INITIALISATION << "Sending defaults to EtherCAT\n";
                     upd = IOComponent::getDefaults();
-                    assert(upd);
-#if VERBOSE_DEBUG
-                    display(std::cout, upd->data());
-                    std::cout << ":";
-                    display(std::cout, upd->mask());
-                    std::cout << "\n";
-#endif
                 }
                 else {
                     upd = IOComponent::getUpdates();
                 }
-                if (upd) {
-                    uint32_t size = upd->size();
+                if (upd.data_size() > 0) {
+                    uint32_t size = upd.data_size();
                     uint8_t stage = 1;
                     while (true) {
                         try {
@@ -1198,7 +1122,7 @@ void ProcessingThread::operator()() {
                             }
                             case 3: {
                                 zmq::message_t iomsg(size);
-                                memcpy(iomsg.data(), (void *)upd->data(), size);
+                                memcpy(iomsg.data(), (void *)upd.data(), size);
                                 ecat_out.send(iomsg, ZMQ_SNDMORE);
 #if VERBOSE_DEBUG
                                 DBG_ETHERCAT << "sending to EtherCAT: ";
@@ -1209,7 +1133,7 @@ void ProcessingThread::operator()() {
                             }
                             case 4: {
                                 zmq::message_t iomsg(size);
-                                memcpy(iomsg.data(), (void *)upd->mask(), size);
+                                memcpy(iomsg.data(), (void *)upd.mask(), size);
 #if VERBOSE_DEBUG
                                 DBG_ETHERCAT << "using mask: ";
                                 display(std::cout, upd->mask());
@@ -1234,20 +1158,30 @@ void ProcessingThread::operator()() {
                             assert(false);
                         }
                     }
-                    delete upd;
-                    update_state = s_update_sent;
                     IOComponent::updatesSent(true);
+                }
+                else {
+                    std::cout << "udpate data is empty\n";
+                }
+                if (!defaults_sent) {
+                    defaults_sent = true;
+                    IOComponent::setHardwareState(IOComponent::s_operational);
                 }
             }
         }
-        if (update_state == s_update_sent) {
+        //static bool should_be_op = false;
+        if (update_state == UpdateStates::s_update_sent) {
             char buf[10];
             try {
                 if (ecat_out.recv(buf, 10, ZMQ_DONTWAIT)) {
-                    update_state = s_update_idle;
+                    std::cout << "got " << buf << " from ecat when activation requested: "
+                           << machine.activationRequested() << "\n";
+                    update_state = UpdateStates::s_update_idle;
                     if (machine.activationRequested()) {
                         if (strncmp(buf, "ok", 2) == 0) {
                             machine.requestActivation(false);
+                            std::cout << "should set operational mode\n";
+                            //should_be_op = true;
                         }
                     }
                     else if (machine.deactivationRequested()) {
@@ -1259,12 +1193,24 @@ void ProcessingThread::operator()() {
                         if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
                             std::cout << "setting hardware state to operational\n";
                             IOComponent::setHardwareState(IOComponent::s_operational);
+                            assert(false && "set hardware state to op");
                         }
                     }
                 }
-#ifdef KEEPSTATS
-                avg_update_time.update();
+#if 0
+                else {
+                    if (should_be_op && machine_is_ready 
+                           && IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
+                        std::cout << "setting hardware state to operational\n";
+                        IOComponent::setHardwareState(IOComponent::s_operational);
+                    }
+                    //std::cout << "should be op: " << should_be_op 
+                    //                << " machine_is_ready " << machine_is_ready
+                    //                << " hardware state: " << IOComponent::getHardwareState()
+                    //                << "\n";
+                }
 #endif
+                avg_update_time.update();
             }
             catch (const zmq::error_t &err) {
                 if (zmq_errno() != EINTR) {
@@ -1273,6 +1219,14 @@ void ProcessingThread::operator()() {
                 assert(zmq_errno() == EINTR);
             }
         }
+#if 0
+        else if (should_be_op && IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
+            std::cout << "haven't set operational mode (update_state == " << (int)update_state << ")\n";
+        }
+        else if (should_be_op && IOComponent::getHardwareState() != IOComponent::s_operational) {
+            std::cout << "hardware state is now: " << IOComponent::getHardwareState() << "\n";
+        }
+#endif
 
         // periodically check to see if the cycle time has been changed
         // more work is needed here since the signaller needs to be told about this
