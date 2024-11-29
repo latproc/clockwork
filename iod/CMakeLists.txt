@@ -244,6 +244,7 @@ set (Clockwork_Headers
     src/MessagingInterface.h
     src/ModbusInterface.h
     src/Parameter.h
+    src/parameter_array.h
     src/PatternAction.h
     src/PersistentStore.h
     src/Plugin.h
@@ -354,6 +355,7 @@ set (Clockwork_SRCS
     src/MachineShadowInstance.cpp
     src/ModbusInterface.cpp
     src/Parameter.cpp
+    src/parameter_array.cpp
     src/PatternAction.cpp
     src/PersistentStore.cpp
     src/Plugin.cpp
