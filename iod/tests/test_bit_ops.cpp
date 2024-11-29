@@ -1,7 +1,7 @@
 #include "bit_ops.h"
 #include "library_globals.cpp"
 #include "gtest/gtest.h"
-#include <bits/stdint-uintn.h>
+#include <stdint.h>
 
 // internal to IOComponent but not static..
 //void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val);
