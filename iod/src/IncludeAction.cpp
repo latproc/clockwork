@@ -24,25 +24,13 @@
 #include "MessageLog.h"
 #include <sstream>
 #include "tl/expected.hpp"
+#include "parameter_array.h"
 
 namespace {
 
 void debugParameterChange(MachineInstance *dest_machine) {
-    const char *delim = "";
-    char buf[1010];
-    snprintf(buf, 1000, "[");
-    size_t n = 1;
-    for (unsigned int i = 0; i < dest_machine->parameters.size(); ++i) {
-        snprintf(buf + n, 1000 - n, "%s%s", delim,
-                 dest_machine->parameters[i].val.asString().c_str());
-        n += strlen(delim) + dest_machine->parameters[i].val.asString().length();
-        delim = ",";
-        if (n >= 999) {
-            break;
-        }
-    }
-    snprintf(buf + n, 1000 - n, "]");
-    dest_machine->setValue("DEBUG", Value(buf, Value::t_string));
+    std::string result = toLimitedString(dest_machine->parameters, 300);
+    dest_machine->setValue("DEBUG", Value(result, Value::t_string));
 }
 
 tl::expected<bool, std::string> add_json_array(MachineInstance *list_machine, const Value &to_insert, int64_t pos,

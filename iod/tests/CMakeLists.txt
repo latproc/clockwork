@@ -133,6 +133,11 @@ set_target_properties (test_split_string PROPERTIES COMPILE_DEFINITIONS "EC_SIMU
 target_link_libraries(test_split_string gmock_main cw_interpreter ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} dl pthread)
 add_test(NAME test_split_string COMMAND test_split_string)
 
+add_executable(test_parameter_array test_parameter_array.cpp)
+set_target_properties (test_parameter_array PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_parameter_array gmock_main cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} dl pthread)
+add_test(NAME test_parameter_array COMMAND test_parameter_array)
+
 add_executable(test_exec_command test_exec_command.cpp)
 set_target_properties (test_exec_command PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(test_exec_command gmock_main cw_interpreter cw_client dl ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)

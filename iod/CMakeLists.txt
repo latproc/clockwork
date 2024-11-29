@@ -264,6 +264,7 @@ set (Clockwork_Headers
     src/MQTTInterface.h
     src/options.h
     src/Parameter.h
+    src/parameter_array.h
     src/PatternAction.h
     src/PersistentStore.h
     src/Plugin.h
@@ -372,6 +373,7 @@ set (Clockwork_SRCS
     src/MQTTInterface.cpp
     src/options.cpp
     src/Parameter.cpp
+    src/parameter_array.cpp
     src/PatternAction.cpp
     src/PersistentStore.cpp
     src/Plugin.cpp

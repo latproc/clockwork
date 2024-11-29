@@ -21,29 +21,14 @@
 #include "SetOperationAction.h"
 #include "Logger.h"
 #include "MachineInstance.h"
+#include "parameter_array.h"
 
 static void debugParameterChange(MachineInstance *dest_machine) {
     if (!dest_machine->debug()) {
         return;
     }
-    const char *delim = "";
-    const int bufsize = 600;
-    char buf[bufsize];
-    snprintf(buf, bufsize, "[");
-    size_t n = 1;
-    for (unsigned int i = 0; n < bufsize - 2 && i < dest_machine->parameters.size(); ++i) {
-        if (n + strlen(delim) + dest_machine->parameters[i].val.asString().length() >=
-            bufsize - 2) {
-            n = bufsize - 2;
-            break;
-        }
-        snprintf(buf + n, bufsize - n, "%s%s", delim,
-                 dest_machine->parameters[i].val.asString().c_str());
-        n += strlen(delim) + dest_machine->parameters[i].val.asString().length();
-        delim = ",";
-    }
-    snprintf(buf + n, bufsize - n, "]");
-    dest_machine->setValue("DEBUG", Value(buf, Value::t_string));
+    std::string result = toLimitedString(dest_machine->parameters, 300);
+    dest_machine->setValue("DEBUG", Value(result, Value::t_string));
 }
 
 SetOperationActionTemplate::SetOperationActionTemplate(Value num, Value a, Value b,
@@ -369,7 +354,9 @@ doneIntersectOperation:
         }
     }
 #endif
-    debugParameterChange(dest_machine);
+    if (dest_machine->debug()) {
+        debugParameterChange(dest_machine);
+    }
     status = Complete;
     return status;
 }
@@ -455,15 +442,7 @@ Action::Status DifferenceSetOperation::doOperation() {
             dest_machine->addParameter(a);
         }
     }
-    std::stringstream ss;
-    const char *delim = "";
-    ss << "[";
-    for (unsigned int i = 0; i < dest_machine->parameters.size(); ++i) {
-        ss << delim << dest_machine->parameters[i].val;
-        delim = ",";
-    }
-    ss << "]";
-    dest_machine->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
+    debugParameterChange(dest_machine);
     status = Complete;
     return status;
 }
@@ -637,15 +616,7 @@ Action::Status SelectSetOperation::doOperation() {
 #endif
     }
     if (dest_machine->debug()) {
-        std::stringstream ss;
-        const char *delim = "";
-        ss << "[";
-        for (unsigned int i = 0; i < dest_machine->parameters.size(); ++i) {
-            ss << delim << dest_machine->parameters[i].val;
-            delim = ",";
-        }
-        ss << "]";
-        dest_machine->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
+        debugParameterChange(dest_machine);
     }
     source_a_machine->localised_names.erase("ITEM");
     status = Complete;
