@@ -100,8 +100,8 @@ class IOComponent : public Transmitter {
     static ProcessData &getProcessData();
     static int notifyComponentsAt(unsigned int offset);
     static bool hasUpdates();
-    static IOUpdate getUpdates();
-    static IOUpdate getDefaults();
+    static IOUpdate &getUpdates();
+    static IOUpdate &getDefaults();
     static std::vector<uint8_t> generateMask(std::list<MachineInstance *> &outputs);
     static uint64_t getClock() { return global_clock; }
     static void remove_io_module(int pos);

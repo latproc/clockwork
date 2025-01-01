@@ -196,17 +196,17 @@ void MachineInstance::setNeedsCheck(bool add_to_queue) {
     if (!active_actions.empty() || !mail_queue.empty()) {
         DBG_M_MESSAGING << _name << " queued for action processing\n";
         SharedWorkSet::instance()->add(this);
-        ProcessingThread::activate(this);
+        set_runnable(true);
     }
     else if (getStateMachine()->allow_auto_states) {
         DBG_M_MESSAGING << _name << " queued for stable state checks\n";
         pending_state_change.insert(this);
-        ProcessingThread::activate(this);
+        set_runnable(true);
     }
     else {
         DBG_M_MESSAGING << _name << " queued for action processing\n";
         SharedWorkSet::instance()->add(this);
-        ProcessingThread::activate(this);
+        set_runnable(true);
     }
     next_poll = 0;
     if (state_machine->token_id == ClockworkToken::LIST) {
@@ -283,7 +283,7 @@ void MachineInstance::enqueueAction(Action *a) {
     DBG_ACTIONS << _name << " New Action queued: " << *a << "\n";
     has_work = true;
     SharedWorkSet::instance()->add(this);
-    ProcessingThread::activate(this);
+    set_runnable(true);
 }
 
 void MachineInstance::enqueue(const Package &package) {
@@ -353,6 +353,7 @@ void MachineInstance::triggerFired(Trigger *trig) {
     if (trig->matches(str_publish)) {
         Channel::sendPropertyChanges(this);
     }
+    DBG_PROCESSING << "setting needs check for " << *this << "due to timer\n";
     setNeedsCheck();
 }
 
@@ -360,7 +361,7 @@ void MachineInstance::checkActions() {
     num_machines_with_work++;
     has_work = true;
     SharedWorkSet::instance()->add(this);
-    ProcessingThread::activate(this);
+    set_runnable(true);
     DBG_AUTOSTATES << _name << " ADDED to machines with work " << SharedWorkSet::instance()->size()
                    << "\n";
 }
@@ -1033,7 +1034,7 @@ void MachineInstance::resetNeedsCheck() { needs_check = 0; }
 bool MachineInstance::queuedForStableStateTest() { return pending_state_change.count(this); }
 
 void MachineInstance::idle() {
-    ProcessingThread::suspend(this);
+    set_runnable(false);
 
     if (error_state) {
         return;
@@ -1146,9 +1147,7 @@ void MachineInstance::idle() {
     if (mail_queue.empty() && active_actions.empty()) {
         has_work = false;
     }
-    if (has_work) {
-        ProcessingThread::activate(this);
-    }
+    if (has_work && !is_runnable()) { set_runnable(true); }
 
     return;
 }
@@ -1188,17 +1187,16 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
         evt_iter = pending_events.erase(evt_iter);
         MachineInstance *mi = dynamic_cast<MachineInstance *>(pkg->receiver);
         if (mi) {
+            DBG_PROCESSING << "Processing pending event " << *pkg << " for " << mi->getName() << "\n";
             mi->execute(*(pkg->message), pkg->transmitter);
+            mi->setNeedsCheck();
         }
         delete pkg;
         ++total_process_calls;
-        if (mi) {
-            mi->setNeedsCheck();
-        }
     }
 
     num_machines_with_work = 0;
-    rate_calc_process_time = nowMicrosecs();
+    rate_calc_process_time = microsecs();
     //boost::recursive_mutex &mutex(SharedWorkSet::instance()->getMutex());
     {
         //boost::recursive_mutex::scoped_lock lock(mutex);
@@ -1224,7 +1222,7 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
                     busy_it = to_process.erase(busy_it);
                     if (mi->is_active) {
                         pending_state_change.insert(mi);
-                        ProcessingThread::activate(mi);
+                        mi->set_runnable(true);
                     }
                 }
                 else {
@@ -1232,7 +1230,7 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
                 }
             }
             else if (action) {
-                if (!action->getTrigger()) { ProcessingThread::activate(mi); }
+                if (!action->getTrigger()) { mi->set_runnable(true); }
                 busy_it++;
             }
             else {
@@ -1303,6 +1301,10 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
     std::set<MachineInstance *>::iterator iter = to_process.begin();
     while (iter != to_process.end()) {
         MachineInstance *mi = *iter++;
+        if (!mi->enabled()) {
+            pending_state_change.erase(mi);
+            continue;
+        }
         if (!mi->executingCommand() && mi->mail_queue.empty()) {
             // unless the machine is disabled leave the state check on the queue until it is stable
             if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states ||
@@ -1314,7 +1316,7 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
             SharedWorkSet::instance()->add(mi);
             pending_state_change.erase(
                 mi); // this machine has other work, it should no longer be on the pending state change queue
-            ProcessingThread::activate(mi);
+            mi->set_runnable(true);
         }
     }
     return true;
@@ -2082,7 +2084,6 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
 
             DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val << "ms\n";
             // prepare a new trigger. note: very short timers will still be scheduled
-            // TBD move this outside of the loop and only apply it for the earliest timer
             std::string trigger_name("SSTimer ");
             trigger_name += _name;
             trigger_name += " ";
@@ -2099,11 +2100,11 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                     new ScheduledItem(stable_state_timer_base, timer_val * 1000, s.trigger));
             }
             else if (timer_val >= -2) {
-                ProcessingThread::activate(this);
+                set_runnable(true);
             }
         }
         else if (dbg_report_if_timer_found) {
-            DBG_M_SCHEDULER << " no state timer required\n";
+            DBG_SCHEDULER << " no state timer required for " << getName() << "\n";
         }
 
         if (published && !machine_class_state->isLocal()) {
@@ -2427,12 +2428,12 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                         if (short_name == "activate" && (current_state.getName() == "CONFIG" ||
                                                          current_state.getName() == "CONNECTED")) {
                             ProcessingThread::instance()->machine.requestActivation(true);
-                            ProcessingThread::activate(this);
+                            set_runnable(true);
                         }
                         else if (short_name == "deactivate" &&
                                  current_state.getName() == "ACTIVE") {
                             ProcessingThread::instance()->machine.requestDeactivation(true);
-                            ProcessingThread::activate(this);
+                            set_runnable(true);
                         }
                     }
                     else
@@ -2701,7 +2702,7 @@ void MachineInstance::handle(const Message &m, Transmitter *from, bool send_rece
     HandleMessageAction *hma = new HandleMessageAction(this, hmat);
     enqueueAction(hma);
     SharedWorkSet::instance()->add(this);
-    ProcessingThread::activate(this);
+    set_runnable(true);
 }
 
 void MachineInstance::sendMessageToReceiver(const Message &message, Receiver *r,
@@ -2791,7 +2792,7 @@ void MachineInstance::start(Action *a) {
     Action *curr = executingCommand();
     if (a != curr) {
         active_actions.push_back(a->retain());
-        ProcessingThread::activate(this);
+        set_runnable(true);
     }
     else if (curr) {
         setNeedsCheck();
@@ -3181,7 +3182,7 @@ void MachineInstance::push(Action *new_action) {
     num_machines_with_work++;
     has_work = true;
     SharedWorkSet::instance()->add(this);
-    ProcessingThread::activate(this);
+    set_runnable(true);
     if (tracing() && isTraceable()) {
         resetTemporaryStringStream();
         ss << "starting action: " << *new_action;
@@ -3232,8 +3233,8 @@ std::string MachineInstance::firstValidStableState(const std::string state_name)
 
 bool MachineInstance::setStableState() {
     bool changed_state = false;
-    ProcessingThread::suspend(
-        this); // assume this machine will not have anything else to do after checking states
+    // assume this machine will not have anything else to do after checking states
+    set_runnable(false);
 
     CaptureDuration cd(stable_states_stats);
     DBG_M_AUTOSTATES << _name << " checking stable states (currently " << current_state.getName()

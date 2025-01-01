@@ -91,13 +91,18 @@ std::map<std::string, IOAddress> IOComponent::io_names;
 static uint64_t current_time;
 uint64_t IOComponent::io_clock;     // clock value when ProcessAll is called
 uint64_t IOComponent::global_clock; // clock value last received
+
+namespace IOC {
+    IOUpdate update_data;
+}
+
 static ProcessData process_data;
 std::vector<uint8_t> IOComponent::last_process_data;
 size_t IOComponent::outputs_waiting = 0;
 
-boost::recursive_mutex processing_queue_mutex;
+boost::recursive_mutex io_component_mutex;
 boost::recursive_mutex IOComponent::io_names_mutex;
-boost::unique_lock<boost::recursive_mutex> io_lock(processing_queue_mutex, boost::defer_lock);
+boost::unique_lock<boost::recursive_mutex> io_lock(io_component_mutex, boost::defer_lock);
 
 void IOComponent::lock() { io_lock.lock(); }
 
@@ -132,6 +137,9 @@ void handle_io_sampling(uint64_t clock) {
     }
 }
 
+#if VERBOSE_DEBUG
+static void display(const uint8_t *p, unsigned int count = 0);
+#endif
 
 uint64_t IOUpdate::global_clock() const { return global_clock_; }
 
@@ -187,7 +195,7 @@ ProcessData &IOComponent::getProcessData() {
 
 void IOComponent::reset() {
     setHardwareState(s_hardware_preinit);
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     processing_queue.clear();
     regular_polls.clear();
     std::list<MachineInstance *>::iterator iter = MachineInstance::begin();
@@ -203,7 +211,7 @@ void IOComponent::reset() {
 
 IOComponent::IOComponent(IOAddress addr)
     : last_event(e_none), address(addr), io_index(-1), raw_value(0) {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     processing_queue.push_back(this);
     // the io_index is the bit offset of the first bit in this objects address space
     io_index = addr.io_offset * 8 + addr.io_bitpos;
@@ -211,7 +219,7 @@ IOComponent::IOComponent(IOAddress addr)
 
 IOComponent::IOComponent()
     : last_event(e_none), io_index(-1), raw_value(0), direction_(DirBidirectional) {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     processing_queue.push_back(this);
     // use the same io-updated index as the processing queue position
 }
@@ -308,7 +316,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                         if (just_added == ioc) {--j; bitmask >>= 1; continue; }
                         if (ioc && ioc != just_added && ch & bitmask) { // TODO: consider ioc->last_event?
                             just_added = ioc;
-                            boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+                            boost::recursive_mutex::scoped_lock lock(io_component_mutex);
                             updatedComponentsIn.insert(ioc);
                         }
                         else if (!ioc) {
@@ -329,7 +337,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
     }
 
     {
-        boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+        boost::recursive_mutex::scoped_lock lock(io_component_mutex);
         //if (!updatedComponentsIn.size()) { return; }
         // look at the components that changed and remove them from the
         // outgoing queue as long as the outputs have been sent to the hardware
@@ -573,7 +581,7 @@ class InputFilterSettings {
         }
         double c[] = {0.081, 0.215, 0.541, 0.865, 1, 0.865, 0.541, 0.215, 0.081};
         double res = 0;
-        for (ssize_t i = 0; i < filter_length; ++i) {
+        for (int64_t i = 0; i < filter_length; ++i) {
             double f = (double)getBufferValue(positions, i);
             //printf(" %.3f,%.3f ",f, f*c[i]);
             res += f * c[i];
@@ -785,8 +793,16 @@ int64_t DigitalValue::filter(int64_t val) {
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
         if (o && o->enabled()) {
-            o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
-            o->setValue("VALUE", Value{val});
+            Value mask = o->properties.lookup("MASK");
+            if (mask.kind == Value::t_integer) {
+                auto masked = val & mask.iValue;
+                o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+                o->setValue("VALUE", Value{masked});
+            }
+            else {
+                o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
+                o->setValue("VALUE", Value{val});
+            }
         }
     }
     return val;
@@ -951,7 +967,7 @@ int IOComponent::notifyComponentsAt(unsigned int offset) {
     int count = 0;
     std::list<IOComponent *> *cl = io_map[offset];
     if (cl) {
-        boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+        boost::recursive_mutex::scoped_lock lock(io_component_mutex);
         std::list<IOComponent *>::iterator items = cl->begin();
         while (items != cl->end()) {
             IOComponent *c = *items++;
@@ -965,7 +981,7 @@ int IOComponent::notifyComponentsAt(unsigned int offset) {
 }
 
 bool IOComponent::hasUpdates() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     return !updatedComponentsOut.empty();
 }
 
@@ -1007,7 +1023,6 @@ bool IOComponent::ownersEnabled() const {
 static boost::optional<std::vector<uint8_t>> generateUpdateMask() {
     //  returns null if there are no updates, otherwise returns
     // a mask for the update data
-
     std::vector<uint8_t> res;
 
     unsigned int min = IOComponent::getMinIOOffset();
@@ -1038,17 +1053,18 @@ static boost::optional<std::vector<uint8_t>> generateUpdateMask() {
     return res;
 }
 
-IOUpdate IOComponent::getUpdates() {
-    IOUpdate res;
+IOUpdate &IOComponent::getUpdates() {
+    IOUpdate &res{IOC::update_data};
     auto mask = ::generateUpdateMask();
-    if (!mask.has_value()) { return res; }
-    res.setData(process_data.getUpdateData());
-    res.setMask(*mask);
+    if (mask.has_value()) {
+        res.setData(process_data.getUpdateData());
+        res.setMask(*mask);
+    }
     return res;
 }
 
-IOUpdate IOComponent::getDefaults() {
-    IOUpdate res;
+IOUpdate &IOComponent::getDefaults() {
+    IOUpdate &res{IOC::update_data};
     assert ("process data not configured" && min_offset <= max_offset);
     auto pd = process_data.getProcessData();
     size_t size = max_offset - min_offset + 1;
@@ -1065,7 +1081,7 @@ IOUpdate IOComponent::getDefaults() {
 }
 
 void IOComponent::setupIOMap() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     max_offset = 0;
     min_offset = 1000000L;
     io_map.clear();
@@ -1215,11 +1231,11 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             else {
                 evt = "off_leave";
             }
-            std::list<MachineInstance *>::iterator owner_iter = owners.begin();
-            while (owner_iter != owners.end()) {
-                ProcessingThread::activate(*owner_iter);
-                Message m(evt, Message::LEAVEMSG);
-                work_queue.push_back(new Package(this, *owner_iter++, m));
+            for (auto owner : owners) {
+                Message msg(evt, Message::LEAVEMSG);
+                //if (owner->receives(msg, owner)) {
+                    owner->set_runnable(true);
+                    work_queue.push_back(new Package(this, owner, msg));
             }
 #endif
             if (value) {
@@ -1228,10 +1244,12 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             else {
                 evt = "off_enter";
             }
-            owner_iter = owners.begin();
-            while (owner_iter != owners.end()) {
+            for (auto owner : owners) {
                 Message msg(evt, Message::ENTERMSG);
-                work_queue.push_back(new Package(this, *owner_iter++, msg));
+                //if (owner->receives(msg, owner)) {
+                    owner->set_runnable(true);
+                    work_queue.push_back(new Package(this, owner, msg));
+                //}
             }
         }
         address.value = value;

@@ -1,6 +1,7 @@
 #include "bit_ops.h"
 #include "library_globals.cpp"
 #include "gtest/gtest.h"
+#include <stdint.h>
 
 // internal to IOComponent but not static..
 //void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val);
@@ -53,6 +54,12 @@ TEST(GetChangesTest, ReturnsZeroWhenThereAreNoChanges) {
     }
 }
 
+TEST(SetMaskedBitTest, DoesNotTouchUnmaskedBits) {
+    EXPECT_EQ(copy_masked_bits(0x23, 0xff, 0b00000000), 0x23);
+    EXPECT_EQ(copy_masked_bits(0x23, 0xff, 0b00000100), 0x27);
+    EXPECT_EQ(copy_masked_bits(0b11111011, 0x00, 0b00000011), 0b11111000);
+}
+
 TEST(GetChangesTest, ReturnsCorrectMaskedData) {
     std::vector<uint8_t> src{255, 255, 0, 255};
     std::vector<uint8_t> dst{0, 0, 255, 0};
@@ -61,6 +68,21 @@ TEST(GetChangesTest, ReturnsCorrectMaskedData) {
     auto changes = copyMaskedBitsAndReturnMaskOfChanges(dst.data(), src.data(), mask.data(), last.data(), 4);
     std::vector<uint8_t> expected{1, 2, 255 - 4, 9};
     EXPECT_EQ(0, changes.count);
+    EXPECT_TRUE(expected ==  dst);
+}
+
+TEST(GetChangesTest, ReturnedValueIsIndependentOfPreviousValue) {
+    std::vector<uint8_t> src{255, 255, 0, 255};
+    std::vector<uint8_t> dst{0, 0, 255, 0};
+    std::vector<uint8_t> mask{1, 2, 4, 9};
+    std::vector<uint8_t> last{255, 255, 0, 255};
+    std::vector<uint8_t> expected{1, 2, 255 - 4, 9};
+    auto changes = copyMaskedBitsAndReturnMaskOfChanges(dst.data(), src.data(), mask.data(), last.data(), 4);
+    EXPECT_EQ(0, changes.count);
+    EXPECT_TRUE(expected ==  dst);
+    last[0] = 0;
+    changes = copyMaskedBitsAndReturnMaskOfChanges(dst.data(), src.data(), mask.data(), last.data(), 4);
+    EXPECT_EQ(1, changes.count);
     EXPECT_TRUE(expected ==  dst);
 }
 
@@ -76,3 +98,36 @@ TEST(GetChangesTest, ReturnsCorrectChanges) {
     EXPECT_TRUE(expected ==  dst);
     EXPECT_TRUE(expected_changes == changes.changes);
 }
+
+TEST(GetChangesTest, InplaceVersionReturnsCorrectMask) {
+    std::vector<uint8_t> src{255, 255, 0, 255};
+    std::vector<uint8_t> dst{0, 0, 255, 0};
+    std::vector<uint8_t> mask{1, 2, 4, 9};
+    std::vector<uint8_t> last{255, 255, 0, 255};
+    std::vector<uint8_t> change_mask{1,2,3,4};
+    auto changes = copyMaskedBitsAndSetChangeMask(dst.data(), change_mask.data(),
+                    src.data(), mask.data(), last.data(), 4);
+    std::vector<uint8_t> expected{1, 2, 255 - 4, 9};
+    EXPECT_EQ(0, changes);
+    EXPECT_TRUE(expected ==  dst);
+}
+
+TEST(GetChangesTest, InplaceVersionReturnsCorrectChanges) {
+    std::vector<uint8_t>  dst{0b00000000, 0b00000000, 0b11111111, 0b00000000};
+    std::vector<uint8_t>  src{0b11111111, 0b11111110, 0b00000000, 0b11111111};
+    std::vector<uint8_t> mask{0b00000001, 0b00000011, 0b00000110, 0b00001001};
+    std::vector<uint8_t> last{0b11111110, 0b11111101, 0b00000000, 0b11111000};
+    std::vector<uint8_t> change_mask{1,2,3,4}; // initial data should be discarded
+    auto changes = copyMaskedBitsAndSetChangeMask(dst.data(), change_mask.data(),
+                    src.data(), mask.data(), last.data(), 4);
+    std::vector<uint8_t> expected{1, 2, 255 - 6, 9};
+    std::vector<uint8_t> expected_changes{1, 3, 0, 1};
+    EXPECT_EQ(4, changes);
+    EXPECT_TRUE(expected ==  dst);
+    if (expected_changes != change_mask) {
+        std::cout << buffer_to_string(expected_changes)
+                 << " " << buffer_to_string(change_mask) << "\n";
+    }
+    EXPECT_TRUE(expected_changes == change_mask);
+}
+
