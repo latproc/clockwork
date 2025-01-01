@@ -793,14 +793,13 @@ int64_t DigitalValue::filter(int64_t val) {
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
         if (o && o->enabled()) {
+            o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
             Value mask = o->properties.lookup("MASK");
             if (mask.kind == Value::t_integer) {
                 auto masked = val & mask.iValue;
-                o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
                 o->setValue("VALUE", Value{masked});
             }
             else {
-                o->properties.add("IOTIME", Value{read_time}, SymbolTable::ST_REPLACE);
                 o->setValue("VALUE", Value{val});
             }
         }
@@ -1219,7 +1218,7 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
     bitpos = bitpos % 8;
 
     if (address.bitlen == 1) {
-        int64_t value = (*offset & (1 << bitpos)) ? 1 : 0;
+        int64_t value = is_set(offset, bitpos) ? 1 : 0;
 
         const char *evt;
         if (address.value != value) { // TBD is this test necessary?

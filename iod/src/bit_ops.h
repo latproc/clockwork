@@ -10,6 +10,8 @@ std::string buffer_to_string(const uint8_t *p, size_t len);
 std::string buffer_to_string(const std::vector<uint8_t> &buf);
 
 void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val);
+bool is_set(uint8_t *p, unsigned int bitpos);
+
 void copyMaskedBits(uint8_t *dest, const uint8_t *src, const uint8_t *mask, size_t len);
 
 // set  a bit in the mask for each bit of this value
