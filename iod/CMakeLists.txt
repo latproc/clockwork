@@ -110,6 +110,7 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/value.h
 	${CLOCKWORK_DIR}/symboltable.h
 	${CLOCKWORK_DIR}/rate.h
+	${CLOCKWORK_DIR}/helpers.h
 	${CLOCKWORK_DIR}/watchdog.h
 	${CLOCKWORK_DIR}/Message.h
 	${CLOCKWORK_DIR}/Receiver.h
@@ -137,6 +138,7 @@ add_library (cw_client
 	${CLOCKWORK_DIR}/value.cpp
 	${CLOCKWORK_DIR}/symboltable.cpp
 	${CLOCKWORK_DIR}/rate.cpp
+	${CLOCKWORK_DIR}/helpers.cpp
 	${CLOCKWORK_DIR}/Message.cpp
 	${CLOCKWORK_DIR}/watchdog.cpp
     ${CLOCKWORK_DIR}/json_expr_parser.cpp

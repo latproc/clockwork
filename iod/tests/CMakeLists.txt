@@ -170,4 +170,11 @@ add_test(NAME test_thread_safe_queue COMMAND test_thread_safe_queue)
 #    ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
 #include_directories("${PROJECT_SOURCE_DIR}/tests")
 #add_test(NAME test_multi_queue_monitor COMMAND test_multi_queue_monitor)
+
+add_executable(test_helpers test_helpers.cpp )
+set_target_properties (test_helpers PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_helpers gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_helpers COMMAND test_helpers)
+
 endif()
