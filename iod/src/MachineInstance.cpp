@@ -68,6 +68,7 @@
 #include "SharedWorkSet.h"
 #include "Transition.h"
 #include <mutex>
+#include "set_default_value_mixin.h"
 
 extern int num_errors;
 extern std::list<std::string> error_messages;
@@ -176,6 +177,9 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::s
 }
 
 void MachineInstance::setNeedsCheck(bool add_to_queue) {
+    if (!getStateMachine() || !is_enabled) {
+        return;
+    }
     if (add_to_queue && shared_refresh_queue) {
         shared_refresh_queue->enqueue(this);
         return;
@@ -183,12 +187,6 @@ void MachineInstance::setNeedsCheck(bool add_to_queue) {
     std::lock_guard<std::recursive_mutex> lock(set_needs_check_mutex);
     DBG_M_MESSAGING << _name << "::setNeedsCheck(), enabled: " << is_enabled
                     << " has state machine? " << ((state_machine) ? "yes" : "no") << "\n";
-    if (!getStateMachine()) {
-        return;
-    }
-    if (!is_enabled) {
-        return;
-    }
     bool already_pending = ProcessingThread::is_pending(this);
     if (!needs_check) {
         DBG_AUTOSTATES << _name << " needs check\n";
@@ -3080,40 +3078,40 @@ void MachineInstance::setDebug(bool which) {
 }
 
 void MachineInstance::disable() {
+    // IOComponent doesn't currently use the IOValueMixIn, this wrapper provides it
+    // TODO: Remove this wrapper
+    struct IOBase {
+        bool is_signed() const { return io->is_signed(); };
+        void setValue(int32_t val) { io->setValue(val); }
+        void setValue(uint32_t val) { io->setValue(val); }
+        void turnOff() { io->turnOff(); }
+        IOComponent *io{};
+    };
+
     if (!is_enabled && _type != "LIST" && _type != "REFERENCE") {
-        setNeedsCheck();
         return;
     }
     getTimerVal(); // update the timer in case a resume occurs
     if (locked) {
         locked = 0;
     }
-    if (io_interface) {
-        io_interface->turnOff();
-    }
     if (isShadow()) {
         setInitialState();
     }
     is_enabled = false;
 
-    const Value &val = properties.lookup("default");
-    if (val != SymbolTable::Null) {
-        if (val.kind == Value::t_integer) {
-            int64_t i_val = 0;
-            if (val.asInteger(i_val)) {
-                setValue("VALUE", Value{i_val});
-                if (io_interface) {
-                    if (io_interface->address.is_signed) {
-                        io_interface->setValue((int32_t)(i_val & 0xffffffff));
-                    }
-                    else {
-                        io_interface->setValue((uint32_t)(i_val & 0xffffffff));
-                    }
-                }
-            }
-        }
+    // Restore the default value for certain IO.
+    auto set_value = [this](const std::string &property, const Value &val){ properties.add(property, val); };
+    if (io_interface) {
+        struct IOValue : public IOValueMixIn<IOBase> {
+            IOValue() : IOValueMixIn<IOBase>{} {}
+        } io_value;
+        io_value.io = io_interface; // TODO: Find a better way to set the io interface pointer.
+        set_default_value_and_update_io<IOBase>(set_value, properties, &io_value);
     }
-
+    else {
+        set_default_value_and_update_io<IOBase>(set_value, properties, nullptr);
+    }
     disabled_time = microsecs();
     std::list<MachineInstance *> sorted;
     sortDependentMachines(this, sorted);

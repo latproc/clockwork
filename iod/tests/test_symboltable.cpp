@@ -1,6 +1,7 @@
 #include "gtest/gtest.h"
 #include <symboltable.h>
 #include <value.h>
+#include <set_default_value_mixin.h>
 
 namespace {
 
@@ -82,6 +83,69 @@ TEST(SymbolTable, SymbolValueAddsTokenId) {
     EXPECT_NE(value.token_id, 0);
     st.add("MySymbol", value);
     EXPECT_TRUE(st.exists(value.token_id));
+}
+
+struct IOBase {
+    struct Address {
+        bool is_signed{};
+    } address;
+    void setValue(int32_t val) {setIntValue_was_called = true; }
+    void setValue(uint32_t val) { setUintValue_was_called = true; }
+    void turnOff() { turnOff_was_called = true;}
+    bool is_signed() const { return address.is_signed; }
+
+    bool setIntValue_was_called{};
+    bool setUintValue_was_called{};
+    bool turnOff_was_called{};
+};
+
+TEST(SymbolTable, SetsDefaultIOIntValue) {
+    SymbolTable st;
+    auto set_value = [&st](const std::string &property, const Value &val){ st.add(property, val); };
+    st.add("default", Value(1));
+    struct IOValue : public IOValueMixIn<IOBase> {} io_value;
+    io_value.address.is_signed = true;
+    set_default_value_and_update_io<IOBase>( set_value, st, &io_value);
+    EXPECT_TRUE(io_value.setIntValue_was_called);
+    EXPECT_FALSE(io_value.setUintValue_was_called);
+    EXPECT_FALSE(io_value.turnOff_was_called);
+    EXPECT_TRUE(st.lookup("VALUE") == Value(1));
+}
+
+TEST(SymbolTable, SetsDefaultIOUintValue) {
+    SymbolTable st;
+    auto set_value = [&st](const std::string &property, const Value &val){ st.add(property, val); };
+    st.add("default", Value(2));
+    struct IOValue : public IOValueMixIn<IOBase> {} io_value;
+    io_value.address.is_signed = false;
+    set_default_value_and_update_io<IOBase>( set_value, st, &io_value);
+    EXPECT_FALSE(io_value.setIntValue_was_called);
+    EXPECT_TRUE(io_value.setUintValue_was_called);
+    EXPECT_FALSE(io_value.turnOff_was_called);
+    EXPECT_TRUE(st.lookup("VALUE") == Value(2));
+}
+
+TEST(SymbolTable, SetsDefaultIOOffWhenNoDefaultIsSet) {
+    SymbolTable st;
+    auto set_value = [&st](const std::string &property, const Value &val){ st.add(property, val); };
+    struct IOValue : public IOValueMixIn<IOBase> {} io_value;
+    set_default_value_and_update_io<IOBase>( set_value, st, &io_value);
+    EXPECT_FALSE(io_value.setIntValue_was_called);
+    EXPECT_FALSE(io_value.setUintValue_was_called);
+    EXPECT_TRUE(io_value.turnOff_was_called);
+    EXPECT_TRUE(st.lookup("VALUE") == SymbolTable::Null);
+}
+
+TEST(SymbolTable, SetsDefaultIOOffWhenDefaultIsNotAnInteger) {
+    SymbolTable st;
+    auto set_value = [&st](const std::string &property, const Value &val){ st.add(property, val); };
+    st.add("default", Value("string"));
+    struct IOValue : public IOValueMixIn<IOBase> {} io_value;
+    set_default_value_and_update_io<IOBase>( set_value, st, &io_value);
+    EXPECT_FALSE(io_value.setIntValue_was_called);
+    EXPECT_FALSE(io_value.setUintValue_was_called);
+    EXPECT_TRUE(io_value.turnOff_was_called);
+    EXPECT_TRUE(st.lookup("VALUE") == Value("string"));
 }
 
 } // namespace

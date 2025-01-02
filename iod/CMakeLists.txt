@@ -108,6 +108,7 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/cJSON.h
 	${CLOCKWORK_DIR}/DebugExtra.h
 	${CLOCKWORK_DIR}/value.h
+	${CLOCKWORK_DIR}/set_default_value_mixin.h
 	${CLOCKWORK_DIR}/symboltable.h
 	${CLOCKWORK_DIR}/rate.h
 	${CLOCKWORK_DIR}/helpers.h

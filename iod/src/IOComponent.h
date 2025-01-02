@@ -130,6 +130,7 @@ class IOComponent : public Transmitter {
     virtual void handleChange(std::list<Package *> &work_queue);
     virtual void turnOn();
     virtual void turnOff();
+    bool is_signed() const { return address.is_signed; }
     bool isOn();
     bool isOff();
     int64_t value() {
