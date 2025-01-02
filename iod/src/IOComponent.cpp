@@ -143,7 +143,7 @@ void IOUpdate::clear() {
 
 void IOUpdate::setGlobalClock(uint64_t clock) { global_clock_ = clock; }
 
-uint32_t IOUpdate::data_size() const { return static_cast<uint32_t>(data_.size()); }
+size_t IOUpdate::data_size() const { return data_.size(); }
 //void IOUpdate::setSize(uint32_t sz) { size_ = sz; }
 
 const uint8_t *IOUpdate::data() const { return data_.data(); }
@@ -286,7 +286,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
         for (size_t i = 0; i < data_size; ++i) {
             pd[i] = data[i];
             if (mask[i]) {
-                notifyComponentsAt(i);
+                notifyComponentsAt(static_cast<unsigned int>(i));
             }
         }
         first_time = false;

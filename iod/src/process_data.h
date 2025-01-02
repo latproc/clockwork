@@ -57,7 +57,7 @@ class IOUpdate {
     void clear();
     uint64_t global_clock() const;
     void setGlobalClock(uint64_t clock);
-    uint32_t data_size() const;
+    size_t data_size() const;
     //void setSize(uint32_t sz);
 
     const uint8_t *data() const;
