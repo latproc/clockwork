@@ -80,9 +80,8 @@ static std::atomic<int> runnable_count{};
 uint64_t rate_calc_process_time = 0; // used for idle calculations for rate estimation
 Value *MachineInstance::polling_delay = 0;
 
-unsigned int MachineInstance::num_machines_with_work =
-    1; // machine idle processing will occur if this value is non zero
-unsigned int MachineInstance::total_machines_needing_check = 1;
+// machine idle processing will occur if this value is non zero
+unsigned int MachineInstance::num_machines_with_work = 1;
 
 SharedThreadSafeQueue<MachineInstance *> *MachineInstance::shared_refresh_queue = nullptr;
 SharedThreadSafeQueue<MachineInstance *> &MachineInstance::refresh_queue() {
@@ -204,10 +203,6 @@ void MachineInstance::setNeedsCheck(bool add_to_queue) {
     std::lock_guard<std::recursive_mutex> lock(set_needs_check_mutex);
     DBG_M_MESSAGING << _name << "::setNeedsCheck(), enabled: " << is_enabled
                     << " has state machine? " << ((state_machine) ? "yes" : "no") << "\n";
-    if (!needs_check) {
-        DBG_AUTOSTATES << _name << " needs check\n";
-        ++total_machines_needing_check;
-    }
     ++needs_check;
     if (!active_actions.empty() || !mail_queue.empty()) {
         DBG_M_MESSAGING << _name << " queued for action processing\n";
@@ -308,25 +303,12 @@ void MachineInstance::enqueue(const Package &package) {
 }
 
 bool MachineInstance::workToDo() {
-    if (!pending_events.empty()) {
-        DBG_MSG << "!pending_events.empty()\n";
-    }
-    if (!SharedWorkSet::instance()->empty()) {
-        DBG_MSG << "!SharedWorkSet::instance()->empty()\n";
-    }
-    if (!pending_state_change.empty()) {
-        DBG_MSG << "!pending_state_change.empty()\n";
-    }
-    if (num_machines_with_work + total_machines_needing_check > 0) {
-        DBG_MSG << "num_machines_with_work + total_machines_needing_check > 0 ("
-                << num_machines_with_work << "," << total_machines_needing_check << ") > 0\n";
-    }
     for (const auto machine : all_machines) {
         if (machine->is_runnable()) return true;
     }
-    return !pending_events.empty() || !SharedWorkSet::instance()->empty() ||
+    return !SharedWorkSet::instance()->empty() ||
            !pending_state_change.empty() ||
-           num_machines_with_work + total_machines_needing_check > 0;
+           num_machines_with_work > 0;
 }
 std::list<Package *> &MachineInstance::pendingEvents() { return pending_events; }
 std::set<MachineInstance *> &MachineInstance::pluginMachines() { return plugin_machines; }
@@ -341,7 +323,7 @@ void MachineInstance::add_io_entry(const char *name, unsigned int io_offset, uns
 {
     HardwareAddress addr(io_offset, bit_offset);
     addr.io_offset = io_offset;
-    addr.io_bitpos = bit_offset;
+    addr.io_bitpos = bit_offset;
     hw_names[name] = addr;
 }
 #endif
@@ -1316,7 +1298,6 @@ void MachineInstance::checkPluginStates() {
 // Warning: max_time is ignored in this method
 bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
                                         uint32_t max_time) {
-    total_machines_needing_check = 0;
     std::set<MachineInstance *>::iterator iter = to_process.begin();
     while (iter != to_process.end()) {
         MachineInstance *mi = *iter++;
@@ -1752,11 +1733,6 @@ Action::Status MachineInstance::setState(const char *sn, uint64_t authority, boo
         return Action::Failed;
     }
     return setState(*s, authority, resume);
-}
-
-void MachineInstance::forceStableStateCheck() {
-    DBG_AUTOSTATES << "stable state check forced\n";
-    total_machines_needing_check++;
 }
 
 void MachineInstance::requireAuthority(uint64_t auth) { expected_authority = auth; }

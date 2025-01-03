@@ -344,7 +344,6 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     void publish();
     void unpublish();
 
-    static void forceStableStateCheck();
     static void forceIdleCheck();
     static bool workToDo();
     static std::list<Package *> &pendingEvents();
@@ -425,7 +424,6 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     static std::list<MachineInstance *> io_modules;     // machines of type MODULE
     static std::list<Package *> pending_events;         // machines that shadow remote machines
     static unsigned int num_machines_with_work;
-    static unsigned int total_machines_needing_check;
     uint64_t expected_authority;
 
     std::map<std::string, Value> changes;
