@@ -40,9 +40,9 @@ class ProcessingThread : public ClockworkProcessManager {
     CommandSocketInfo *addCommandChannel(Channel *);
     CommandSocketInfo *addCommandChannel(CommandSocketInfo *);
 
-    static void activate(MachineInstance *m);
-    static void suspend(MachineInstance *m);
-    static bool is_pending(MachineInstance *m);
+    //static void activate(MachineInstance *m);
+    //static void suspend(MachineInstance *m);
+    //static bool is_pending(MachineInstance *m);
 
     void operator()();
 

@@ -332,7 +332,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     static void sort();
 
-    virtual void setNeedsCheck(bool add_to_queue = false);
+    virtual void setNeedsCheck(bool add_to_queue = true);
     Value earliestScheduleTime(const std::list<Predicate *> &predicates);
     uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
     void updateLastEvaluationTime();
@@ -402,8 +402,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     std::list<Predicate *> timer_predicates;
     Channel *owner_channel;
 
-    bool is_runnable() { return _is_runnable; }
-    void set_runnable(bool which) { _is_runnable = which; }
+    bool is_runnable();
+    void set_runnable(bool which);
 
   private:
     Cache *cache;

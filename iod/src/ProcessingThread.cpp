@@ -344,6 +344,7 @@ ProcessingThread *ProcessingThread::instance_ = 0;
 ProcessingThread *ProcessingThread::instance() { return instance_; }
 void ProcessingThread::setProcessingThreadInstance(ProcessingThread *pti) { instance_ = pti; }
 
+#if 0
 void ProcessingThread::activate(MachineInstance *m) {
     boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
     instance()->runnable.insert(m);
@@ -358,6 +359,7 @@ bool ProcessingThread::is_pending(MachineInstance *m) {
     boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
     return instance()->runnable.count(m);
 }
+#endif
 
 void ProcessingThread::handle_package(Package *p) {
 {
@@ -465,7 +467,7 @@ void ProcessingThread::handle_package(Package *p) {
             MachineInstance *mi = dynamic_cast<MachineInstance *>(to);
             if (mi) {
                 SharedWorkSet::instance()->add(mi);
-                ProcessingThread::activate(mi);
+                mi->set_runnable(true);
                 Action *curr = mi->executingCommand();
                 if (curr) {
                     DBG_DISPATCHER << mi->getName() << " currently executing "
@@ -719,7 +721,7 @@ void ProcessingThread::operator()() {
         int dynamic_poll_start_idx = 6;
 
         int poll_wait = static_cast<int>(internals->cycle_delay / 1000); // millisecs
-        machine_check_delay = static_cast<unsigned int>(internals->cycle_delay / 5);
+        machine_check_delay = static_cast<uint32_t>(internals->cycle_delay / 5);
         long systems_waiting = 0;
         uint64_t curr_t = 0;
         uint64_t last_sample_poll = 0;

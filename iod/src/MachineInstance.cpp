@@ -68,11 +68,14 @@
 #include "SharedWorkSet.h"
 #include "Transition.h"
 #include <mutex>
+#include <stdatomic.h>
+#include "helpers.h"
 #include "set_default_value_mixin.h"
 
 extern int num_errors;
 extern std::list<std::string> error_messages;
 static std::recursive_mutex set_needs_check_mutex;
+static std::atomic<int> runnable_count{};
 
 uint64_t rate_calc_process_time = 0; // used for idle calculations for rate estimation
 Value *MachineInstance::polling_delay = 0;
@@ -176,10 +179,20 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::s
     }
 }
 
+bool MachineInstance::is_runnable() {
+    return _is_runnable;
+}
+
+void MachineInstance::set_runnable(bool which) {
+    runnable_count += counter_adjustment(_is_runnable, which);
+    _is_runnable = which;
+}
+
 void MachineInstance::setNeedsCheck(bool add_to_queue) {
     if (!getStateMachine() || !is_enabled) {
         return;
     }
+    set_runnable(true);
     if (add_to_queue && shared_refresh_queue) {
         shared_refresh_queue->enqueue(this);
         return;
@@ -187,7 +200,6 @@ void MachineInstance::setNeedsCheck(bool add_to_queue) {
     std::lock_guard<std::recursive_mutex> lock(set_needs_check_mutex);
     DBG_M_MESSAGING << _name << "::setNeedsCheck(), enabled: " << is_enabled
                     << " has state machine? " << ((state_machine) ? "yes" : "no") << "\n";
-    bool already_pending = ProcessingThread::is_pending(this);
     if (!needs_check) {
         DBG_AUTOSTATES << _name << " needs check\n";
         ++total_machines_needing_check;
@@ -304,6 +316,9 @@ bool MachineInstance::workToDo() {
     if (num_machines_with_work + total_machines_needing_check > 0) {
         DBG_MSG << "num_machines_with_work + total_machines_needing_check > 0 ("
                 << num_machines_with_work << "," << total_machines_needing_check << ") > 0\n";
+    }
+    for (const auto machine : all_machines) {
+        if (machine->is_runnable()) return true;
     }
     return !pending_events.empty() || !SharedWorkSet::instance()->empty() ||
            !pending_state_change.empty() ||
@@ -3078,6 +3093,7 @@ void MachineInstance::setDebug(bool which) {
     }
 }
 
+
 void MachineInstance::disable() {
     // IOComponent doesn't currently use the IOValueMixIn, this wrapper provides it
     // TODO: Remove this wrapper
@@ -3089,6 +3105,7 @@ void MachineInstance::disable() {
         IOComponent *io{};
     };
 
+    set_runnable(false);
     if (!is_enabled && _type != "LIST" && _type != "REFERENCE") {
         return;
     }

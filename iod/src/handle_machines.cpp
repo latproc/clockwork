@@ -39,6 +39,12 @@ void ProcessingThread::handle_machines(
                         iter++;
                     }
                 }
+                for (auto i = MachineInstance::begin(); i != MachineInstance::end(); ++i) {
+                    auto machine = *i;
+                    if (machine->is_runnable()) {
+                        to_process.insert(machine);
+                    }
+                }
             }
 
             if (!to_process.empty()) {
@@ -50,6 +56,12 @@ void ProcessingThread::handle_machines(
         }
         if (processing_state == ProcessingStates::eStableStates) {
             std::set<MachineInstance *> to_process;
+            for (auto i = MachineInstance::begin(); i != MachineInstance::end(); ++i) {
+                auto machine = *i;
+                if (machine->is_runnable()) {
+                    to_process.insert(machine);
+                }
+            }
             {
                 boost::recursive_mutex::scoped_lock lock(runnable_mutex);
                 std::set<MachineInstance *>::iterator iter = runnable.begin();
