@@ -1,6 +1,4 @@
-#ifndef __SHAREDWORKSET_H
-#define __SHAREDWORKSET_H
-
+#pragma once
 #include <boost/thread/recursive_mutex.hpp>
 #include <set>
 
@@ -10,18 +8,15 @@ class SharedWorkSet {
     static SharedWorkSet *instance();
     void add(MachineInstance *m);
     void remove(MachineInstance *m);
+    bool empty() const;
+    size_t size() const;
     std::set<MachineInstance *>::iterator erase(std::set<MachineInstance *>::iterator &iter);
-    bool empty();
-    size_t size();
     std::set<MachineInstance *>::iterator begin();
     std::set<MachineInstance *>::iterator end();
     boost::recursive_mutex &getMutex() { return mutex; }
 
   private:
     static SharedWorkSet *instance_;
-    boost::recursive_mutex mutex;
-    SharedWorkSet() {}
+    mutable boost::recursive_mutex mutex;
     std::set<MachineInstance *> busy_machines; // machines that have work queued to them
 };
-
-#endif

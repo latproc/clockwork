@@ -27,12 +27,12 @@ SharedWorkSet::erase(std::set<MachineInstance *>::iterator &iter) {
     return busy_machines.erase(iter);
 }
 
-bool SharedWorkSet::empty() {
+bool SharedWorkSet::empty() const {
     boost::recursive_mutex::scoped_lock scoped_lock(mutex);
     return busy_machines.empty();
 }
 
-size_t SharedWorkSet::size() {
+size_t SharedWorkSet::size() const {
     boost::recursive_mutex::scoped_lock scoped_lock(mutex);
     return busy_machines.size();
 }
