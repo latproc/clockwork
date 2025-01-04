@@ -220,7 +220,7 @@ void MachineInstance::setNeedsCheck(bool add_to_queue) {
         set_runnable(true);
     }
     next_poll = 0;
-    if (state_machine->token_id == ClockworkToken::LIST) {
+    if (state_machine->hasType(ClockworkToken::LIST)) {
         std::set<MachineInstance *>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
@@ -229,7 +229,7 @@ void MachineInstance::setNeedsCheck(bool add_to_queue) {
             }
         }
     }
-    else if (state_machine->token_id == ClockworkToken::REFERENCE) {
+    else if (state_machine->hasType(ClockworkToken::REFERENCE)) {
         std::set<MachineInstance *>::iterator dep_iter = depends.begin();
         while (dep_iter != depends.end()) {
             MachineInstance *dep = *dep_iter++;
@@ -521,7 +521,7 @@ MachineInstance *MachineInstance::lookup_cache_miss(const std::string &seek_mach
     //ss << _name<< " cache miss lookup " << seek_machine_name << " from " << _name;
     if (seek_machine_name == "SELF" || seek_machine_name == _name) {
         //ss << "...self";
-        if (state_machine->token_id == ClockworkToken::tokCONDITION && owner) {
+        if (state_machine->hasType(ClockworkToken::tokCONDITION && owner)) {
             found = owner;
         }
         else {
@@ -620,8 +620,8 @@ class VariableValue : public DynamicValue {
   public:
     VariableValue(MachineInstance *mi) : machine_instance(mi) {}
     virtual Value &operator()(MachineInstance *m) {
-        if (machine_instance->getStateMachine()->token_id == ClockworkToken::VARIABLE ||
-            machine_instance->getStateMachine()->token_id == ClockworkToken::CONSTANT) {
+        if (machine_instance->getStateMachine()->hasType(ClockworkToken::VARIABLE) ||
+            machine_instance->getStateMachine()->hasType(ClockworkToken::CONSTANT)) {
             last_result = machine_instance->getValue("VALUE");
             return last_result;
         }
@@ -928,7 +928,7 @@ void MachineInstance::describe(std::ostream &out) {
     }
     const Value *current_timer_val = getTimerVal();
     out << "Timer: " << *current_timer_val << "\n";
-    if (stable_states.size() || state_machine->token_id == ClockworkToken::LIST) {
+    if (stable_states.size() || state_machine->hasType(ClockworkToken::LIST)) {
         long now_t = microsecs();
         uint64_t delta = now_t - last_state_evaluation_time;
         out << "Last stable state evaluation (";
@@ -2944,7 +2944,7 @@ void MachineInstance::setInitialState(bool resume) {
             }
         }
         else {
-            if (state_machine->token_id == ClockworkToken::LIST) {
+            if (state_machine->hasType(ClockworkToken::LIST)) {
                 fixListState(*this);
             }
             else {
@@ -3031,7 +3031,7 @@ void MachineInstance::enable() {
         b->enable();
     }
 
-    if (isActive() && !isShadow() && getStateMachine()->token_id != ClockworkToken::EXTERNAL) {
+    if (isActive() && !isShadow() && !getStateMachine()->hasType(ClockworkToken::EXTERNAL)) {
         std::string msgstr(_name);
         msgstr += "_enabled";
         Message msg(msgstr.c_str(), Message::ENABLEMSG);
@@ -3265,12 +3265,12 @@ bool MachineInstance::setStableState() {
         }
     }
     else if ((!state_machine && _type == "LIST") ||
-             (state_machine && state_machine->token_id == ClockworkToken::LIST)) {
+             (state_machine && state_machine->hasType(ClockworkToken::LIST))) {
         //DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
         fixListState(*this);
     }
     else if ((!state_machine && _type == "REFERENCE") ||
-             (state_machine && state_machine->token_id == ClockworkToken::REFERENCE)) {
+             (state_machine && state_machine->hasType(ClockworkToken::REFERENCE))) {
         //DBG_MSG << _name << " has " << parameters.size() << " parameters\n";
         if (locals.size()) {
             const State *s = state_machine->findState("ASSIGNED");
@@ -3569,7 +3569,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     }
     // a list has many parameters but the list class does not.
     // nevertheless, the parameters and dependencies still need to be setup.
-    if (state_machine->token_id == ClockworkToken::LIST) {
+    if (state_machine->hasType(ClockworkToken::LIST)) {
         for (unsigned int i = 0; i < parameters.size(); ++i) {
             parameters[i].real_name = parameters[i].val.sValue;
             MachineInstance *m = lookup(parameters[i].real_name);
@@ -3676,7 +3676,7 @@ const Value *MachineInstance::resolve(std::string property) {
         if (other) {
             return other->resolve(prop);
         }
-        else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" &&
+        else if (state_machine->hasType(ClockworkToken::REFERENCE) && name == "ITEM" &&
                  locals.size() == 0) {
             // permit references items to be not always available so that these can be
             // added and removed as the program executes
@@ -3705,8 +3705,8 @@ const Value *MachineInstance::resolve(std::string property) {
             return getTimerVal();
         }
         // variables may refer to an initialisation value passed in as a parameter.
-        if (state_machine->token_id == ClockworkToken::VARIABLE ||
-            state_machine->token_id == ClockworkToken::CONSTANT) {
+        if (state_machine->hasType(ClockworkToken::VARIABLE) ||
+            state_machine->hasType(ClockworkToken::CONSTANT)) {
             for (unsigned int i = 0; i < parameters.size(); ++i) {
                 if (state_machine->parameters[i].val.kind == Value::t_symbol &&
                     property == state_machine->parameters[i].val.sValue) {
@@ -3783,18 +3783,18 @@ const Value *MachineInstance::resolve(std::string property) {
         // finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
         MachineInstance *m = lookup(property);
         if (m) {
-            if (m->state_machine && (m->state_machine->token_id == ClockworkToken::VARIABLE ||
-                                     m->state_machine->token_id == ClockworkToken::CONSTANT)) {
+            if (m->state_machine && (m->state_machine->hasType(ClockworkToken::VARIABLE) ||
+                                     m->state_machine->hasType(ClockworkToken::CONSTANT))) {
                 return &m->properties.lookup("VALUE");
             }
             else if (m->getStateMachine()) {
 
-                if (m->getStateMachine()->token_id == ClockworkToken::VARIABLE ||
-                    m->getStateMachine()->token_id == ClockworkToken::CONSTANT) {
+                if (m->getStateMachine()->hasType(ClockworkToken::VARIABLE) ||
+                    m->getStateMachine()->hasType(ClockworkToken::CONSTANT)) {
                     return &m->properties.lookup("VALUE");
                 }
-                else if (m->getStateMachine()->token_id == ClockworkToken::LIST ||
-                         m->getStateMachine()->token_id == ClockworkToken::REFERENCE) {
+                else if (m->getStateMachine()->hasType(ClockworkToken::LIST) ||
+                         m->getStateMachine()->hasType(ClockworkToken::REFERENCE)) {
                     return m->getCurrent().getNameValue();
                 }
             }
@@ -3850,7 +3850,7 @@ const Value &MachineInstance::getValue(const std::string &property) {
                              << " with value " << v << "\n";
             return v;
         }
-        else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" &&
+        else if (state_machine->hasType(ClockworkToken::REFERENCE) && name == "ITEM" &&
                  locals.size() == 0) {
             // permit references items to be not always available so that these can be
             // added and removed as the program executes
@@ -3873,8 +3873,8 @@ const Value &MachineInstance::getValue(const std::string &property) {
         // try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
 
         // variables may refer to an initialisation value passed in as a parameter.
-        if (state_machine && (state_machine->token_id == ClockworkToken::VARIABLE ||
-                              state_machine->token_id == ClockworkToken::CONSTANT)) {
+        if (state_machine && (state_machine->hasType(ClockworkToken::VARIABLE) ||
+                              state_machine->hasType(ClockworkToken::CONSTANT))) {
             for (unsigned int i = 0; i < parameters.size(); ++i) {
                 if (state_machine->parameters[i].val.kind == Value::t_symbol &&
                     property == state_machine->parameters[i].val.sValue
@@ -3952,8 +3952,8 @@ const Value &MachineInstance::getValue(const std::string &property) {
         // finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
         MachineInstance *m = lookup(property);
         if (m) {
-            if (m->state_machine->token_id == ClockworkToken::VARIABLE ||
-                m->state_machine->token_id == ClockworkToken::CONSTANT) {
+            if (m->state_machine->hasType(ClockworkToken::VARIABLE) ||
+                m->state_machine->hasType(ClockworkToken::CONSTANT)) {
                 return m->getValue("VALUE");
             }
             // we no longer support the idea that the property lookup process may return the state of a machine
@@ -3978,7 +3978,7 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
                              << *v << "\n";
             return v;
         }
-        else if (state_machine->token_id == ClockworkToken::REFERENCE && name == "ITEM" &&
+        else if (state_machine->hasType(ClockworkToken::REFERENCE) && name == "ITEM" &&
                  locals.size() == 0) {
             // permit references items to be not always available so that these can be
             // added and removed as the program executes
@@ -4001,8 +4001,8 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
         // try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
 
         // variables may refer to an initialisation value passed in as a parameter.
-        if (state_machine && (state_machine->token_id == ClockworkToken::VARIABLE ||
-                              state_machine->token_id == ClockworkToken::CONSTANT)) {
+        if (state_machine && (state_machine->hasType(ClockworkToken::VARIABLE) ||
+                              state_machine->hasType(ClockworkToken::CONSTANT))) {
             for (unsigned int i = 0; i < parameters.size(); ++i) {
                 if (state_machine->parameters[i].val.kind == Value::t_symbol &&
                     property == state_machine->parameters[i].val.sValue
@@ -4071,8 +4071,8 @@ Value *MachineInstance::getMutableValue(const char *property_name) {
         // finally, the 'property' may be a VARIABLE or CONSTANT machine declared locally
         MachineInstance *m = lookup(property);
         if (m) {
-            if (m->state_machine->token_id == ClockworkToken::VARIABLE ||
-                m->state_machine->token_id == ClockworkToken::CONSTANT) {
+            if (m->state_machine->hasType(ClockworkToken::VARIABLE) ||
+                m->state_machine->hasType(ClockworkToken::CONSTANT)) {
                 return m->getMutableValue("VALUE");
             }
             //else
@@ -4300,7 +4300,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             if (new_value.asInteger(new_delay)) {
                 idle_time = new_delay;
             }
-            if (state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
+            if (state_machine->hasType(ClockworkToken::SYSTEMSETTINGS)) {
                 *MachineInstance::polling_delay = new_delay;
                 was_changed = true;
             }
@@ -4321,7 +4321,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         if (global_var != state_machine->global_references.end()) {
             MachineInstance *global_machine = (*global_var).second;
             if (global_machine &&
-                global_machine->state_machine->token_id != ClockworkToken::CONSTANT) {
+                !global_machine->state_machine->hasType(ClockworkToken::CONSTANT)) {
                 DBG_PROPERTIES << global_machine->getName() << " setting property VALUE to "
                                << new_value << "\n";
                 return global_machine->setValue("VALUE", new_value);
@@ -4339,7 +4339,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             // the 'property' may be a VARIABLE or CONSTANT machine declared locally or globally
             MachineInstance *global_machine = lookup(property);
             if (global_machine) {
-                if (global_machine->state_machine->token_id != ClockworkToken::CONSTANT) {
+                if (!global_machine->state_machine->hasType(ClockworkToken::CONSTANT)) {
                     return global_machine->setValue("VALUE", new_value);
                 }
                 NB_MSG << "attempt to set a value on constant " << property << ". ignored\n";
@@ -4404,7 +4404,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
                 NB_MSG << buf << "\n";
             }
         }
-        if (state_machine->token_id == ClockworkToken::MQTTPUBLISHER && mq_interface &&
+        if (state_machine->hasType(ClockworkToken::MQTTPUBLISHER) && mq_interface &&
             property_val.token_id == ClockworkToken::tokMessage) {
             //std::string old_val(properties.lookup(property.c_str()).asString());
             mq_interface->publish(properties.lookup("topic").asString(), new_value.asString(),

@@ -100,21 +100,23 @@ class MachineClass {
     std::string name;
     static std::list<MachineClass *> all_machine_classes;
     bool allow_auto_states;
-    int token_id;
-    Plugin *plugin;
-    long polling_delay;
+    Plugin *plugin{nullptr};
+    long polling_delay{0};
 
     std::set<std::string> property_names;
     std::set<std::string> command_names;
 
-    MachineClass *parent;
+    MachineClass *parent{nullptr};
 
     void exportHandlers(std::ostream &ofs);
     void exportCommands(std::ostream &ofs);
     bool cExport(const std::string &filename);
 
+    bool hasType(int token) const { return token_id == token; }
+
   private:
     std::set<std::string> static_state_names;
+    int token_id{0};
 
     MachineClass();
     MachineClass(const MachineClass &other);

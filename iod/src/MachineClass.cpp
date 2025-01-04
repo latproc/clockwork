@@ -27,7 +27,7 @@ static bool stringEndsWith(const std::string &str, const std::string &subs) {
 
 MachineClass::MachineClass(const char *class_name)
     : default_state("unknown"), initial_state("INIT"), name(class_name), allow_auto_states(true),
-      token_id(0), plugin(0), polling_delay(0), parent(0) {
+      plugin(0), polling_delay(0), parent(0), token_id(0) {
     addState("INIT", true);
     token_id = Tokeniser::instance()->getTokenId(class_name);
     all_machine_classes.push_back(this);

@@ -385,7 +385,7 @@ void ProcessingThread::handle_package(Package *p) {
             NB_MSG << buf << "\n";
         }
         if (!chn && mi && mi->getStateMachine() &&
-            mi->getStateMachine()->token_id == ClockworkToken::EXTERNAL) {
+            mi->getStateMachine()->hasType(ClockworkToken::EXTERNAL)) {
             DBG_DISPATCHER << "Dispatcher sending external message " << *p << " to "
                            << to->getName() << "\n";
             {
