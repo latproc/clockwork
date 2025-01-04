@@ -699,6 +699,7 @@ IODCommandThread::IODCommandThread() : done(false), internals(0) {
 IODCommandThread::~IODCommandThread() { delete internals; }
 
 void IODCommandThread::stop() {
+    done = true;
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals *>(internals);
     if ((void *)cti->socket != 0) {
         cti->socket.close();

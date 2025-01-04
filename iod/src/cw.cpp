@@ -730,11 +730,6 @@ int main(int argc, char const *argv[]) {
 
     char buf[100];
     size_t response_len;
-    if (safeRecv(sim_io, buf, 100, true, response_len, 0)) {
-        buf[(response_len < 100) ? response_len : 99] = 0;
-        DBG_INITIALISATION << "simulated io got start message: " << buf << "\n";
-    }
-
     DBG_INITIALISATION << "processing has started\n";
     uint64_t then = microsecs();
     while (!program_done) {
@@ -768,7 +763,8 @@ int main(int argc, char const *argv[]) {
         MQTTInterface::instance()->stop();
         Dispatcher::instance()->stop();
         processMonitor.stop();
-        cleanup_machine_classes();
+        // TODO: Fix the corruption of this list at shutdown
+        // cleanup_machine_classes();
         kill(0, SIGTERM); // interrupt select() and poll()s to enable termination
         process.join();
         stateMonitor->stop();
