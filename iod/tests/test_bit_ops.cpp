@@ -147,4 +147,3 @@ TEST(BitOpsIsSet, CalculatesCorrectValue) {
         else { EXPECT_EQ(value, 0); }
     }
 }
-
