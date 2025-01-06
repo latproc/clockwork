@@ -34,6 +34,7 @@ c32 Cell(r:3, c:2) row3,col2;
 c33 Cell(r:3, c:3) row3,col3;
 
 AllTentative MACHINE related {
+  false WHEN ANY all ARE unknown OR ANY all ARE blocked OR ANY all ARE wait OR ANY all ARE INIT;
   true WHEN SIZE OF related == 9 AND SELF IS true OR
       ( COUNT tentative_one FROM related == 3
          AND COUNT tentative_two FROM related == 3
@@ -52,6 +53,7 @@ Cell MACHINE row, col {
   LOCAL OPTION r 0;
   LOCAL OPTION c 0;
   GLOBAL all_tentative;
+  LOCAL OPTION delay 0;
   related LIST; # the set of all cells that this cell shares row or columns with
 
   wait WHEN (SELF IS wait OR SELF IS INIT) AND TIMER < 400; # give sampler time to connect
@@ -60,6 +62,8 @@ Cell MACHINE row, col {
     two   WHEN SELF IS two   OR (SELF IS tentative_two && all_tentative IS true);
     three WHEN SELF IS three OR (SELF IS tentative_three && all_tentative IS true);
 
+    unknown WHEN (SELF IS tentative_one OR SELF IS tentative_two OR SELF IS tentative_three)
+                 AND all_tentative IS false AND TIMER > 40 AND (ANY related ARE blocked OR ANY related ARE unknown);
      tentative_one WHEN
       ( SELF IS unknown AND COUNT tentative_one FROM related == 0
               OR SELF IS tentative_one AND COUNT tentative_one FROM related == 1);
@@ -72,7 +76,7 @@ Cell MACHINE row, col {
       ( SELF IS unknown AND COUNT tentative_three FROM related == 0
               OR SELF IS tentative_three AND COUNT tentative_three FROM related == 1);
 
-  blocked WHEN TIMER < 40; # yuk. we need to sit in blocked long enough for the other machines to stabilise
+  blocked WHEN TIMER < delay; # yuk. we need to sit in blocked long enough for the other machines to stabilise
   unknown DEFAULT;
 
   ENTER INIT {
@@ -80,6 +84,7 @@ Cell MACHINE row, col {
     #   machine will break when we fix that problem
     COPY ALL FROM row TO related;
     COPY ALL FROM col TO related;
+    delay := RANDOM % 10 + 2;
   }
 
 }
