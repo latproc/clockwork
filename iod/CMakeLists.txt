@@ -241,6 +241,7 @@ set (Clockwork_Headers
     src/ecat_thread.h
     src/ECInterface.h
     src/EnableAction.h
+    src/error_state.h
     src/EtherCATSetup.h
     src/exec_command.h
     src/ExecuteMessageAction.h
@@ -356,6 +357,7 @@ set (Clockwork_SRCS
     src/dynamic_value.cpp
     src/ECInterface.cpp
     src/EnableAction.cpp
+    src/error_state.cpp
     src/exec_command.c
     src/ExecuteMessageAction.cpp
     src/ExportState.cpp

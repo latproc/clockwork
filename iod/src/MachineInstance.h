@@ -309,13 +309,6 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     bool isTraceable() { return is_traceable.bValue; }
 
-    // error states are outside of the normal processing for a state machine;
-    // they cause other processing to halt and trigger receipt of a message: ERROR
-    bool inError();
-    void setError(int val);
-    void resetError();
-    void ignoreError();
-
     // debug messaging
     void setDebug(bool which);
     bool isActive() { return is_active; }
@@ -377,7 +370,6 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     std::vector<std::string> command_names; // used for mapping modbus offsets to states
     ModbusExport::Type modbus_exported;
 
-    int error_state;   // error number of the current error if any
     State saved_state; // save state before error
     Value current_state_val;
     bool is_active; // is this machine active or passive?

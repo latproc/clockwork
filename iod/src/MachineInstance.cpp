@@ -1036,10 +1036,6 @@ bool MachineInstance::queuedForStableStateTest() { return pending_state_change.c
 
 void MachineInstance::idle() {
     set_runnable(false);
-
-    if (error_state) {
-        return;
-    }
     if (!is_enabled) {
         return;
     }
@@ -2897,7 +2893,6 @@ void MachineInstance::resume() {
 
         // fix status
         is_enabled = true;
-        error_state = 0;
         for (unsigned int i = 0; i < locals.size(); ++i) {
             locals[i].machine->resume();
         }
@@ -3017,7 +3012,6 @@ void MachineInstance::enable() {
         return;
     }
     is_enabled = true;
-    error_state = 0;
     clearAllActions();
     if (io_interface) {
         io_interface->setupProperties(this);
@@ -3134,7 +3128,6 @@ void MachineInstance::resume(const State &s) {
         // fix status
         clearAllActions();
         is_enabled = true;
-        error_state = 0;
         // resume all local machines first so that setState() can
         // execute any necessary methods on local machines
         for (unsigned int i = 0; i < locals.size(); ++i) {
@@ -5104,28 +5097,3 @@ int MachineInstance::getModbusValue(ModbusAddress &addr, unsigned int offset, in
     }
     return 0;
 }
-
-// Error states (not used yet)
-bool MachineInstance::inError() { return error_state != 0; }
-
-void MachineInstance::setError(int val) {
-    if (error_state) {
-        return;
-    }
-    error_state = val;
-    if (val) {
-        saved_state = current_state;
-        const State *err = state_machine->findState("ERROR");
-        assert(err);
-        setState(*err);
-    }
-}
-
-void MachineInstance::resetError() {
-    error_state = 0;
-    if (state_machine) {
-        setState(state_machine->initial_state);
-    }
-}
-
-void MachineInstance::ignoreError() { error_state = 0; }
