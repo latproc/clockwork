@@ -179,13 +179,17 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::s
     }
 }
 
-bool MachineInstance::is_runnable() {
+bool MachineInstance::is_runnable() const {
     return _is_runnable;
 }
 
 void MachineInstance::set_runnable(bool which) {
     runnable_count += counter_adjustment(_is_runnable, which);
     _is_runnable = which;
+}
+
+int MachineInstance::num_runnable() {
+    return runnable_count;
 }
 
 void MachineInstance::setNeedsCheck(bool add_to_queue) {

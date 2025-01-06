@@ -402,8 +402,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     std::list<Predicate *> timer_predicates;
     Channel *owner_channel;
 
-    bool is_runnable();
+    bool is_runnable() const;
     void set_runnable(bool which);
+    static int num_runnable();
 
   private:
     Cache *cache;

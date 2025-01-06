@@ -45,6 +45,12 @@ void ProcessingThread::handle_machines(
                         to_process.insert(machine);
                     }
                 }
+                if (to_process.size()) {
+                    assert(MachineInstance::num_runnable() > 0);
+                }
+                else {
+                    assert(MachineInstance::num_runnable() == 0);
+                }
             }
 
             if (!to_process.empty()) {
@@ -61,6 +67,12 @@ void ProcessingThread::handle_machines(
                 if (machine->is_runnable()) {
                     to_process.insert(machine);
                 }
+            }
+            if (to_process.size()) {
+                assert(MachineInstance::num_runnable() > 0);
+            }
+            else {
+                assert(MachineInstance::num_runnable() == 0);
             }
             {
                 boost::recursive_mutex::scoped_lock lock(runnable_mutex);
