@@ -24,6 +24,7 @@
 #include "Statistic.h"
 #include "Statistics.h"
 #include "cJSON.h"
+#include "clock.h"
 #include "tl/expected.hpp"
 #include <boost/thread/condition.hpp>
 #include <cstddef>
@@ -316,7 +317,7 @@ void SDOEntry::resolveSDOModules() {
 
 
 ECInterface::ECInterface()
-    : initialised(0), reference_time(0),
+    : initialised(0), application_time(0),
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
       current_init_entry(initialisation_entries.begin()),
@@ -331,9 +332,9 @@ void ECInterface::setup(void *data) { instance()->init(); }
 
 #ifndef EC_SIMULATOR
 
-void ECInterface::setReferenceTime(uint32_t now) { reference_time = now; }
+void ECInterface::setApplicationTime(uint64_t now) { application_time = now; }
 
-uint32_t ECInterface::getReferenceTime() { return reference_time; }
+uint64_t ECInterface::getApplicationTime() { return application_time; }
 
 bool ECModule::ecrtMasterSlaveConfig(ec_master_t *master) {
     if (master) {
@@ -1222,6 +1223,7 @@ bool ECInterface::activate() {
     }
     DBG_ETHERCAT << "Activating master...";
     char buf[200];
+    ecrt_master_application_time(master, Clock::nanosecs());
     DBG_ETHERCAT_CALLS << "ecrt_master_activate\n";
     if ((res = ecrt_master_activate(master))) {
         snprintf(buf, 200, "EtherCAT interface: Activating master failed with code: %d", res);
@@ -1507,23 +1509,21 @@ void ECInterface::receiveState() {
             }
             last_receive = now;
             if (update_to_recv.getCount() >= 1000) {
-                update_to_recv.report(std::cout);
+                if (static_cast<uint64_t>(update_to_recv.max()) > get_cycle_time()) {
+                    update_to_recv.report(std::cout);
+                }
                 update_to_recv.reset();
             }
         }
 #endif
+        application_time = Clock::nanosecs();
+        ecrt_master_application_time(master, application_time);
         // receive process data
         DBG_ETHERCAT_CALLS << "ecrt_master_receive\n";
         ecrt_master_receive(master);
         DBG_ETHERCAT_CALLS << "ecrt_domain_process\n";
         ecrt_domain_process(domain1);
-#ifdef USE_DC
-        DBG_ETHERCAT_CALLS << "ecrt_imaster_reference_clock_time\n";
-        int err = ecrt_master_reference_clock_time(master, &reference_time);
-        if (err == -ENXIO) {
-            reference_time = -1; // no reference clocks
-        }
-#endif
+
         check_domain1_state();
     }
     // check for master state (optional)
@@ -1692,6 +1692,7 @@ int ECInterface::collectState() {
 
     return affected_bits;
 }
+
 void ECInterface::sendUpdates() {
     static uint64_t last_warning = 0;
     uint64_t now = microsecs();
@@ -1707,25 +1708,24 @@ void ECInterface::sendUpdates() {
     }
 
     if (keep_stats) {
-        uint64_t t = microsecs();
-        int64_t dt = t - last_receive;
+        int64_t dt = now - last_receive;
         if (last_receive != 0) {
             recv_to_update.add(dt);
         }
-        last_update = t;
+        last_update = now;
         if (recv_to_update.getCount() >= 1000) {
-            recv_to_update.report(std::cout);
+            if (static_cast<uint64_t>(recv_to_update.max()) > get_cycle_time()) {
+                recv_to_update.report(std::cout);
+            }
             recv_to_update.reset();
         }
 
     }
 
 #ifndef EC_SIMULATOR
-#ifdef USE_DC
-    DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
-    ecrt_master_application_time(master, EC_TIMEVAL2NANO(now));
+#ifdef EC_HAVE_REF_CLOCK_TIME
     DBG_ETHERCAT_CALLS << "ecrt_master_sync_reference_clock\n";
-    ecrt_master_sync_reference_clock(master);
+    ecrt_master_sync_reference_clock_to(master, Clock::nanosecs());
     DBG_ETHERCAT_CALLS << "ecrt_master_sync_slave_clocks\n";
     ecrt_master_sync_slave_clocks(master);
 #endif

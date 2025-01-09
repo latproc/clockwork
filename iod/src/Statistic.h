@@ -120,6 +120,8 @@ class Statistic {
     int getCount() { return count; }
     double getSum() { return sum; }
     double mean() { return (count != 0) ? sum / count : 0; }
+    long max() const { return max_value; }
+    long min() const { return min_value; }
 
   private:
     Statistic(const Statistic &orig);
