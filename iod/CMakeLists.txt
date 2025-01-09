@@ -389,7 +389,7 @@ add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 	src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
 )
 
-set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT;KEEP_STATS" )
+set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT" )
 if(USE_ETHERCAT_SOURCE)
 target_link_libraries(iod cw_interpreter cw_client ec_tool ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
 else()

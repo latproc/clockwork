@@ -1509,7 +1509,7 @@ void ECInterface::receiveState() {
             }
             last_receive = now;
             if (update_to_recv.getCount() >= 1000) {
-                if (static_cast<uint64_t>(update_to_recv.max()) > get_cycle_time()) {
+                if (static_cast<uint64_t>(update_to_recv.max()) > get_cycle_time() * 1.05) {
                     update_to_recv.report(std::cout);
                 }
                 update_to_recv.reset();
@@ -1714,7 +1714,7 @@ void ECInterface::sendUpdates() {
         }
         last_update = now;
         if (recv_to_update.getCount() >= 1000) {
-            if (static_cast<uint64_t>(recv_to_update.max()) > get_cycle_time()) {
+            if (static_cast<uint64_t>(recv_to_update.max()) > get_cycle_time() * 1.05) {
                 recv_to_update.report(std::cout);
             }
             recv_to_update.reset();
@@ -2230,29 +2230,6 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
     }
     if (c_entries) {
         delete[] c_entries;
-#warning removed what i think is dead code
-#if 0
-    if (reconfigure) {
-                DBG_ETHERCAT << "defining module " << slave.name << " sync_count: "
-                                << (int)slave.sync_count << " num entries: " << total_entries << "\n";
-        ECModule *module = new ECModule();
-        module->name = slave.name;
-        module->alias = 0;
-        module->position = slave.position;
-        module->vendor_id = slave.vendor_id;
-        module->product_code = slave.product_code;
-        module->syncs = c_syncs;
-        module->pdos = c_pdos;
-        module->pdo_entries = c_entries;
-        module->sync_count = slave.sync_count;
-        module->entry_details = c_entry_details;
-        module->num_entries = total_entries;
-        auto res = ECInterface::instance()->addModule(module, reconfigure);
-        if (!res) {
-            delete module; // module may be already registered
-            std::cerr << "Failed to add module " << slave.name << " " << res.error() << "\n";
-        }
-#endif
     }
     if (c_pdos) {
         delete[] c_pdos;
