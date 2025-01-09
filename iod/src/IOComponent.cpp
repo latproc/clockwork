@@ -37,30 +37,13 @@
 #include "ProcessingThread.h"
 #include "buffering.c"
 
-#define VERBOSE_DEBUG 0
-//static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
-
 /* byte swapping macros using either custom code or the network byte order std functions */
 #if __BIGENDIAN
-#if 0
-#define toU16(m, v)                                                                                \
-    *((uint16_t *)m) = ((((uint16_t)v) & 0xff00) >> 8) | ((((uint16_t)v) & 0x00ff) << 8)
-#define fromU16(m) (((*(uint16_t *)m) & 0xff00) >> 8) | ((*((uint16_t *)m) & 0x00ff) << 8)
-#define toU32(m, v)                                                                                \
-    *((uint32_t *)m) = ((((uint32_t)v) & 0xff000000) >> 24) |                                      \
-                       ((((uint32_t)v) & 0x00ff0000) >> 8) | ((((uint32_t)v) & 0x0000ff00) << 8) | \
-                       ((((uint32_t)v) & 0x000000ff) << 24)
-#define fromU32(m)                                                                                 \
-    (((*(uint32_t *)m) & 0xff000000) >> 24) | ((*((uint32_t *)m) & 0x00ff0000) >> 8) |             \
-        (((*(uint32_t *)m) & 0x0000ff00) << 8) | ((*((uint32_t *)m) & 0x000000ff) << 24)
-
-#else
 #include <netinet/in.h>
 #define toU16(m, v) *(uint16_t *)(m) = htons((v))
 #define fromU16(m) ntohs(*(uint16_t *)m)
 #define toU32(m, v) *(uint32_t *)(m) = htonl((v))
 #define fromU32(m) ntohl(*(uint32_t *)m)
-#endif
 #else
 #define toU16(m, v) EC_WRITE_U16(m, v)
 #define fromU16(m) EC_READ_U16(m)
@@ -69,6 +52,35 @@
 #define toU64(m) EC_WRITE_U64(m, v)
 #define fromU64(m) EC_READ_U64(m)
 #endif
+
+namespace {
+
+void set_mask_bits(const IOAddress & address, uint8_t *result) {
+    unsigned int offset = address.io_offset;
+    unsigned int bitpos = address.io_bitpos;
+    unsigned int bitlen = address.bitlen;
+    ::set_mask_bits(offset, bitpos, bitlen, result);
+}
+
+unsigned int calcIOBufferSize() {
+    return IOComponent::getMaxIOOffset() - IOComponent::getMinIOOffset() + 1;
+}
+
+// Build a mask that indicates what bits in the process data are
+// relevant to IOComponents.
+std::vector<uint8_t> generateProcessMask(unsigned int size) {
+    std::vector<uint8_t> result;
+    result.resize(size);
+
+    IOComponent::Iterator iter = IOComponent::begin();
+    while (iter != IOComponent::end()) {
+        IOComponent *ioc = *iter++;
+        set_mask_bits(ioc->address, result.data());
+    }
+    return result;
+}
+
+} // namespace
 
 std::list<IOComponent *> IOComponent::processing_queue;
 std::map<std::string, IOAddress> IOComponent::io_names;
