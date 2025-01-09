@@ -96,9 +96,9 @@ uint8_t *IOComponent::default_mask = 0;
 static uint8_t *last_process_data = 0;
 size_t IOComponent::outputs_waiting = 0;
 
-boost::recursive_mutex processing_queue_mutex;
+boost::recursive_mutex io_component_mutex;
 boost::recursive_mutex IOComponent::io_names_mutex;
-boost::unique_lock<boost::recursive_mutex> io_lock(processing_queue_mutex, boost::defer_lock);
+boost::unique_lock<boost::recursive_mutex> io_lock(io_component_mutex, boost::defer_lock);
 
 void IOComponent::lock() { io_lock.lock(); }
 
@@ -118,16 +118,17 @@ static uint64_t last_sample = 0; // retains a timestamp for the last sample
 // as long as there has been a sufficient delay, run the filter for each
 // of the nominated components.
 // This is called regularly from the processing thread
-void handle_io_sampling(uint64_t io_clock) {
+void handle_io_sampling(uint64_t clock) {
     uint64_t now = microsecs();
     if (now - last_sample < 1000) {
         return;
     }
     last_sample = now;
+    uint64_t u_sec = clock / 1000;
     std::set<IOComponent *>::iterator iter = regular_polls.begin();
     while (iter != regular_polls.end()) {
         IOComponent *ioc = *iter++;
-        ioc->read_time = io_clock;
+        ioc->read_time = u_sec;
         ioc->filter(ioc->address.value);
     }
 }
@@ -177,24 +178,24 @@ void IOComponent::setHardwareState(IOComponent::HardwareState state) {
 IOComponent::DeviceList IOComponent::devices;
 
 uint8_t *IOComponent::getProcessData() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     return io_process_data;
 }
 uint8_t *IOComponent::getProcessMask() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     return io_process_mask;
 }
 uint8_t *IOComponent::getDefaultData() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     return default_data;
 }
 uint8_t *IOComponent::getDefaultMask() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     return default_mask;
 }
 
 void IOComponent::reset() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     processing_queue.clear();
     regular_polls.clear();
     std::list<MachineInstance *>::iterator iter = MachineInstance::begin();
@@ -233,7 +234,7 @@ void IOComponent::reset() {
 
 IOComponent::IOComponent(IOAddress addr)
     : last_event(e_none), address(addr), io_index(-1), raw_value(0) {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     processing_queue.push_back(this);
     // the io_index is the bit offset of the first bit in this objects address space
     io_index = addr.io_offset * 8 + addr.io_bitpos;
@@ -241,7 +242,7 @@ IOComponent::IOComponent(IOAddress addr)
 
 IOComponent::IOComponent()
     : last_event(e_none), io_index(-1), raw_value(0), direction_(DirBidirectional) {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     processing_queue.push_back(this);
     // use the same io-updated index as the processing queue position
 }
@@ -259,7 +260,6 @@ size_t IOComponent::updatesWaiting() {
 }
 
 void IOComponent::updatesSent(bool which) {
-    //if (which) std::cout << "updates sent\n";
     updates_sent = which;
 }
 
@@ -272,22 +272,6 @@ IOComponent *IOComponent::lookup_device(const std::string &name) {
     }
     return 0;
 }
-
-#if VERBOSE_DEBUG
-static void display(const uint8_t *p, unsigned int count) {
-    int max = IOComponent::getMaxIOOffset();
-    int min = IOComponent::getMinIOOffset();
-    if (count == 0)
-        for (int i = min; i <= max; ++i) {
-            std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
-        }
-    else
-        for (unsigned int i = 0; i < count; ++i) {
-            std::cout << std::setw(2) << std::setfill('0') << std::hex << (unsigned int)p[i];
-        }
-    std::cout << std::dec;
-}
-#endif
 
 uint8_t *IOComponent::getUpdateData() {
     assert(io_process_data);
@@ -314,7 +298,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
     // Update the IOTIME for all enabled components
     auto usec = io_clock / 1000;
     for (auto ioc : processing_queue) {
-        //if (ioc->is_polled) continue; // regularly polled devices get updated elsewhere
+        if (ioc->is_polled) continue; // regularly polled devices get updated elsewhere
         for (auto owner : ioc->owners) {
             if (owner->enabled()) {
                 ioc->read_time = usec;
@@ -322,27 +306,6 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
             }
         }
     }
-
-#if VERBOSE_DEBUG
-    for (size_t ii = 0; ii < data_size; ++ii)
-        if (mask[ii]) {
-            std::cout << "IOComponent::processAll()\n";
-            std::cout << "size: " << data_size << "\n";
-            std::cout << "pdta: ";
-            display(io_process_data, data_size);
-            std::cout << "\n";
-            std::cout << "pmsk: ";
-            display(io_process_mask, data_size);
-            std::cout << "\n";
-            std::cout << "data: ";
-            display(data, data_size);
-            std::cout << "\n";
-            std::cout << "mask: ";
-            display(mask, data_size);
-            std::cout << "\n";
-            break;
-        }
-#endif
 
     assert(data_size == process_data_size);
 
@@ -395,7 +358,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                             // remotely source change on this io
                             if (ioc) {
                                 //std::cout << " adding " << ioc->io_name << " due to bit change\n";
-                                boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+                                boost::recursive_mutex::scoped_lock lock(io_component_mutex);
                                 updatedComponentsIn.insert(ioc);
                             }
 
@@ -443,7 +406,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
     }
 
     {
-        boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+        boost::recursive_mutex::scoped_lock lock(io_component_mutex);
         if (!updatedComponentsIn.size()) {
             return;
         }
@@ -658,9 +621,7 @@ class InputFilterSettings {
 #endif
 
         // replace the raw value the positions buffer with the filtered value
-        //std::cout << read_time << " replacing pos: " << getBufferValue(positions, 0) << " with " << last_sent << "\n";
         setBufferValue(positions, last_sent);
-        //if (prev_sent == 0.0) prev_sent = last_sent; TBD wrong?
         if (last_time == 0) {
             last_time = read_time;
             prev_sent = last_sent;
@@ -677,11 +638,6 @@ class InputFilterSettings {
                 speed = savitsky_golay_filter(positions, smoothing_len, first_derivative_coeff,
                                               FIRST_DERIV_NORM);
                 speed = speed / dt;
-                //speed = vel_bwf->filter(speed);
-                //speed = 1000000.0 * rate(positions, (rate_len<4)? 4 : rate_len);
-                //std::cout << "computed speed " << speed << " at " << getBufferValueAt(positions, 0) << "\n";
-                //}
-                //else speed = 0.0;
                 speeds.append(speed);
             }
             if (*calc_d2t) {
@@ -727,8 +683,6 @@ int64_t InputFilterSettings::default_calc_stddev = 0;       // don't calculate s
 
 InputFilterSettings::~InputFilterSettings() {
     destroyBuffer(positions);
-    delete[] filter_c_coeff;
-    delete[] filter_d_coeff;
     delete input_bwf;
     delete vel_bwf;
     delete accel_bwf;
@@ -738,6 +692,7 @@ AnalogueInput::AnalogueInput(IOAddress addr) : IOComponent(addr) {
     config = new InputFilterSettings();
     direction_ = DirInput;
     regular_polls.insert(this);
+    is_polled = true;
 }
 
 static bool getFloatValue(MachineInstance *scope, const char *name, double &result) {
@@ -758,16 +713,13 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
         double speed_scale = 1.0, accel_scale = 1.0;
         if (getFloatValue(settings, "velocity_scale", speed_scale)) {
             config->speed_scale = speed_scale;
-            std::cout << m->getName() << " set velocity scale to: " << config->speed_scale << "\n";
         }
         if (getFloatValue(settings, "acceleration_scale", accel_scale)) {
             config->accel_scale = accel_scale;
-            std::cout << m->getName() << " set accel scale to: " << config->accel_scale << "\n";
         }
         const Value &throttle_v = settings->getValue("throttle");
         if (throttle_v.kind == Value::t_integer) {
             config->throttle = &throttle_v.iValue;
-            std::cout << m->getName() << " set throtle rate to: " << *config->throttle << "ms\n";
         }
         const Value &conf_dt = settings->getValue("enable_velocity");
         if (conf_dt.kind == Value::t_integer) {
@@ -954,6 +906,8 @@ Counter::Counter(IOAddress addr) : IOComponent(addr), internals(0) {
     regular_polls.insert(this);
 }
 
+Counter::~Counter() { delete internals; }
+
 void Counter::setupProperties(MachineInstance *m) {
     const Value &v = m->getValue("input_scale");
     if (v.kind == Value::t_integer) {
@@ -1107,7 +1061,7 @@ int IOComponent::notifyComponentsAt(unsigned int offset) {
             IOComponent *c = *items++;
             if (c) {
                 //std::cout << "notifying " << c->io_name << "\n";
-                boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+                boost::recursive_mutex::scoped_lock lock(io_component_mutex);
                 updatedComponentsIn.insert(c);
                 ++count;
             }
@@ -1118,7 +1072,7 @@ int IOComponent::notifyComponentsAt(unsigned int offset) {
 }
 
 bool IOComponent::hasUpdates() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     return !updatedComponentsOut.empty();
 }
 
@@ -1334,7 +1288,7 @@ IOUpdate *IOComponent::getDefaults() {
 }
 
 void IOComponent::setupIOMap() {
-    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    boost::recursive_mutex::scoped_lock lock(io_component_mutex);
     max_offset = 0;
     min_offset = 1000000L;
     io_map.clear();
@@ -1533,14 +1487,12 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
                 val = val >> 1;
                 bitmask = bitmask >> 1;
             }
-            //std::cout << " value: " << val << "\n";
         }
         else if (address.bitlen == 8) {
             val = *(int8_t *)(offset);
         }
         else if (address.bitlen == 16) {
             val = fromU16(offset);
-            //std::cout << " 16bit value: " << val << " " << std::hex << val << std::dec << "\n";
         }
         else if (address.bitlen == 32) {
             val = fromU32(offset);
@@ -1562,14 +1514,13 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
                 bitpos -= 8;
             }
         }
-        if (regular_polls.count(this)) {
+        if (is_polled) {
             // this device is polled on a regular clock, do not process here
             raw_value = val;
             address.value = val;
         }
         else if (hardware_state == s_hardware_init ||
                  (hardware_state == s_operational && raw_value != val)) {
-            //std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
             raw_value = val;
             int64_t new_val = filter(val);
             if (hardware_state == s_operational) { //&& address.value != new_val) {

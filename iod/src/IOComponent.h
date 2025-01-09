@@ -42,6 +42,8 @@ struct IOAddress {
     unsigned int bitlen;
     unsigned int entry_position;
     bool is_signed;
+    std::string description;
+
     IOAddress(unsigned int module_pos, unsigned int offs, int bitp, unsigned int entry_pos,
               unsigned int len = 1, bool signed_value = false)
         : module_position(module_pos), io_offset(offs), io_bitpos(bitp), value(0), bitlen(len),
@@ -54,7 +56,6 @@ struct IOAddress {
     IOAddress()
         : module_position(0), io_offset(0), io_bitpos(0), value(0), bitlen(1), entry_position(0),
           is_signed(false) {}
-    std::string description;
 };
 
 std::ostream &operator<<(std::ostream &out, const IOAddress &address);
@@ -184,8 +185,8 @@ class IOComponent : public Transmitter {
     void addOwner(MachineInstance *m) { owners.push_back(m); }
     bool ownersEnabled() const;
 
-    virtual void setupProperties(
-        MachineInstance *m); // link properties in the component to the MachineInstance properties
+    // link properties in the component to the MachineInstance properties
+    virtual void setupProperties(MachineInstance *m);
 
     virtual int64_t filter(int64_t);
 
@@ -226,6 +227,7 @@ class IOComponent : public Transmitter {
     static uint8_t *default_data;
     static uint8_t *default_mask;
     static bool updates_sent;
+    bool is_polled = false;
     std::list<MachineInstance *> owners;
 };
 std::ostream &operator<<(std::ostream &out, const IOComponent &);
@@ -262,6 +264,7 @@ class CounterInternals;
 class Counter : public IOComponent {
   public:
     Counter(IOAddress addr);
+    ~Counter();
     const char *type() override { return "Counter"; }
     void update(); // clockwork uses this to notify of updates
     int64_t filter(int64_t raw) override;
