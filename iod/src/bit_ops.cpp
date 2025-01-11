@@ -39,6 +39,10 @@ void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val) {
     }
 }
 
+bool is_set(uint8_t *offset, unsigned int bitpos) {
+    return (*offset & (1 << bitpos)) ? true : false;
+}
+
 // applies mask to src and returns init + masked values from src
 uint8_t copy_masked_bits(uint8_t init, uint8_t src, uint8_t mask) {
     uint8_t result = init;

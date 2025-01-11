@@ -1,7 +1,7 @@
 #include "bit_ops.h"
 #include "library_globals.cpp"
 #include "gtest/gtest.h"
-#include <bits/stdint-uintn.h>
+#include <stdint.h>
 
 // internal to IOComponent but not static..
 //void set_bit(uint8_t *q, unsigned int bitpos, unsigned int val);
@@ -129,5 +129,22 @@ TEST(GetChangesTest, InplaceVersionReturnsCorrectChanges) {
                  << " " << buffer_to_string(change_mask) << "\n";
     }
     EXPECT_TRUE(expected_changes == change_mask);
+}
+
+TEST(BitOpsIsSet, CalculatesCorrectValue) {
+    std::vector<uint8_t> input(8, 0);
+    for (int i=0; i<8; ++i) {
+        input[i] = 1<<i;
+    }
+
+    for (int i = 0; i<64; ++i) {
+        int bitpos = i%8;
+        uint8_t *offset = input.data() + i/8;
+        //int64_t value = (*offset & (1 << bitpos)) ? 1 : 0;
+        int64_t value = is_set(offset, bitpos) ? 1 : 0;
+        EXPECT_EQ(*offset, (1<<i/8));
+        if (bitpos == i/8) { EXPECT_EQ(value,1); }
+        else { EXPECT_EQ(value, 0); }
+    }
 }
 
