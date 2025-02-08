@@ -54,7 +54,7 @@ void ProcessingThread::handle_machines(
             }
 
             if (!to_process.empty()) {
-                DBG_SCHEDULER << "processing " << to_process.size() << " machines\n";
+                //DBG_SCHEDULER << "processing " << to_process.size() << " machines\n";
                 MachineInstance::processAll(to_process, 150000,
                                             MachineInstance::NO_BUILTINS);
             }
@@ -94,7 +94,7 @@ void ProcessingThread::handle_machines(
             }
 
             if (!to_process.empty()) {
-                DBG_SCHEDULER << "processing stable states\n";
+                //	DBG_SCHEDULER << "processing stable states\n";
                 MachineInstance::checkStableStates(to_process, 150000);
             }
             if (i < num_loops - 1) {

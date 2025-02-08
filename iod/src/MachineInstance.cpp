@@ -1665,12 +1665,12 @@ bool MachineInstance::receives(const Message &m, Transmitter *from) {
         return false;
     }
     // passive machines do not receive messages
-    //if (!is_active) return false;
+    //if (!is_active) return false; // TODO: Why is this commented out?
     // all active machines receive messages from themselves but now we
     // check if there is a handler in the case of enter and leave messages
     // enter and leave functions are no longer automatically accepted
     if (m.isSimple() || m.isEnable()) {
-        if (from == this || (io_interface && from == io_interface)) {
+        if (io_interface && from == io_interface) {
             DBG_M_MESSAGING << "Machine " << getName() << " receiving " << m << " from itself\n";
             return true;
         }
@@ -2050,7 +2050,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                     --timer_val;
                 }
 
-                if (timer_val < earliestTimer || earliestTimerState == 0) {
+                if (timer_val < earliestTimer || earliestTimerState == nullptr) {
                     earliestTimerState = &s;
                     earliestTimer = timer_val;
                 }
@@ -2092,6 +2092,9 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
             }
             else if (timer_val >= -2) {
                 set_runnable(true);
+            }
+            else {
+                DBG_SCHEDULER << getName() << " time overdue, not scheduling\n";
             }
         }
         else if (dbg_report_if_timer_found) {
@@ -2158,10 +2161,10 @@ void MachineInstance::notifyDependents(Message &msg) {
         if (!dep->is_active && !dep->io_interface) {
             continue;
         }
-        DBG_M_MESSAGING << _name << " should tell " << dep->getName() << " it is "
-                        << current_state.getName() << " using " << msg << "\n";
 
         if (dep->receives(msg, this)) {
+            DBG_M_MESSAGING << _name << " should tell " << dep->getName() << " it is "
+                            << current_state.getName() << " using " << msg << "\n";
             dep->execute(msg, this);
         }
 

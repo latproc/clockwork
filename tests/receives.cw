@@ -20,6 +20,7 @@ RisingEdge MACHINE clock {
 
   # Do nothing when paused
   RECEIVE clock.tick_enter WITHIN paused {
+    LOG "paused";
   }
 }
 
