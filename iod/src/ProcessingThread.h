@@ -9,6 +9,7 @@
 #include <zmq.hpp>
 #include <Message.h>
 #include <ThreadSafeQueue.h>
+#include "MQTTInterface.h"
 
 class IOComponent;
 class HardwareActivation {
@@ -28,7 +29,8 @@ class ProcessingThread : public ClockworkProcessManager {
   public:
     ProcessingThreadInternals *internals;
     static ProcessingThread &create(ControlSystemMachine *m, HardwareActivation &activator,
-                                    IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue);
+                                    IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
+                                    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue);
 
     ~ProcessingThread();
 
@@ -77,7 +79,8 @@ class ProcessingThread : public ClockworkProcessManager {
   private:
     static ProcessingThread *instance_;
     ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator,
-                     IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &message_queue);
+                     IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &message_queue,
+                     SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage *> &mqtt_source_queue);
     ProcessingThread(const ProcessingThread &other);
     ProcessingThread &operator=(const ProcessingThread &other);
 
@@ -87,6 +90,8 @@ class ProcessingThread : public ClockworkProcessManager {
     HardwareActivation &activate_hardware;
     IODCommandThread &command_interface;
     SharedThreadSafeQueue<Package*> &message_queue;
+    void handle_mqtt_message(const MQTTInterface::MQTTReceivedMessage &message);
+    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue;
     uint64_t program_start;
 
     std::set<MachineInstance *> runnable;
