@@ -1,7 +1,7 @@
 /*
 
 Prepare a password file using mosquitto_passwd
-    mosquitto_passwd -c /etc/mosquitto/passwd user
+    mosquitto_passwd -c mqtt_passwd user
 
 and add a configuration file: with the following content:
  

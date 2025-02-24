@@ -101,7 +101,7 @@ class Value {
     explicit Value(double v);
     explicit Value(cJSON *v); // take ownership of the JSON
     explicit Value(const char *str, Kind k = t_symbol);
-    explicit Value(std::string str, Kind k = t_symbol);
+    explicit Value(const std::string & str, Kind k = t_symbol);
     explicit Value(Value &&other);
     explicit Value(const Value &&other);
     Value(const Value &other);

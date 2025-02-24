@@ -588,6 +588,11 @@ int main(int argc, char const *argv[]) {
     boost::condition_variable_any refresh_condition;
     boost::shared_mutex refresh_queue_mutex;
     SharedThreadSafeQueue<MachineInstance*> refresh_queue(refresh_condition, refresh_queue_mutex);
+
+    boost::condition_variable_any mqtt_source_condition;
+    boost::shared_mutex mqt_source_queue_mutex;
+    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> mqtt_source_queue(mqtt_source_condition, mqt_source_queue_mutex);
+
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
@@ -680,7 +685,7 @@ int main(int argc, char const *argv[]) {
         return generate_c() ? EXIT_SUCCESS : EXIT_FAILURE;
     }
     MQTTInterface::instance()->init();
-    MQTTInterface::instance()->start();
+    MQTTInterface::instance()->start(mqtt_source_queue);
 
     bool sigok = setup_signals();
     assert(sigok);
@@ -689,7 +694,7 @@ int main(int argc, char const *argv[]) {
     IODHardwareActivation iod_activation;
     MachineInstance::setRefreshQueue(&refresh_queue);
     ProcessingThread &processMonitor(
-        ProcessingThread::create(machine, iod_activation, *stateMonitor, processing_queue, refresh_queue));
+                                     ProcessingThread::create(machine, iod_activation, *stateMonitor, processing_queue, refresh_queue, mqtt_source_queue));
 
     zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
     sim_io.bind("inproc://ethercat_sync");
@@ -733,9 +738,6 @@ int main(int argc, char const *argv[]) {
     DBG_INITIALISATION << "processing has started\n";
     uint64_t then = microsecs();
     while (!program_done) {
-        MQTTInterface::instance()->collectState();
-
-        //sim_io.send("ecat", 4);
         safeRecv(sim_io, buf, 10, false, response_len, 100);
         uint64_t now = microsecs();
 

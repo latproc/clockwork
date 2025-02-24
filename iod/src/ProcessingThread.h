@@ -9,6 +9,7 @@
 #include <zmq.hpp>
 #include <Message.h>
 #include <ThreadSafeQueue.h>
+#include "MQTTInterface.h"
 
 class IOComponent;
 class HardwareActivation {
@@ -29,7 +30,8 @@ class ProcessingThread : public ClockworkProcessManager {
     ProcessingThreadInternals *internals;
     static ProcessingThread &create(ControlSystemMachine &m, HardwareActivation &activator,
                                     IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
-                                    SharedThreadSafeQueue<MachineInstance*> &refresh_queue);
+                                    SharedThreadSafeQueue<MachineInstance*> &refresh_queue,
+                                    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue);
 
     ~ProcessingThread();
 
@@ -109,7 +111,8 @@ class ProcessingThread : public ClockworkProcessManager {
     static ProcessingThread *instance_;
     ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator,
                      IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &message_queue,
-                     SharedThreadSafeQueue<MachineInstance*> &refresh_queue);
+                     SharedThreadSafeQueue<MachineInstance*> &refresh_queue,
+                     SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage *> &mqtt_source_queue);
     ProcessingThread(const ProcessingThread &other);
     ProcessingThread &operator=(const ProcessingThread &other);
 
@@ -118,6 +121,7 @@ class ProcessingThread : public ClockworkProcessManager {
 
     void handle_plugin_machines(ProcessingStates polling_states,
         uint64_t curr_t, uint64_t last_checked_plugins);
+    void handle_mqtt_message(const MQTTInterface::MQTTReceivedMessage &message);
     void handle_command(zmq::pollitem_t fixed_items[],
         unsigned int command_channel_index,
         int dynamic_poll_start_idx,
@@ -153,6 +157,7 @@ class ProcessingThread : public ClockworkProcessManager {
     IODCommandThread &command_interface;
     SharedThreadSafeQueue<Package*> &message_queue;
     SharedThreadSafeQueue<MachineInstance*> &refresh_queue;
+    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue;
     uint64_t program_start;
     // sometimes ethercat is not processed and the watchdog
     // triggers. This is to check if it's the processing

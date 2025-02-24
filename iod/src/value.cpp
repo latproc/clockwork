@@ -199,7 +199,7 @@ Value::Value(const char *str, Kind k)
     }
 }
 
-Value::Value(std::string str, Kind k)
+Value::Value(const std::string & str, Kind k)
     : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0),
       dyn_value(0) {
     if (kind == t_symbol && !str.empty()) {

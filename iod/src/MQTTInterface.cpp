@@ -43,75 +43,49 @@ std::list<MQTTModule *> MQTTInterface::modules;
 
 int MQTTInterface::FREQUENCY = 100;
 
+void MQTTInterface::enqueReceivedMessage(MQTTReceivedMessage *msg) {
+    sink->enqueue(msg);
+}
+
 void my_message_callback(struct mosquitto *mosq, void *obj,
                          const struct mosquitto_message *message) {
     MQTTModule *device = (MQTTModule *)obj;
 
-    if (message->payloadlen) {
+    if (message && message->payloadlen) {
         char *payload = new char[message->payloadlen + 1];
         memcpy(payload, message->payload, message->payloadlen);
         payload[message->payloadlen] = 0;
-        std::map<std::string, MachineInstance *>::iterator pos =
-            device->handlers.find(message->topic);
-        MachineInstance *m = nullptr;
-        if (pos != device->handlers.end()) {
-            m = (*pos).second;
+        {
+            std::stringstream ss;
+            ss << "MQTT message received: " << payload;
+            MessageLog::instance()->add(ss.str().c_str());
         }
-        if (m && m->enabled()) {
-            m->setValue("topic", Value(message->topic, Value::t_string));
-            char *tmp = 0;
-            int64_t val = strtol(payload, &tmp, 10);
-            if (tmp && *tmp == 0) {
-                m->setValue("message", Value{val});
-            }
-            else {
-                m->setValue("message", Value(payload, Value::t_string));
-            }
-            const char *evt = payload;
-            std::string event("");
-            event += evt;
-            bool is_enter = false;
-            if (strcmp(evt, "on") == 0 || strcmp(evt, "off") == 0) {
-                event += "_enter";
-                is_enter = true;
-            }
-            else {
-                event = "property_change";
-            }
-            if (m->_type == "POINT" && (event == "on_enter" || event == "off_enter")) {
-                Message msg(event.c_str(), Message::ENTERMSG);
-                Package *p = new Package(device, m, msg, false);
-                Dispatcher::instance()->deliver(p);
-            }
-            else {
-                std::set<MachineInstance *>::iterator iter = m->depends.begin();
-                while (iter != m->depends.end()) {
-                    MachineInstance *mi = *iter++;
-                    if (!mi->enabled()) { continue; }
-                    if (mi->_type == "LIST") { continue; }
-                    Message msg(event.c_str(), (is_enter) ? Message::ENTERMSG : Message::SIMPLEMSG);
-                    Package *p = new Package(device, mi, msg, false);
-                    Dispatcher::instance()->deliver(p);
-                }
-            }
-        }
+        auto to_send = new MQTTInterface::MQTTReceivedMessage({
+            device,
+            message->topic,
+            payload
+        });
         delete[] payload;
+        MQTTInterface::instance()->enqueReceivedMessage(to_send);
+    }
+    else {
+        MessageLog::instance()->add("MQTT callback with no payload");
     }
 }
 
 void my_connect_callback(struct mosquitto *mosq, void *obj, int result) {
     MQTTModule *device = (MQTTModule *)obj;
 
-    MessageLog::instance()->add("Connected to MQTT broker");
     if (result != MOSQ_ERR_SUCCESS) {
         std::stringstream ss;
-        ss << "Connection Error: " << mosquitto_connack_string(result);
+        ss << "MQTT Connection Error: " << mosquitto_connack_string(result);
         MessageLog::instance()->add(ss.str());
         device->last_error_str = mosquitto_connack_string(result);
         device->last_error = result;
         device->connected = false;
     }
     else {
+        MessageLog::instance()->add("Connected to MQTT broker");
         device->connected = true;
     }
 }
@@ -123,6 +97,9 @@ void my_disconnect_callback(struct mosquitto *mosq, void *obj, int rc) {
         MessageLog::instance()->add("Unexpected disconnect: " +
                                     std::string(mosquitto_strerror(rc)));
     }
+    else {
+        MessageLog::instance()->add("Disconnected from MQTT broker");
+    }
 }
 
 void my_publish_callback(struct mosquitto *mosq, void *obj, int mid) {
@@ -133,14 +110,16 @@ void my_subscribe_callback(struct mosquitto *mosq, void *obj, int mid, int qos_c
                            const int *granted_qos) {
     MQTTModule *device = (MQTTModule *)obj;
     std::stringstream ss;
-    ss << "Subscribed (mid: " << mid << "): " << granted_qos[0];
+    ss << "Subscribed (mid: " << mid << "): qos: " << granted_qos[0];
     for (int i = 1; i < qos_count; i++) {
         ss << ", " << granted_qos[i];
     }
     MessageLog::instance()->add(ss.str());
 }
 
-void my_subscribe_callback(struct mosquitto *mosq, void *obj, int mid) {}
+void my_subscribe_callback(struct mosquitto *mosq, void *obj, int mid) {
+    assert(false);
+}
 
 MQTTModule::MQTTModule(const char *name) : Transmitter(name) {
     mid_sent = 0;
@@ -149,7 +128,7 @@ MQTTModule::MQTTModule(const char *name) : Transmitter(name) {
     disconnect_sent = false;
     quiet = false;
 
-    mosq = mosquitto_new(NULL, true, this);
+    mosq = mosquitto_new("cw", true, this);
     if (!mosq) {
         switch (errno) {
         case ENOMEM:
@@ -183,7 +162,7 @@ bool MQTTModule::connect() {
             return false;
         }
     }
-    auto result = mosquitto_connect(mosq, host.c_str(), port, 10);
+    auto result = mosquitto_connect(mosq, host.c_str(), port, 20);
     if (result != MOSQ_ERR_SUCCESS) {
         last_error = result;
         last_error_str = "Error: Could not connect to broker.";
@@ -279,11 +258,19 @@ std::string MQTTModule::getStateString(const std::string &topic) {
     }
 }
 
+MachineInstance *MQTTModule::find_handler(const std::string &topic) {
+    auto found = handlers.find(topic);
+    if (found != handlers.end()) {
+        return (*found).second;
+    }
+    return nullptr;
+}
+
 bool MQTTModule::publishes(const std::string &topic) { return pubs.exists(topic.c_str()); }
 
 bool MQTTModule::subscribes(const std::string &topic) { return subs.exists(topic.c_str()); }
 
-MQTTInterface::MQTTInterface() : initialised(0), active(false) { initialised = init(); }
+MQTTInterface::MQTTInterface() : initialised(0), active(false), sink(nullptr) { initialised = init(); }
 
 std::ostream &MQTTModule::describe(std::ostream &out) const {
     out << "Publishes: " << pubs << " Subscribes " << subs;
@@ -379,6 +366,7 @@ MQTTInterface *MQTTInterface::instance() {
     return instance_;
 }
 
+#if 0
 void MQTTInterface::collectState() {
     if (!initialised || !active) {
         return;
@@ -408,6 +396,7 @@ void MQTTInterface::sendUpdates() {
         return;
     }
 }
+#endif
 
 void setup_mqtt(const std::map<std::string, MachineInstance *> &machines) {
     {
@@ -514,7 +503,7 @@ void setup_mqtt(const std::map<std::string, MachineInstance *> &machines) {
     }
 }
 
-bool MQTTInterface::start() {
+bool MQTTInterface::start(SharedThreadSafeQueue<MQTTReceivedMessage*> &sink) {
 #if 0
     struct sigaction sa;
     struct itimerval tv;
@@ -541,6 +530,7 @@ bool MQTTInterface::start() {
         return false;
     }
 #endif
+    instance()->sink = &sink;
     setup_mqtt(machines);
     std::list<MQTTModule *>::iterator iter = modules.begin();
     while (iter != modules.end()) {
