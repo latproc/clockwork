@@ -37,6 +37,18 @@ FallingEdge MACHINE clock {
 
 Clock MACHINE {
     OPTION step 500;
+    LOCAL OPTION last_tick 0;
+    OPTION dt 0;
+    idle LOCAL STATE;
     idle DEFAULT;
     tick WHEN TIMER >= step;
+    ENTER tick {
+        dt := NOW - last_tick;
+        last_tick := NOW;
+    }
+    LEAVE tick {
+        IF (TIMER >10) {
+          LOG "slow to change state " + TIMER;
+        }
+    }
 }

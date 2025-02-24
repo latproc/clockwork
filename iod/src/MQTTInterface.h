@@ -26,6 +26,7 @@
 #include <boost/optional.hpp>
 #include <mosquitto.h>
 #include <sys/types.h>
+#include "ThreadSafeQueue.h"
 
 class MachineInstance;
 
@@ -60,6 +61,8 @@ class MQTTModule : public Transmitter {
     std::string getStateString(const std::string &topic);
     std::ostream &describe(std::ostream &out) const;
 
+    MachineInstance *find_handler(const std::string &topic);
+
     int mid_sent;
     int last_mid;
     bool connected = false;
@@ -77,6 +80,11 @@ class MQTTModule : public Transmitter {
 
 class MQTTInterface {
   public:
+    struct MQTTReceivedMessage {
+        MQTTModule *module;
+        std::string topic;
+        std::string value;
+    };
     static int FREQUENCY;
     bool initialised;
     bool active;
@@ -87,15 +95,17 @@ class MQTTInterface {
     // Timer
     static unsigned int sig_alarms;
 
-    void collectState();
-    void sendUpdates();
+    // void collectState();
+    // void sendUpdates();
 
-    bool start();
+    bool start(SharedThreadSafeQueue<MQTTReceivedMessage*> &sink);
     bool stop();
     bool init();
     void add_topic(const char *name, const char *module_name, const char *topic);
     bool activate();
     bool addModule(MQTTModule *m, bool reset_io);
+    void enqueReceivedMessage(MQTTReceivedMessage *msg);
+
     bool online();
     bool operational();
     static std::list<MQTTModule *> modules;
@@ -107,6 +117,7 @@ class MQTTInterface {
     ~MQTTInterface();
     static MQTTInterface *instance_;
     std::string id;
+    SharedThreadSafeQueue<MQTTReceivedMessage*> *sink = nullptr;
 };
 
 #endif

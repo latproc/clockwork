@@ -358,6 +358,11 @@ int main(int argc, char const *argv[]) {
     boost::condition_variable_any processing_condition;
     boost::shared_mutex processing_queue_mutex;
     SharedThreadSafeQueue<Package*> processing_queue(processing_condition, processing_queue_mutex);
+
+    boost::condition_variable_any mqtt_source_condition;
+    boost::shared_mutex mqt_source_queue_mutex;
+    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> mqtt_source_queue(mqtt_source_condition, mqt_source_queue_mutex);
+
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
@@ -369,7 +374,7 @@ int main(int argc, char const *argv[]) {
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
     ProcessingThread &processMonitor(
-        ProcessingThread::create(&machine, iod_activation, *stateMonitor, processing_queue));
+        ProcessingThread::create(&machine, iod_activation, *stateMonitor, processing_queue, mqtt_source_queue));
 
     Logger::instance()->setLevel(Logger::Debug);
     //LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
@@ -487,7 +492,7 @@ int main(int argc, char const *argv[]) {
     DBG_INITIALISATION << "-------- Initialising ---------\n";
 
     MQTTInterface::instance()->init();
-    MQTTInterface::instance()->start();
+    MQTTInterface::instance()->start(mqtt_source_queue);
 
     DBG_INITIALISATION << "-------- Starting EtherCAT Interface ---------\n";
     EtherCATThread ethercat;
@@ -550,6 +555,7 @@ int main(int argc, char const *argv[]) {
     try {
         process.join();
         return 0;
+        MQTTInterface::instance()->stop();
         Scheduler::instance()->stop();
         stateMonitor->stop();
         ethercat.stop();

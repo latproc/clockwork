@@ -94,7 +94,7 @@ class Value {
     Value(double v);
     Value(cJSON *v); // take ownership of the JSON
     Value(const char *str, Kind k = t_symbol);
-    Value(std::string str, Kind k = t_symbol);
+    Value(const std::string & str, Kind k = t_symbol);
     Value(const Value &other);
     Value(Value &&other);
     Value(DynamicValueBase *dv);
