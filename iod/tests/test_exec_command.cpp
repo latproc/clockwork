@@ -7,17 +7,16 @@
 #include <SetStateAction.h>
 #include <debug_malloc.h>
 #include <exec_command.h>
-#include <memory>
 #include <symboltable.h>
 
 #include "Statistics.h"
-#include "split_string.h"
 #include <Dispatcher.h>
 #include <Logger.h>
 #include <MessagingInterface.h>
 #include <iostream>
 #include <zmq.hpp>
 #include <ThreadSafeQueue.h>
+#include <MQTTInterface.h>
 #include <boost/thread.hpp>
 
 bool program_done = false;
@@ -104,6 +103,9 @@ int main(int, char **) {
     boost::condition_variable_any m_cond_var;
     boost::shared_mutex m_mutex;
     SharedThreadSafeQueue<Package*> queue(m_cond_var, m_mutex);
+    boost::condition_variable_any mqtt_cond_var;
+    boost::shared_mutex mqtt_mutex;
+    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> mqtt_queue(mqtt_cond_var, mqtt_mutex);
     Dispatcher::create(queue);
     Logger::instance();
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
@@ -112,7 +114,7 @@ int main(int, char **) {
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
     ProcessingThread &processMonitor(
-        ProcessingThread::create(&machine, iod_activation, *stateMonitor, queue));
+        ProcessingThread::create(&machine, iod_activation, *stateMonitor, queue, mqtt_queue));
     processMonitor.setProcessingThreadInstance(&processMonitor);
     boost::thread process(boost::ref(processMonitor));
 

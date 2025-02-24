@@ -54,6 +54,8 @@
 #include <pthread.h>
 #include "SharedWorkSet.h"
 #include "Dispatcher.h"
+#include "Scheduler.h"
+#include <sstream>
 
 #include <iostream>
 
@@ -91,17 +93,19 @@ class ProcessingThreadInternals {
 };
 
 ProcessingThread &ProcessingThread::create(ControlSystemMachine *m, HardwareActivation &activator,
-                                           IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue) {
+                                           IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
+                                           SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue) {
     if (!instance_) {
-        instance_ = new ProcessingThread(m, activator, cmd_interface, queue);
+        instance_ = new ProcessingThread(m, activator, cmd_interface, queue, mqtt_source_queue);
     }
     return *instance_;
 }
 
 ProcessingThread::ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator,
-                                   IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue)
+                                   IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
+                                   SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue)
     : internals(0), machine(*m), status(e_waiting), activate_hardware(activator),
-      command_interface(cmd_interface), message_queue(queue), program_start(0) {
+      command_interface(cmd_interface), message_queue(queue), mqtt_source_queue(mqtt_source_queue), program_start(0) {
     program_start = microsecs();
     internals = new ProcessingThreadInternals();
 }
@@ -549,6 +553,64 @@ ProcessingThread::ProcessingState ProcessingThread::poll_machines() {
     return eStableStates;
 }
 
+void ProcessingThread::handle_mqtt_message(const MQTTInterface::MQTTReceivedMessage &message) {
+    if (!message.module) {
+        std::stringstream ss;
+        ss << "No MQTT module to handle message: " << message.topic;
+        MessageLog::instance()->add(ss.str().c_str());
+        return;
+    }
+    MachineInstance *m = message.module->find_handler(message.topic);
+    if (!m) {
+        std::stringstream ss;
+        ss << "No MQTTSUBSCRIBER on module "
+            << message.module->getName()
+            << " to handle topic: " << message.topic;
+        MessageLog::instance()->add(ss.str().c_str());
+        return;
+    }
+    Value received{message.topic, Value::t_string};
+    m->setValue("topic", received);
+    char *tmp = 0;
+    const char *payload = message.value.c_str();
+    int64_t val = strtol(payload, &tmp, 10);
+    if (tmp && *tmp == 0) {
+        m->setValue("message", Value{val});
+    }
+    else {
+        m->setValue("message", Value(payload, Value::t_string));
+    }
+    const char *evt = payload;
+    std::string event("");
+    event += evt;
+    bool is_enter = false;
+    if (strcmp(evt, "on") == 0 || strcmp(evt, "off") == 0) {
+        event += "_enter";
+        is_enter = true;
+    }
+    else {
+        event = "property_change";
+    }
+    if (m->_type == "POINT" && (event == "on_enter" || event == "off_enter")) {
+        Message msg(event.c_str(), Message::ENTERMSG);
+        Package *p = new Package(message.module, m, msg, false);
+        Dispatcher::instance()->deliver(p);
+    }
+    else {
+        std::set<MachineInstance *>::iterator iter = m->depends.begin();
+        while (iter != m->depends.end()) {
+            MachineInstance *mi = *iter++;
+            if (!mi->enabled()) { continue; }
+            if (mi->_type == "LIST") { continue; }
+            Message msg(event.c_str(), (is_enter) ? Message::ENTERMSG : Message::SIMPLEMSG);
+            Package *p = new Package(message.module, mi, msg, false);
+            Dispatcher::instance()->deliver(p);
+        }
+    }
+}
+
+
+
 void ProcessingThread::operator()() {
 
 #ifdef __APPLE__
@@ -697,6 +759,27 @@ void ProcessingThread::operator()() {
         uint64_t last_sample_poll = 0;
         bool machines_have_work = false;
         unsigned int num_channels = 0;
+        {
+            // MQTT subscriber messages
+            std::list<MQTTInterface::MQTTReceivedMessage*> to_handle;
+            {
+                MQTTInterface::MQTTReceivedMessage *message;
+                while (mqtt_source_queue.try_dequeue(message)) {
+                    to_handle.push_back(message);
+                }
+            }
+            while (!to_handle.empty()) {
+                auto message = to_handle.front();
+                to_handle.pop_front();
+                if (message) {
+                    handle_mqtt_message(*message);
+                    delete message;
+                }
+                else {
+                    MessageLog::instance()->add("unexpected null message from MQTT");
+                }
+            }
+        }
         while (!program_done) {
             {
                 std::list<Package*> to_handle;
