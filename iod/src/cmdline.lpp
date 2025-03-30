@@ -13,16 +13,64 @@ static int buflen = 0;
 static char *bufp;
 extern YYSTYPE yylval;
 int yycharno;
+static char json_delim;
+static int json_depth;
 
 extern bool cmdline_done;
 
 void append_char(int ch);
+void prepare_buffer();
+void begin_group(char start);
+int end_group(char end);
 
 %}
 %x STRING
 %x COMMENT
+%x JSONSTR
+%x JSONEXPRSTR
 
 %%
+
+JSON_VALUE        {
+                    BEGIN JSONSTR;
+                    json_delim = 0;
+                    json_depth = 0;
+                    prepare_buffer();
+                  }
+<JSONSTR>" "      {   if (json_delim != 0) { append_char(*yytext); } }
+<JSONSTR>"{"      {
+                    if (json_delim == 0) { json_delim = '{'; }
+                    begin_group('{');
+                  }
+<JSONSTR>"}"      { if (end_group('}') == 0) { return JSONVAL; } }
+<JSONSTR>"["      {
+                    if (json_delim == 0) { json_delim = '['; }
+                    begin_group('[');
+                  }
+<JSONSTR>"]"      { if (end_group(']') == 0) { return JSONVAL; } }
+<JSONSTR>\n       { append_char(*yytext); yylineno++; yycharno=1; }
+<JSONSTR>.        {
+                    if (json_delim == 0) {
+                      printf("invalid JSON character %d (%c)\n", *yytext, *yytext);
+                      yyerror("Unexpected character");
+                    }
+                    else {
+                      append_char(*yytext);
+                    }
+                  }
+
+"${"              { BEGIN JSONEXPRSTR; prepare_buffer(); }
+<JSONEXPRSTR>\n   { append_char('\n'); yylineno++; yycharno=1; }
+<JSONEXPRSTR>"}"  {
+                      BEGIN 0;
+                      yylval.jsExpr = buf;
+                      buf = NULL;
+                      return JSONEXPR;
+                  }
+<JSONEXPRSTR>.    { append_char(*yytext); }
+
+JSON               return JSON;
+
 
 [A-Za-z][A-Za-z0-9_.:]*       {
     yylval.sVal = strdup(yytext);
@@ -100,6 +148,36 @@ void append_char(int ch)
 	}
 	*bufp++ = ch;
 	*bufp = 0;
+}
+
+void prepare_buffer() {
+    if (!buf)
+    {
+        buf = (char *)malloc(20);
+        buflen = 20;
+    }
+        bufp = buf;
+    *bufp = 0;
+}
+
+void begin_group(char start) {
+    append_char(start);
+    if (json_delim == start) {
+        json_depth++;
+    }
+}
+
+int end_group(char end) {
+    append_char(end);
+    if ((json_delim == '{' && end == '}') || (json_delim == '[' && end == ']')) {
+        if (--json_depth == 0) {
+            BEGIN 0;
+            printf("JSON: %s\n", buf);
+            yylval.jVal = cJSON_Parse(buf);
+            buf = NULL;
+        }
+    }
+    return json_depth;
 }
 
 int get_input(char *buf, unsigned int size)
