@@ -3,6 +3,7 @@
 
 #include "value.h"
 #include <list>
+#include "cJSON.h"
 
 void yyerror(const char *str);
 #define YY_INPUT(buf, result, max_size) result = get_input(buf, max_size);
