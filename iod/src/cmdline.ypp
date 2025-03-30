@@ -20,6 +20,8 @@ extern char *yytext;
 
 %}
 
+%token JSON
+
 %union {
 	int64_t iVal;
 	double fVal;
@@ -27,12 +29,16 @@ extern char *yytext;
 	const char *symbol;
 	const char *pVal;
 	Value *val;
+    cJSON *jVal;
+    const char *jsExpr;
 };
 
 %token <iVal> INTEGER
 %token <fVal> FLOAT
 %token <symbol> SYMBOL
 %token <sVal> STRINGVAL
+%token <jVal> JSONVAL
+%token <jsExpr> JSONEXPR
 
 %%
 
@@ -58,6 +64,7 @@ INTEGER		{ params.push_back(yylval.iVal); }
 | FLOAT		{ params.push_back(yylval.fVal); }
 | SYMBOL	{ params.push_back(yylval.sVal); }
 | STRINGVAL	{ params.push_back(Value(yylval.sVal, Value::t_string)); }
+| JSONVAL   { params.push_back(Value(yylval.jVal)); }
 
 %%
 
