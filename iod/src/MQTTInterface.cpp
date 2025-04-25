@@ -128,7 +128,7 @@ MQTTModule::MQTTModule(const char *name) : Transmitter(name) {
     disconnect_sent = false;
     quiet = false;
 
-    mosq = mosquitto_new("cw", true, this);
+    mosq = mosquitto_new(name, true, this);
     if (!mosq) {
         switch (errno) {
         case ENOMEM:
