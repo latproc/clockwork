@@ -445,27 +445,7 @@ void setup_mqtt(const std::map<std::string, MachineInstance *> &machines) {
             else if (m->_type == "POINT" && m->parameters.size() > 1 &&
                      m->parameters[1].val.kind == Value::t_integer) {
                 // POINTs with integer values are used by EtherCAT
-#if 0
-                std::string name = m->parameters[0].real_name;
-                //int bit_position = (int)m->parameters[1].val.iValue;
-                //std::cerr << "Setting up point " << m->getName() << " " << bit_position << " on module " << name << "\n";
-                MachineInstance *module_mi = MachineInstance::find(name.c_str());
-                if (!module_mi) {
-                    std::cerr << "No machine called " << name << "\n";
-                    continue;
-                }
-                if (!module_mi->properties.exists("position")) { // module position not given
-                    std::cerr << "Machine " << name << " does not specify a position\n";
-                    continue;
-                }
-                int module_position = (int)module_mi->properties.lookup("position").iValue;
-                if (module_position == -1) { // module position unmapped
-                    std::cerr << "Machine " << name << " position not mapped\n";
-                    continue;
-                }
-#else
                 continue;
-#endif
             }
             else {
                 if (m->_type == "POINT" || m->_type == "MQTTPUBLISHER" ||

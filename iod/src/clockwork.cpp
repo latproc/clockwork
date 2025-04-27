@@ -844,7 +844,7 @@ void semantic_analysis() {
 
         // for each of the machine instance's symbol parameters,
         //  find a reference to the machine instance corresponding to the given name
-        //  and raise a warning if necessary. ( should this warning be an error?)
+        //  and raise warning or error if necessary.
         for (unsigned int i = 0; i < mi->parameters.size(); i++) {
             Value p_i = mi->parameters[i].val;
             if (p_i.kind == Value::t_symbol) {
@@ -859,13 +859,20 @@ void semantic_analysis() {
                         std::stringstream ss;
                         ss << "Error: in the definition of " << mi->getName() << ", " << p_i.sValue
                            << " has type " << found->_type << " but should be MODULE or MQTTBROKER";
-                        std::string s = ss.str();
+                        error_messages.push_back(ss.str());
                         ++num_errors;
-                        error_messages.push_back(s);
+                    }
+                    // special check of parameters for MQTT subscribers and publishers
+                    else if (mi->_type == "MQTTSUBSCRIBER" || mi->_type == "MQTTPUBLISHER") {
+                        if (i == 0 && found->_type != "MQTTBROKER") {
+                            std::stringstream ss;
+                            ss << "Error: in the definition of " << mi->getName() << ", " << p_i.sValue
+                               << " has type " << found->_type << " but should be MQTTBROKER";
+                            error_messages.push_back(ss.str());
+                            ++num_errors;
+                        }
                     }
                     else {
-                        DBG_PARSER << " linked machine " << found->getName() << " as parameter "
-                                   << i << "\n";
                         mi->parameters[i].machine = found;
                         found->addDependancy(mi);
                         mi->listenTo(found);
