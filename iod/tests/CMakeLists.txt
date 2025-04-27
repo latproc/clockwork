@@ -165,4 +165,9 @@ target_link_libraries(test_thread_safe_queue gmock_main cw_client
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_thread_safe_queue COMMAND test_thread_safe_queue)
 
+#add_executable(test_multi_queue_monitor test_multi_queue_monitor.cpp )
+#target_link_libraries(test_multi_queue_monitor gmock_main cw_client
+#    ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+#include_directories("${PROJECT_SOURCE_DIR}/tests")
+#add_test(NAME test_multi_queue_monitor COMMAND test_multi_queue_monitor)
 endif()
