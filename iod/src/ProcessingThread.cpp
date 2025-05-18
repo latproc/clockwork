@@ -700,7 +700,7 @@ void ProcessingThread::operator()() {
         long systems_waiting = 0;
         uint64_t curr_t = 0;
         uint64_t last_sample_poll = 0;
-        bool machines_have_work = false;
+        static bool machines_have_work = false;
         unsigned int num_channels = 0;
         {
             // MQTT subscriber messages
@@ -855,6 +855,7 @@ void ProcessingThread::operator()() {
 
         if (status == e_waiting && machines_have_work &&
                curr_t - last_checked_machines >= machine_check_delay) {
+            machines_have_work = false; // Assume the following will complete all work
             handle_machines(last_checked_machines, machine_check_delay, processing_state, curr_t);
         }
         // send a message to the ethercat thread requesting activation

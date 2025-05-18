@@ -51,11 +51,10 @@ bool ProcessingThread:: wait_for_work(
                 idx - dynamic_poll_start_idx; // the number channels we are actually monitoring
         }
 
-        //machines_have_work = MachineInstance::workToDo();
         {
             static size_t last_runnable_count = 0;
             boost::recursive_mutex::scoped_lock lock(runnable_mutex);
-            machines_have_work = !runnable.empty() || !MachineInstance::pendingEvents().empty();
+            machines_have_work = machines_have_work || !runnable.empty() || !MachineInstance::pendingEvents().empty();
             size_t runnable_count = runnable.size();
             if (runnable_count != last_runnable_count) {
                 //DBG_PROCESSING << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
@@ -74,6 +73,7 @@ bool ProcessingThread:: wait_for_work(
         systems_waiting = pollZMQItems(poll_wait, items, 5 + num_channels, ecat_sync,
                                        resource_mgr, sched_sync, ecat_out);
 
+        // return false means 'not waiting'.
         if (systems_waiting > 0 ||
             (machines_have_work && curr_t - last_checked_machines >= machine_check_delay)) {
             return false;
