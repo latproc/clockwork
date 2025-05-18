@@ -696,7 +696,7 @@ void ProcessingThread::operator()() {
         int dynamic_poll_start_idx = 5;
 
         int poll_wait = static_cast<int>(internals->cycle_delay / 1000); // millisecs
-        machine_check_delay = internals->cycle_delay / 5;
+        machine_check_delay = static_cast<unsigned int>(internals->cycle_delay / 5);
         long systems_waiting = 0;
         uint64_t curr_t = 0;
         uint64_t last_sample_poll = 0;

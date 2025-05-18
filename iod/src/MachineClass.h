@@ -62,7 +62,7 @@ class MachineClass {
     void addState(const char *name, bool is_static = false);
     const State *findState(const char *name) const;
     const State *findState(const State &seek) const;
-    int numStates() { return states.size(); }
+    size_t numStates() { return states.size(); }
     bool isStaticState(const char *name);
     bool isStaticState(const std::string &);
     State *findMutableState(const char *name);

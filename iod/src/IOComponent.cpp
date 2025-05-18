@@ -143,7 +143,7 @@ void IOUpdate::clear() {
 
 void IOUpdate::setGlobalClock(uint64_t clock) { global_clock_ = clock; }
 
-uint32_t IOUpdate::data_size() const { return data_.size(); }
+uint32_t IOUpdate::data_size() const { return static_cast<uint32_t>(data_.size()); }
 //void IOUpdate::setSize(uint32_t sz) { size_ = sz; }
 
 const uint8_t *IOUpdate::data() const { return data_.data(); }
