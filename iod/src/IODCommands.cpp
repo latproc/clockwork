@@ -1345,7 +1345,7 @@ bool IODCommandChannelRefresh::run(std::vector<Value> &params) {
     free(r_str);
     cJSON_Delete(result);
     return true;
-};
+}
 
 bool IODCommandChannel::run(std::vector<Value> &params) {
     if (params.size() >= 2) {

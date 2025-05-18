@@ -256,7 +256,8 @@ void initialise_machine_names(char *data) {
     if (data) {
         cleanup();
         long buffer_size = 5000;
-        char buf[buffer_size];
+        std::vector<char> buffer(buffer_size);
+        char *buf = buffer.data();
         char *p = data, *q = buf;
         while (*p) {
             if (*p != ' ' && *p != '\n') {

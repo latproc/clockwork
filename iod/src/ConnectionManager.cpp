@@ -69,10 +69,10 @@ std::string constructAlphaNumericString(const char *prefix, const char *val, con
     if (suffix) {
         len += strlen(suffix);
     }
-    char buf[len + 1];
-    char *q = buf;
+    std::vector<char> buf(len + 1);
+    char *q = buf.data();
     if (prefix) {
-        strcpy(buf, prefix);
+        strcpy(buf.data(), prefix);
         q += strlen(prefix);
     }
     const char *p = val;
@@ -83,13 +83,13 @@ std::string constructAlphaNumericString(const char *prefix, const char *val, con
         ++p;
     }
     *q = 0;
-    if (q == buf) { // no alpha/num found in the input string
+    if (q == buf.data()) { // no alpha/num found in the input string
         return default_name;
     }
     if (suffix) {
         strcpy(q, suffix);
     }
-    return buf;
+    return buf.data();
 }
 
 }

@@ -4,17 +4,18 @@
 std::string toLimitedString(const ParameterArray &parameters, size_t limit) {
     std::string str;
     const char *delim = "";
-    const int bufsize = limit + 1;
-    char buf[bufsize];
+    const ssize_t bufsize = limit + 1;
+    std::vector<char> buffer(bufsize);
+    char * buf = buffer.data();
     snprintf(buf, bufsize, "[");
-    size_t n = 1;
+    ssize_t n = 1;
     bool truncated = false;
     for (unsigned int i = 0; i < parameters.size(); ++i) {
         std::string string_val = parameters[i].val.asString();
         if (*delim && n < bufsize - 2) {
             buf[n++] = *delim;
         }
-        if (n + string_val.length() > bufsize - 2) {
+        if (static_cast<ssize_t>(n + string_val.length()) > bufsize - 2) {
             snprintf(buf + n, bufsize - n, "%s", string_val.c_str());
             n = bufsize;
             truncated = true;

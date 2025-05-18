@@ -438,7 +438,7 @@ int64_t Value::trunc() const {
         return (int64_t)::trunc(fValue);
     }
     return 0;
-};
+}
 
 int64_t Value::round(int digits) const {
     if (kind == t_integer) {

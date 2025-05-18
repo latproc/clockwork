@@ -37,7 +37,7 @@ void AutoStatStorage::update(uint64_t now, uint64_t duration) {
         *rp = total_delays / total_polls;
     }
 }
-bool AutoStatStorage::running() { return start_time != 0; };
+bool AutoStatStorage::running() { return start_time != 0; }
 void AutoStatStorage::start() { start_time = microsecs(); }
 void AutoStatStorage::stop() {
     if (start_time) {

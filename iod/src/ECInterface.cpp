@@ -1127,7 +1127,7 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
         delete module; // module may be already registered
         std::cerr << "Failed to add module " << slave.name << " " << res.error() << "\n";
     }
-};
+}
 
 void collectEtherCatModules() {
     unsigned int pos = 0;

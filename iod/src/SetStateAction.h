@@ -70,7 +70,6 @@ struct SetStateAction : public Action {
   private:
     Predicate *expr = nullptr;
     Condition condition;
-    StateChangeReason reason;
 
   protected:
     uint64_t authority;

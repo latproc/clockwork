@@ -180,9 +180,9 @@ MachineCommandTemplate *MachineClass::findMatchingCommand(std::string cmd_name, 
 }
 
 std::string method_name(const std::string msg) {
-    char buf[msg.length() + 1];
+    std::vector<char> buf(msg.length() + 1);
     const char *p = msg.c_str();
-    char *q = buf;
+    char *q = buf.data();
     while (*p) {
         if (*p == '.') {
             *q++ = '_';
@@ -193,7 +193,7 @@ std::string method_name(const std::string msg) {
         ++p;
     }
     *q = 0;
-    return buf;
+    return buf.data();
 }
 
 // Messages that appear in clockwork programs as strings are converted to

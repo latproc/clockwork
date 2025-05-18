@@ -51,6 +51,6 @@ namespace MessageEncoding {
     void addValueToJSONObject(cJSON *obj, const char *name, const Value &val);
     void addValueToJSONArray(cJSON *arr, const Value &val);
     Value valueFromJSONObject(cJSON *obj, cJSON *cjType);
-};
+}
 
 #endif /* defined(__clockwork__MessageEncoding__) */
