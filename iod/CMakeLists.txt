@@ -31,6 +31,8 @@ if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 	include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON) 
+
 if (USE_ETHERCAT)
 if (USE_SOEM)
 	add_subdirectory(ext/SOEM)
@@ -142,6 +144,7 @@ add_library (cw_client
     ${CLOCKWORK_DIR}/process.cpp
 	${HEADER_FILES}
 )
+
 
 include_directories("/usr/local/include")
 if (EXISTS "/opt/local/include")
@@ -437,6 +440,7 @@ set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULAT
 
 add_executable(cw src/cw.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+set_target_properties(cw PROPERTIES LINK_FLAGS "-rdynamic")
 #target_link_libraries(cw cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES})
 target_link_libraries(cw cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
 
@@ -445,6 +449,7 @@ if (USE_ETHERCAT)
 if(USE_SOEM)
 add_executable(cw_ecat src/cw.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw_ecat PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR;SOEM_ETHERCAT" )
+set_target_properties(cw_ecat PROPERTIES LINK_FLAGS "-rdynamic")
 target_link_directories(cw_ecat PRIVATE "${CW_ETHERCAT_DIR}")
 target_link_libraries(cw_ecat cw_interpreter cw_client dl ${CW_ETHERCAT_LIB} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 endif()
@@ -537,6 +542,7 @@ add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 )
 
 set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT;KEEP_STATS;USE_CHRONO" )
+set_target_properties(iod PROPERTIES LINK_FLAGS "-rdynamic")
 if(USE_ETHERCAT_SOURCE)
 target_link_libraries(iod cw_client ec_tool ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
 else()
@@ -549,6 +555,7 @@ add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 )
 #set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
 target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 USE_CHRONO=1 )
+set_target_properties(iod_sdo PROPERTIES LINK_FLAGS "-rdynamic")
 if(USE_ETHERCAT_SOURCE)
 target_link_libraries(iod_sdo cw_client ec_tool ethercat dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt)
 else()
