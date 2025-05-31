@@ -23,7 +23,7 @@ SystemExec MACHINE {
     COMMAND reset WITHIN Error { SET SELF TO Idle; }
 }
 
-% BEGIN_PLUGIN
+%BEGIN_PLUGIN
 #include <Plugin.h>
 #include <copy_environment.c>
 #include <debug_malloc.c>
@@ -31,12 +31,12 @@ SystemExec MACHINE {
 #include <read_file.c>
 #include <split_string.c>
 
-        PLUGIN_EXPORT int
-        check_states(void *scope) {
+PLUGIN_EXPORT
+int check_states(void *scope) {
     return exec_command(scope);
 }
 
 PLUGIN_EXPORT
 int poll_actions(void *scope) { return PLUGIN_COMPLETED; }
 
-% END_PLUGIN
+%END_PLUGIN
