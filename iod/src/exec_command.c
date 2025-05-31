@@ -178,6 +178,10 @@ continue_plugin:
         }
         debug_free(current, "current");
         return PLUGIN_COMPLETED;
+    }
+    else {
+        return PLUGIN_COMPLETED; /* not in Start or Running state, nothing to do */
+    }
     CommandFinished:
         if (data->parameters) {
             release_params(data->parameters);
@@ -201,7 +205,7 @@ continue_plugin:
             debug_free(data->stderr, "tmp_filename");
             data->stderr = 0;
         }
-    }
+
     setInstanceData(scope, 0);
     debug_free(current, "current");
     debug_free(data, "data");
