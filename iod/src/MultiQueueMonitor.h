@@ -3,7 +3,6 @@
 #include <condition_variable>
 #include <vector>
 #include <thread>
-#include <iostream>
 #include <boost/optional/optional.hpp>
 #include "ThreadSafeQueue.h"
 

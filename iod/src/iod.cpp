@@ -21,10 +21,7 @@
 #include "ControlSystemMachine.h"
 #include "ECInterface.h"
 #include "IOComponent.h"
-#include "boost/filesystem/operations.hpp"
-#include "boost/filesystem/path.hpp"
 #include <iostream>
-#include <sstream>
 #include <stdio.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -36,7 +33,6 @@
 #include <fstream>
 #include <list>
 #include <map>
-#include <utility>
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
 #include "SDOEntry.h"
@@ -51,7 +47,6 @@
 #include "DebugExtra.h"
 #include "Dispatcher.h"
 #include "EtherCATSetup.h"
-#include "IODCommand.h"
 #include "IODCommands.h"
 #include "Logger.h"
 #include "MQTTInterface.h"
@@ -69,7 +64,6 @@
 #include "ethercat_xml_parser.h"
 #include "options.h"
 #include "symboltable.h"
-#include <signal.h>
 #include <stdio.h>
 #include "ThreadSafeQueue.h"
 

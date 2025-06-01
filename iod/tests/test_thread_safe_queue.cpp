@@ -3,9 +3,10 @@
 #include <unistd.h>
 #include <vector>
 #include <string>
-#include <stdlib.h>
 #include "ThreadSafeQueue.h"
 #include <boost/thread.hpp>
+#include <boost/thread/shared_mutex.hpp>
+#include <zmq.hpp>
 #include "Message.h"
 
 template <typename T>
@@ -297,4 +298,102 @@ TEST(SharedThreadSafeQueueTest, NotifiesSharedConditionVariable) {
     manager.stop();
     manager_thread.join();
     EXPECT_EQ(manager.count(), 2);
+}
+
+class ZmqNotifier {
+public:
+    ZmqNotifier(zmq::context_t& context, const std::string& endpoint)
+        : socket_(context, ZMQ_PUSH) {
+        socket_.connect(endpoint);
+    }
+
+    void operator()() const {
+        zmq::message_t msg("non_empty", 9);
+        socket_.send(msg, ZMQ_DONTWAIT);
+    }
+
+private:
+    mutable zmq::socket_t socket_;
+};
+
+TEST(SharedThreadSafeQueueTest, NotifiesZmq) {
+    zmq::context_t context(1);
+    zmq::socket_t socket(context, ZMQ_PULL);
+    socket.bind("inproc://test_queue");
+
+    ZmqNotifier notify_zmq(context, "inproc://test_queue");
+    auto notifier = [&notify_zmq]() {
+        notify_zmq();
+    };
+
+    boost::condition_variable_any cond_var_any_;
+    boost::shared_mutex cond_var_mutex_;
+    SharedThreadSafeQueue<int> queue(cond_var_any_, cond_var_mutex_,
+         boost::optional<ThreadSafeQueue<int>::Notifier>(notifier));
+    queue.enqueue(1);
+
+    zmq::message_t msg;
+    EXPECT_TRUE(socket.recv(&msg));
+    EXPECT_EQ(std::string(static_cast<char*>(msg.data()), msg.size()), "non_empty");
+
+    int value;
+    EXPECT_TRUE(queue.try_dequeue(value));
+    EXPECT_EQ(value, 1);
+}
+
+TEST(SharedThreadSafeQueueTest, NotifiesZmqWithLazyNotifier) {
+    zmq::context_t context(1);
+    zmq::socket_t socket(context, ZMQ_PULL);
+    socket.bind("inproc://test_queue");
+
+    boost::condition_variable_any cond_var_any_;
+    boost::shared_mutex cond_var_mutex_;
+    SharedThreadSafeQueue<int> queue(cond_var_any_, cond_var_mutex_);
+
+    ZmqNotifier notify_zmq(context, "inproc://test_queue");
+    queue.set_notifier([&notify_zmq]() { notify_zmq(); });
+    queue.enqueue(1);
+
+    zmq::message_t msg;
+    EXPECT_TRUE(socket.recv(&msg));
+    EXPECT_EQ(std::string(static_cast<char*>(msg.data()), msg.size()), "non_empty");
+
+    int value;
+    EXPECT_TRUE(queue.try_dequeue(value));
+    EXPECT_EQ(value, 1);
+}
+
+TEST(SharedThreadSafeQueueTest, NotifiesToZmqFromMultipleQueues) {
+    zmq::context_t context(1);
+    zmq::socket_t socket(context, ZMQ_PULL);
+    socket.bind("inproc://test_queue");
+
+    ZmqNotifier notify_zmq(context, "inproc://test_queue");
+    auto notifier = [&notify_zmq]() {
+        notify_zmq();
+    };
+
+    boost::condition_variable_any cond_var_any_;
+    boost::shared_mutex cond_var_mutex_;
+    SharedThreadSafeQueue<int> queue(cond_var_any_, cond_var_mutex_,
+         boost::optional<ThreadSafeQueue<int>::Notifier>(notifier));
+    SharedThreadSafeQueue<int> queue2(cond_var_any_, cond_var_mutex_,
+         boost::optional<ThreadSafeQueue<int>::Notifier>(notifier));
+
+    queue.enqueue(1);
+
+    zmq::message_t msg;
+    EXPECT_TRUE(socket.recv(&msg));
+    EXPECT_EQ(std::string(static_cast<char*>(msg.data()), msg.size()), "non_empty");
+
+    queue2.enqueue(2);
+    EXPECT_TRUE(socket.recv(&msg));
+    EXPECT_EQ(std::string(static_cast<char*>(msg.data()), msg.size()), "non_empty");
+
+    int value;
+    EXPECT_TRUE(queue.try_dequeue(value));
+    EXPECT_EQ(value, 1);
+
+    EXPECT_TRUE(queue2.try_dequeue(value));
+    EXPECT_EQ(value, 2);
 }

@@ -4,12 +4,14 @@
 #include <mutex>
 #include <boost/thread.hpp>
 #include <condition_variable>
-#include <thread>
 #include <boost/optional/optional.hpp>
+#include <functional>
 
 template <typename T>
 class ThreadSafeQueue {
 public:
+    using Notifier = std::function<void()>;
+
     void enqueue(T value) {
         {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -69,22 +71,36 @@ private:
     std::queue<T> queue_;
     mutable std::mutex mutex_;
     std::condition_variable cond_var_;
+
 };
 
 template <typename T>
 class SharedThreadSafeQueue {
 public:
+    using Notifier = std::function<void()>;
+
     SharedThreadSafeQueue(
                     boost::condition_variable_any& cv_any,
-                    boost::shared_mutex& cv_mutex)
-        : cond_var_any_(cv_any), cond_var_mutex_(cv_mutex) {}
+                    boost::shared_mutex& cv_mutex,
+                    boost::optional<Notifier> notifier = boost::none)
+        : cond_var_any_(cv_any), cond_var_mutex_(cv_mutex), notifier_(std::move(notifier))
+    {}
+
+    void set_notifier(const Notifier& notifier) {
+        notifier_ = notifier;
+    }
 
     void enqueue(T value) {
+        bool notify = false;
         {
             std::lock_guard<std::mutex> lock(mutex_);
+            notify = queue_.empty();
             queue_.push(std::move(value));
         }
         cond_var_any_.notify_all();
+        if (notify && notifier_) {
+            (*notifier_)();
+        }
     }
 
     bool is_empty() const {
@@ -134,5 +150,6 @@ private:
     mutable std::mutex mutex_;
     boost::condition_variable_any& cond_var_any_;
     boost::shared_mutex& cond_var_mutex_;
+    boost::optional<Notifier> notifier_;
 };
 

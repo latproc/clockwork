@@ -67,7 +67,8 @@ class ProcessingThread : public ClockworkProcessManager {
 
     int pollZMQItems(int poll_time, zmq::pollitem_t items[], int num_items,
                      zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr,
-                     zmq::socket_t &sched, zmq::socket_t &ecat_out);
+                     zmq::socket_t &sched, zmq::socket_t &ecat_out,
+                     zmq::socket_t &queues);
 
     bool wait_for_work(
         zmq::pollitem_t items[],
@@ -87,6 +88,7 @@ class ProcessingThread : public ClockworkProcessManager {
         zmq::socket_t & ecat_sync,
         zmq::socket_t & command_sync,
         zmq::socket_t & ecat_out,
+        zmq::socket_t & queue_sync,
         std::set<IOComponent *> & io_work_queue,
         uint64_t & last_checked_cycle_time,
         uint64_t & last_checked_plugins,

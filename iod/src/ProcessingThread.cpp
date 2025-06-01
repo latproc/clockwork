@@ -19,10 +19,6 @@
 */
 
 #include "IOComponent.h"
-#include "PolledMessageHandler.h"
-#include "boost/filesystem/operations.hpp"
-#include "boost/filesystem/path.hpp"
-#include <algorithm>
 #include <assert.h>
 #include <stdint.h>
 #include <sstream>
@@ -30,16 +26,12 @@
 #include <unistd.h>
 #include <zmq.hpp>
 
-#include "bit_ops.h"
-#include "cJSON.h"
 #include <boost/thread/mutex.hpp>
 #include <list>
 #include <set>
 
 #include "ClientInterface.h"
 #include "DebugExtra.h"
-#include "IODCommand.h"
-#include "IODCommands.h"
 #include "IOInterface.h"
 #include "Logger.h"
 #include "MachineInstance.h"
@@ -87,13 +79,41 @@ class ProcessingThreadInternals {
     static const int SCHEDULER_ITEM = 2;  // scheduled items firing
     static const int ECAT_OUT_ITEM = 3;   //io has data update for ethercat
     static const int CMD_SYNC_ITEM = 4;   // client interface sending message
+    static const int QUEUE_NOTIFIER = 5;  // notifier for shared queues
 
     Watchdog processing_wd;
     ClockworkProcessManager process_manager;
     std::list<CommandSocketInfo *> channel_sockets;
 
+    class ZmqNotifier {
+    public:
+        ZmqNotifier(zmq::context_t& context, const std::string& endpoint)
+            : socket_(context, ZMQ_PUSH) {
+            socket_.connect(endpoint);
+        }
+
+        void operator()() const {
+            zmq::message_t msg("non_empty", 9);
+            socket_.send(msg, ZMQ_DONTWAIT);
+        }
+
+    private:
+        mutable zmq::socket_t socket_;
+    };
+
+    // When messages are sent to shared queues, the queue will notify to this socket viz ZMQ.
+    const std::string shared_queue_notification_endpoint = "inproc://shared_queues";
+    ZmqNotifier notify_zmq;
+    zmq::socket_t queue_notification; // recieves notifications from shared queues
+
     ProcessingThreadInternals()
-        : sequence(0), cycle_delay(1000), processing_wd("Processing Loop Watchdog", 2000) {}
+        : sequence(0), cycle_delay(1000), processing_wd("Processing Loop Watchdog", 2000),
+          notify_zmq(*MessagingInterface::getContext(), shared_queue_notification_endpoint),
+          queue_notification(*MessagingInterface::getContext(), ZMQ_PULL)
+    {
+
+        queue_notification.bind(shared_queue_notification_endpoint);
+    }
 };
 
 ProcessingThread &ProcessingThread::create(ControlSystemMachine &m, HardwareActivation &activator,
@@ -114,6 +134,10 @@ ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &
       command_interface(cmd_interface), message_queue(queue), refresh_queue(refresh_queue), mqtt_source_queue(mqtt_source_queue), program_start(0) {
     program_start = microsecs();
     internals = new ProcessingThreadInternals();
+    auto notifier = [this]() { internals->notify_zmq(); };
+    queue.set_notifier(notifier);
+    refresh_queue.set_notifier(notifier);
+    mqtt_source_queue.set_notifier(notifier);
 }
 
 ProcessingThread::~ProcessingThread() { delete internals; }
@@ -206,7 +230,6 @@ IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
                 // clock
                 ecat_sync.recv(&message);
                 size_t msglen = message.size();
-                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
                 assert(msglen == sizeof(update.global_clock()));
                 update.setGlobalClock(*reinterpret_cast<uint64_t*>(message.data()));
                 ++stage;
@@ -222,12 +245,7 @@ IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
                     break;
                 }
                 assert(msglen == 4);
-                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
                 uint32_t data_size = *reinterpret_cast<uint32_t*>(message.data());
-                if (data_size != update.data_size()) {
-                    DBG_PROCESSING << "Process data size updated. Was: " << update.data_size()
-                              << " now: " << data_size << "\n";
-                }
                 ++stage;
             }
             case 3: { // data
@@ -236,7 +254,6 @@ IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
                 zmq::message_t message;
                 ecat_sync.recv(&message);
                 size_t msglen = message.size();
-                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
                 update.setData(static_cast<uint8_t*>(message.data()), msglen);
                 ++stage;
             }
@@ -246,7 +263,6 @@ IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
                 assert(more);
                 ecat_sync.recv(&message);
                 size_t msglen = message.size();
-                DBG_PROCESSING << "recv stage: " << (int)stage << " " << msglen << "\n";
                 update.setMask(static_cast<uint8_t*>(message.data()), msglen);
                 ++stage;
                 break;
@@ -277,7 +293,8 @@ IOUpdate receive_ethercat_data(zmq::socket_t &ecat_sync) {
 
 int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int num_items,
                                    zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr,
-                                   zmq::socket_t &scheduler, zmq::socket_t &ecat_out) {
+                                   zmq::socket_t &scheduler, zmq::socket_t &ecat_out,
+                                   zmq::socket_t &queues) {
     int res = 0;
     while (!program_done) {
         try {
@@ -296,7 +313,11 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int nu
             if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
                 IOLockHelper lock;
                 internals->update = receive_ethercat_data(ecat_sync);
-                break;
+            }
+            // Throw away queue notifications now that an update has been detected.
+            if (items[internals->QUEUE_NOTIFIER].revents & ZMQ_POLLIN) {
+                zmq::message_t msg;
+                while ( queues.recv(&msg, ZMQ_DONTWAIT) ) { }
             }
             break;
         }
@@ -689,11 +710,13 @@ void ProcessingThread::operator()() {
         zmq::pollitem_t fixed_items[] = {
             {(void *)ecat_sync, 0, ZMQ_POLLIN, 0},     {(void *)resource_mgr, 0, ZMQ_POLLIN, 0},
             {(void *)sched_sync, 0, ZMQ_POLLIN, 0},
-            {(void *)ecat_out, 0, ZMQ_POLLIN, 0},      {(void *)command_sync, 0, ZMQ_POLLIN, 0}};
-        const int max_poll_sockets = 25;
+            {(void *)ecat_out, 0, ZMQ_POLLIN, 0},      {(void *)command_sync, 0, ZMQ_POLLIN, 0},
+            {(void *)internals->queue_notification, 0, ZMQ_POLLIN, 0} // notifier for shared queues
+        };
+        const int max_poll_sockets = 25; // imposes a limit on the number of channels
         zmq::pollitem_t items[max_poll_sockets];
         memset((void *)items, 0, max_poll_sockets * sizeof(zmq::pollitem_t));
-        int dynamic_poll_start_idx = 5;
+        int dynamic_poll_start_idx = 6;
 
         int poll_wait = static_cast<int>(internals->cycle_delay / 1000); // millisecs
         machine_check_delay = static_cast<unsigned int>(internals->cycle_delay / 5);
@@ -756,12 +779,13 @@ void ProcessingThread::operator()() {
                 items[i] = fixed_items[i];
             }
 
-            if (!wait_for_work(
+            if (program_done || !wait_for_work(
                 items, &machine, dynamic_poll_start_idx, curr_t,
                 max_poll_sockets, poll_wait, machines_have_work,
                 systems_waiting, runnable_mutex,last_machine_change,
                 num_channels, machine_check_delay,
                 sched_sync, resource_mgr, ecat_sync, command_sync, ecat_out,
+                internals->queue_notification,
                 io_work_queue, last_checked_cycle_time, last_checked_plugins,
                 last_checked_machines, last_sample_poll, internals->channel_sockets
             )) { break; }
@@ -964,5 +988,5 @@ void ProcessingThread::operator()() {
     if (log->count() > 0) {
         std::cerr << "Messages at shutdown:\n" << log->toString(log->count()) << "\n";
     }
-    DBG_INITIALISATION << "processing done\n";
+    DBG_PROCESSING << "processing done\n";
 }

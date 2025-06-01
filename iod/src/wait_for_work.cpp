@@ -24,6 +24,7 @@ bool ProcessingThread:: wait_for_work(
     zmq::socket_t & ecat_sync,
     zmq::socket_t & command_sync,
     zmq::socket_t & ecat_out,
+    zmq::socket_t & queue_sync,
     std::set<IOComponent *> & io_work_queue,
     uint64_t & last_checked_cycle_time,
     uint64_t & last_checked_plugins,
@@ -70,10 +71,10 @@ bool ProcessingThread:: wait_for_work(
 
         //if (Watchdog::anyTriggered(curr_t))
         //  Watchdog::showTriggered(curr_t, true, std::cerr);
-        systems_waiting = pollZMQItems(poll_wait, items, 5 + num_channels, ecat_sync,
-                                       resource_mgr, sched_sync, ecat_out);
+        systems_waiting = pollZMQItems(poll_wait, items, dynamic_poll_start_idx + num_channels, ecat_sync,
+                                       resource_mgr, sched_sync, ecat_out, queue_sync);
 
-        // return false means 'not waiting'.
+        // return false means work has been found (i.e., not waiting any longer)
         if (systems_waiting > 0 ||
             (machines_have_work && curr_t - last_checked_machines >= machine_check_delay)) {
             return false;
