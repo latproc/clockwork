@@ -1069,7 +1069,7 @@ void MachineInstance::idle() {
         }
         return;
     }
-    CaptureDuration cd(message_handling_stats);
+    CaptureDuration<long> cd(message_handling_stats);
 
     Action *curr = executingCommand();
     while (curr) {
@@ -3229,7 +3229,7 @@ bool MachineInstance::setStableState() {
     // assume this machine will not have anything else to do after checking states
     set_runnable(false);
 
-    CaptureDuration cd(stable_states_stats);
+    CaptureDuration<long> cd(stable_states_stats);
     DBG_M_AUTOSTATES << _name << " checking stable states (currently " << current_state.getName()
                      << ")\n";
     if (!state_machine || !state_machine->allow_auto_states) {

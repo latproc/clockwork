@@ -18,36 +18,37 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef cwlang_statistic_h
-#define cwlang_statistic_h
+#pragma once
 
 #include "cJSON.h"
 #include "options.h"
-#include <inttypes.h>
-#include <limits.h>
-#include <list>
-#include <ostream>
+#include <limits>
 #include <string>
+#include <ostream>
 #include <sys/time.h>
+#include <stdexcept>
 
 uint64_t microsecs();
 
-class Statistic {
+template <typename T>
+class UntypedStatistic {
   public:
-    Statistic(const char *msg)
-        : text(msg), sum(0), count(0), min_value(LONG_MAX), max_value(LONG_MIN){};
-    Statistic &operator=(const Statistic &other);
+    UntypedStatistic(const char *msg)
+        : text(msg), sum(0), count(0),
+          min_value(std::numeric_limits<T>::max()),
+          max_value(std::numeric_limits<T>::min()), ssq(0) {}
+    UntypedStatistic &operator=(const UntypedStatistic &other);
     std::ostream &operator<<(std::ostream &out) const;
-    bool operator==(const Statistic &other);
+    bool operator==(const UntypedStatistic &other);
 
     void reset() {
         sum = 0;
         count = 0;
-        min_value = LONG_MAX;
-        max_value = LONG_MIN;
+        min_value = std::numeric_limits<T>::max();
+        max_value = std::numeric_limits<T>::min();
     }
 
-    void add(long new_value) {
+    void add(T new_value) {
         ++count;
         sum += new_value;
         if (new_value > max_value) {
@@ -58,7 +59,8 @@ class Statistic {
         }
         ssq += new_value * new_value;
     }
-    void report(std::ostream &out) {
+
+    void report(std::ostream &out) const {
         if (count == 0) {
             out << text << "\tNo data\n";
         }
@@ -68,76 +70,53 @@ class Statistic {
                 << "\n";
         }
     }
-    void reportArray(cJSON *obj) {
+
+    void report(cJSON *obj) const {
         double ave = (count == 0) ? 0 : sum / count;
-        cJSON_AddItemToArray(obj, cJSON_CreateNumber(count));
-        cJSON_AddItemToArray(obj, cJSON_CreateNumber(min_value));
-        cJSON_AddItemToArray(obj, cJSON_CreateNumber(max_value));
-        cJSON_AddItemToArray(obj, cJSON_CreateDouble(ave));
-        cJSON_AddItemToArray(obj, cJSON_CreateDouble(sum));
-    }
-    void report(cJSON *obj) {
-        double ave = (count == 0) ? 0 : sum / count;
-        cJSON_AddNumberToObject(obj, "count", count);
-        cJSON_AddNumberToObject(obj, "min", min_value);
-        cJSON_AddNumberToObject(obj, "max", max_value);
-        cJSON_AddNumberToObject(obj, "ave", ave);
-        cJSON_AddNumberToObject(obj, "sum", sum);
-    }
-#if 0
-    double rollingAverage() {
-        int c = periods.size();
-        if (c == 0) {
-            return 0.0f;
+        if (obj->type == cJSON_Array) {
+            cJSON_AddItemToArray(obj, cJSON_CreateNumber(count));
+            cJSON_AddItemToArray(obj, cJSON_CreateNumber(min_value));
+            cJSON_AddItemToArray(obj, cJSON_CreateNumber(max_value));
+            cJSON_AddItemToArray(obj, cJSON_CreateDouble(ave));
+            cJSON_AddItemToArray(obj, cJSON_CreateDouble(sum));
+        } else if (obj->type == cJSON_Object) {
+            cJSON_AddStringToObject(obj, "name", text.c_str());
+            cJSON_AddNumberToObject(obj, "count", count);
+            cJSON_AddNumberToObject(obj, "min", min_value);
+            cJSON_AddNumberToObject(obj, "max", max_value);
+            cJSON_AddNumberToObject(obj, "ave", ave);
+            cJSON_AddNumberToObject(obj, "sum", sum);
         }
-        double s = 0.0f;
-        for (int i = 0; i < c; i++) {
-            s += average(i);
-        }
-        return s / c;
-    }
-#endif
-    static void add(Statistic *new_stat) { stats.push_back(new_stat); }
-    static void reportAll(std::ostream &out) {
-        std::list<Statistic *>::iterator iter = stats.begin();
-        while (iter != stats.end()) {
-            Statistic *stat = *iter++;
-            stat->report(out);
+        else {
+            throw std::runtime_error("Invalid cJSON object type for reporting statistics");
         }
     }
-    static void reportAll(cJSON *obj) {
-        std::list<Statistic *>::iterator iter = stats.begin();
-        while (iter != stats.end()) {
-            cJSON *item = cJSON_CreateObject();
-            cJSON *info = cJSON_CreateArray();
-            Statistic *stat = *iter++;
-            stat->reportArray(info);
-            cJSON_AddItemToObject(item, stat->getName().c_str(), info);
-            cJSON_AddItemToArray(obj, item);
-        }
-    }
+
     const std::string &getName() const { return text; }
-    int getCount() { return count; }
-    double getSum() { return sum; }
-    double mean() { return (count != 0) ? sum / count : 0; }
+    int getCount() const { return count; }
+    double getSum() const { return sum; }
+    double mean() const { return (count != 0) ? sum / count : 0; }
+    T getMin() const { return min_value; }
+    T getMax() const { return max_value; }
 
   private:
-    Statistic(const Statistic &orig);
+    UntypedStatistic(const UntypedStatistic &orig);
 
     std::string text;
     double sum;
     int count;
-    long min_value;
-    long max_value;
+    T min_value;
+    T max_value;
     double ssq;
-    static std::list<Statistic *> stats;
 };
 
-std::ostream &operator<<(std::ostream &out, const Statistic &m);
+template <typename T>
+std::ostream &operator<<(std::ostream &out, const UntypedStatistic<T> &m);
 
+template <typename T>
 class CaptureDuration {
   public:
-    CaptureDuration(Statistic &stat) : statistic(stat) {
+    CaptureDuration(UntypedStatistic<T> &stat) : statistic(stat) {
         if (keep_statistics()) {
             start = microsecs();
         }
@@ -154,10 +133,9 @@ class CaptureDuration {
     };
 
   private:
-    Statistic &statistic;
+    UntypedStatistic<T> &statistic;
     uint64_t start;
 };
 
-#
+using Statistic = UntypedStatistic<long>;
 
-#endif

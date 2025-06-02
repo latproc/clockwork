@@ -26,12 +26,13 @@
 #include "MachineInstance.h"
 #include "MessageEncoding.h"
 #include "MessageLog.h"
-#include "MessagingInterface.h"
 #include "ProcessingThread.h"
 #include "Scheduler.h"
 #include "SharedWorkSet.h"
 #include "Statistic.h"
 #include "Statistics.h"
+#include "StatisticList.h"
+#include "StatisticHelper.h"
 #include "cJSON.h"
 #include "options.h"
 #include <fstream>
@@ -1236,6 +1237,21 @@ bool IODCommandModbusRefresh::run(std::vector<Value> &params) {
 }
 
 bool IODCommandPerformance::run(std::vector<Value> &params) {
+    if (params.size() == 2 && params[1] == "RESET") {
+        if (all_statistics) {
+            for (auto &stat : *all_statistics) {
+                stat->reset();
+            }
+        }
+        std::list<MachineInstance *>::iterator m_iter = MachineInstance::begin();
+        while (m_iter != MachineInstance::end()) {
+            MachineInstance *m = *m_iter++;
+            m->stable_states_stats.reset();
+            m->message_handling_stats.reset();
+        }
+        result_str = "OK";
+        return true;
+    }
     std::list<MachineInstance *>::iterator m_iter = MachineInstance::begin();
     cJSON *result = cJSON_CreateArray();
     while (m_iter != MachineInstance::end()) {
@@ -1245,7 +1261,7 @@ bool IODCommandPerformance::run(std::vector<Value> &params) {
             cJSON_AddItemToArray(stat, cJSON_CreateString(m->fullName().c_str()));
             cJSON_AddItemToArray(stat,
                                  cJSON_CreateString(m->stable_states_stats.getName().c_str()));
-            m->stable_states_stats.reportArray(stat);
+            m->stable_states_stats.report(stat);
             cJSON_AddItemToArray(result, stat);
         }
         if (m->message_handling_stats.getCount()) {
@@ -1253,13 +1269,15 @@ bool IODCommandPerformance::run(std::vector<Value> &params) {
             cJSON_AddItemToArray(stat, cJSON_CreateString(m->fullName().c_str()));
             cJSON_AddItemToArray(stat,
                                  cJSON_CreateString(m->message_handling_stats.getName().c_str()));
-            m->message_handling_stats.reportArray(stat);
+            m->message_handling_stats.report(stat);
             cJSON_AddItemToArray(result, stat);
         }
     }
     {
         cJSON *stats = cJSON_CreateArray();
-        Statistic::reportAll(stats);
+        if(all_statistics != nullptr) {
+             all_statistics->reportAll(stats);
+        }
         cJSON_AddItemToArray(result, stats);
     }
 

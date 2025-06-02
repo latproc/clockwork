@@ -35,7 +35,7 @@
 #include "SetStateAction.h"
 #include "StableState.h"
 #include "State.h"
-#include "Statistic.h"
+#include "StatisticHelper.h"
 #include "Transition.h"
 #include "dynamic_value.h"
 #include "symboltable.h"

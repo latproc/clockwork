@@ -22,7 +22,6 @@
 bool program_done = false;
 bool machine_is_ready = false;
 Statistics *statistics = NULL;
-std::list<Statistic *> Statistic::stats;
 
 class IODHardwareActivation : public HardwareActivation {
   public:

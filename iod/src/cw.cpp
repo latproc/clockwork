@@ -71,7 +71,6 @@ void usage(int argc, char *argv[]);
 void displaySymbolTable();
 
 Statistics *statistics = NULL;
-std::list<Statistic *> Statistic::stats;
 
 //static boost::mutex io_mutex;
 boost::condition_variable_any ecat_polltime;

@@ -54,6 +54,7 @@
 #include "MachineInstance.h"
 #include "MessagingInterface.h"
 #include "Statistic.h"
+#include "StatisticHelper.h"
 #include "clockwork.h"
 #include "ecat_thread.h"
 #include "options.h"
@@ -362,8 +363,7 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool exchange_
 
 void EtherCATThread::operator()() {
     pthread_setname_np(pthread_self(), "iod ethercat");
-    Statistic *keep_alive_stat = new Statistic("keep alive margin");
-    Statistic::add(keep_alive_stat);
+    Statistic & keep_alive_stat = addStatistic<long>("keep alive margin");
 
     struct sched_param param = {};
     param.sched_priority = sched_get_priority_max(SCHED_FIFO);
@@ -456,5 +456,5 @@ void EtherCATThread::operator()() {
         ECInterface::instance()->sendUpdates();
         checkAndUpdateCycleDelay();
     }
-    keep_alive_stat->report(std::cout);
+    keep_alive_stat.report(std::cout);
 }

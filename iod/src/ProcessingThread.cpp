@@ -39,6 +39,7 @@
 #include "MessagingInterface.h"
 #include "Statistic.h"
 #include "Statistics.h"
+#include "StatisticHelper.h"
 #include "clockwork.h"
 #include "options.h"
 #include "symboltable.h"
@@ -595,8 +596,6 @@ void ProcessingThread::operator()() {
     pthread_setname_np(pthread_self(), "iod processing");
 #endif
 
-    Statistic *cycle_delay_stat = new Statistic("Cycle Delay");
-    Statistic::add(cycle_delay_stat);
     long delta, delta2;
 
     AutoStatStorage avg_io_time("AVG_IO_TIME", 0);

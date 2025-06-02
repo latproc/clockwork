@@ -314,6 +314,8 @@ set (Clockwork_Headers
     src/State.h
     src/Statistic.h
     src/Statistics.h
+    src/StatisticList.h
+    src/StatisticHelper.h
     src/symboltable.h
     src/SyncRemoteStatesAction.h
     src/Transition.h
@@ -416,6 +418,7 @@ set (Clockwork_SRCS
     src/split_string.c
     src/StableState.cpp
     src/State.cpp
+    src/StatisticHelper.cpp
     src/SyncRemoteStatesAction.cpp
     src/Transition.cpp
     src/Trigger.cpp

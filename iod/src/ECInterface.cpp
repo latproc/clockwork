@@ -22,6 +22,7 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "Statistic.h"
+#include "StatisticHelper.h"
 #include "Statistics.h"
 #include "cJSON.h"
 #include "clock.h"
@@ -92,8 +93,8 @@ bool keep_stats = true;
 #else
 bool keep_stats = false;
 #endif
-Statistic recv_to_update("Receive to update");
-Statistic update_to_recv("Update to receive");
+RegisteredStatistic<long> recv_to_update("Receive to update");
+RegisteredStatistic<long> update_to_recv("Update to receive");
 
 namespace {
 
@@ -2233,7 +2234,6 @@ bool IODCommandMasterInfo::run(std::vector<Value> &params) {
     statistics->machine_processing.report(ss);
     statistics->dispatch_processing.report(ss);
     statistics->auto_states.report(ss);
-    Statistic::reportAll(ss);
     ss << std::flush;
     cJSON_AddStringToObject(root, "statistics", ss.str().c_str());
 #endif
@@ -2283,7 +2283,6 @@ bool IODCommandMasterInfo::run(std::vector<Value> &params) {
     statistics->machine_processing.report(ss);
     statistics->dispatch_processing.report(ss);
     statistics->auto_states.report(ss);
-    Statistic::reportAll(ss);
     ss << std::flush;
     cJSON_AddStringToObject(root, "statistics", ss.str().c_str());
 
