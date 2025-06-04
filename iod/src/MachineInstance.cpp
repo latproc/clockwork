@@ -68,7 +68,6 @@
 #include "SharedWorkSet.h"
 #include "Transition.h"
 #include <mutex>
-#include <stdatomic.h>
 #include "helpers.h"
 #include "set_default_value_mixin.h"
 
