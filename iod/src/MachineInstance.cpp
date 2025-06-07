@@ -52,6 +52,7 @@
 #include <time.h>
 #include <utility>
 #include <vector>
+#include <atomic>
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
 #include "SDOEntry.h"
