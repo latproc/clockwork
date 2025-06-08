@@ -44,6 +44,7 @@
 Scheduler *Scheduler::instance_;
 static const uint32_t ONEMILLION = 1000000L;
 static Watchdog *watch_dog = 0;
+extern bool program_done;
 
 class SchedulerInternals {
   public:
@@ -362,7 +363,7 @@ void Scheduler::idle() {
     state = e_waiting;
     bool is_ready;
     uint64_t last_poll = microsecs();
-    while (state != e_aborted) {
+    while (state != e_aborted && !program_done) {
         next_delay_time = getNextDelay(last_poll);
         if (!ready(last_poll) && state == e_waiting) {
             watch_dog->stop();
