@@ -381,7 +381,6 @@ bool sendMessage(const std::string &msg, zmq::socket_t &sock, std::string &respo
 
 void MessagingInterface::setContext(zmq::context_t *ctx) {
     zmq_context = ctx;
-    assert(zmq_context);
 }
 
 MessagingInterface *MessagingInterface::create(std::string host, int port, ProtocolType proto) {

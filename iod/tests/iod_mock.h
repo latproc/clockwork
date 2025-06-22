@@ -11,6 +11,8 @@
 #include <Message.h>
 #include <ThreadSafeQueue.h>
 #include <boost/thread.hpp>
+#include <Scheduler.h>
+#include <daemon.h>
 
 class MockSystemSetup {
   public:
@@ -19,13 +21,14 @@ class MockSystemSetup {
         bool initialiseHardware() override { return initialise_machines(); }
         void operator()(void) override { initialiseHardware(); }
     };
-    MockSystemSetup() : queue(m_cond_var, m_mutex), queue2(m_cond_var2, m_mutex2), queue3(m_cond_var3, m_mutex3) {
+    MockSystemSetup() : daemon("mock-system", "mock-system", nullptr){
+        //: queue(m_cond_var, m_mutex), queue2(m_cond_var2, m_mutex2), queue3(m_cond_var3, m_mutex3), queue4(m_cond_var4, m_mutex4) {
         // TODO: lots of setup needed here...
-        zmq::context_t *context = new zmq::context_t;
-        MessagingInterface::setContext(context);
-        Dispatcher::create(queue);
-        Logger::instance();
-        MessageLog::setMaxMemory(10000);
+        //zmq::context_t *context = new zmq::context_t;
+        //MessagingInterface::setContext(context);
+        //Dispatcher::create(queue);
+        //Logger::instance();
+        //MessageLog::setMaxMemory(10000);
     }
     void activate() {
         Dispatcher::instance()->reset();
@@ -33,7 +36,7 @@ class MockSystemSetup {
         Dispatcher::start(); // start the dispatcher thread and wait for the start message
         ControlSystemMachine csm;
         IODCommandThread *ict = IODCommandThread::instance();
-        auto &thread{ProcessingThread::create(csm, iod_activation, *ict, queue, queue2, queue3)};
+        auto &thread{ProcessingThread::create(csm, iod_activation, *ict, daemon, daemon.queue_manager)}; //queue, queue2, queue3, queue4)};
         pt = &thread;
         iod_activation();
     }
@@ -45,15 +48,20 @@ class MockSystemSetup {
     }
 
   private:
-    boost::condition_variable_any m_cond_var;
-    boost::shared_mutex m_mutex;
-    SharedThreadSafeQueue<Package*> queue;
-    boost::condition_variable_any m_cond_var2;
-    boost::shared_mutex m_mutex2;
-    SharedThreadSafeQueue<MachineInstance*> queue2;
-    boost::condition_variable_any m_cond_var3;
-    boost::shared_mutex m_mutex3;
-    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> queue3;
+    Daemon daemon;
     MockHardwareActivation iod_activation;
+    // boost::condition_variable_any m_cond_var;
+    // boost::shared_mutex m_mutex;
+    // SharedThreadSafeQueue<Package*> queue;
+    // boost::condition_variable_any m_cond_var2;
+    // boost::shared_mutex m_mutex2;
+    // SharedThreadSafeQueue<MachineInstance*> queue2;
+    // boost::condition_variable_any m_cond_var3;
+    // boost::shared_mutex m_mutex3;
+    // SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> queue3;
+    // boost::condition_variable_any m_cond_var4;
+    // boost::shared_mutex m_mutex4;
+    // SharedThreadSafeQueue<ScheduledItem*> queue4;
+
     ProcessingThread *pt = nullptr;
 };

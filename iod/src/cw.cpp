@@ -18,13 +18,15 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#include "ControlSystemMachine.h"
+#include "daemon.h"
 #include "IOComponent.h"
 #include <iostream>
 #include <stdio.h>
 #include <unistd.h>
 #include <zmq.hpp>
+#include "Channel.h"
 
+#include <fstream>
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/thread.hpp>
@@ -42,13 +44,9 @@
 #endif
 
 #define __MAIN__
-#include "ClientInterface.h"
 #include "DebugExtra.h"
 #include "Dispatcher.h"
-#include "IODCommands.h"
-#include "Logger.h"
 #include "MQTTInterface.h"
-#include "MessageLog.h"
 #include "MessagingInterface.h"
 #include "ModbusInterface.h"
 #include "PredicateAction.h"
@@ -59,7 +57,6 @@
 #include "clockwork.h"
 #include "symboltable.h"
 #include <libgen.h>
-#include "SharedQueueManager.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -76,34 +73,6 @@ typedef std::list<std::string> StringList;
 std::map<std::string, StringList> wiring;
 
 namespace {
-
-void load_debug_config() {
-    if (debug_config()) {
-        std::ifstream program_config(debug_config());
-        if (program_config) {
-            std::string debug_flag;
-            while (program_config >> debug_flag) {
-                if (debug_flag[0] == '#') {
-                    continue;
-                }
-                int dbg = LogState::instance()->lookup(debug_flag);
-                if (dbg) {
-                    LogState::instance()->insert(dbg);
-                }
-                else if (machines.count(debug_flag)) {
-                    MachineInstance *mi = machines[debug_flag];
-                    if (mi) {
-                        mi->setDebug(true);
-                    }
-                }
-                else {
-                    std::cerr << "Warning: unrecognised DEBUG Flag " << debug_flag << "\n";
-                }
-            }
-            LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
-        }
-    }
-}
 
 void finish(int sig) {
     struct sigaction sa;
@@ -154,18 +123,6 @@ void exportPropertyInitialisation(const MachineInstance *m, const std::string na
         const std::pair<std::string, Value> &item = *iter++;
         if (item.first != "NAME") {
             setup << "\t" << name << "->" << item.first << " = " << item.second << ";\n";
-        }
-    }
-}
-
-void collect_connected_machines(std::set<MachineInstance *> &included_machines,
-                                MachineInstance *mi) {
-    if (mi) {
-        included_machines.insert(mi);
-        for (size_t i = 0; i < mi->parameters.size(); ++i) {
-            if (mi->parameters[i].machine) {
-                collect_connected_machines(included_machines, mi->parameters[i].machine);
-            }
         }
     }
 }
@@ -567,40 +524,11 @@ bool generate_c() {
 } // namespace
 
 int main(int argc, char const *argv[]) {
-    char *pn = strdup(argv[0]);
-    program_name = strdup(basename(pn));
-    free(pn);
-
     std::string thread_name("cw_main");
-#ifdef __APPLE__
-    pthread_setname_np(thread_name.c_str());
-#else
-    pthread_setname_np(pthread_self(), thread_name.c_str());
-#endif
-    auto dbg_instance = DebugExtra::instance();
-    SharedQueueManager queue_manager;
-    boost::condition_variable_any processing_condition;
-    boost::shared_mutex processing_queue_mutex;
-    queue_manager.create<Package*>("processing", processing_condition, processing_queue_mutex);
+    Daemon daemon{argv[0], thread_name};
 
-    boost::condition_variable_any refresh_condition;
-    boost::shared_mutex refresh_queue_mutex;
-    queue_manager.create<MachineInstance*>("refresh", refresh_condition, refresh_queue_mutex);
-
-    boost::condition_variable_any mqtt_source_condition;
-    boost::shared_mutex mqtt_source_queue_mutex;
-    queue_manager.create<MQTTInterface::MQTTReceivedMessage*>("mqtt_source", mqtt_source_condition, mqtt_source_queue_mutex);
-
-    zmq::context_t *context = new zmq::context_t;
-    MessagingInterface::setContext(context);
-    Logger::instance();
-    Dispatcher::create(queue_manager.get<Package*>("processing"));
-    MessageLog::setMaxMemory(10000);
-    Scheduler::instance();
-    ControlSystemMachine machine;
-
-    set_debug_config("iod.conf");
-    Logger::instance()->setLevel(Logger::Debug);
+    zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
+    sim_io.bind("inproc://ethercat_sync");
 
     std::list<std::string> source_files;
     int load_result = loadOptions(argc, argv, source_files);
@@ -608,126 +536,35 @@ int main(int argc, char const *argv[]) {
         return load_result;
     }
 
-    IODCommandListJSON::no_display.insert("tab");
-    IODCommandListJSON::no_display.insert("type");
-    IODCommandListJSON::no_display.insert("name");
-    IODCommandListJSON::no_display.insert("image");
-    IODCommandListJSON::no_display.insert("class");
-    IODCommandListJSON::no_display.insert("state");
-    IODCommandListJSON::no_display.insert("export");
-    IODCommandListJSON::no_display.insert("startup_enabled");
-    IODCommandListJSON::no_display.insert("NAME");
-    IODCommandListJSON::no_display.insert("STATE");
-    IODCommandListJSON::no_display.insert("PERSISTENT");
-    IODCommandListJSON::no_display.insert("POLLING_DELAY");
-    IODCommandListJSON::no_display.insert("TRACEABLE");
-    IODCommandListJSON::no_display.insert("default");
-
     statistics = new Statistics;
-    load_debug_config();
     load_result = loadConfig(source_files);
     if (load_result) {
         Dispatcher::instance()->stop();
         Scheduler::instance()->stop();
         return load_result;
     }
+    daemon.do_not_export_internal_properties();
 
     if (dependency_graph()) {
-        std::ofstream graph(dependency_graph());
-        if (graph) {
-            std::set<MachineInstance *> included_machines;
-            if (graph_root()) {
-                MachineInstance *mi = MachineInstance::find(graph_root());
-                collect_connected_machines(included_machines, mi);
-            }
-            graph << "digraph G {\n\tnode [shape=record];\n";
-            std::list<MachineInstance *>::iterator m_iter;
-            m_iter = MachineInstance::begin();
-            while (m_iter != MachineInstance::end()) {
-                MachineInstance *mi = *m_iter++;
-                if (graph_root() && included_machines.find(mi) == included_machines.end()) {
-                    continue;
-                }
-                for (size_t i = 0; i < mi->parameters.size(); ++i) {
-                    if (mi->parameters[i].machine) {
-                        graph << mi->parameters[i].machine->getName() << " -> " << mi->getName()
-                              << ";\n";
-                    }
-                }
-            }
-            graph << "}\n";
-        }
-        else {
-            std::cerr << "not able to open " << dependency_graph() << " for write\n";
-        }
+        display_dependency_graph();
     }
-    if (test_only()) {
-        const char *backup_file_name = "modbus_mappings.bak";
-        rename(modbus_map(), backup_file_name);
-        // export the modbus mappings and exit
-        std::list<MachineInstance *>::iterator m_iter = MachineInstance::begin();
-        std::ofstream out(modbus_map());
-        if (!out) {
-            std::cerr << "not able to open " << modbus_map() << " for write\n";
-            return 1;
-        }
-        while (m_iter != MachineInstance::end()) {
-            (*m_iter)->exportModbusMapping(out);
-            m_iter++;
-        }
-        out.close();
 
-        return load_result;
+    if (test_only()) {
+        return export_modbus_mappings(load_result);
     }
+
     if (export_to_c()) {
         return generate_c() ? EXIT_SUCCESS : EXIT_FAILURE;
     }
-    MQTTInterface::instance()->init();
-    MQTTInterface::instance()->start(queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source"));
 
     bool sigok = setup_signals();
     assert(sigok);
 
-    IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
-    MachineInstance::setRefreshQueue(&queue_manager.get<MachineInstance*>("refresh"));
-    ProcessingThread &processMonitor(
-        ProcessingThread::create(machine, iod_activation, *stateMonitor,
-            queue_manager.get<Package*>("processing"),
-            queue_manager.get<MachineInstance*>("refresh"),
-            queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source")));
+    daemon.start(&iod_activation, daemon.user_data);
 
-    zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
-    sim_io.bind("inproc://ethercat_sync");
-
-    DBG_INITIALISATION << "-------- Starting Scheduler ---------\n";
-    boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
-    Scheduler::instance()->setThreadRef(scheduler_thread);
-
-    DBG_INITIALISATION << "-------- Starting Command Interface ---------\n";
-    boost::thread monitor(boost::ref(*stateMonitor));
-
-    // Inform the modbus interface we have started
-    load_debug_config();
-    ModbusAddress::message("STARTUP");
-    Dispatcher::start();
-    DBG_INITIALISATION << "started dispatcher thread\n";
-
-    processMonitor.setProcessingThreadInstance(&processMonitor);
-    boost::thread process(boost::ref(processMonitor));
-
-    MQTTInterface::instance()->activate();
-
-#ifdef SOEM_ETHERCAT
-    if (strlen(ethercat_adapter()) > 0) {
-        std::cout << "Using SOEM EtherCAT on interface " << ethercat_adapter() << "\n";
-        EtherCATthread::instance()->activate(ethercat_adapter());
-        EtherCATthread::instance()->stop();
-    }
-    else {
-        std::cout << "Requires ethernet interface name: -e name\n";
-    }
-#endif
+    // let channels start processing messages
+    Channel::startChannels();
 
     char buf[100];
     size_t response_len;
@@ -761,17 +598,7 @@ int main(int argc, char const *argv[]) {
         then = now;
     }
     try {
-        MQTTInterface::instance()->stop();
-        Dispatcher::instance()->stop();
-        processMonitor.stop();
-        // TODO: Fix the corruption of this list at shutdown
-        // cleanup_machine_classes();
-        kill(0, SIGTERM); // interrupt select() and poll()s to enable termination
-        process.join();
-        stateMonitor->stop();
-        monitor.join();
-        delete dbg_instance;
-        delete context;
+        daemon.stop();
     }
     catch (const zmq::error_t &) {
     }

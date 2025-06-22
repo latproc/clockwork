@@ -32,6 +32,7 @@
 #include "Action.h"
 #include "Message.h"
 #include <zmq.hpp>
+#include <ThreadSafeQueue.h>
 
 struct ScheduledItem {
     Package *package;
@@ -47,7 +48,10 @@ struct ScheduledItem {
     ScheduledItem(uint64_t starting, long delay, Action *a);
     ScheduledItem(uint64_t starting, long delay, Trigger *t);
     ~ScheduledItem();
+    int64_t time_remaining() const;
     std::ostream &operator<<(std::ostream &out) const;
+
+    friend std::ostream &operator<<(std::ostream &out, const ScheduledItem &item);
 
   private:
     bool operator<=(const ScheduledItem &other) const;
@@ -55,7 +59,6 @@ struct ScheduledItem {
     bool operator==(const ScheduledItem &other) const;
 };
 
-std::ostream &operator<<(std::ostream &out, const ScheduledItem &item);
 
 class PriorityQueue {
   public:
@@ -83,8 +86,12 @@ class SchedulerInternals;
 class Scheduler {
   public:
     static Scheduler *instance() {
+        assert(instance_);
+        return instance_;
+    }
+    static Scheduler *create(SharedThreadSafeQueue<ScheduledItem*> & queue) {
         if (!instance_) {
-            instance_ = new Scheduler();
+            instance_ = new Scheduler(queue);
         }
         return instance_;
     }
@@ -94,35 +101,30 @@ class Scheduler {
     void pop();
     bool ready(uint64_t start);
     void idle();
-    bool empty() { return items.empty(); }
+    bool empty() const { return items.empty(); }
     int clear(const Transmitter *transmitter, const Receiver *receiver, const char *message);
     std::string getStatus();
 
     void operator()();
     void stop();
-    int64_t getNextDelay();
-    int64_t getNextDelay(uint64_t start);
     void setThreadRef(boost::thread &ref);
 
   protected:
     SchedulerInternals *internals;
-    Scheduler();
+    Scheduler(SharedThreadSafeQueue<ScheduledItem*> &queue);
     ~Scheduler() {}
     static Scheduler *instance_;
-    //std::priority_queue<ScheduledItem*, std::vector<ScheduledItem*>, CompareSheduledItems> items;
     PriorityQueue items;
-    uint64_t next_time;
+
     enum State {
-        e_waiting,    // waiting for something to do
-        e_have_work,  // new items have been pushed and need to be checked
-        e_waiting_cw, // waiting to begin processing
-        e_running,    // processing triggered events
-        e_aborted     // time to shutdown
+        e_waiting,
+        e_aborted
     } state;
-    zmq::socket_t update_sync;
-    zmq::socket_t *update_notify;
-    long next_delay_time;
-    uint64_t notification_sent; // the scheduler has been notified that an item is scheduled
+
+private:
+    int64_t microsecs_until_first_item() const;
+    int64_t microsecs_until_first_item(uint64_t start) const;
+    SharedThreadSafeQueue<ScheduledItem*> &m_queue;
 
     friend class PriorityQueue;
 };

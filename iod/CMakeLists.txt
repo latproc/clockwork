@@ -232,6 +232,7 @@ set (Clockwork_Headers
     src/CounterRateInstance.h
     src/cw_client.h
     src/cwlang.h
+    src/daemon.h
     src/debug_malloc.h
     src/DebugExtra.h
     src/DisableAction.h
@@ -325,6 +326,7 @@ set (Clockwork_Headers
     src/urlencode.h
     src/value.h
     src/WaitAction.h
+    src/ZmqNotifier.h
 )
 if (USE_ETHERCAT)
 	LIST (APPEND Clockwork_Headers "src/EtherCATthread.h")
@@ -354,6 +356,7 @@ set (Clockwork_SRCS
     src/CounterRateInstance.cpp
     src/cwlang.lpp
     src/cwlang.ypp
+    src/daemon.cpp
     src/debug_malloc.c
     src/DisableAction.cpp
     src/Dispatcher.cpp

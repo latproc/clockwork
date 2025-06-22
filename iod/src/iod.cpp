@@ -18,11 +18,13 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
+#include "daemon.h"
 #include "ControlSystemMachine.h"
 #include "ECInterface.h"
 #include "IOComponent.h"
 #include <iostream>
 #include <stdio.h>
+#include <signal.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <zmq.hpp>
@@ -339,135 +341,31 @@ class IODHardwareActivation : public HardwareActivation {
 };
 
 int main(int argc, char const *argv[]) {
-    char *pn = strdup(argv[0]);
-    program_name = strdup(basename(pn));
-    free(pn);
     std::string thread_name("iod_main");
-#ifdef __APPLE__
-    pthread_setname_np(thread_name.c_str());
-#else
-    pthread_setname_np(pthread_self(), thread_name.c_str());
-#endif
-
-    auto dbg_instance = DebugExtra::instance();
-    SharedQueueManager queue_manager;
-    boost::condition_variable_any processing_condition;
-    boost::shared_mutex processing_queue_mutex;
-    queue_manager.create<Package*>("processing", processing_condition, processing_queue_mutex);
-
-    boost::condition_variable_any refresh_condition;
-    boost::shared_mutex refresh_queue_mutex;
-    queue_manager.create<MachineInstance*>("refresh", refresh_condition, refresh_queue_mutex);
-
-    boost::condition_variable_any mqtt_source_condition;
-    boost::shared_mutex mqtt_source_queue_mutex;
-    queue_manager.create<MQTTInterface::MQTTReceivedMessage*>("mqtt_source", mqtt_source_condition, mqtt_source_queue_mutex);
-
-    zmq::context_t *context = new zmq::context_t;
-    MessagingInterface::setContext(context);
-    Logger::instance();
-    Dispatcher::create(queue_manager.get<Package*>("processing"));
-    MessageLog::setMaxMemory(10000);
-    Scheduler::instance();
-
-    ControlSystemMachine machine;
-    IODCommandThread *stateMonitor = IODCommandThread::instance();
-    IODHardwareActivation iod_activation;
-    MachineInstance::setRefreshQueue(&queue_manager.get<MachineInstance*>("refresh"));
-    ProcessingThread &processMonitor(
-        ProcessingThread::create(machine, iod_activation, *stateMonitor,
-            queue_manager.get<Package*>("processing"),
-            queue_manager.get<MachineInstance*>("refresh"),
-            queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source")));
-
-    Logger::instance()->setLevel(Logger::Debug);
-    //LogState::instance()->insert(dbg_instance->DEBUG_PARSER);
+    Daemon daemon{argv[0], thread_name};
 
     std::list<std::string> source_files;
-    int load_result = loadOptions(argc, argv, source_files);
-    if (load_result) {
+    int load_error = loadOptions(argc, argv, source_files);
+    if (load_error) {
+        return load_error;
+    }
+
+    statistics = new Statistics;
+    load_error = loadConfig(source_files);
+    if (load_error) {
         Dispatcher::instance()->stop();
         Scheduler::instance()->stop();
-        return load_result;
+        return load_error;
     }
-    load_debug_config();
 
-#if 0
-    //LogState::instance()->insert(dbg_instance->DEBUG_PREDICATES);
-    //LogState::instance()->insert(dbg_instance->DEBUG_INITIALISATION);
-    //LogState::instance()->insert(dbg_instance->DEBUG_MESSAGING);
-    //LogState::instance()->insert(dbg_instance->DEBUG_ACTIONS);
-    //DBG_INITIALISATION << dbg_instance->DEBUG_PREDICATES << "\n";
-    //assert (!LogState::instance()->includes(dbg_instance->DEBUG_PREDICATES));
-    //LogState::instance()->insert(dbg_instance->DEBUG_SCHEDULER);
-    //LogState::instance()->insert(dbg_instance->DEBUG_PROPERTIES);
-    //LogState::instance()->insert(dbg_instance->DEBUG_MESSAGING);
-    //LogState::instance()->insert(dbg_instance->DEBUG_STATECHANGES);
-    //LogState::instance()->insert(dbg_instance->DEBUG_AUTOSTATES);
-    //LogState::instance()->insert(dbg_instance->DEBUG_MODBUS);
-#endif
+    daemon.do_not_export_internal_properties();
 
-    IODCommandListJSON::no_display.insert("tab");
-    IODCommandListJSON::no_display.insert("type");
-    IODCommandListJSON::no_display.insert("name");
-    IODCommandListJSON::no_display.insert("image");
-    IODCommandListJSON::no_display.insert("class");
-    IODCommandListJSON::no_display.insert("state");
-    IODCommandListJSON::no_display.insert("export");
-    IODCommandListJSON::no_display.insert("startup_enabled");
-    IODCommandListJSON::no_display.insert("NAME");
-    IODCommandListJSON::no_display.insert("STATE");
-    IODCommandListJSON::no_display.insert("PERSISTENT");
-    IODCommandListJSON::no_display.insert("POLLING_DELAY");
-    IODCommandListJSON::no_display.insert("TRACEABLE");
-    IODCommandListJSON::no_display.insert("default");
-
-    load_debug_config();
-    statistics = new Statistics;
-    load_result = loadConfig(source_files);
-    if (load_result) {
-        return load_result;
-    }
     if (dependency_graph()) {
-        DBG_INITIALISATION << "writing dependency graph to " << dependency_graph() << "\n";
-        std::ofstream graph(dependency_graph());
-        if (graph) {
-            graph << "digraph G {\n";
-            std::list<MachineInstance *>::iterator m_iter;
-            m_iter = MachineInstance::begin();
-            while (m_iter != MachineInstance::end()) {
-                MachineInstance *mi = *m_iter++;
-                if (!mi->depends.empty()) {
-                    BOOST_FOREACH (MachineInstance *dep, mi->depends) {
-                        graph << mi->getName() << " -> " << dep->getName() << ";\n";
-                    }
-                }
-            }
-            graph << "}\n";
-        }
-        else {
-            std::cerr << "not able to open " << dependency_graph() << " for write\n";
-        }
+        display_dependency_graph();
     }
 
     if (test_only()) {
-        const char *backup_file_name = "modbus_mappings.bak";
-        ControlSystemMachine machine;
-        rename(modbus_map(), backup_file_name);
-        // export the modbus mappings and exit
-        std::list<MachineInstance *>::iterator m_iter = MachineInstance::begin();
-        std::ofstream out(modbus_map());
-        if (!out) {
-            std::cerr << "not able to open " << modbus_map() << " for write\n";
-            return 1;
-        }
-        while (m_iter != MachineInstance::end()) {
-            (*m_iter)->exportModbusMapping(out);
-            m_iter++;
-        }
-        out.close();
-
-        return load_result;
+        return export_modbus_mappings(load_error);
     }
 
     const Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
@@ -493,11 +391,6 @@ int main(int argc, char const *argv[]) {
         return 2;
     }
 
-    DBG_INITIALISATION << "-------- Initialising ---------\n";
-
-    MQTTInterface::instance()->init();
-    MQTTInterface::instance()->start(queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source"));
-
     DBG_INITIALISATION << "-------- Starting EtherCAT Interface ---------\n";
     EtherCATThread ethercat;
     boost::thread ecat_thread(boost::ref(ethercat));
@@ -519,19 +412,9 @@ int main(int argc, char const *argv[]) {
         }
     }
 #endif
-    DBG_INITIALISATION << "-------- Starting Scheduler ---------\n";
-    boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
-    Scheduler::instance()->setThreadRef(scheduler_thread);
 
-    boost::thread monitor(boost::ref(*stateMonitor));
-    usleep(50000); // give time before starting the processin g thread
-
-    // Inform the modbus interface we have started
-    ModbusAddress::message("STARTUP");
-    Dispatcher::start();
-
-    processMonitor.setProcessingThreadInstance(&processMonitor);
-    boost::thread process(boost::ref(processMonitor));
+    IODHardwareActivation iod_activation;
+    daemon.start(&iod_activation, daemon.user_data);
 #ifdef __linux__
     {
         int processing_cpu = cpu_affinity("processing");
@@ -539,7 +422,7 @@ int main(int argc, char const *argv[]) {
             cpu_set_t cpuset;
             CPU_ZERO(&cpuset);
             CPU_SET(processing_cpu, &cpuset);
-            int rc = pthread_setaffinity_np(process.native_handle(), sizeof(cpu_set_t), &cpuset);
+            int rc = pthread_setaffinity_np(daemon.process->native_handle(), sizeof(cpu_set_t), &cpuset);
             if (rc != 0) {
                 std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
             }
@@ -557,16 +440,12 @@ int main(int argc, char const *argv[]) {
     // do not start a thread, simply run this process directly
     //processMonitor();
     try {
-        process.join();
-        return 0;
-        MQTTInterface::instance()->stop();
-        Scheduler::instance()->stop();
-        stateMonitor->stop();
+        daemon.process->join();
         ethercat.stop();
+        kill(0, SIGTERM);
         ecat_thread.join();
-        Dispatcher::instance()->stop();
-        delete Dispatcher::instance();
-        delete context;
+        return 0;
+        // delete daemon;
     }
     catch (const zmq::error_t &ex) { // expected error when we remove the zmq context
         std::cerr << "Error on exit: " << ex.what() << "\n";

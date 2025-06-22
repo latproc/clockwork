@@ -18,6 +18,8 @@
 #include <ThreadSafeQueue.h>
 #include <MQTTInterface.h>
 #include <boost/thread.hpp>
+#include <Scheduler.h>
+#include "daemon.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -107,26 +109,30 @@ class ExecuteTests {
 };
 
 int main(int, char **) {
-    zmq::context_t *context = new zmq::context_t;
-    MessagingInterface::setContext(context);
-    boost::condition_variable_any m_cond_var;
-    boost::shared_mutex m_mutex;
-    SharedThreadSafeQueue<Package*> queue(m_cond_var, m_mutex);
-    boost::condition_variable_any refresh_cond_var;
-    boost::shared_mutex refresh_mutex;
-    SharedThreadSafeQueue<MachineInstance*> refresh_queue(refresh_cond_var, refresh_mutex);
-    boost::condition_variable_any mqtt_cond_var;
-    boost::shared_mutex mqtt_mutex;
-    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> mqtt_queue(mqtt_cond_var, mqtt_mutex);
-    Dispatcher::create(queue);
-    Logger::instance();
-    zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
-    dispatch_sync.connect("inproc://dispatcher_sync");
+//    zmq::context_t *context = new zmq::context_t;
+//    MessagingInterface::setContext(context);
+//    boost::condition_variable_any m_cond_var;
+//    boost::shared_mutex m_mutex;
+//    SharedThreadSafeQueue<Package*> queue(m_cond_var, m_mutex);
+//    boost::condition_variable_any refresh_cond_var;
+//    boost::shared_mutex refresh_mutex;
+//    SharedThreadSafeQueue<MachineInstance*> refresh_queue(refresh_cond_var, refresh_mutex);
+//    boost::condition_variable_any mqtt_cond_var;
+//    boost::shared_mutex mqtt_mutex;
+//    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> mqtt_queue(mqtt_cond_var, mqtt_mutex);
+//    boost::condition_variable_any scheduler_cond_var;
+//    boost::shared_mutex scheduler_mutex;
+//    SharedThreadSafeQueue<ScheduledItem*> scheduler_queue(scheduler_cond_var, scheduler_mutex);
+//    Dispatcher::create(queue);
+//    Logger::instance();
+//    zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
+//    dispatch_sync.connect("inproc://dispatcher_sync");
+    Daemon daemon("test_exec_command", "test_exec_command", nullptr);
     ControlSystemMachine machine;
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
     ProcessingThread &processMonitor(
-        ProcessingThread::create(machine, iod_activation, *stateMonitor, queue, refresh_queue, mqtt_queue));
+                                     ProcessingThread::create(machine, iod_activation, *stateMonitor, daemon, daemon.queue_manager));
     processMonitor.setProcessingThreadInstance(&processMonitor);
     boost::thread process(boost::ref(processMonitor));
 

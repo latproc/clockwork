@@ -43,6 +43,8 @@
 #include "clockwork.h"
 #include "options.h"
 #include "symboltable.h"
+#include "Scheduler.h"
+#include "daemon.h"
 
 #include "Channel.h"
 #include "ControlSystemMachine.h"
@@ -51,6 +53,7 @@
 #include <pthread.h>
 #include "SharedWorkSet.h"
 #include "Dispatcher.h"
+#include "ZmqNotifier.h"
 #include <sstream>
 
 #include <iostream>
@@ -85,67 +88,60 @@ class ProcessingThreadInternals {
     Watchdog processing_wd;
     ClockworkProcessManager process_manager;
     std::list<CommandSocketInfo *> channel_sockets;
-
-    class ZmqNotifier {
-    public:
-        ZmqNotifier(zmq::context_t& context, const std::string& endpoint)
-            : socket_(context, ZMQ_PUSH) {
-            socket_.connect(endpoint);
-        }
-
-        void operator()() const {
-            zmq::message_t msg("non_empty", 9);
-            socket_.send(msg, ZMQ_DONTWAIT);
-        }
-
-    private:
-        mutable zmq::socket_t socket_;
-    };
+    Daemon *daemon;
 
     // When messages are sent to shared queues, the queue will notify to this socket viz ZMQ.
-    const std::string shared_queue_notification_endpoint = "inproc://shared_queues";
-    ZmqNotifier notify_zmq;
-    zmq::socket_t queue_notification; // recieves notifications from shared queues
+    //const std::string shared_queue_notification_endpoint = "inproc://shared_queues";
+    //ZmqNotifier notify_zmq;
+    //zmq::socket_t queue_notification; // recieves notifications from shared queues
 
     ProcessingThreadInternals()
-        : sequence(0), cycle_delay(1000), processing_wd("Processing Loop Watchdog", 2000),
-          notify_zmq(*MessagingInterface::getContext(), shared_queue_notification_endpoint),
-          queue_notification(*MessagingInterface::getContext(), ZMQ_PULL)
+        : sequence(0), cycle_delay(1000), processing_wd("Processing Loop Watchdog", 2000)
+        //,notify_zmq(*MessagingInterface::getContext(), shared_queue_notification_endpoint),
+        //  queue_notification(*MessagingInterface::getContext(), ZMQ_PULL)
     {
 
-        queue_notification.bind(shared_queue_notification_endpoint);
+        //queue_notification.bind(shared_queue_notification_endpoint);
     }
 };
 
 ProcessingThread &ProcessingThread::create(ControlSystemMachine &m, HardwareActivation &activator,
-                                           IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
+                                           IODCommandThread &cmd_interface, Daemon &daemon,
+                                           SharedThreadSafeQueue<Package*> &queue,
                                            SharedThreadSafeQueue<MachineInstance*> &refresh_queue,
-                                           SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue) {
+                                           SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue,
+                                           SharedThreadSafeQueue<ScheduledItem *> &scheduler_queue) {
     if (!instance_) {
-        instance_ = new ProcessingThread(m, activator, cmd_interface, queue, refresh_queue, mqtt_source_queue);
+        instance_ = new ProcessingThread(m, activator, cmd_interface, daemon, queue, refresh_queue, mqtt_source_queue, scheduler_queue);
     }
     return *instance_;
 }
 
 ProcessingThread & ProcessingThread::create(ControlSystemMachine &m, HardwareActivation &activator,
-                                           IODCommandThread &cmd_interface, SharedQueueManager &queue_manager) {
-    return create(m, activator, cmd_interface, queue_manager.get<Package*>("processing"),
-                  queue_manager.get<MachineInstance*>("refresh"), queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source"));
+                                           IODCommandThread &cmd_interface, Daemon &daemon, SharedQueueManager &queue_manager) {
+    return create(m, activator, cmd_interface, daemon,
+                  queue_manager.get<Package*>("processing"),
+                  queue_manager.get<MachineInstance*>("refresh"), queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source"),
+                  queue_manager.get<ScheduledItem*>("scheduler"));
 }
 
-
 ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator,
-                                   IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
+                                   IODCommandThread &cmd_interface, Daemon &daemon,
+                                   SharedThreadSafeQueue<Package*> &queue,
                                    SharedThreadSafeQueue<MachineInstance*> &refresh_queue,
-                                   SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue)
-    : internals(0), machine(m), status(e_waiting), activate_hardware(activator),
-      command_interface(cmd_interface), message_queue(queue), refresh_queue(refresh_queue), mqtt_source_queue(mqtt_source_queue), program_start(0) {
+                                   SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue,
+                                   SharedThreadSafeQueue<ScheduledItem *> &scheduler_queue)
+    : internals(0), machine(m), activate_hardware(activator),
+      command_interface(cmd_interface), message_queue(queue), refresh_queue(refresh_queue), mqtt_source_queue(mqtt_source_queue),
+      scheduler_queue(scheduler_queue), program_start(0) {
     program_start = microsecs();
     internals = new ProcessingThreadInternals();
-    auto notifier = [this]() { internals->notify_zmq(); };
+    internals->daemon = &daemon;
+    auto notifier = [this]() { internals->daemon->notify_zmq(); };
     queue.set_notifier(notifier);
     refresh_queue.set_notifier(notifier);
     mqtt_source_queue.set_notifier(notifier);
+    scheduler_queue.set_notifier(notifier);
 }
 
 ProcessingThread::~ProcessingThread() { delete internals; }
@@ -719,7 +715,7 @@ void ProcessingThread::operator()() {
             {(void *)ecat_sync, 0, ZMQ_POLLIN, 0},     {(void *)resource_mgr, 0, ZMQ_POLLIN, 0},
             {(void *)sched_sync, 0, ZMQ_POLLIN, 0},
             {(void *)ecat_out, 0, ZMQ_POLLIN, 0},      {(void *)command_sync, 0, ZMQ_POLLIN, 0},
-            {(void *)internals->queue_notification, 0, ZMQ_POLLIN, 0} // notifier for shared queues
+            {(void *)internals->daemon->queue_notification, 0, ZMQ_POLLIN, 0} // notifier for shared queues
         };
         const int max_poll_sockets = 25; // imposes a limit on the number of channels
         zmq::pollitem_t items[max_poll_sockets];
@@ -768,36 +764,66 @@ void ProcessingThread::operator()() {
                 delete p;
             }
         }
-        while (!program_done) {
-            curr_t = nowMicrosecs();
-            internals->process_manager.SetTime(curr_t);
-            //TBD add a guard here to detect/prevent rapid cycling
-            {
-                MachineInstance *to_refresh;
-                std::set<MachineInstance *> marked_for_refresh;
-                while (refresh_queue.try_dequeue(to_refresh)) {
-                    if (!marked_for_refresh.count(to_refresh)) {
-                        to_refresh->setNeedsCheck(false); // activate the machine, don't push it back
-                        marked_for_refresh.insert(to_refresh);
+        {
+            std::list<ScheduledItem*> to_handle;
+            ScheduledItem *item;
+            while (scheduler_queue.try_dequeue(item)) {
+                assert(item);
+                DBG_SCHEDULER << "Processing dequeued " << *item << "\n";
+                to_handle.push_back(item);
+            }
+            DBG_SCHEDULER << "Scheduler processing " << to_handle.size() << " items\n";
+            for (auto item : to_handle) {
+                if (item->trigger) {
+                    if (item->trigger->enabled()) {
+                        DBG_SCHEDULER << "Scheduler firing trigger " << item->trigger->getName()<< "\n";
+                        item->trigger->fire();
                     }
                 }
-            }
+                else if (item->package) {
+                    DBG_SCHEDULER << "Scheduler activating package on "
+                                  << item->package->receiver->getName() << "\n";
+                    item->package->receiver->handle(*item->package->message,
+                                                    item->package->transmitter);
+                }
+                else if (item->action) {
+                    DBG_SCHEDULER << "Scheduler activating pushing action to  "
+                                  << item->action->getOwner()->getName() << "\n";
+                    item->action->getOwner()->push(item->action);
+                }
+                else {
 
-            for (int i = 0; i < dynamic_poll_start_idx; ++i) {
-                items[i] = fixed_items[i];
+                    assert(false);
+                }
+                delete item;
             }
-
-            if (program_done || !wait_for_work(
-                items, &machine, dynamic_poll_start_idx, curr_t,
-                max_poll_sockets, poll_wait, machines_have_work,
-                systems_waiting, runnable_mutex,last_machine_change,
-                num_channels, machine_check_delay,
-                sched_sync, resource_mgr, ecat_sync, command_sync, ecat_out,
-                internals->queue_notification,
-                io_work_queue, last_checked_cycle_time, last_checked_plugins,
-                last_checked_machines, last_sample_poll, internals->channel_sockets
-            )) { break; }
         }
+        curr_t = nowMicrosecs();
+        internals->process_manager.SetTime(curr_t);
+        {
+            MachineInstance *to_refresh;
+            std::set<MachineInstance *> marked_for_refresh;
+            while (refresh_queue.try_dequeue(to_refresh)) {
+                if (!marked_for_refresh.count(to_refresh)) {
+                    to_refresh->setNeedsCheck(false); // activate the machine, don't push it back
+                    marked_for_refresh.insert(to_refresh);
+                }
+            }
+        }
+
+        for (int i = 0; i < dynamic_poll_start_idx; ++i) {
+            items[i] = fixed_items[i];
+        }
+        wait_for_work(
+            items, &machine, dynamic_poll_start_idx, curr_t,
+            max_poll_sockets, poll_wait, machines_have_work,
+            systems_waiting, runnable_mutex,last_machine_change,
+            num_channels, machine_check_delay,
+            sched_sync, resource_mgr, ecat_sync, command_sync, ecat_out,
+            internals->daemon->queue_notification,
+            io_work_queue, last_checked_cycle_time, last_checked_plugins,
+            last_checked_machines, last_sample_poll, internals->channel_sockets
+        );
 
 #ifdef KEEPSTATS
         avg_poll_time.update();

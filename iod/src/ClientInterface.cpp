@@ -588,10 +588,11 @@ void IODCommandThread::operator()() {
                 }
             }
             catch (const zmq::error_t &zex) {
-                {
+                if (!done) {
                     FileLogger fl(program_name);
                     fl.f() << "Client Interface exception during poll() " << zex.what() << "\n";
                 }
+                else { break; }
                 usleep(100);
                 continue;
             }

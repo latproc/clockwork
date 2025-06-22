@@ -25,17 +25,21 @@ class ControlSystemMachine;
 class CommandSocketInfo;
 class Channel;
 class MachineInstance;
+struct ScheduledItem;
+struct Daemon;
 
 class ProcessingThread : public ClockworkProcessManager {
   public:
     ProcessingThreadInternals *internals;
     static ProcessingThread &create(ControlSystemMachine &m, HardwareActivation &activator,
-                                    IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
+                                    IODCommandThread &cmd_interface, Daemon &daemon,
+                                    SharedThreadSafeQueue<Package*> &queue,
                                     SharedThreadSafeQueue<MachineInstance*> &refresh_queue,
-                                    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue);
+                                    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue,
+                                    SharedThreadSafeQueue<ScheduledItem *> &scheduler_queue);
 
     static ProcessingThread & create(ControlSystemMachine &m, HardwareActivation &activator,
-                                    IODCommandThread &cmd_interface, SharedQueueManager &queue_manager);
+                                    IODCommandThread &cmd_interface, Daemon &daemon, SharedQueueManager &queue_manager);
 
     ~ProcessingThread();
 
@@ -116,9 +120,12 @@ class ProcessingThread : public ClockworkProcessManager {
   private:
     static ProcessingThread *instance_;
     ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator,
-                     IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &message_queue,
+                     IODCommandThread &cmd_interface,
+                     Daemon &daemon,
+                     SharedThreadSafeQueue<Package*> &message_queue,
                      SharedThreadSafeQueue<MachineInstance*> &refresh_queue,
-                     SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage *> &mqtt_source_queue);
+                     SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage *> &mqtt_source_queue,
+                     SharedThreadSafeQueue<ScheduledItem *> &scheduler_queue);
     ProcessingThread(const ProcessingThread &other);
     ProcessingThread &operator=(const ProcessingThread &other);
 
@@ -164,6 +171,7 @@ class ProcessingThread : public ClockworkProcessManager {
     SharedThreadSafeQueue<Package*> &message_queue;
     SharedThreadSafeQueue<MachineInstance*> &refresh_queue;
     SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue;
+    SharedThreadSafeQueue<ScheduledItem *> &scheduler_queue;
     uint64_t program_start;
     // sometimes ethercat is not processed and the watchdog
     // triggers. This is to check if it's the processing
