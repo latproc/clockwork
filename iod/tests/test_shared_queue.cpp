@@ -3,7 +3,6 @@
 #include <unistd.h>
 #include <vector>
 #include <string>
-#include <stdlib.h>
 #include "SharedQueue.h"
 #include "Message.h"
 

@@ -31,7 +31,7 @@ if (EXISTS "${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 	include("${PROJECT_SOURCE_DIR}/LocalCMakeLists.txt")
 endif()
 
-set(CMAKE_POSITION_INDEPENDENT_CODE ON) 
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 if (USE_ETHERCAT)
 if (USE_SOEM)
@@ -304,6 +304,7 @@ set (Clockwork_Headers
     src/SetOperationAction.h
     src/SetStateAction.h
     src/SharedWorkSet.h
+    src/SharedQueueManager.h
     src/ShutdownAction.h
     src/SimulatedRawInput.h
     src/SimulatedRawOutput.h

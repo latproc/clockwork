@@ -10,6 +10,7 @@
 #include <Message.h>
 #include <ThreadSafeQueue.h>
 #include "MQTTInterface.h"
+#include "SharedQueueManager.h"
 
 class IOComponent;
 class HardwareActivation {
@@ -32,6 +33,9 @@ class ProcessingThread : public ClockworkProcessManager {
                                     IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
                                     SharedThreadSafeQueue<MachineInstance*> &refresh_queue,
                                     SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> &mqtt_source_queue);
+
+    static ProcessingThread & create(ControlSystemMachine &m, HardwareActivation &activator,
+                                    IODCommandThread &cmd_interface, SharedQueueManager &queue_manager);
 
     ~ProcessingThread();
 

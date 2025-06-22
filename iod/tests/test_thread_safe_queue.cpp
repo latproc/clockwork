@@ -8,6 +8,7 @@
 #include <boost/thread/shared_mutex.hpp>
 #include <zmq.hpp>
 #include "Message.h"
+#include "SharedQueueManager.h"
 
 template <typename T>
 class MyThread {
@@ -396,4 +397,85 @@ TEST(SharedThreadSafeQueueTest, NotifiesToZmqFromMultipleQueues) {
 
     EXPECT_TRUE(queue2.try_dequeue(value));
     EXPECT_EQ(value, 2);
+}
+
+// Shared Queue Manager
+//
+
+TEST(SharedQueueManagerTest, CanQueueAndDequeueWhenGettingQueueFromManager) {
+    SharedQueueManager manager;
+    boost::condition_variable_any cond_var_any_;
+    boost::shared_mutex cond_var_mutex_;
+    manager.create<int>("test_queue", cond_var_any_, cond_var_mutex_);
+    auto & queue = manager.get<int>("test_queue");
+
+    queue.enqueue(1);
+    queue.enqueue(2);
+
+    int value;
+    EXPECT_TRUE(queue.try_dequeue(value));
+    EXPECT_EQ(value, 1);
+    EXPECT_TRUE(queue.try_dequeue(value));
+    EXPECT_EQ(value, 2);
+}
+
+TEST(SharedQueueManagerTest, CanCreateAndGetMultipleQueues) {
+    SharedQueueManager manager;
+    boost::condition_variable_any cond_var_any_1;
+    boost::shared_mutex cond_var_mutex_1;
+    boost::condition_variable_any cond_var_any_2;
+    boost::shared_mutex cond_var_mutex_2;
+
+    manager.create<int>("int_queue", cond_var_any_1, cond_var_mutex_1);
+    manager.create<std::string>("string_queue", cond_var_any_2, cond_var_mutex_2);
+
+    auto & int_queue = manager.get<int>("int_queue");
+    auto & string_queue = manager.get<std::string>("string_queue");
+
+    int_queue.enqueue(42);
+    string_queue.enqueue("hello");
+
+    int int_value;
+    std::string str_value;
+
+    EXPECT_TRUE(int_queue.try_dequeue(int_value));
+    EXPECT_EQ(int_value, 42);
+    EXPECT_TRUE(string_queue.try_dequeue(str_value));
+    EXPECT_EQ(str_value, "hello");
+}
+
+TEST(SharedQueueManagerTest, ThrowsOnQueueNotFound) {
+    SharedQueueManager manager;
+    boost::condition_variable_any cond_var_any_;
+    boost::shared_mutex cond_var_mutex_;
+    manager.create<int>("test_queue", cond_var_any_, cond_var_mutex_);
+
+    EXPECT_THROW(manager.get<std::string>("test_queue"), std::runtime_error);
+}
+
+TEST(SharedQueueManagerTest, ThrowsOnQueueTypeMismatch) {
+    SharedQueueManager manager;
+    boost::condition_variable_any cond_var_any_;
+    boost::shared_mutex cond_var_mutex_;
+    manager.create<int>("test_queue", cond_var_any_, cond_var_mutex_);
+
+    EXPECT_THROW(manager.get<std::string>("test_queue"), std::runtime_error);
+}
+
+TEST(SharedQueueManagerTest, CanRemoveQueue) {
+    SharedQueueManager manager;
+    boost::condition_variable_any cond_var_any_;
+    boost::shared_mutex cond_var_mutex_;
+    manager.create<int>("test_queue", cond_var_any_, cond_var_mutex_);
+
+    auto & queue = manager.get<int>("test_queue");
+    queue.enqueue(1);
+
+    int value;
+    EXPECT_TRUE(queue.try_dequeue(value));
+    EXPECT_EQ(value, 1);
+
+    manager.remove<int>("test_queue");
+
+    EXPECT_THROW(manager.get<int>("test_queue"), std::runtime_error);
 }

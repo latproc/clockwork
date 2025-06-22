@@ -34,7 +34,6 @@
 #include <sys/stat.h>
 #include <utility>
 
-#include "cJSON.h"
 #ifndef EC_SIMULATOR
 #include "tool/MasterDevice.h"
 #endif
@@ -43,7 +42,6 @@
 #endif
 
 #define __MAIN__
-#include "Channel.h"
 #include "ClientInterface.h"
 #include "DebugExtra.h"
 #include "Dispatcher.h"
@@ -59,10 +57,9 @@
 #include "Statistic.h"
 #include "Statistics.h"
 #include "clockwork.h"
-#include "cwlang.h"
 #include "symboltable.h"
 #include <libgen.h>
-#include "ThreadSafeQueue.h"
+#include "SharedQueueManager.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -581,21 +578,23 @@ int main(int argc, char const *argv[]) {
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
     auto dbg_instance = DebugExtra::instance();
+    SharedQueueManager queue_manager;
     boost::condition_variable_any processing_condition;
     boost::shared_mutex processing_queue_mutex;
-    SharedThreadSafeQueue<Package*> processing_queue(processing_condition, processing_queue_mutex);
+    queue_manager.create<Package*>("processing", processing_condition, processing_queue_mutex);
+
     boost::condition_variable_any refresh_condition;
     boost::shared_mutex refresh_queue_mutex;
-    SharedThreadSafeQueue<MachineInstance*> refresh_queue(refresh_condition, refresh_queue_mutex);
+    queue_manager.create<MachineInstance*>("refresh", refresh_condition, refresh_queue_mutex);
 
     boost::condition_variable_any mqtt_source_condition;
-    boost::shared_mutex mqt_source_queue_mutex;
-    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> mqtt_source_queue(mqtt_source_condition, mqt_source_queue_mutex);
+    boost::shared_mutex mqtt_source_queue_mutex;
+    queue_manager.create<MQTTInterface::MQTTReceivedMessage*>("mqtt_source", mqtt_source_condition, mqtt_source_queue_mutex);
 
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
-    Dispatcher::create(processing_queue);
+    Dispatcher::create(queue_manager.get<Package*>("processing"));
     MessageLog::setMaxMemory(10000);
     Scheduler::instance();
     ControlSystemMachine machine;
@@ -684,16 +683,19 @@ int main(int argc, char const *argv[]) {
         return generate_c() ? EXIT_SUCCESS : EXIT_FAILURE;
     }
     MQTTInterface::instance()->init();
-    MQTTInterface::instance()->start(mqtt_source_queue);
+    MQTTInterface::instance()->start(queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source"));
 
     bool sigok = setup_signals();
     assert(sigok);
 
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
-    MachineInstance::setRefreshQueue(&refresh_queue);
+    MachineInstance::setRefreshQueue(&queue_manager.get<MachineInstance*>("refresh"));
     ProcessingThread &processMonitor(
-                                     ProcessingThread::create(machine, iod_activation, *stateMonitor, processing_queue, refresh_queue, mqtt_source_queue));
+        ProcessingThread::create(machine, iod_activation, *stateMonitor,
+            queue_manager.get<Package*>("processing"),
+            queue_manager.get<MachineInstance*>("refresh"),
+            queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source")));
 
     zmq::socket_t sim_io(*MessagingInterface::getContext(), ZMQ_REP);
     sim_io.bind("inproc://ethercat_sync");

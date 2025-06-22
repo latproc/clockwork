@@ -66,6 +66,7 @@
 #include "symboltable.h"
 #include <stdio.h>
 #include "ThreadSafeQueue.h"
+#include "SharedQueueManager.h"
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -348,34 +349,39 @@ int main(int argc, char const *argv[]) {
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
 
+    auto dbg_instance = DebugExtra::instance();
+    SharedQueueManager queue_manager;
     boost::condition_variable_any processing_condition;
     boost::shared_mutex processing_queue_mutex;
-    SharedThreadSafeQueue<Package*> processing_queue(processing_condition, processing_queue_mutex);
+    queue_manager.create<Package*>("processing", processing_condition, processing_queue_mutex);
+
     boost::condition_variable_any refresh_condition;
     boost::shared_mutex refresh_queue_mutex;
-    SharedThreadSafeQueue<MachineInstance*> refresh_queue(refresh_condition, refresh_queue_mutex);
+    queue_manager.create<MachineInstance*>("refresh", refresh_condition, refresh_queue_mutex);
 
     boost::condition_variable_any mqtt_source_condition;
-    boost::shared_mutex mqt_source_queue_mutex;
-    SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> mqtt_source_queue(mqtt_source_condition, mqt_source_queue_mutex);
+    boost::shared_mutex mqtt_source_queue_mutex;
+    queue_manager.create<MQTTInterface::MQTTReceivedMessage*>("mqtt_source", mqtt_source_condition, mqtt_source_queue_mutex);
 
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
-    Dispatcher::create(processing_queue);
+    Dispatcher::create(queue_manager.get<Package*>("processing"));
     MessageLog::setMaxMemory(10000);
     Scheduler::instance();
 
     ControlSystemMachine machine;
     IODCommandThread *stateMonitor = IODCommandThread::instance();
     IODHardwareActivation iod_activation;
-    MachineInstance::setRefreshQueue(&refresh_queue);
+    MachineInstance::setRefreshQueue(&queue_manager.get<MachineInstance*>("refresh"));
     ProcessingThread &processMonitor(
-        ProcessingThread::create(
-            machine, iod_activation, *stateMonitor, processing_queue, refresh_queue, mqtt_source_queue));
+        ProcessingThread::create(machine, iod_activation, *stateMonitor,
+            queue_manager.get<Package*>("processing"),
+            queue_manager.get<MachineInstance*>("refresh"),
+            queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source")));
 
     Logger::instance()->setLevel(Logger::Debug);
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_PARSER);
+    //LogState::instance()->insert(dbg_instance->DEBUG_PARSER);
 
     std::list<std::string> source_files;
     int load_result = loadOptions(argc, argv, source_files);
@@ -387,18 +393,18 @@ int main(int argc, char const *argv[]) {
     load_debug_config();
 
 #if 0
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_PREDICATES);
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_INITIALISATION);
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_MESSAGING);
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_ACTIONS);
-    //DBG_INITIALISATION << DebugExtra::instance()->DEBUG_PREDICATES << "\n";
-    //assert (!LogState::instance()->includes(DebugExtra::instance()->DEBUG_PREDICATES));
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_SCHEDULER);
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_PROPERTIES);
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_MESSAGING);
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_STATECHANGES);
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_AUTOSTATES);
-    //LogState::instance()->insert(DebugExtra::instance()->DEBUG_MODBUS);
+    //LogState::instance()->insert(dbg_instance->DEBUG_PREDICATES);
+    //LogState::instance()->insert(dbg_instance->DEBUG_INITIALISATION);
+    //LogState::instance()->insert(dbg_instance->DEBUG_MESSAGING);
+    //LogState::instance()->insert(dbg_instance->DEBUG_ACTIONS);
+    //DBG_INITIALISATION << dbg_instance->DEBUG_PREDICATES << "\n";
+    //assert (!LogState::instance()->includes(dbg_instance->DEBUG_PREDICATES));
+    //LogState::instance()->insert(dbg_instance->DEBUG_SCHEDULER);
+    //LogState::instance()->insert(dbg_instance->DEBUG_PROPERTIES);
+    //LogState::instance()->insert(dbg_instance->DEBUG_MESSAGING);
+    //LogState::instance()->insert(dbg_instance->DEBUG_STATECHANGES);
+    //LogState::instance()->insert(dbg_instance->DEBUG_AUTOSTATES);
+    //LogState::instance()->insert(dbg_instance->DEBUG_MODBUS);
 #endif
 
     IODCommandListJSON::no_display.insert("tab");
@@ -453,7 +459,7 @@ int main(int argc, char const *argv[]) {
         std::ofstream out(modbus_map());
         if (!out) {
             std::cerr << "not able to open " << modbus_map() << " for write\n";
-            return false;
+            return 1;
         }
         while (m_iter != MachineInstance::end()) {
             (*m_iter)->exportModbusMapping(out);
@@ -490,7 +496,7 @@ int main(int argc, char const *argv[]) {
     DBG_INITIALISATION << "-------- Initialising ---------\n";
 
     MQTTInterface::instance()->init();
-    MQTTInterface::instance()->start(mqtt_source_queue);
+    MQTTInterface::instance()->start(queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source"));
 
     DBG_INITIALISATION << "-------- Starting EtherCAT Interface ---------\n";
     EtherCATThread ethercat;

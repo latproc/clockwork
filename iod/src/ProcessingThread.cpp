@@ -127,6 +127,13 @@ ProcessingThread &ProcessingThread::create(ControlSystemMachine &m, HardwareActi
     return *instance_;
 }
 
+ProcessingThread & ProcessingThread::create(ControlSystemMachine &m, HardwareActivation &activator,
+                                           IODCommandThread &cmd_interface, SharedQueueManager &queue_manager) {
+    return create(m, activator, cmd_interface, queue_manager.get<Package*>("processing"),
+                  queue_manager.get<MachineInstance*>("refresh"), queue_manager.get<MQTTInterface::MQTTReceivedMessage*>("mqtt_source"));
+}
+
+
 ProcessingThread::ProcessingThread(ControlSystemMachine &m, HardwareActivation &activator,
                                    IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &queue,
                                    SharedThreadSafeQueue<MachineInstance*> &refresh_queue,
