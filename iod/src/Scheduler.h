@@ -24,10 +24,8 @@
 
 #include <list>
 #include <ostream>
-#include <queue>
 #include <string>
 #include <sys/time.h>
-#include <vector>
 
 #include "Action.h"
 #include "Message.h"

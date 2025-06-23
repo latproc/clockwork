@@ -20,16 +20,10 @@
 
 #include "Scheduler.h"
 #include "DebugExtra.h"
-#include "Logger.h"
-#include "MachineInstance.h"
-#include "MessageLog.h"
 #include "MessagingInterface.h"
 #include "ProcessingThread.h"
-#include "watchdog.h"
 #include <cassert>
 #include <boost/chrono.hpp>
-#include <inttypes.h>
-#include <iomanip>
 #include <iostream>
 #include <zmq.hpp>
 #include <iomanip>
