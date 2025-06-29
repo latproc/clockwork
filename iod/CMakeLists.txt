@@ -450,7 +450,7 @@ endif()
 add_library(cw_interpreter ${Clockwork_SRCS})
 set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 
-add_executable(cw src/cw.cpp) # ${Clockwork_SRCS})
+add_executable(cw src/cw.cpp src/export_code.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 set_target_properties(cw PROPERTIES LINK_FLAGS "-rdynamic")
 #target_link_libraries(cw cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES})
@@ -459,7 +459,7 @@ target_link_libraries(cw cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBR
 if (USE_ETHERCAT)
 # Experimental cw with SOEM EtherCAT library support
 if(USE_SOEM)
-add_executable(cw_ecat src/cw.cpp) # ${Clockwork_SRCS})
+add_executable(cw_ecat src/cw.cpp src/export_code.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw_ecat PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR;SOEM_ETHERCAT" )
 set_target_properties(cw_ecat PROPERTIES LINK_FLAGS "-rdynamic")
 target_link_directories(cw_ecat PRIVATE "${CW_ETHERCAT_DIR}")
