@@ -207,6 +207,6 @@ int get_input(char *buf, unsigned int size)
             last_read = strdup(buf);
         }
     }
-    return strlen(buf);
+    return static_cast<int>(strlen(buf));
 }
 

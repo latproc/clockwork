@@ -568,7 +568,7 @@ struct ModbusServerThread {
                             while (iter != iod_sync_commands.end()) {
                                 std::string cmd = *iter++;
                                 std::string response;
-                                uint64_t cmd_timeout = 0;
+                                uint32_t cmd_timeout = 0;
                                 if (!sendMessage(cmd.c_str(), *cmd_interface, response,
                                                  cmd_timeout)) {
                                     FileLogger fl(program_name);
@@ -584,7 +584,7 @@ struct ModbusServerThread {
                                 std::string cmd(getIODSyncCommand(
                                     0, addr + 1, (query_backup[function_code_offset + 3]) ? 1 : 0));
                                 std::string response;
-                                uint64_t cmd_timeout = 0;
+                                uint32_t cmd_timeout = 0;
                                 if (!sendMessage(cmd.c_str(), *cmd_interface, response,
                                                  cmd_timeout)) {
                                     FileLogger fl(program_name);
@@ -605,7 +605,7 @@ struct ModbusServerThread {
                             std::string res(getIODSyncCommand(4, addr + 1,
                                                               modbus_mapping->tab_registers[addr]));
                             std::string response;
-                            uint64_t cmd_timeout = 0;
+                            uint32_t cmd_timeout = 0;
                             if (!sendMessage(res.c_str(), *cmd_interface, response, cmd_timeout)) {
                                 FileLogger fl(program_name);
                                 fl.f() << "Message send of " << res << " failed\n";

@@ -102,7 +102,7 @@ double Buffer::stddev(size_t n) {
     if (len < n) {
         n = len;
     }
-    int i = (front + BUFSIZE - n + 1) % BUFSIZE;
+    int i = static_cast<int>((front + BUFSIZE - n + 1) % BUFSIZE);
     do {
         double val = getFloatAtIndex(i) - avg;
         res += val * val;
