@@ -26,9 +26,9 @@ debug:
 debug-install:	debug
 	cd build/Debug && make install
 
-xcode:
+xcode: Makefile
 	[ -d "xcode" ] || mkdir xcode
-	cd xcode && cmake -G Xcode .. && xcodebuild -parallelizeTargets
+	cd xcode && cmake -G Xcode -DCMAKE_OSX_DEPLOYMENT_TARGET=12 .. && xcodebuild -parallelizeTargets
 
 test:
 	[ -d "build" ] || mkdir build
