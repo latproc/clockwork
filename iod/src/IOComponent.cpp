@@ -1009,7 +1009,14 @@ int64_t DigitalValue::filter(int64_t val) {
         MachineInstance *o = *owners_iter++;
         if (o) {
             o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
-            o->setValue("VALUE", val);
+            Value mask = o->properties.lookup("MASK");
+            if (mask.kind == Value::t_integer) {
+                auto masked = val & mask.iValue;
+                o->setValue("VALUE", Value{masked});
+            }
+            else {
+                o->setValue("VALUE", Value{val});
+            }
         }
     }
     return val;
