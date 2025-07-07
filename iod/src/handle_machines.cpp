@@ -2,111 +2,65 @@
 #include "ProcessingThread.h"
 #include <stdint.h>
 #include "DebugExtra.h"
+#include "MessageLog.h"
 
 void ProcessingThread::handle_machines(
         uint64_t & last_checked_machines,
         unsigned int & machine_check_delay,
-        ProcessingStates &processing_state,
         uint64_t & curr_t
     ) {
-
-    if (processing_state == ProcessingStates::eIdle) {
-        processing_state = ProcessingStates::ePollingMachines;
-    }
-    const int num_loops = 1;
+    const int num_loops = 2;
     for (int i = 0; i < num_loops; ++i) {
-        if (processing_state == ProcessingStates::ePollingMachines) {
 #ifdef KEEPSTATS
-            avg_clockwork_time.start();
+        avg_clockwork_time.start();
 #endif
-            std::set<MachineInstance *> to_process;
-            {
-                boost::recursive_mutex::scoped_lock lock(runnable_mutex);
-                std::set<MachineInstance *>::iterator iter = runnable.begin();
-                while (iter != runnable.end()) {
-                    MachineInstance *mi = *iter;
-                    if (mi->executingCommand() || !mi->pendingEvents().empty() ||
-                        mi->hasMail()) {
-                        to_process.insert(mi);
-                        if (!mi->queuedForStableStateTest()) {
-                            iter = runnable.erase(iter);
-                        }
-                        else {
-                            iter++;
-                        }
-                    }
-                    else {
-                        iter++;
-                    }
+        std::set<MachineInstance *> to_poll_actions;
+        std::set<MachineInstance *> to_poll_stable_states;
+        {
+            boost::recursive_mutex::scoped_lock lock(runnable_mutex);
+            std::set<MachineInstance *>::iterator iter = runnable.begin();
+            while (iter != runnable.end()) {
+                MachineInstance *mi = *iter;
+                if (!mi->is_runnable()) {
+                    std::stringstream ss;
+                    ss << "Machine " << mi->getName() << " is not runnable but was in the runnable list\n";
+                    MessageLog::instance()->add(ss.str().c_str());
+                    continue;
                 }
-                for (auto i = MachineInstance::begin(); i != MachineInstance::end(); ++i) {
-                    auto machine = *i;
-                    if (machine->is_runnable()) {
-                        to_process.insert(machine);
-                    }
-                }
-                if (to_process.size()) {
-                    assert(MachineInstance::num_runnable() > 0);
+                if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail()) {
+                    to_poll_actions.insert(mi);
                 }
                 else {
-                    assert(MachineInstance::num_runnable() == 0);
+                    to_poll_stable_states.insert(mi);
                 }
+                iter = runnable.erase(iter);
             }
-
-            if (!to_process.empty()) {
-                //DBG_SCHEDULER << "processing " << to_process.size() << " machines\n";
-                MachineInstance::processAll(to_process, 150000,
-                                            MachineInstance::NO_BUILTINS);
-            }
-            processing_state = ProcessingStates::eStableStates;
-        }
-        if (processing_state == ProcessingStates::eStableStates) {
-            std::set<MachineInstance *> to_process;
+            // TODO: Is this catch-all necessary?
             for (auto i = MachineInstance::begin(); i != MachineInstance::end(); ++i) {
-                auto machine = *i;
-                if (machine->is_runnable()) {
-                    to_process.insert(machine);
+                auto mi = *i;
+                if (mi->is_runnable()) {
+                   if (mi->executingCommand() || !mi->pendingEvents().empty() || mi->hasMail()) {
+                       to_poll_actions.insert(mi);
+                   }
+                   else {
+                       to_poll_stable_states.insert(mi);
+                   }
                 }
-            }
-            if (to_process.size()) {
-                assert(MachineInstance::num_runnable() > 0);
-            }
-            else {
-                assert(MachineInstance::num_runnable() == 0);
-            }
-            {
-                boost::recursive_mutex::scoped_lock lock(runnable_mutex);
-                std::set<MachineInstance *>::iterator iter = runnable.begin();
-                while (iter != runnable.end()) {
-                    MachineInstance *mi = *iter;
-                    if (mi->executingCommand() || !mi->pendingEvents().empty()) {
-                        iter++;
-                        continue;
-                    }
-                    if (mi->queuedForStableStateTest()) {
-                        to_process.insert(mi);
-                        iter = runnable.erase(iter);
-                    }
-                    else {
-                        iter++;
-                    }
-                }
-            }
-
-            if (!to_process.empty()) {
-                //	DBG_SCHEDULER << "processing stable states\n";
-                MachineInstance::checkStableStates(to_process, 150000);
-            }
-            if (i < num_loops - 1) {
-                processing_state = ProcessingStates::ePollingMachines;
-            }
-            else {
-                processing_state = ProcessingStates::eIdle;
-                last_checked_machines = curr_t; // check complete
-#ifdef KEEPSTATS
-                avg_clockwork_time.update();
-#endif
             }
         }
+
+        if (!to_poll_actions.empty()) {
+            MachineInstance::processAll(to_poll_actions, 150000,
+                                        MachineInstance::NO_BUILTINS);
+        }
+
+        if (!to_poll_stable_states.empty()) {
+            MachineInstance::checkStableStates(to_poll_stable_states, 150000);
+        }
+
+        last_checked_machines = curr_t; // check complete
+#ifdef KEEPSTATS
+        avg_clockwork_time.update();
+#endif
     }
 }

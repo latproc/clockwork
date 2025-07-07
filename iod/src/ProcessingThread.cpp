@@ -318,6 +318,12 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t *items, int nu
                 IOLockHelper lock;
                 internals->update = receive_ethercat_data(ecat_sync);
             }
+            if (items[internals->CMD_ITEM].revents & ZMQ_POLLIN) {
+                int x = 0;
+            }
+            if (items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
+                int x = 0;
+            }
             // Throw away queue notifications now that an update has been detected.
             if (items[internals->QUEUE_NOTIFIER].revents & ZMQ_POLLIN) {
                 zmq::message_t msg;
@@ -518,9 +524,9 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     }
 }
 
-void ProcessingThread::handle_plugin_machines(ProcessingStates processing_state, uint64_t curr_t, uint64_t last_checked_plugins) {
+void ProcessingThread::handle_plugin_machines(uint64_t curr_t, uint64_t last_checked_plugins) {
     if (!MachineInstance::pluginMachines().empty()) {
-        if (processing_state == ProcessingStates::eIdle && curr_t - last_checked_plugins >= 1000) {
+        if (curr_t - last_checked_plugins >= 1000) {
 #ifdef KEEPSTATS
             AutoStat stats(avg_plugin_time);
 #endif
@@ -668,7 +674,6 @@ void ProcessingThread::operator()() {
 
     bool commands_started = false;
 
-    ProcessingStates processing_state = ProcessingStates::eIdle;
     std::set<IOComponent *> io_work_queue;
 
     //  we need to stop polling io (ie exit) if the control threads do not seem
@@ -688,9 +693,10 @@ void ProcessingThread::operator()() {
             }
         }
 
+        // Removed closed channels and other unloaded machines
         MachineInstance::remove_pending();
         unsigned int machine_check_delay;
-        machine.idle();
+        machine.idle(); // ControlSystemMachine poll
         last_machine_change = machine.lastUpdated();
 
         // only process io components if the machine is operational
@@ -829,16 +835,12 @@ void ProcessingThread::operator()() {
         avg_poll_time.update();
         avg_poll_time.start();
 #endif
-        /*  this loop prioritises ethercat processing but if a certain
-            number of ethercat cycles have been processed with no
-            other activities being given time, we give other jobs
-            some time anyway.
-        */
+
         if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
             HandleIncomingEtherCatData(io_work_queue, curr_t, last_sample_poll, avg_io_time);
         }
         if (program_done) { break; }
-        if (machine_is_ready && processing_state != ProcessingStates::eStableStates && !io_work_queue.empty()) {
+        if (machine_is_ready && !io_work_queue.empty()) {
 #ifdef KEEPSTATS
             AutoStat stats(avg_iowork_time);
 #endif
@@ -851,9 +853,9 @@ void ProcessingThread::operator()() {
         }
 
         if (program_done) { break; }
-        handle_plugin_machines(processing_state, curr_t, last_checked_plugins);
+        handle_plugin_machines(curr_t, last_checked_plugins);
 
-        if (status == e_waiting) {
+        {
 #ifdef KEEPSTATS
             AutoStat stats(avg_channel_time);
 #endif
@@ -861,50 +863,19 @@ void ProcessingThread::operator()() {
         }
 
         if (program_done) { break; }
-        char buf[200];
-        if (status == e_waiting) {
-            if (items[internals->CMD_ITEM].revents & ZMQ_POLLIN) {
-#ifdef KEEPSTATS
-                AutoStat stats(avg_cmd_processing);
-#endif
-                size_t len = resource_mgr.recv(buf, 200, ZMQ_NOBLOCK);
-                if (len) {
-                    MessageLog::instance()->get_stream()
-                        << "Warning: processing thread ignoring incoming data '" << buf
-                        << "' from client";
-                    MessageLog::instance()->release_stream();
-                }
-            }
-        }
-
-        if (program_done) {
-            break;
-        }
-#ifdef KEEPSTATS
-        AutoStat stats(avg_cmd_processing);
-#endif
-        if (status == e_waiting && systems_waiting > 0) {
-            handle_command(items,internals->CMD_SYNC_ITEM, dynamic_poll_start_idx, num_channels, command_sync, internals->channel_sockets, internals->cycle_delay);
-        }
+        handle_command(items,internals->CMD_SYNC_ITEM, dynamic_poll_start_idx, num_channels, command_sync, internals->channel_sockets, internals->cycle_delay);
 
         if (program_done) { break; }
 
         if (machine.activationRequested()) {
             DBG_PROCESSING << " activation requested\n"
-              << "status: " << status
               << " have devices: " << !IOComponent::devices.empty()
               << " update_status " << static_cast<int>(update_state)
               << "\n";
         }
-
-        if (status == e_waiting && machines_have_work &&
-               curr_t - last_checked_machines >= machine_check_delay) {
-            machines_have_work = false; // Assume the following will complete all work
-            handle_machines(last_checked_machines, machine_check_delay, processing_state, curr_t);
-        }
         // send a message to the ethercat thread requesting activation
         // or deactivation of the master
-        if (status == e_waiting && !IOComponent::devices.empty() && update_state == UpdateStates::s_update_idle &&
+        if (!IOComponent::devices.empty() && update_state == UpdateStates::s_update_idle &&
             (machine.activationRequested() || machine.deactivationRequested())) {
             DBG_INITIALISATION << "activation/deactivation requested\n";
             uint32_t size = 0;
@@ -945,7 +916,7 @@ void ProcessingThread::operator()() {
                 }
             }
         }
-        else if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty() &&
+        else if (machine_is_ready && !IOComponent::devices.empty() &&
                  (IOComponent::updatesWaiting() ||
                   IOComponent::getHardwareState() != IOComponent::s_operational)) {
             handle_hardware(
@@ -957,17 +928,17 @@ void ProcessingThread::operator()() {
                 );
         }
         if (update_state == UpdateStates::s_update_sent) {
-            char buf[10];
+            char ack[10];
             try {
-                if (ecat_out.recv(buf, 10, ZMQ_DONTWAIT)) {
+                if (ecat_out.recv(ack, 10, ZMQ_DONTWAIT)) {
                     update_state = UpdateStates::s_update_idle;
                     if (machine.activationRequested()) {
-                        if (strncmp(buf, "ok", 2) == 0) {
+                        if (strncmp(ack, "ok", 2) == 0) {
                             machine.requestActivation(false);
                         }
                     }
                     else if (machine.deactivationRequested()) {
-                        if (strncmp(buf, "ok", 2) == 0) {
+                        if (strncmp(ack, "ok", 2) == 0) {
                             machine.requestDeactivation(false);
                         }
                     }
@@ -997,6 +968,8 @@ void ProcessingThread::operator()() {
             cycle_check_counter = 0;
             checkAndUpdateCycleDelay();
         }
+
+       handle_machines(last_checked_machines, machine_check_delay, curr_t);
 
         machine.idle(); // in case any of the above triggered a change to the machine state
         last_machine_change = machine.lastUpdated();

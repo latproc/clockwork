@@ -63,17 +63,12 @@ bool ProcessingThread::wait_for_work(
                 last_runnable_count = runnable_count;
             }
         }
-        if (machines_have_work || IOComponent::updatesWaiting() || !io_work_queue.empty()) {
-            poll_wait = 1;
-        }
-        else {
-            poll_wait = 100;
-        }
+
 
         //if (Watchdog::anyTriggered(curr_t))
         //  Watchdog::showTriggered(curr_t, true, std::cerr);
-        systems_waiting = pollZMQItems(poll_wait, items, dynamic_poll_start_idx + num_channels, ecat_sync,
-                                       resource_mgr, sched_sync, ecat_out, queue_sync);
+        systems_waiting = pollZMQItems(1000, items, dynamic_poll_start_idx + num_channels, ecat_sync,
+                                      resource_mgr, sched_sync, ecat_out, queue_sync);
 
         // return false means work has been found (i.e., not waiting any longer)
         if (systems_waiting > 0 ||

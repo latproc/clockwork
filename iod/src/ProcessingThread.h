@@ -59,17 +59,6 @@ class ProcessingThread : public ClockworkProcessManager {
 
     ControlSystemMachine &machine;
 
-    enum Status {
-        e_waiting,
-        e_handling_ecat,
-        e_start_handling_commands,
-        e_handling_cmd,
-        e_command_done,
-        e_handling_sched,
-        e_waiting_sched
-    };
-    Status status;
-
     enum class ProcessingStates { eIdle, eStableStates, ePollingMachines };
     enum class UpdateStates { s_update_idle, s_update_sent };
 
@@ -132,8 +121,7 @@ class ProcessingThread : public ClockworkProcessManager {
     void HandleIncomingEtherCatData(std::set<IOComponent *> &io_work_queue, uint64_t curr_t,
                                     uint64_t last_sample_poll, AutoStatStorage &avg_io_time);
 
-    void handle_plugin_machines(ProcessingStates polling_states,
-        uint64_t curr_t, uint64_t last_checked_plugins);
+    void handle_plugin_machines(uint64_t curr_t, uint64_t last_checked_plugins);
     void handle_mqtt_message(const MQTTInterface::MQTTReceivedMessage &message);
     void handle_command(zmq::pollitem_t fixed_items[],
         unsigned int command_channel_index,
@@ -154,7 +142,6 @@ class ProcessingThread : public ClockworkProcessManager {
     void handle_machines(
         uint64_t & last_checked_machines,
         unsigned int & machine_check_delay,
-        ProcessingStates &processing_state,
         uint64_t & curr_t
     );
 
