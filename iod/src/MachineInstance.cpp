@@ -2906,6 +2906,9 @@ void MachineInstance::resume() {
         if (mtv) {
             mtv->resume();
         }
+        if (io_interface) {
+            io_interface->filter(io_interface->address.value); // IO may have changed while disabled
+        }
         setNeedsCheck();
     }
 }
@@ -3018,6 +3021,7 @@ void MachineInstance::enable() {
     clearAllActions();
     if (io_interface) {
         io_interface->setupProperties(this);
+        filter(io_interface->address.value); // the value may have changed while the machine was disabled
         io_interface->handleChange(pending_events);
     }
     std::list<MachineInstance *> sorted;
