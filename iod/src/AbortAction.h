@@ -18,20 +18,18 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-#ifndef __ABORTACTION_H__
-#define __ABORTACTION_H__ 1
-
+#pragma once
 #include "Action.h"
 
 class MachineInstance;
 
-// Abort is a special action that is used within a Command list to stop further execution
+// Abort is a special action used within a Command list to stop further execution
 
 struct AbortActionTemplate : public ActionTemplate {
-    AbortActionTemplate(bool failed = true);
+    explicit AbortActionTemplate(bool failed = true);
     AbortActionTemplate(bool failed, Value exception_message);
-    virtual Action *factory(MachineInstance *mi);
-    std::ostream &operator<<(std::ostream &out) const {
+    Action *factory(MachineInstance *mi) override;
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << "Abort(failure=" << abort_fail << ") action template\n";
     }
     bool abort_fail;
@@ -40,11 +38,11 @@ struct AbortActionTemplate : public ActionTemplate {
 
 struct AbortAction : public Action {
     AbortAction(MachineInstance *m, const AbortActionTemplate *dat);
-    Status run();
-    Status checkComplete();
-    virtual std::ostream &operator<<(std::ostream &out) const;
+    Status run() override;
+    Status checkComplete() override;
+
+    std::ostream &operator<<(std::ostream &out) const override;
     bool abort_fail;
     std::string message;
 };
 
-#endif

@@ -20,14 +20,9 @@
 
 #pragma once
 
-#include "Expression.h"
 #include "Message.h"
 #include "Trigger.h"
-#include <boost/foreach.hpp>
-#include <cstdlib>
-#include <cstring>
 #include <set>
-#include <sys/types.h>
 #include <vector>
 
 typedef std::vector<std::string> ActionParameterList;
@@ -45,7 +40,7 @@ class ActionTemplate {
 };
 std::ostream &operator<<(std::ostream &out, const ActionTemplate &a);
 
-// an action is started by operator(). If the action successfully starts,
+// An action is started by operator(). If the action successfully starts,
 // running() will return true. When the action is complete, complete() will
 // return true;
 class Action : public TriggerOwner {
@@ -61,11 +56,11 @@ class Action : public TriggerOwner {
     int references() const { return refs; }
     virtual void release();
 
-    const char *error() {
+    const char *error() const {
         const char *res = error_str.get();
         return (res) ? res : "";
     }
-    const char *result() {
+    const char *result() const {
         const char *res = result_str.get();
         return (res) ? res : "";
     }
@@ -76,7 +71,7 @@ class Action : public TriggerOwner {
     Status operator()();
     bool complete();
     bool running();
-    bool suspended() { return status == Suspended; }
+    bool suspended() const { return status == Suspended; }
     void suspend();
     void resume();
     void recover(); // debug TBD
@@ -95,7 +90,7 @@ class Action : public TriggerOwner {
     void disableTrigger();
     void cleanupTrigger();
 
-    MachineInstance *getOwner() { return owner; }
+    MachineInstance *getOwner() const { return owner; }
     bool started() const;
     void start();
     void stop();
@@ -154,14 +149,6 @@ class TriggeredAction : public Action {
     // active() indicates the action has triggered. It will automatically
     // reset the trigger only when one of the dependent inputs changes
     bool active();
-    // set() only fires once and resets only when reset() is called.
-    bool set() {
-        if (has_triggered) {
-            return true;
-        }
-        has_triggered = active();
-        return true;
-    }
     void reset() override { has_triggered = false; }
     virtual bool usesTimer() { return false; }
 
@@ -171,5 +158,3 @@ class TriggeredAction : public Action {
 };
 
 std::ostream &operator<<(std::ostream &out, const Action &);
-
-
