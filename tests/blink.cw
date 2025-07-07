@@ -34,10 +34,13 @@ b AltBlinker(delay:400);
 c AltBlinker(delay:600);
 
 PINGGENERATOR MACHINE {
-  OPTION DELAY 0;
-  on WHEN SELF IS off AND TIMER >= 1000 || SELF IS on AND TIMER < 1000;
+  OPTION delay 1000;
+  OPTION prev_timer 0;
+  on WHEN SELF IS off AND TIMER >= delay || SELF IS on AND TIMER < delay;
   off DEFAULT;
-  ENTER INIT { WAIT DELAY; }
+  ENTER INIT { WAIT delay; }
+  LEAVE on { prev_timer := TIMER; }
+  LEAVE off {prev_timer := TIMER; }
 }
 
 PING MACHINE Slave {
@@ -52,7 +55,6 @@ PING MACHINE Slave {
 }
 
 ping PINGGENERATOR;
-
 
 Debounced MACHINE Input {
   OPTION stable 50;
