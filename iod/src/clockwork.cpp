@@ -352,9 +352,10 @@ MachineClass *makeDigitalValueMachineClass() {
     auto result = new MachineClass("DIGITALVALUE");
     result->parameters.push_back(Parameter("module"));
     result->parameters.push_back(Parameter("offset"));
-    result->addState("idle");
-    result->default_state = State("idle");
-    result->initial_state = State("idle");
+    result->addState("stable");
+    result->addState("unstable");
+    result->default_state = State("stable");
+    result->initial_state = State("stable");
     result->disableAutomaticStateChanges();
     result->setProperty("IOTIME", Value(0));
     result->setProperty("VALUE", Value(0));
