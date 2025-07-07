@@ -887,21 +887,7 @@ void ProcessingThread::operator()() {
             handle_command(items,internals->CMD_SYNC_ITEM, dynamic_poll_start_idx, num_channels, command_sync, internals->channel_sockets, internals->cycle_delay);
         }
 
-        if (items[internals->SCHEDULER_ITEM].revents & ZMQ_POLLIN) {
-          handle_scheduler(
-#if KEEPSTATS
-              scheduler_delay,
-#endif
-              sched_sync,
-              buf,
-              status,
-              processing_state
-              );
-        }
-        if (status == e_handling_sched) {
-            safeSend(sched_sync, "continue", 8);
-            status = e_waiting_sched;
-        }
+        if (program_done) { break; }
 
         if (machine.activationRequested()) {
             DBG_PROCESSING << " activation requested\n"

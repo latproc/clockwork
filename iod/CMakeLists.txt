@@ -374,7 +374,6 @@ set (Clockwork_SRCS
     src/handle_command.cpp
     src/handle_hardware.cpp
     src/handle_machines.cpp
-    src/handle_scheduler.cpp
     src/HandleMessageAction.cpp
     src/HandleRequestAction.cpp
     src/IfCommandAction.cpp

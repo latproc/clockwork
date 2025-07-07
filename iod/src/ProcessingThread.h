@@ -143,15 +143,7 @@ class ProcessingThread : public ClockworkProcessManager {
         const std::list<CommandSocketInfo*> & channels,
         long cycle_delay
     );
-    void handle_scheduler(
-#ifdef KEEPSTATS
-        AutoStatStorage &scheduler_delay,
-#endif
-        zmq::socket_t &sched_sync,
-        char *buf,
-        Status &status,
-        ProcessingStates &processing_state
-    );
+
     void handle_hardware(
 #ifdef KEEPSTATS
         AutoStatStorage &avg_update_time,
