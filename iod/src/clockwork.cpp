@@ -351,6 +351,8 @@ MachineClass *makeDigitalValueMachineClass() {
     result->parameters.push_back(Parameter("module"));
     result->parameters.push_back(Parameter("offset"));
     result->addState("idle");
+    result->addState("stable");
+    result->addState("unstable");
     result->default_state = State("idle");
     result->initial_state = State("idle");
     result->disableAutomaticStateChanges();
