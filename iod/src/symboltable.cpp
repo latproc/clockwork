@@ -24,6 +24,7 @@
 #include <iostream>
 #include <iterator>
 #include <utility>
+#include <chrono>
 
 const Value SymbolTable::Null;
 const Value SymbolTable::True(true);
@@ -182,8 +183,9 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         using namespace boost::posix_time;
         Value &res = keywords->find(name);
         if (strcmp("NOW", name) == 0) {
-            uint64_t msecs = (microsecs() + 500) / 1000;
-            res = msecs;
+            auto now = std::chrono::system_clock::now();
+            auto duration_since_epoch = now.time_since_epoch();
+            res = std::chrono::duration_cast<std::chrono::milliseconds>(duration_since_epoch).count();
             return res;
         }
         else if (strcmp("CLOCK", name) == 0) {
