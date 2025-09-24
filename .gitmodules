@@ -2,3 +2,6 @@
 	path = iod/ext/SOEM
 	url = https://github.com/OpenEtherCATsociety/SOEM.git
 	branch = master
+[submodule "iod/ext/cpp-httplib"]
+	path = iod/ext/cpp-httplib
+	url = https://github.com/yhirose/cpp-httplib.git
