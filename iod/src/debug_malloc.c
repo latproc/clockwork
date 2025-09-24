@@ -20,7 +20,7 @@ char *debug_malloc(size_t size, const char *message) {
     return malloc(size);
 }
 
-char *debug_strdup(char *str, const char *message) {
+char *debug_strdup(const char *str, const char *message) {
 #ifdef DEBUG_MALLOC_VERBOSE
     printf("alloc %s\n", message);
 #endif

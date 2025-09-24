@@ -14,7 +14,7 @@ int debug_mallocs_remaining(void);
 void reset_debug_malloc(void);
 
 char *debug_malloc(size_t size, const char *message);
-char *debug_strdup(char *str, const char *message);
+char *debug_strdup(const char *str, const char *message);
 void debug_free(void *block, const char *message);
 
 /* use the following to register mallocs and frees within library code */
