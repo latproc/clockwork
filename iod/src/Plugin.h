@@ -32,6 +32,7 @@ void *getNamedScope(cwpi_Scope, const char *name);
 int getIntValue(cwpi_Scope s, const char *property_name, const int64_t **res);
 char *getStringValue(cwpi_Scope, const char *property_name);
 void setIntValue(cwpi_Scope, const char *property_name, const int64_t new_value);
+void setJsonValue(cwpi_Scope, const char *property_name, const char *new_value);
 void setStringValue(cwpi_Scope, const char *property_name, const char *new_value);
 int changeState(cwpi_Scope, const char *new_state);
 char *getState(cwpi_Scope);

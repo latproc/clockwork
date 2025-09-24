@@ -62,7 +62,6 @@ void setIntValue(cwpi_Scope s, const char *property_name, int64_t new_value) {
     std::string name(property_name);
     scope->setValue(name, new_value);
 }
-
 void setStringValue(cwpi_Scope s, const char *property_name, const char *new_value) {
     MachineInstance *scope = static_cast<MachineInstance *>(s);
     if (!scope) {
@@ -71,6 +70,24 @@ void setStringValue(cwpi_Scope s, const char *property_name, const char *new_val
 
     std::string name(property_name);
     scope->setValue(name, new_value);
+}
+
+void setJsonValue(cwpi_Scope s, const char *property_name, const char *new_value) {
+    MachineInstance *scope = static_cast<MachineInstance *>(s);
+    if (!scope) {
+        return;
+    }
+
+    std::string name(property_name);
+    if (!new_value || strlen(new_value) == 0) { return; }
+    cJSON *json = cJSON_Parse(new_value);
+    if (json) {
+        scope->setValue(name, Value{json});
+    }
+    else {
+        MessageLog::instance()->add("setJsonValue failed to parse ", new_value);
+    }
+
 }
 
 int changeState(cwpi_Scope s, const char *new_state) {
