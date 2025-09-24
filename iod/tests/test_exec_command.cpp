@@ -117,6 +117,9 @@ int main(int, char **) {
         ProcessingThread::create(&machine, iod_activation, *stateMonitor, queue, mqtt_queue));
     processMonitor.setProcessingThreadInstance(&processMonitor);
     boost::thread process(boost::ref(processMonitor));
+    // ProcessingThread requires that there be a SYSTEM machine to set cycle delays.
+    MachineInstance *system = MachineInstanceFactory::create("SYSTEM", "SYSTEMSETTINGS");
+
 
     int result = 0;
     {
