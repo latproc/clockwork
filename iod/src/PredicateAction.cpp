@@ -351,6 +351,8 @@ Action::Status PredicateAction::run() {
             DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name
                              << " to " << val << " (type: " << val.kind_to_string() << ")\n";
             setValue(owner, name, val, predicate);
+            // FIXME: This prevents a double free.
+            if (val.kind == Value::t_json) { val.kind = Value::t_empty; }
             status = Complete;
             owner->stop(this);
             return status;
