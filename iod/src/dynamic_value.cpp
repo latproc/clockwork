@@ -996,7 +996,7 @@ Value &PopListBackValue::operator()(MachineInstance *mi) {
         last_result = false;
         return last_result;
     }
-    size_t i = machine_list->parameters.size() - 1;
+    ssize_t i = machine_list->parameters.size() - 1;
     last_result = false;
     if (i >= 0) {
         last_result = machine_list->parameters[i].val;
