@@ -1772,13 +1772,25 @@ cJSON *Value::asJSON() const {
     return nullptr;
 }
 
-cJSON *Value::getFromJSON(const std::string &key) { // lookup the named property
-    assert(kind == t_json);
-    if (kind != t_json)
-        return nullptr;
-    if (json == nullptr)
-        return nullptr;
-    if (json->type != cJSON_Object)
-        return nullptr;
-    return cJSON_GetObjectItem(json, key.c_str());
+cJSON *getFromJSON(cJSON *json, const std::string &key) { // lookup the named property
+    if (json->type != cJSON_Object) { return nullptr; }
+    cJSON *res = cJSON_GetObjectItem(json, key.c_str());
+    return res;
 }
+
+cJSON *clone_json(cJSON *json) {
+    auto str = cJSON_PrintUnformatted(json);
+    cJSON *res = cJSON_Parse(str);
+    free(str);
+    return res;
+}
+
+Value get_value(cJSON *json) { return assign_value(json); }
+
+Value Value::getFromJSON(const std::string &key) {
+    Value res;
+    if (kind != t_json || !json) { return res; }
+    res = assign_value(::getFromJSON(json, key));
+    return res;
+}
+

@@ -66,6 +66,14 @@ class DynamicValueBase {
 };
 std::ostream &operator<<(std::ostream &, const DynamicValue &);
 
+// Helpers
+// Lookup a property and return it as a cJSON object.
+// The caller does not own the returned value.
+cJSON *clone_json(cJSON *json);
+Value get_value(cJSON *json); // returns a plain value if possible
+Value getFromJSON(const std::string &key);
+cJSON *getFromJSON(cJSON *json, const std::string &key); // lookup the named property
+                                                             //
 class Value {
   public:
     enum Kind {
@@ -119,9 +127,8 @@ class Value {
 
     void toString(); // convert the value to a string from a symbol
     void toSymbol(); // convert the value to a symbol from a string
-    // Lookup a property and return it as a cJSON object.
-    // The caller does not own the returned value.
-    cJSON *getFromJSON(const std::string &key);
+
+    Value getFromJSON(const std::string &key);
 
     Kind kind;
     bool bValue;
