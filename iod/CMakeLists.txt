@@ -100,6 +100,7 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/cJSON.h
 	${CLOCKWORK_DIR}/DebugExtra.h
 	${CLOCKWORK_DIR}/value.h
+    ${CLOCKWORK_DIR}/urlencode.h
 	${CLOCKWORK_DIR}/symboltable.h
 	${CLOCKWORK_DIR}/rate.h
 	${CLOCKWORK_DIR}/watchdog.h
@@ -127,6 +128,7 @@ add_library (cw_client
 	${CLOCKWORK_DIR}/cJSON.c
 	${CLOCKWORK_DIR}/DebugExtra.cpp
 	${CLOCKWORK_DIR}/value.cpp
+    ${CLOCKWORK_DIR}/urlencode.cpp
 	${CLOCKWORK_DIR}/symboltable.cpp
 	${CLOCKWORK_DIR}/rate.cpp
 	${CLOCKWORK_DIR}/Message.cpp

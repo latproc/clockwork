@@ -289,8 +289,12 @@ cJSON *assign(const std::string &str, cJSON *json, double value,
             }
         }
         else {
-            json = number;
+            if (result.value) { cJSON_Delete(result.value); }
+            result.value = number;
         }
+    }
+    else {
+        result.value = number;
     }
     return json;
 }
@@ -309,8 +313,12 @@ cJSON *assign(const std::string &str, cJSON *json, cJSON *value,
             }
         }
         else {
-            json = value;
+            if (result.value) { cJSON_Delete(result.value); }
+            result.value = value;
         }
+    }
+    else {
+        result.value = value;
     }
     return json;
 }
