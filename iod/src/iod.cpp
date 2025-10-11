@@ -554,9 +554,6 @@ int main(int argc, char const *argv[]) {
     //processMonitor();
     try {
         process.join();
-        ethercat.stop();
-        kill(0, SIGTERM);
-        ecat_thread.join();
         return 0;
         MQTTInterface::instance()->stop();
         Scheduler::instance()->stop();
