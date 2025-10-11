@@ -5,6 +5,3 @@
 [submodule "iod/ext/cpp-httplib"]
 	path = iod/ext/cpp-httplib
 	url = https://github.com/yhirose/cpp-httplib.git
-[submodule "iod/ext/ext/cpp-httplib"]
-	path = iod/ext/ext/cpp-httplib
-	url = https://github.com/yhirose/cpp-httplib.git
