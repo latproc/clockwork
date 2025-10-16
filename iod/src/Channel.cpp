@@ -11,7 +11,6 @@
 #include "MessagingInterface.h"
 #include "ProcessingThread.h"
 #include "regular_expressions.h"
-#include "SharedWorkSet.h"
 #include "SocketMonitor.h"
 #include "SyncRemoteStatesAction.h"
 #include "WaitAction.h"
@@ -95,10 +94,10 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
     *buf = nullptr;
     IODCommand *command = parseCommandString(data);
     if (command) {
-        if (command->param(0) == "STATE") {
+        if (command->param(0) == Value{"STATE"}) {
             MachineInstance *m = MachineInstance::find(command->param(1).asString().c_str());
             if (!m->isShadow()) {
-                if (command->numParams() == 4 && command->param(3) == channel->getAuthority()) {
+                if (command->numParams() == 4 && command->param(3) == Value{channel->getAuthority()}) {
                     // do nothing, this is an echo of a command we sent
                     {
                         FileLogger fl(program_name);
@@ -108,14 +107,13 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
                     return false;
                 }
                 else {
-                    char *msg =
+                        std::string msg =
                         MessageEncoding::encodeState(m->getName(), command->param(2).sValue.c_str(),
                                                      (int64_t)channel->getAuthority());
                     delete[] *buf;
-                    len = strlen(msg) + 1;
+                    len = msg.size() + 1;
                     *buf = new char[len];
-                    memcpy(*buf, msg, len);
-                    free(msg);
+                    memcpy(*buf, msg.c_str(), len);
                 }
             }
         }
@@ -191,14 +189,13 @@ Channel::Channel(const std::string &ch_name, const std::string &type)
     if (::machines.find(ch_name) == ::machines.end()) {
         ::machines[ch_name] = this;
     }
-    //markActive(); // this machine performs state changes in the ::idle() processing
 
     // make sure the channel is in the LIST of channels
     if (::machines.find("CHANNELS") != ::machines.end()) {
         MachineInstance *channel_list = ::machines["CHANNELS"];
         size_t i, n = channel_list->parameters.size();
         for (i = 0; i < n; i++) {
-            if (channel_list->parameters.at(i).val == ch_name) {
+            if (channel_list->parameters.at(i).val == Value{ch_name}) {
                 break;
             }
         }
@@ -225,7 +222,7 @@ void Channel::addSocket(int route_id, const char *addr) {
     internals->router.addRoute(route_id, ZMQ_PAIR, addr);
 }
 
-void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &messages) {
+void Channel::syncInterfaceProperties(MachineInstance *m, std::list<std::string> &messages) {
     if (!definition()->hasFeature(ChannelDefinition::ReportPropertyChanges)) {
         DBG_CHANNELS << "ReportPropertyChanges not set for " << channel_name << " not syncing properties\n";
         return;
@@ -263,8 +260,8 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
                 const std::string &s = *props++;
                 Value v = m->getValue(s);
                 if (v != SymbolTable::Null) {
-                    char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v,
-                                                               definition()->getAuthority());
+                        std::string cmd = MessageEncoding::encodeCommand("PROPERTY", Value{m->getName()}, Value{s}, v,
+                                                               Value{definition()->getAuthority()});
                     messages.push_back(cmd);
                 }
                 else {
@@ -279,7 +276,7 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
     }
 }
 
-bool Channel::syncRemoteStates(std::list<char *> &messages) {
+bool Channel::syncRemoteStates(std::list<std::string> &messages) {
     DBG_CHANNELS << "Channel " << channel_name << " syncRemoteStates " << current_state << "\n";
     // publishers do not initially send the state of all machines
     if (definition()->isPublisher()) {
@@ -298,7 +295,7 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
                     std::string state(m->getCurrentStateString());
                     DBG_CHANNELS << "Machine " << m->getName() << " current state: " << state
                                  << "\n";
-                    char *msg = MessageEncoding::encodeState(m->getName(), state, authority);
+                    std::string msg = MessageEncoding::encodeState(m->getName(), state, authority);
                     messages.push_back(msg);
                 }
             }
@@ -322,7 +319,7 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
                     const char *state = m->getCurrentStateString();
                     char buf[200];
                     if (cmd_client) {
-                        char *msg = MessageEncoding::encodeState(m->getName(), state,
+                        auto msg = MessageEncoding::encodeState(m->getName(), state,
                                                                  definition()->authority);
                         messages.push_back(msg);
                         //std::string response;
@@ -419,7 +416,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
                      channel_name.c_str());
             MessageLog::instance()->add(buf);
             DBG_CHANNELS << buf << "\n";
-            SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING");
+            SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"DOWNLOADING"});
             enqueueAction(
                 ssat.factory(this)); // execute this state change once all other actions are done
         }
@@ -574,14 +571,14 @@ void Channel::addConnection() {
     if (connections == 1) {
         if (isClient()) {
             if (definition()->isPublisher()) {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"ACTIVE"});
                 enqueueAction(ssat.factory(
                     this)); // execute this state change once all other actions are complete
             }
             else {
                 WaitActionTemplate *wat = new WaitActionTemplate(50);
                 SetStateActionTemplate *ssat_connected =
-                    new SetStateActionTemplate(CStringHolder("SELF"), "CONNECTED");
+                    new SetStateActionTemplate(CStringHolder("SELF"), Value{"CONNECTED"});
                 MachineCommandTemplate mc("download_channel_state", "");
                 mc.setActionTemplate(wat);
                 mc.setActionTemplate(ssat_connected);
@@ -593,11 +590,11 @@ void Channel::addConnection() {
         }
         else {
             if (definition()->isPublisher()) {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"ACTIVE"});
                 enqueueAction(ssat.factory(this));
             }
             else {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "WAITSTART");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"WAITSTART"});
                 enqueueAction(ssat.factory(this));
             }
         }
@@ -612,7 +609,7 @@ void Channel::addConnection() {
                << " when in state: " << current_state << "; now waiting for start";
             MessageLog::instance()->add(ss.str());
             DBG_CHANNELS << buf << "\n";
-            SetStateActionTemplate ssat(CStringHolder("SELF"), "WAITSTART");
+            SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"WAITSTART"});
             enqueueAction(ssat.factory( this));
         }
     }
@@ -632,7 +629,7 @@ void Channel::dropConnection() {
     --connections;
 
     if (!connections) {
-        SetStateActionTemplate ssat(CStringHolder("SELF"), "DISCONNECTED");
+        SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"DISCONNECTED"});
         enqueueAction(
             ssat.factory(this)); // execute this state change once all other actions are complete
     }
@@ -1397,7 +1394,7 @@ void ChannelDefinition::instantiateInterfaces() {
                     MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
                     m->setProperties(mc->getProperties());
                     m->setStateMachine(mc);
-                    m->setValue("startup_enabled", false);
+                    m->setValue("startup_enabled", Value{false});
                     machines[instance_name.first] = m;
                     ::machines[instance_name.first] = m;
                 }
@@ -1426,7 +1423,7 @@ void ChannelDefinition::instantiateInterfaces() {
                     MachineClass *mc = MachineClass::find(instance_name.second.asString().c_str());
                     m->setProperties(mc->getProperties());
                     m->setStateMachine(mc);
-                    m->setValue("startup_enabled", false);
+                    m->setValue("startup_enabled", Value{false});
                     machines[instance_name.first] = m;
                     ::machines[instance_name.first] = m;
                 }
@@ -1618,7 +1615,7 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
     }
     if (communications_manager) {
         std::string response;
-        char *cmd = 0;
+        std::string cmd;
         if (!definition()->isPublisher()) {
 
             if (m->isShadow() && m->ownerChannel() == this) {
@@ -1628,8 +1625,8 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                 if (!m->getStateMachine()->property_names.count(key.asString())) {
                     return; //ignore properties no in the interface definition
                 }
-                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val,
-                                                     (int64_t)auth);
+                cmd = MessageEncoding::encodeCommand("PROPERTY", Value{channel_name}, key, val,
+                                                     Value{(int64_t)auth});
             }
             else {
                 //NB_MSG << "using authority " << getAuthority()
@@ -1640,18 +1637,18 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                     return; //ignore properties no in the interface definition
                 }
 
-                cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val,
-                                                     definition()->getAuthority());
+                cmd = MessageEncoding::encodeCommand("PROPERTY", Value{channel_name}, key, val,
+                                                     Value{definition()->getAuthority()});
             }
         }
         else { // publishers do not use the authority system
-            cmd = MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val);
+            cmd = MessageEncoding::encodeCommand("PROPERTY", Value{channel_name}, key, val);
         }
         MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
         mh.start_time = microsecs();
         if (isClient()) {
             if (communications_manager->setupStatus() == SubscriptionManager::e_done) {
-                safeSend(*cmd_client, cmd, strlen(cmd), mh);
+                safeSend(*cmd_client, cmd.c_str(), cmd.size(), mh);
             }
             else {
                 DBG_CHANNELS << "Not sending '" << cmd
@@ -1659,11 +1656,11 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
             }
         }
         else if (communications_manager) {
-            safeSend(*cmd_client, cmd, strlen(cmd), mh);
+            safeSend(*cmd_client, cmd.c_str(), cmd.size(), mh);
         }
         else if (mif) {
             //mif->send(cmd);
-            safeSend(*mif->getSocket(), cmd, strlen(cmd), mh);
+            safeSend(*mif->getSocket(), cmd.c_str(), cmd.size(), mh);
         }
         else {
             char buf[150];
@@ -1671,16 +1668,13 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
                      m->getName().c_str(), key.asString().c_str());
             MessageLog::instance()->add(buf);
         }
-        free(cmd);
     }
     else if (mif) {
         MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
         mh.start_time = microsecs();
-        char *cmd =
-            MessageEncoding::encodeCommand("PROPERTY", channel_name, key, val); // send command
-        safeSend(*mif->getSocket(), cmd, strlen(cmd), mh);
-        //mif->send(cmd);
-        free(cmd);
+        std::string cmd =
+            MessageEncoding::encodeCommand("PROPERTY", Value{channel_name}, key, val); // send command
+        safeSend(*mif->getSocket(), cmd.c_str(), cmd.size(), mh);
     }
 }
 
@@ -2002,7 +1996,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
         return;
     }
     std::string machine_name = machine->fullName();
-    char *cmdstr = 0;
+    std::string cmdstr;
 
     std::map<std::string, Channel *>::iterator iter = all->begin();
     while (iter != all->end()) {
@@ -2047,14 +2041,14 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
                 std::string response;
                 MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                 mh.start_time = microsecs();
-                safeSend(*chn->cmd_client, cmdstr, strlen(cmdstr), mh);
+                safeSend(*chn->cmd_client, cmdstr.c_str(), cmdstr.size(), mh);
                 //chn->sendMessage(cmdstr, *chn->cmd_client, response);
             }
             else if (chn->communications_manager &&
                      chn->communications_manager->setupStatus() == SubscriptionManager::e_done) {
                 MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                 mh.start_time = microsecs();
-                safeSend(*chn->cmd_client, cmdstr, strlen(cmdstr), mh);
+                safeSend(*chn->cmd_client, cmdstr, mh);
             }
             else if (chn->mif) {
 #if 0
@@ -2062,7 +2056,7 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
 #else
                 MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                 mh.start_time = microsecs();
-                safeSend(*chn->mif->getSocket(), cmdstr, strlen(cmdstr), mh);
+                safeSend(*chn->mif->getSocket(), cmdstr, mh);
 #endif
             }
             else {
@@ -2072,7 +2066,6 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
                          machine->getName().c_str());
                 MessageLog::instance()->add(buf);
             }
-            free(cmdstr);
         }
         else {
             DBG_CHANNELS << "filters do not allow " << machine_name << "\n";
@@ -2089,7 +2082,7 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
     MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance *>(machine);
 
     std::string machine_name = machine->fullName();
-    char *cmdstr = 0;
+    std::string cmdstr;
 
     Channel *chn = this;
     if (current_state == ChannelImplementation::DISCONNECTED) {
@@ -2126,7 +2119,7 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
             std::string response;
             MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
             mh.start_time = microsecs();
-            safeSend(*cmd_client, cmdstr, strlen(cmdstr), mh);
+            safeSend(*cmd_client, cmdstr, mh);
         }
         else if (communications_manager &&
                  communications_manager->setupStatus() == SubscriptionManager::e_done) {
@@ -2135,17 +2128,17 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
                 std::string response;
                 MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                 mh.start_time = microsecs();
-                safeSend(*cmd_client, cmdstr, strlen(cmdstr), mh);
+                safeSend(*cmd_client, cmdstr, mh);
                 //DBG_CHANNELS << tnam << ": channel " << chn->channel_name << " got response: " << response << "\n";
             }
             else {
                 MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                 mh.start_time = microsecs();
-                safeSend(*cmd_client, cmdstr, strlen(cmdstr), mh);
+                safeSend(*cmd_client, cmdstr, mh);
             }
         }
         else if (mif) {
-            mif->send(cmdstr);
+            mif->send(cmdstr.c_str());
         }
         else {
             char buf[150];
@@ -2153,7 +2146,6 @@ void Channel::requestStateChange(MachineInstance *machine, std::string new_state
                      machine->getName().c_str());
             MessageLog::instance()->add(buf);
         }
-        free(cmdstr);
     }
     else {
         DBG_CHANNELS << "filters do not allow " << machine_name << "\n";
@@ -2183,25 +2175,29 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
             assert(false);
             return; // there should be no way for modbus updates to go to shadows
         }
-        char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+        std::string cmd;
+        if (params) { cmd = MessageEncoding::encodeCommand(command, *params); }// send command
+        else {
+            std::list<Value> empty;
+            cmd = MessageEncoding::encodeCommand(command, empty); // send command
+        }
         DBG_CHANNELS << "Channel " << chn->channel_name << " sending " << cmd << "\n";
         MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
         mh.start_time = microsecs();
         //chn->sendMessage(cmd, *chn->cmd_server, response, mh);//setup()
         if (!chn->isClient() && chn->communications_manager) {
-            safeSend(*chn->cmd_client, cmd, strlen(cmd), mh);
+            safeSend(*chn->cmd_client, cmd, mh);
         }
         else if (chn->communications_manager &&
                  chn->communications_manager->setupStatus() == SubscriptionManager::e_done) {
-            safeSend(*chn->cmd_client, cmd, strlen(cmd), mh);
+            safeSend(*chn->cmd_client, cmd, mh);
         }
         else {
-            char buf[150];
-            snprintf(buf, 150, "Warning: machine %s wanted to send '%s' but couldn't\n",
-                     machine->getName().c_str(), cmd);
-            MessageLog::instance()->add(buf);
+            std::stringstream ss;
+            ss << "Warning: machine " << machine->getName() << " wanted to send '" << cmd
+               << "' but couldn't\n";
+            MessageLog::instance()->add(ss.str());
         }
-        free(cmd);
     }
     else {
         DBG_CHANNELS << " sending " << command << " to channels that monitor " << machine->getName()
@@ -2227,22 +2223,33 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
                     (chn->isClient() && chn->communications_manager &&
                      chn->communications_manager->setupStatus() == SubscriptionManager::e_done)) {
                     std::string response;
-                    char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+                    std::string cmd;
+                    if (params) {
+                        cmd = MessageEncoding::encodeCommand(command, *params); // send command
+                    }
+                    else {
+                        std::list<Value> empty;
+                        cmd = MessageEncoding::encodeCommand(command, empty); // send command
+                    }
                     DBG_CHANNELS << "Channel " << chn->channel_name << " sending " << cmd << "\n";
                     MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                     mh.start_time = microsecs();
                     //chn->sendMessage(cmd, *chn->cmd_server, response, mh);//setup()
-                    safeSend(*chn->cmd_server, cmd, strlen(cmd), mh);
-                    free(cmd);
+                    safeSend(*chn->cmd_server, cmd, mh);
                 }
                 else if (chn->mif) {
-                    char *cmd = MessageEncoding::encodeCommand(command, params); // send command
+                    std::string cmd;
+                    if (params) {
+                        cmd = MessageEncoding::encodeCommand(command, *params); // send command
+                    }
+                    else {
+                        std::list<Value> empty;
+                        cmd = MessageEncoding::encodeCommand(command, empty); // send command
+                    }
                     DBG_CHANNELS << "Channel " << chn->channel_name << " sending " << cmd << "\n";
                     MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                     mh.start_time = microsecs();
-                    safeSend(*chn->mif->getSocket(), cmd, strlen(cmd), mh);
-                    //chn->mif->send(cmd);
-                    free(cmd);
+                    safeSend(*chn->mif->getSocket(), cmd, mh);
                 }
                 else {
                     char buf[150];

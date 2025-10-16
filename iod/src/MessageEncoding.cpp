@@ -27,6 +27,18 @@
 #include <math.h>
 #include <string.h>
 #include <string>
+#include <sstream>
+
+namespace {
+
+    cJSON *cJSON_Duplicate(cJSON *json) {
+        char *str = cJSON_PrintUnformatted(json);
+        cJSON *res = cJSON_Parse(str);
+        free(str);
+        return res;
+    }
+
+}
 
 std::string MessageEncoding::valueType(const Value &v) {
     switch (v.kind) {
@@ -41,6 +53,8 @@ std::string MessageEncoding::valueType(const Value &v) {
         return "FLOAT";
     case Value::t_bool:
         return "BOOL";
+    case Value::t_json:
+        return "JSON";
 #ifdef DYNAMIC_VALUES
     case Value::t_dynamic: {
         DynamicValue *dv = v.dynamicValue();
@@ -68,6 +82,18 @@ void MessageEncoding::addValueToJSONObject(cJSON *obj, const char *name, const V
     case Value::t_float:
         cJSON_AddItemToObject(obj, name, cJSON_CreateDouble(val.fValue));
         break;
+    case Value::t_json:
+    {
+        if (val.json == nullptr) {
+            cJSON_AddNullToObject(obj, name);
+        }
+        else if (val.json->type == cJSON_Object) {
+            cJSON_AddItemToObject(obj, name, cJSON_Duplicate(val.json));
+        }
+        else if (val.json->type == cJSON_Array) {
+            cJSON_AddItemToObject(obj, name, cJSON_Duplicate(val.json));
+        }
+    }
     case Value::t_bool:
         if (val.bValue) {
             cJSON_AddTrueToObject(obj, name);
@@ -114,6 +140,18 @@ void MessageEncoding::addValueToJSONArray(cJSON *obj, const Value &val) {
             cJSON_AddItemToArray(obj, cJSON_CreateFalse());
         }
         break;
+    case Value::t_json:
+    {
+        if (val.json == nullptr) {
+            cJSON_AddItemToArray(obj, cJSON_CreateNull());
+        }
+        else if (val.json->type == cJSON_Object) {
+            cJSON_AddItemToArray(obj, cJSON_Duplicate(val.json));
+        }
+        else if (val.json->type == cJSON_Array) {
+            cJSON_AddItemToArray(obj, cJSON_Duplicate(val.json));
+        }
+    }
 #ifdef DYNAMIC_VALUES
     case Value::t_dynamic: {
         DynamicValue *dv = val.dynamicValue();
@@ -132,27 +170,28 @@ void MessageEncoding::addValueToJSONArray(cJSON *obj, const Value &val) {
     }
 }
 
-char *MessageEncoding::encodeCommand(std::string cmd, std::list<Value> *params) {
+std::string MessageEncoding::encodeCommand(std::string cmd, const std::list<Value> &params) {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "command", cmd.c_str());
     cJSON *cjParams = cJSON_CreateArray();
-    if (params)
-        for (std::list<Value>::const_iterator iter = params->begin(); iter != params->end();) {
-            const Value &val = *iter++;
-            if (val != SymbolTable::Null) {
-                cJSON *cjItem = cJSON_CreateObject();
-                cJSON_AddStringToObject(cjItem, "type", valueType(val).c_str());
-                addValueToJSONObject(cjItem, "value", val);
-                cJSON_AddItemToArray(cjParams, cjItem);
-            }
+    for (std::list<Value>::const_iterator iter = params.begin(); iter != params.end();) {
+        const Value &val = *iter++;
+        if (val != SymbolTable::Null) {
+            cJSON *cjItem = cJSON_CreateObject();
+            cJSON_AddStringToObject(cjItem, "type", valueType(val).c_str());
+            addValueToJSONObject(cjItem, "value", val);
+            cJSON_AddItemToArray(cjParams, cjItem);
         }
+    }
     cJSON_AddItemToObject(msg, "params", cjParams);
     char *res = cJSON_PrintUnformatted(msg);
+    std::string result{res};
+    free(res);
     cJSON_Delete(msg);
-    return res;
+    return result;
 }
 
-char *MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value p3, Value p4) {
+std::string MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value p3, Value p4) {
     std::list<Value> params;
     if (p1 != SymbolTable::Null) {
         params.push_back(p1);
@@ -166,56 +205,45 @@ char *MessageEncoding::encodeCommand(std::string cmd, Value p1, Value p2, Value 
     if (p4 != SymbolTable::Null) {
         params.push_back(p4);
     }
-    return encodeCommand(cmd, &params);
+    return encodeCommand(cmd, params);
 }
 
-char *MessageEncoding::encodeState(const std::string &machine, const std::string &state,
+std::string MessageEncoding::encodeCommand(std::string cmd,
+                    boost::optional<std::string> p1,
+                    boost::optional<std::string> p2,
+                    boost::optional<std::string> p3,
+                    boost::optional<std::string> p4) {
+    std::list<Value> params;
+    if (p1) { params.push_back(Value{*p1}); }
+    if (p2) { params.push_back(Value{*p2}); }
+    if (p3) { params.push_back(Value{*p3}); }
+    if (p4) { params.push_back(Value{*p4}); }
+    return encodeCommand(cmd, params);
+}
+
+std::string MessageEncoding::encodeState(const std::string &machine, const std::string &state,
                                    uint64_t authority) {
-    size_t msglen = machine.length() + state.length() + 80;
-    char *buf = (char *)malloc(msglen);
-    snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\", %" PRId64 "]} ",
-             machine.c_str(), state.c_str(), authority);
-    return buf;
-    /*
-        cJSON *msg = cJSON_CreateObject();
-        cJSON_AddStringToObject(msg, "command", "STATE");
-        cJSON *cjParams = cJSON_CreateArray();
-        cJSON_AddItemToArray(cjParams, cJSON_CreateString(machine.c_str()));
-        cJSON_AddItemToArray(cjParams, cJSON_CreateString(state.c_str()));
-        cJSON_AddItemToArray(cjParams, cJSON_CreateLong(authority));
-        cJSON_AddItemToObject(msg, "params", cjParams);
-        char *res = cJSON_PrintUnformatted(msg);
-        cJSON_Delete(msg);
-        return res;
-    */
+    std::stringstream ss;
+    ss << "{\"command\":\"STATE\", \"params\":[\"" <<machine << "\", \"" << state << "\", "
+            << authority << "]} ";
+    return ss.str();
 }
 
-char *MessageEncoding::encodeState(const std::string &machine, const std::string &state) {
+std::string MessageEncoding::encodeState(const std::string &machine, const std::string &state) {
+    std::stringstream ss;
+    ss << "{\"command\":\"STATE\", \"params\":[\"" <<machine << "\", \"" << state << "\"]} ";
     size_t msglen = machine.length() + state.length() + 50;
-    char *buf = (char *)malloc(msglen);
-    snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\"]}", machine.c_str(),
-             state.c_str());
-    return buf;
-    /*
-        cJSON *msg = cJSON_CreateObject();
-        cJSON_AddStringToObject(msg, "command", "STATE");
-        cJSON *cjParams = cJSON_CreateArray();
-        cJSON_AddItemToArray(cjParams, cJSON_CreateString(machine.c_str()));
-        cJSON_AddItemToArray(cjParams, cJSON_CreateString(state.c_str()));
-        cJSON_AddItemToArray(cjParams, cJSON_CreateLong(authority));
-        cJSON_AddItemToObject(msg, "params", cjParams);
-        char *res = cJSON_PrintUnformatted(msg);
-        cJSON_Delete(msg);
-        return res;
-    */
+    return ss.str();
 }
 
-char *MessageEncoding::encodeError(const char *error) {
+std::string MessageEncoding::encodeError(const char *error) {
     cJSON *msg = cJSON_CreateObject();
     cJSON_AddStringToObject(msg, "error", error);
     char *res = cJSON_PrintUnformatted(msg);
     cJSON_Delete(msg);
-    return res;
+    std::string result{res};
+    free(res);
+    return result;
 }
 
 Value MessageEncoding::valueFromJSONObject(cJSON *obj, cJSON *cjType) {
@@ -255,6 +283,12 @@ Value MessageEncoding::valueFromJSONObject(cJSON *obj, cJSON *cjType) {
         else {
             res = obj->valueNumber.val._double;
         }
+    }
+    else if (obj->type == cJSON_Object) {
+        res = cJSON_Duplicate(obj);
+    }
+    else if (obj->type == cJSON_Array) {
+        res = cJSON_Duplicate(obj);
     }
     else {
         res = SymbolTable::Null;

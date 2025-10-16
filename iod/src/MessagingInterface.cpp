@@ -21,12 +21,11 @@
 #include "MessagingInterface.h"
 #include "DebugExtra.h"
 #include "Logger.h"
-#include "cJSON.h"
-#include <assert.h>
+#include <cassert>
 #include <exception>
 #include <iostream>
 #include <map>
-#include <math.h>
+#include <cmath>
 #include <zmq.hpp>
 #ifdef DYNAMIC_VALUES
 #include "dynamic_value.h"
@@ -36,15 +35,13 @@
 #include "MessageEncoding.h"
 #include "MessageLog.h"
 #include "anet.h"
-#include "options.h"
-#include "string.h"
-#include "symboltable.h"
+#include <cstring>
 
 const char *program_name;
-static std::string STATE_ERROR("Operation cannot be accomplished in current state");
+const std::string STATE_ERROR{"Operation cannot be accomplished in current state"};
 
-MessagingInterface *MessagingInterface::current = 0;
-zmq::context_t *MessagingInterface::zmq_context = 0;
+MessagingInterface *MessagingInterface::current = nullptr;
+zmq::context_t *MessagingInterface::zmq_context = nullptr;
 std::map<std::string, MessagingInterface *> MessagingInterface::interfaces;
 bool MessagingInterface::abort_all = false;
 
@@ -130,7 +127,7 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
             return (*response_len == 0) ? false : true;
         }
         catch (const zmq::error_t &e) {
-            std::cerr << thread_name() << " safeRecv error " << errno << " " << zmq_strerror(errno)
+            std::cerr << thread_name() << " " << e.what() << " safeRecv error " << errno << " " << zmq_strerror(errno)
                       << "\n";
             if (errno == EINTR) {
                 {
@@ -164,13 +161,12 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
             if (!n && block) {
                 continue;
             }
-            bool got_response = false;
             if (items[0].revents & ZMQ_POLLIN) {
 
                 bool done = false;
                 zmq::message_t message;
                 while (!done) {
-                    if ((got_response = sock.recv(&message, ZMQ_DONTWAIT))) {
+                    if (sock.recv(&message, ZMQ_DONTWAIT)) {
                         if (message.more() && message.size() == sizeof(MessageHeader)) {
                             memcpy(&header, message.data(), sizeof(MessageHeader));
                             continue;
@@ -181,20 +177,16 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
                         (*buf)[*response_len] = 0;
                         return true;
                     }
-                    else {
-                        if (!block) {
-                            done = true;
-                        }
+                    if (!block) {
+                        done = true;
                     }
                 }
                 return (*response_len == 0) ? false : true;
             }
-            else {
-                return false;
-            }
+            return false;
         }
         catch (const zmq::error_t &e) {
-            std::cerr << thread_name() << " safeRecv error " << errno << " " << zmq_strerror(errno)
+            std::cerr << thread_name() << " " << e.what() << " safeRecv error " << errno << " " << zmq_strerror(errno)
                       << "\n";
             if (errno == EINTR) {
                 {
@@ -245,7 +237,7 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
         catch (const zmq::error_t &e) {
             {
                 FileLogger fl(program_name);
-                fl.f() << thread_name() << " safeRecv error " << errno << " " << zmq_strerror(errno)
+                fl.f() << thread_name() << " " << e.what() << " safeRecv error " << errno << " " << zmq_strerror(errno)
                        << "\n";
             }
             if (--retries == 0) {
@@ -264,8 +256,12 @@ bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &re
     return false;
 }
 
+void safeSend(zmq::socket_t &sock, const std::string &buf, const MessageHeader &header) {
+    safeSend(sock, buf.c_str(), buf.size(), header);
+}
+
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const MessageHeader &header) {
-    enum send_stage { e_sending_dest, e_sending_source, e_sending_data } stage = e_sending_data;
+    enum send_stage { e_sending_source, e_sending_data } stage = e_sending_data;
     if (header.dest || header.source) {
         stage = e_sending_source;
     }
@@ -279,11 +275,10 @@ void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const Message
                 sock.send(msg, ZMQ_SNDMORE);
                 stage = e_sending_data;
             }
-            if (stage == e_sending_data) {
-                zmq::message_t msg(buflen);
-                memcpy(msg.data(), buf, buflen);
-                sock.send(msg);
-            }
+            assert(stage == e_sending_data);
+            zmq::message_t msg(buflen);
+            memcpy(msg.data(), buf, buflen);
+            sock.send(msg);
             break;
         }
         catch (const zmq::error_t &) {
@@ -362,8 +357,8 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, in
     return false;
 }
 
-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us) {
-    safeSend(sock, msg, strlen(msg));
+bool sendMessage(const std::string &msg, zmq::socket_t &sock, std::string &response, int32_t timeout_us) {
+    safeSend(sock, msg.c_str(), msg.size());
 
     char *buf = nullptr;
     size_t len = 0;
@@ -377,17 +372,15 @@ bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response, in
 
 void MessagingInterface::setContext(zmq::context_t *ctx) {
     zmq_context = ctx;
-    assert(zmq_context);
 }
 
-MessagingInterface *MessagingInterface::create(std::string host, int port, ProtocolType proto) {
+MessagingInterface *MessagingInterface::create(const std::string &host, int port, ProtocolType proto) {
     std::stringstream ss;
     ss << host << ":" << port;
     std::string id = ss.str();
     if (interfaces.count(id) == 0) {
         DBG_CHANNELS << "creating new interface to " << id << "\n";
-        MessagingInterface *res =
-            new MessagingInterface(host, port, MessagingInterface::IMMEDIATE_START, proto);
+        auto *res = new MessagingInterface(host, port, MessagingInterface::IMMEDIATE_START, proto);
         interfaces[id] = res;
         return res;
     }
@@ -399,7 +392,7 @@ MessagingInterface *MessagingInterface::create(std::string host, int port, Proto
 
 MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred_start,
                                        ProtocolType proto)
-    : Receiver("messaging_interface"), protocol(proto), socket(0), is_publisher(false),
+    : Receiver("messaging_interface"), protocol(proto), socket(nullptr), is_publisher(false),
       connection(-1), port(port_), owner_thread(0), started_(false) {
     owner_thread = pthread_self();
     is_publisher = true;
@@ -442,11 +435,11 @@ void MessagingInterface::start() {
 
 void MessagingInterface::stop() { started_ = false; }
 
-bool MessagingInterface::started() { return started_; }
+bool MessagingInterface::started() const { return started_; }
 
-MessagingInterface::MessagingInterface(std::string host, int remote_port, bool deferred,
+MessagingInterface::MessagingInterface(const std::string & host, int remote_port, bool deferred,
                                        ProtocolType proto)
-    : Receiver("messaging_interface"), protocol(proto), socket(0), is_publisher(false),
+    : Receiver("messaging_interface"), protocol(proto), socket(nullptr), is_publisher(false),
       connection(-1), hostname(host), port(remote_port), owner_thread(0), started_(false) {
     std::stringstream ss;
     ss << "tcp://" << host << ":" << port;
@@ -497,7 +490,7 @@ int MessagingInterface::uniquePort(unsigned int start, unsigned int end) {
             DBG_CHANNELS << "found available port " << res << "\n";
             break;
         }
-        catch (const zmq::error_t &err) {
+        catch (const zmq::error_t &) {
             if (zmq_errno() != EADDRINUSE) {
                 res = 0;
                 break;
@@ -544,8 +537,8 @@ MessagingInterface::~MessagingInterface() {
         }
         connection = -1;
     }
-    if (MessagingInterface::current == this) {
-        MessagingInterface::current = 0;
+    if (current == this) {
+        current = nullptr;
     }
     socket->disconnect(url.c_str());
     delete socket;
@@ -557,6 +550,10 @@ void MessagingInterface::handle(const Message &msg, Transmitter *from, bool need
     if (response) {
         free(response);
     }
+}
+
+void MessagingInterface::handle(const Message &msg, Transmitter *from) {
+    handle(msg, from, false);
 }
 
 char *MessagingInterface::send(const char *txt) {
@@ -686,13 +683,20 @@ char *MessagingInterface::send(const char *txt) {
             }
         }
     }
-    return 0;
+    return nullptr;
 }
 
 char *MessagingInterface::send(const Message &msg) {
-    char *text = MessageEncoding::encodeCommand(msg.getText(), msg.getParams());
-    char *res = send(text);
-    free(text);
+    auto params = msg.getParams();
+    std::string text;
+    if (params) {
+        text = MessageEncoding::encodeCommand(msg.getText(), *params);
+    }
+    else {
+        std::list<Value> empty_params;
+        text = MessageEncoding::encodeCommand(msg.getText(), empty_params);
+    }
+    char *res = send(text.c_str());
     return res;
 }
 
@@ -718,9 +722,16 @@ bool MessagingInterface::send_raw(const char *msg) {
     return true;
 }
 char *MessagingInterface::sendCommand(std::string cmd, std::list<Value> *params) {
-    char *request = MessageEncoding::encodeCommand(cmd, params);
-    char *response = send(request);
-    free(request);
+    char *response = nullptr;
+    std::string request;
+    if (params) {
+        request = MessageEncoding::encodeCommand(cmd, *params);
+    }
+    else {
+        std::list<Value> empty_params;
+        request = MessageEncoding::encodeCommand(cmd, empty_params);
+    }
+    response = send(request.c_str());
     return response;
 }
 
@@ -744,23 +755,8 @@ char *MessagingInterface::sendCommand(std::string cmd, Value p1, Value p2, Value
     return sendCommand(cmd, &params);
 }
 
-char *MessagingInterface::sendState(std::string cmd, std::string name, std::string state_name) {
-    size_t msglen = name.length() + state_name.length() + 50;
-    char *buf = (char *)malloc(msglen);
-    snprintf(buf, msglen, "{\"command\":\"STATE\", \"params\":[\"%s\", \"%s\"]}", name.c_str(),
-             state_name.c_str());
-    return buf;
-    /*
-        cJSON *msg = cJSON_CreateObject();
-        cJSON_AddStringToObject(msg, "command", cmd.c_str());
-        cJSON *cjParams = cJSON_CreateArray();
-        cJSON_AddStringToObject(cjParams, "name", name.c_str());
-        cJSON_AddStringToObject(cjParams, "state", state_name.c_str());
-        cJSON_AddItemToObject(msg, "params", cjParams);
-        char *request = cJSON_PrintUnformatted(msg);
-        cJSON_Delete(msg);
-        char *response = send(request);
-        free (request);
-        return response;
-    */
+std::string MessagingInterface::sendState(const std::string &cmd, const std::string &name, const std::string &state_name) {
+    std::stringstream ss;
+    ss << "{\"command\":\"STATE\", \"params\":[\"" << name << "\", \"" << state_name << "\"]}";
+    return ss.str();
 }

@@ -33,9 +33,9 @@ Action *SyncRemoteStatesActionTemplate::factory(MachineInstance *mi) {
 
 class SyncRemoteStatesActionInternals {
   public:
-    std::list<char *> messages; // encoded messages (free() required on completion)
+    std::list<std::string> messages; // encoded messages (free() required on completion)
     MessageHeader header;
-    std::list<char *>::iterator *iter;
+    std::list<std::string>::iterator *iter;
     Channel *chn;
     zmq::socket_t *sock;
 
@@ -70,7 +70,7 @@ Action::Status SyncRemoteStatesAction::execute() {
         status = Running;
         internals->process_state = SyncRemoteStatesActionInternals::ps_sending_messages;
         if (chn->syncRemoteStates(internals->messages)) {
-            internals->iter = new std::list<char *>::iterator(internals->messages.begin());
+            internals->iter = new std::list<std::string>::iterator(internals->messages.begin());
             if (*internals->iter != internals->messages.end()) {
                 internals->message_state = SyncRemoteStatesActionInternals::e_sending;
             }
@@ -91,12 +91,11 @@ Action::Status SyncRemoteStatesAction::execute() {
             internals->message_state = SyncRemoteStatesActionInternals::e_done;
         }
         if (internals->message_state == SyncRemoteStatesActionInternals::e_sending) {
-            char *current_message = *(*internals->iter);
+                std::string current_message = *(*internals->iter);
 
             internals->header.needReply(false);
             internals->header.start_time = microsecs();
-            safeSend(*internals->sock, current_message, strlen(current_message), internals->header);
-            free(current_message);
+            safeSend(*internals->sock, current_message, internals->header);
             *internals->iter = internals->messages.erase(*internals->iter);
             internals->message_state = SyncRemoteStatesActionInternals::e_receiving;
             // skip receiving temporarily
@@ -149,13 +148,13 @@ Action::Status SyncRemoteStatesAction::execute() {
             // execute a state change once all other actions are
 
             if (chn->isClient()) {
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "ACTIVE");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"ACTIVE"});
                 SetStateAction *ssa = (SetStateAction *)ssat.factory(chn);
                 chn->enqueueAction(ssa);
             }
             else {
 
-                SetStateActionTemplate ssat(CStringHolder("SELF"), "DOWNLOADING");
+                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"DOWNLOADING"});
                 chn->enqueueAction(ssat.factory(chn));
             }
             return status;

@@ -48,6 +48,7 @@ enum ProtocolType { eCLOCKWORK, eRAW, eZMQ, eCHANNEL };
 
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen);
 void safeSend(zmq::socket_t &sock, const char *buf, size_t buflen, const MessageHeader &header);
+void safeSend(zmq::socket_t &sock, const std::string &buf, const MessageHeader &header);
 
 bool safeRecv(zmq::socket_t &sock, char *buf, int buflen, bool block, size_t &response_len,
               int64_t timeout);
@@ -56,8 +57,8 @@ bool safeRecv(zmq::socket_t &sock, char **buf, size_t *response_len, bool block,
               MessageHeader &hdr);
 
 bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
-                 const MessageHeader &header, int32_t timeout_us = 0);
-bool sendMessage(const char *msg, zmq::socket_t &sock, std::string &response,
+                 int32_t timeout_us, const MessageHeader &header);
+bool sendMessage(const std::string &msg, zmq::socket_t &sock, std::string &response,
                  int32_t timeout_us = 0);
 
 class MessagingInterface : public Receiver {
@@ -66,11 +67,11 @@ class MessagingInterface : public Receiver {
     static const bool IMMEDIATE_START = false;
 
     MessagingInterface(int num_threads, int port, bool deferred_start, ProtocolType proto = eZMQ);
-    MessagingInterface(std::string host, int port, bool deferred_start, ProtocolType proto = eZMQ);
+    MessagingInterface(const std::string & host, int port, bool deferred_start, ProtocolType proto = eZMQ);
     ~MessagingInterface();
     void start();
     void stop();
-    bool started();
+    bool started() const;
     static zmq::context_t *getContext();
     static void setContext(zmq::context_t *);
     static int uniquePort(unsigned int range_start = 7600, unsigned int range_end = 7799);
@@ -79,15 +80,16 @@ class MessagingInterface : public Receiver {
     bool send_raw(const char *msg);
     void setCurrent(MessagingInterface *mi) { current = mi; }
     static MessagingInterface *getCurrent();
-    static MessagingInterface *create(std::string host, int port, ProtocolType proto = eZMQ);
+    static MessagingInterface *create(const std::string &host, int port, ProtocolType proto = eZMQ);
     char *sendCommand(std::string cmd, std::list<Value> *params);
     char *sendCommand(std::string cmd, Value p1 = SymbolTable::Null, Value p2 = SymbolTable::Null,
                       Value p3 = SymbolTable::Null);
-    char *sendState(std::string cmd, std::string name, std::string state_name);
+    static std::string sendState(const std::string &cmd, const std::string &name, const std::string &state_name);
 
     //Receiver interface
     virtual bool receives(const Message &, Transmitter *t);
-    virtual void handle(const Message &, Transmitter *from, bool needs_receipt = false);
+    virtual void handle(const Message &, Transmitter *from, bool needs_receipt);
+    virtual void handle(const Message &, Transmitter *from);
     zmq::socket_t *getSocket() { return socket; }
     static bool aborted() { return abort_all; }
     static void abort() { abort_all = true; }
