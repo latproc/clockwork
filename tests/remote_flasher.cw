@@ -20,7 +20,7 @@ FlagInterface INTERFACE {
 
 /*
  here we define a channel that communicates between the two clockwork
- drivers. The channel refers to a machine that is may be instantiated at one
+ drivers. The channel refers to a machine that is instantiated at one
  side of the channel. Any side of the channel that does not instantiate 
  a machine with the given name will instantiate a machine using the 
  named interface.
