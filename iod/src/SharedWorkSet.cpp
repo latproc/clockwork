@@ -2,13 +2,9 @@
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/recursive_mutex.hpp>
 
-SharedWorkSet *SharedWorkSet::instance_ = 0;
-
 SharedWorkSet *SharedWorkSet::instance() {
-    if (!instance_) {
-        instance_ = new SharedWorkSet();
-    }
-    return instance_;
+    static SharedWorkSet inst;
+    return &inst;
 }
 
 void SharedWorkSet::add(MachineInstance *m) {

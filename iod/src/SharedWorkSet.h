@@ -18,8 +18,7 @@ class SharedWorkSet {
     boost::recursive_mutex &getMutex() { return mutex; }
 
   private:
-    static SharedWorkSet *instance_;
-    boost::recursive_mutex mutex;
+        boost::recursive_mutex mutex;
     SharedWorkSet() {}
     std::set<MachineInstance *> busy_machines; // machines that have work queued to them
 };
