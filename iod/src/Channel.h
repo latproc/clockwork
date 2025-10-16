@@ -24,7 +24,6 @@
 #include "MachineInstance.h"
 #include "MessagingInterface.h"
 #include "SocketMonitor.h"
-#include "regular_expressions.h"
 #include "symboltable.h"
 #include "value.h"
 #include <boost/thread/recursive_mutex.hpp>
@@ -93,7 +92,7 @@ class ChannelImplementation {
 
 class ChannelDefinition : public MachineClass, public ChannelImplementation {
   public:
-    enum Feature {
+    enum Feature : uint8_t {
         ReportStateChanges,
         ReportPropertyChanges,
         ReportModbusUpdates,

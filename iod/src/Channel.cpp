@@ -3,7 +3,6 @@
 #include "ConnectionManager.h"
 #include "DebugExtra.h"
 #include "IODCommand.h"
-#include "IODCommands.h"
 #include "Logger.h"
 #include "MachineInterface.h"
 #include "MachineShadowInstance.h"
@@ -11,11 +10,11 @@
 #include "MessageLog.h"
 #include "MessagingInterface.h"
 #include "ProcessingThread.h"
+#include "regular_expressions.h"
 #include "SharedWorkSet.h"
 #include "SocketMonitor.h"
 #include "SyncRemoteStatesAction.h"
 #include "WaitAction.h"
-#include "cwlang.tab.hpp"
 #include "value.h"
 #include <boost/thread.hpp>
 #include <iostream>
@@ -61,14 +60,10 @@ class CommandLogFilter : public MessageFilter {
 };
 
 bool CommandLogFilter::filter(char **buf, size_t &len, MessageHeader &mh) {
-    //char *data = *buf;
-    //NB_MSG << header << mh << " " << data << "\n";
     return true;
 }
 
 bool CommandLogFilter::filter(char **buf, size_t &len) {
-    //char *data = *buf;
-    //NB_MSG << header << data << "\n";
     return true;
 }
 
@@ -262,12 +257,7 @@ void Channel::syncInterfaceProperties(MachineInstance *m, std::list<char *> &mes
                 if (v != SymbolTable::Null) {
                     char *cmd = MessageEncoding::encodeCommand("PROPERTY", m->getName(), s, v,
                                                                definition()->getAuthority());
-                    //NB_MSG  << channel_name << " prepared command" << cmd << "\n";
                     messages.push_back(cmd);
-                    //std::string response;
-                    //sendMessage(cmd, *cmd_client, response);
-                    //MessageHeader mh(ChannelInternals::SOCK_CHAN, ChannelInternals::SOCK_CHAN, true);
-                    //safeSend(*cmd_client, cmd, strlen(cmd), mh);
                 }
                 else {
                     DBG_CHANNELS << "Note: machine " << m->getName() << " does not have a property "
@@ -301,12 +291,7 @@ bool Channel::syncRemoteStates(std::list<char *> &messages) {
                     DBG_CHANNELS << "Machine " << m->getName() << " current state: " << state
                                  << "\n";
                     char *msg = MessageEncoding::encodeState(m->getName(), state, authority);
-                    //std::string response;
                     messages.push_back(msg);
-                    // TBD this can take some time. need to remember where we are up to and come back later
-                    //sendMessage(msg, *cmd_client, response);
-                    //safeSend(*cmd_client, msg, strlen(msg), mh);
-                    //free(msg);
                 }
             }
         }
