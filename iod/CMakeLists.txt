@@ -273,7 +273,6 @@ set (Clockwork_Headers
     src/PatternAction.h
     src/PersistentStore.h
     src/Plugin.h
-    src/PolledMessageHandler.h
     src/PopListAction.h
     src/PredicateAction.h
     src/process_data.h
@@ -375,7 +374,6 @@ set (Clockwork_SRCS
     src/PatternAction.cpp
     src/PersistentStore.cpp
     src/Plugin.cpp
-    src/PolledMessageHandler.cpp
     src/PopListAction.cpp
     src/PredicateAction.cpp
     src/process_data.cpp

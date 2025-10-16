@@ -3,6 +3,7 @@
 #include <zmq.hpp>
 
 std::list<PolledMessageHandler *> PolledMessageHandler::handlers;
+std::mutex PolledMessageHandler::handlers_mx;
 zmq::pollitem_t *PolledMessageHandler::poll_items = 0;
 bool PolledMessageHandler::changed = false; // indicates whether the cached poll_items is valid
 
@@ -12,6 +13,7 @@ PolledMessageHandler::PolledMessageHandler(zmq::socket_t &socket, bool is_enable
 PolledMessageHandler::~PolledMessageHandler() {}
 
 void PolledMessageHandler::enlist(zmq::socket_t &socket) {
+    std::lock_guard<std::mutex> lk(handlers_mx);
     handlers.push_back(new PolledMessageHandler(socket));
     changed = true;
 }
@@ -30,6 +32,7 @@ void PolledMessageHandler::delist(zmq::socket_t &socket) {
 }
 
 void PolledMessageHandler::enable(zmq::socket_t &socket) {
+    std::lock_guard<std::mutex> lk(handlers_mx);
     std::list<PolledMessageHandler *>::iterator iter = handlers.begin();
     while (iter != handlers.end()) {
         PolledMessageHandler *pmh = *iter++;
@@ -42,6 +45,7 @@ void PolledMessageHandler::enable(zmq::socket_t &socket) {
 }
 
 void PolledMessageHandler::disable(zmq::socket_t &socket) {
+    std::lock_guard<std::mutex> lk(handlers_mx);
     std::list<PolledMessageHandler *>::iterator iter = handlers.begin();
     while (iter != handlers.end()) {
         PolledMessageHandler *pmh = *iter++;

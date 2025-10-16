@@ -4,8 +4,14 @@
 #include <list>
 #include <string.h>
 #include <zmq.hpp>
+#include <mutex>
 
 class PolledMessageHandler {
+
+  private:
+    static std::mutex handlers_mx;
+
+  public:
 
     PolledMessageHandler(zmq::socket_t &socket, bool enabled = true);
     ~PolledMessageHandler();
