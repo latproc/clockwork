@@ -21,7 +21,6 @@
 #include "MachineInstance.h"
 #include "CallMethodAction.h"
 #include "Channel.h"
-#include "ControlSystemMachine.h"
 #include "DebugExtra.h"
 #include "Dispatcher.h"
 #include "ExecuteMessageAction.h"
@@ -44,6 +43,7 @@
 #include "options.h"
 #include <algorithm>
 #include <boost/thread/mutex.hpp>
+#include <mutex>
 #include <cassert>
 #include <dlfcn.h>
 #include <iostream>
@@ -58,9 +58,7 @@
 #include "ECInterface.h"
 #endif
 #include "AbortAction.h"
-#include "CounterRateFilterSettings.h"
 #include "CounterRateInstance.h"
-#include "MachineInterface.h"
 #include "MachineShadowInstance.h"
 #include "ProcessingThread.h"
 #include "RateEstimatorInstance.h"
@@ -73,8 +71,9 @@ extern std::list<std::string> error_messages;
 uint64_t rate_calc_process_time = 0; // used for idle calculations for rate estimation
 Value *MachineInstance::polling_delay = 0;
 
-unsigned int MachineInstance::num_machines_with_work =
-    1; // machine idle processing will occur if this value is non zero
+// machine idle processing will occur if this value is non zero
+unsigned int MachineInstance::num_machines_with_work = 1;
+
 unsigned int MachineInstance::total_machines_needing_check = 1;
 
 class MachineEvent {
@@ -131,6 +130,7 @@ std::set<MachineInstance *> MachineInstance::plugin_machines;
 std::list<Package *> MachineInstance::pending_events;
 std::set<MachineInstance *> MachineInstance::pending_state_change;
 std::map<std::string, HardwareAddress> MachineInstance::hw_names;
+std::mutex global_lists_mutex;
 
 // The above lists need to be reorganised.. in the meantime
 // this is a temporary list of machines that need to be removed
@@ -680,11 +680,13 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     if (_type != "LIST" && _type != "REFERENCE") {
         current_value_holder.setDynamicValue(new MachineValue(this, _name));
     }
-    if (_type == "MODULE") {
-        io_modules.push_back(this);
+    {
+        std::unique_lock<std::mutex> lock(global_lists_mutex);
+        if (_type == "MODULE") { io_modules.push_back(this); }
     }
     // Initialise machines but skip shadows and templates (local machines and CONDITIONs)
     if (instance_type == MACHINE_INSTANCE) {
+        std::unique_lock<std::mutex> lock(global_lists_mutex);
         all_machines.push_back(this);
         Dispatcher::instance()->addReceiver(this);
         start_time = microsecs();
@@ -713,11 +715,13 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
     if (_type != "LIST" && _type != "REFERENCE") {
         current_value_holder.setDynamicValue(new MachineValue(this, _name));
     }
-    if (_type == "MODULE") {
-        io_modules.push_back(this);
+    {
+        std::unique_lock<std::mutex> lock(global_lists_mutex);
+        if (_type == "MODULE") { io_modules.push_back(this); }
     }
     // Initialise machines but skip shadows and templates (local machines and CONDITIONs)
     if (instance_type == MACHINE_INSTANCE) {
+        std::unique_lock<std::mutex> lock(global_lists_mutex);
         all_machines.push_back(this);
         Dispatcher::instance()->addReceiver(this);
         start_time = microsecs();
@@ -729,6 +733,7 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
 }
 
 MachineInstance::~MachineInstance() {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
     all_machines.remove(this);
     automatic_machines.remove(this);
     active_machines.remove(this);
@@ -737,6 +742,7 @@ MachineInstance::~MachineInstance() {
 }
 
 void MachineInstance::remove_pending() {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
     while (!to_remove.is_empty()) {
         MachineInstance *m;
         if (to_remove.try_pop_front(m)) {
