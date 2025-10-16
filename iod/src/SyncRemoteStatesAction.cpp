@@ -66,19 +66,8 @@ Action::Status SyncRemoteStatesAction::execute() {
     char buf[200];
     Channel *chn = dynamic_cast<Channel *>(owner);
     if (internals->process_state == SyncRemoteStatesActionInternals::ps_init) {
-        //snprintf(buf, 200, "%s Sync remote states - init", chn->getName().c_str());
-        //MessageLog::instance()->add(buf);
         owner->start(this);
         status = Running;
-#if 0
-        if (!internals->sock) {
-            internals->sock = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_PAIR);
-            internals->sock->bind("inproc://syncstates");
-            chn->addSocket(10, "inproc://syncstates");
-        }
-#endif
-        //assert(chn);
-        //assert(chn == internals->chn);
         internals->process_state = SyncRemoteStatesActionInternals::ps_sending_messages;
         if (chn->syncRemoteStates(internals->messages)) {
             internals->iter = new std::list<char *>::iterator(internals->messages.begin());
@@ -98,20 +87,11 @@ Action::Status SyncRemoteStatesAction::execute() {
     }
 
     if (internals->process_state == SyncRemoteStatesActionInternals::ps_sending_messages) {
-        //snprintf(buf, 200, "%s Sync remote states - process state: sending messages", chn->getName().c_str());
-        //MessageLog::instance()->add(buf);
-        //DBG_CHANNELS << buf << "\n";
         if (*internals->iter == internals->messages.end()) {
-            //snprintf(buf, 200, "%s Sync remote states - done", chn->getName().c_str());
-            //MessageLog::instance()->add(buf);
-            //DBG_CHANNELS << buf << "\n";
             internals->message_state = SyncRemoteStatesActionInternals::e_done;
         }
         if (internals->message_state == SyncRemoteStatesActionInternals::e_sending) {
             char *current_message = *(*internals->iter);
-            //snprintf(buf, 200, "%s Sync remote states - sending: %s", chn->getName().c_str(), current_message);
-            //MessageLog::instance()->add(buf);
-            //DBG_CHANNELS << buf << "\n";
 
             internals->header.needReply(false);
             internals->header.start_time = microsecs();
@@ -126,9 +106,6 @@ Action::Status SyncRemoteStatesAction::execute() {
             char *repl = nullptr;
             size_t len;
             if (safeRecv(*internals->sock, &repl, &len, false, 0, internals->header)) {
-                //snprintf(buf, 200, "%s Sync remote states - received reply %s", chn->getName().c_str(), repl);
-                //MessageLog::instance()->add(buf);
-                //DBG_CHANNELS << buf << "\n";
                 internals->message_state = SyncRemoteStatesActionInternals::e_done;
                 delete[] repl;
             }
@@ -137,9 +114,6 @@ Action::Status SyncRemoteStatesAction::execute() {
             }
         }
         if (internals->message_state == SyncRemoteStatesActionInternals::e_done) {
-            //snprintf(buf, 200, "%s Sync remote states - message done", chn->getName().c_str());
-            //MessageLog::instance()->add(buf);
-            //DBG_CHANNELS << buf << "\n";
             if (*internals->iter != internals->messages.end()) {
                 internals->message_state = SyncRemoteStatesActionInternals::e_sending;
             }
@@ -152,10 +126,6 @@ Action::Status SyncRemoteStatesAction::execute() {
             if (!internals->iter) { // finished sending messages
                 if (internals->process_state ==
                     SyncRemoteStatesActionInternals::ps_sending_messages) {
-                    //safeSend(*cmd_client, "done", 4);
-                    //std::string ack;
-                    //MessageHeader mh(ChannelInternals::SOCK_CTRL, ChannelInternals::SOCK_CTRL, false);
-                    //sendMessage("done", *cmd_client, ack, mh);
                     internals->header.dest = MessageHeader::SOCK_CTRL;
                     internals->header.source = MessageHeader::SOCK_CTRL;
                     internals->header.needReply(true);
@@ -167,9 +137,6 @@ Action::Status SyncRemoteStatesAction::execute() {
         }
     }
     else if (internals->process_state == SyncRemoteStatesActionInternals::ps_waiting_ack) {
-        //snprintf(buf, 200, "%s Sync remote states - awaiting ack", chn->getName().c_str());
-        //MessageLog::instance()->add(buf);
-        //DBG_CHANNELS << buf << "\n";
         char *ack = nullptr;
         size_t len;
         if (safeRecv(*internals->sock, &ack, &len, false, 0, internals->header)) {
@@ -195,15 +162,6 @@ Action::Status SyncRemoteStatesAction::execute() {
         }
     }
     return status;
-#if 0
-    std::stringstream ss;
-    ss << owner->getName() << " failed to find machine " << target.get() << " for SetState action" << std::flush;
-    std::string str = ss.str();
-    error_str = strdup(str.c_str());
-    status = Failed;
-    owner->stop(this);
-    return status;
-#endif
 }
 
 Action::Status SyncRemoteStatesAction::run() { return execute(); }
