@@ -21,6 +21,7 @@
 #include "MachineInstance.h"
 #include "CallMethodAction.h"
 #include "Channel.h"
+#include "ControlSystemMachine.h"
 #include "DebugExtra.h"
 #include "Dispatcher.h"
 #include "ExecuteMessageAction.h"
