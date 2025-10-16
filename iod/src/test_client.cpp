@@ -47,6 +47,7 @@ int main() {
         memcpy(data, reply.data(), len);
         data[len] = 0;
         std::cout << "Received reply " << request_nbr << " " << data << std::endl;
+        delete[] data;
         usleep(300000);
     }
     return 0;
