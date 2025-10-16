@@ -69,10 +69,10 @@ std::string constructAlphaNumericString(const char *prefix, const char *val, con
     if (suffix) {
         len += strlen(suffix);
     }
-    char buf[len + 1];
-    char *q = buf;
+    std::vector<char> buf(len + 1);
+    char *q = buf.data();
     if (prefix) {
-        strcpy(buf, prefix);
+        strcpy(buf.data(), prefix);
         q += strlen(prefix);
     }
     const char *p = val;
@@ -83,13 +83,13 @@ std::string constructAlphaNumericString(const char *prefix, const char *val, con
         ++p;
     }
     *q = 0;
-    if (q == buf) { // no alpha/num found in the input string
+    if (q == buf.data()) { // no alpha/num found in the input string
         return default_name;
     }
     if (suffix) {
         strcpy(q, suffix);
     }
-    return buf;
+    return buf.data();
 }
 
 }
@@ -258,18 +258,16 @@ bool SubscriptionManager::requestChannel() {
 
             DBG_CHANNELS << "Requesting channel " << channel_name
                          << (smi->sent_request ? " (repeat)" : "") << "\n";
-            char *channel_setup = MessageEncoding::encodeCommand("CHANNEL", channel_name);
+            auto channel_setup = MessageEncoding::encodeCommand("CHANNEL", Value{channel_name});
             try {
                 usleep(200);
-                safeSend(setup(), channel_setup, strlen(channel_setup));
+                safeSend(setup(), channel_setup.c_str(), channel_setup.size());
                 setSetupStatus(SubscriptionManager::e_waiting_setup);
                 smi->sent_request = true;
                 smi->send_time = now;
-                free(channel_setup);
             }
             catch (const zmq::error_t &ex) {
                 ++error_count;
-                free(channel_setup);
                 {
                     FileLogger fl(program_name);
                     fl.f() << channel_name << " exception " << zmq_errno() << " "

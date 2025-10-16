@@ -58,6 +58,67 @@
 #include <netinet/tcp.h>
 #include <signal.h>
 #include <sys/socket.h>
+#include <string>
+
+namespace {
+
+int debug = 0;
+
+void send_response_to_clockwork(cJSON *json_request, const char *buf) {
+    struct ResponseTarget {
+        Value machine{"manager"};
+        Value property{"response"};
+    };
+    ResponseTarget target;
+    auto respond_to = cJSON_GetObjectItem(json_request, "respond_to");
+    if (respond_to && respond_to->type == cJSON_String) {
+        std::string respond_to_str = respond_to->valuestring;
+        target.machine = Value{respond_to_str.substr(0, respond_to_str.rfind('.'))};
+        target.property = Value{respond_to_str.substr(respond_to_str.rfind('.') + 1)};
+        std::cout << "responding to " << target.machine << "." << target.property << "\n";
+    }
+    cJSON *msg = cJSON_Parse(buf);
+    if (!msg) {
+        std::cout << "could not parse database response: " << buf << "\n";
+        return;
+    }
+    auto str = cJSON_Print(msg);
+    assert(str && "cJSON_Print returned a null pointer");
+    auto cmd = MessageEncoding::encodeCommand("PROPERTY", target.machine, target.property, Value{msg});
+    if (!cmd.empty()) {
+        if (debug) {
+            std::cout << "sending response to clockwork: " << cmd << "\n" << std::flush;
+        }
+        std::cout << str << "\n";
+        zmq::context_t context;
+        zmq::socket_t client(context, ZMQ_REQ);
+        client.connect("tcp://127.0.0.1:5555");
+
+        std::string response;
+        if (sendMessage(cmd.c_str(), client, response)) {
+            std::cout << "response: " << response << "\n";
+            auto update = MessageEncoding::encodeCommand("SEND",
+                             target.property + Value{"_changed"},
+                             Value{"TO",Value::t_string},
+                             target.machine);
+            if (!update.empty()) {
+                if (debug) {
+                    std::cout << "sending update to clockwork: " << update << "\n" << std::flush;
+                }
+                std::string response;
+                if (sendMessage(update.c_str(), client, response)) {
+                    std::cout << "response: " << response << "\n";
+                }
+            }
+        }
+        else {
+            std::cout << "send failed\n";
+        }
+    }
+    free(str);
+}
+
+}
 
 namespace po = boost::program_options;
 
@@ -67,7 +128,6 @@ const char *local_commands = "inproc://local_cmds";
 
 enum ProgramState { s_initialising, s_pausing, s_paused, s_resuming, s_starting, s_running, s_finished } program_state = s_initialising;
 
-int debug = 0;
 int saved_debug = 0;
 
 const int DEBUG_LIB = 1 << 15;
@@ -97,15 +157,13 @@ char *sendIOD(int group, int addr, int new_value);
 char *sendIODMessage(const std::string &s);
 
 std::string getIODSyncCommand(int group, int addr, int new_value) {
-    char *msg = MessageEncoding::encodeCommand("MODBUS", group, addr, new_value);
+    auto msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
     sendIODMessage(msg);
 
     if (DEBUG_BASIC) {
         std::cout << "IOD command: " << msg << "\n";
     }
-    std::string s(msg);
-    free(msg);
-    return s;
+    return msg;
 }
 
 char *sendIOD(int group, int addr, int new_value) {
@@ -199,7 +257,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
     std::string ds;
     std::list<Value> *param_list = 0;
     if (MessageEncoding::getCommand(data, ds, &param_list)) {
-        params.push_back(ds);
+        params.push_back(Value{ds});
         if (param_list) {
             std::list<Value>::const_iterator iter = param_list->begin();
             while (iter != param_list->end()) {
@@ -213,7 +271,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
     else {
         std::istringstream iss(data);
         while (iss >> ds) {
-            parts.push_back(ds.c_str());
+            parts.push_back(Value{ds.c_str()});
             ++count;
         }
         std::copy(parts.begin(), parts.end(), std::back_inserter(params));
@@ -345,13 +403,14 @@ int main(int argc, const char *argv[]) {
             zmq::pollitem_t items[] = {
                 {(void *)subscription_manager.setup(), 0, ZMQ_POLLIN, 0},
                 {(void *)subscription_manager.subscriber(), 0, ZMQ_POLLIN, 0},
+                { iosh_cmd, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 }
             };
             try {
-                if (!subscription_manager.checkConnections(items, 2, iosh_cmd)) {
+                if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) {
                     if (debug) {
                         std::cout << "no connection to iod\n";
                     }
-                    usleep(1000000);
+                    usleep(10000);
                     exception_count = 0;
                     continue;
                 }
@@ -431,14 +490,22 @@ int main(int argc, const char *argv[]) {
             }
             if (data) {
                 try {
-                    zmq::context_t context;
-                    zmq::socket_t client(context, ZMQ_REQ);
-                    client.connect("tcp://127.0.0.1:5554");
-                    for (int i = 1; i<argc; ++i) {
-                        char *buf = makeRemoteRequest(client, data);
-                        std::cout << buf << "\n";
-                        delete[] buf;
+                    char *buf = nullptr;
+                    cJSON *json_request = nullptr;
+                    {
+                        zmq::context_t context;
+                        zmq::socket_t client(context, ZMQ_REQ);
+                        client.connect("tcp://127.0.0.1:5554");
+                        std::cout << "sending: " << data << "\n";
+                        json_request = cJSON_Parse(data);
+                        if (json_request) {
+                            buf = makeRemoteRequest(client, data);
+                        }
+
                     }
+                    std::cout << buf << "\n";
+                    send_response_to_clockwork(json_request, buf);
+                    delete[] buf;
                 }
                 catch(std::exception& e) {
                     std::cerr << "error: " << e.what() << "\n";
@@ -447,7 +514,7 @@ int main(int argc, const char *argv[]) {
                 catch(...) {
                     std::cerr << "Exception of unknown type!\n";
                 }
-                                                    
+
                 free(data);
                 data = 0;
             }

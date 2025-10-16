@@ -109,14 +109,13 @@ char *send_command(std::list<Value> &params) {
     Value cmd_val = params.front();
     params.pop_front();
     std::string cmd = cmd_val.asString();
-    char *msg = MessageEncoding::encodeCommand(cmd, &params);
+    std::string msg = MessageEncoding::encodeCommand(cmd, params);
     if (cmd != "" && cmd != ";") {
         cmd += ";";
         write_history(history_file_path.c_str());
     }
-    sendMessage(*psocket, msg);
+    sendMessage(*psocket, msg.c_str());
     size_t size;
-    free(msg);
     zmq::message_t reply;
     if (psocket->recv(&reply)) {
         size = reply.size();
@@ -244,7 +243,7 @@ void cleanup_machine_name_list() {
 
 void initialise_machine_names(char *data) {
     std::list<Value> params;
-    params.push_back("LIST");
+    params.push_back(Value{"LIST"});
     bool did_alloc = false;
     if (!data) {
         data = send_command(params);
@@ -253,7 +252,8 @@ void initialise_machine_names(char *data) {
     if (data) {
         cleanup_machine_name_list();
         long buffer_size = 5000;
-        char buf[buffer_size];
+        std::vector<char> buffer(buffer_size);
+        char *buf = buffer.data();
         char *p = data, *q = buf;
         while (*p) {
             if (*p != ' ' && *p != '\n') {
@@ -304,7 +304,7 @@ void initialise_commands() {
 
 void check_messages() {
     std::list<Value> params;
-    params.push_back("MESSAGES");
+    params.push_back(Value{"MESSAGES"});
     char *data = send_command(params);
     if (data) {
         char *p = data + strlen(data);
