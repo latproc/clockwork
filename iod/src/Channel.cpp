@@ -141,9 +141,17 @@ class ChannelInternals {
   public:
     ChannelInternals() : owning_thread_name(get_thread_name()), command_sock(0), cmd_sock_info(0), last_state("undefined") { }
     ~ChannelInternals() {
-        // TODO: delete command_sock and cmd_sock_info
-        //   if (command_sock) { delete command_sock; }
-        //   if (cmd_sock_info) { delete cmd_sock_info; }
+        if (command_sock) {
+            int linger = 0;
+            // Ensure ZeroMQ sockets are torn down without blocking
+            command_sock->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+            delete command_sock;
+            command_sock = 0;
+        }
+        if (cmd_sock_info) {
+            delete cmd_sock_info;
+            cmd_sock_info = 0;
+        }
     }
     std::string getCommandSocketName(bool client_endpoint);
 
