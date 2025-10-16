@@ -196,48 +196,119 @@ SET_SOURCE_FILES_PROPERTIES(${cw_yacc_output} GENERATED)
 INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}/src)
 
 set (Clockwork_Headers
-	src/cw_client.h
-	src/Action.h			src/AbortAction.h	src/Expression.h
-	src/Transition.h	src/ConditionHandler.h src/MachineInstance.h
-	src/SetListEntriesAction.h	src/cJSON.h src/StableState.h
-	src/CallMethodAction.h		src/ExpressionAction.h		src/Message.h
-	src/MachineShadowInstance.h src/CounterRateInstance.h
-	src/CounterRateFilterSettings.h src/SetOperationAction.h	src/clockwork.h
-	src/Parameter.h src/MachineClass.h src/SharedWorkSet.h
-	src/MachineInterface.h src/MachineDetails.h src/ActionList.h
-	src/RateEstimatorInstance.h src/Channel.h			src/FireTriggerAction.h
-	src/MessageEncoding.h		src/SetStateAction.h		src/cmdline.h
-	src/ClearListAction.h		src/HandleMessageAction.h	src/MessageLog.h
-	src/ShutdownAction.h		src/cwlang.h src/ClientInterface.h
-	src/IOComponent.h		src/MessagingInterface.h	src/SimulatedRawInput.h
-	src/domain.h src/CommandManager.h		src/IODCommand.h
-	src/ModbusInterface.h		src/SimulatedRawOutput.h	src/dynamic_value.h
-	src/ConnectionManager.h		src/IODCommands.h		src/PatternAction.h
-	src/SocketMonitor.h		src/ecat_thread.h src/ControlSystemMachine.h
-	src/IfCommandAction.h		src/PersistentStore.h
-	src/SortListAction.h		src/filtering.h src/CopyPropertiesAction.h
-	src/IncludeAction.h		src/Plugin.h			src/State.h
-	src/hw_config.h src/DebugExtra.h		src/LockAction.h
-	src/PolledMessageHandler.h	src/Statistic.h			src/options.h
-	src/DisableAction.h		src/LogAction.h			src/PopListAction.h
-	src/Statistics.h		src/rate.h src/Dispatcher.h		src/Logger.h
-	src/PredicateAction.h		src/UnlockAction.h
-	src/regular_expressions.h src/ECInterface.h		src/MQTTDCommand.h
-	src/ProcessingThread.h		src/WaitAction.h		src/symboltable.h
-	src/EnableAction.h		src/MQTTDCommands.h		src/ResumeAction.h
-	src/anet.h			src/value.h src/EtherCATSetup.h		src/MQTTInterface.h
-	src/Scheduler.h			src/arraystr.h src/ExecuteMessageAction.h
-	src/MachineCommandAction.h	src/SendMessageAction.h		src/buffering.h
-	src/SyncRemoteStatesAction.h src/MachineCommandList.h
-	src/ControlSystemMachine.h src/HandleRequestAction.h src/SDOEntry.h
-    src/ExportState.h src/Trigger.h
-	src/AutoStats.h src/Configuration.h
-	src/ResetAction.h src/LoadPropertiesAction.h
-    src/split_string.h src/read_file.h src/copy_environment.h
-    src/exec_command.h src/debug_malloc.h
-    src/json_expr_parser.h src/json_expression.h src/process.h
+    src/AbortAction.h
+    src/Action.h
+    src/ActionList.h
+    src/anet.h
+    src/arraystr.h
+    src/AutoStats.h
+    src/buffering.h
+    src/CallMethodAction.h
+    src/Channel.h
+    src/cJSON.h
+    src/ClearListAction.h
+    src/ClientInterface.h
+    src/clockwork.h
+    src/cmdline.h
+    src/CommandManager.h
+    src/ConditionHandler.h
+    src/Configuration.h
+    src/ConnectionManager.h
+    src/ControlSystemMachine.h
+    src/copy_environment.h
+    src/CopyPropertiesAction.h
+    src/CounterRateFilterSettings.h
+    src/CounterRateInstance.h
+    src/cw_client.h
+    src/cwlang.h
+    src/debug_malloc.h
+    src/DebugExtra.h
+    src/DisableAction.h
+    src/Dispatcher.h
+    src/domain.h
+    src/dynamic_value.h
+    src/ecat_thread.h
+    src/ECInterface.h
+    src/EnableAction.h
+    src/EtherCATSetup.h
+    src/exec_command.h
     src/exec_web_request.h
+    src/ExecuteMessageAction.h
+    src/ExportState.h
+    src/Expression.h
+    src/ExpressionAction.h
+    src/filtering.h
+    src/FireTriggerAction.h
+    src/HandleMessageAction.h
+    src/HandleRequestAction.h
+    src/hw_config.h
+    src/IfCommandAction.h
+    src/IncludeAction.h
+    src/IOComponent.h
+    src/IODCommand.h
+    src/IODCommands.h
+    src/json_expr_parser.h
+    src/json_expression.h
+    src/LoadPropertiesAction.h
+    src/LockAction.h
+    src/LogAction.h
+    src/Logger.h
+    src/MachineClass.h
+    src/MachineCommandAction.h
+    src/MachineCommandList.h
+    src/MachineDetails.h
+    src/MachineInstance.h
+    src/MachineInterface.h
+    src/MachineShadowInstance.h
+    src/Message.h
+    src/MessageEncoding.h
+    src/MessageLog.h
+    src/MessagingInterface.h
+    src/ModbusInterface.h
+    src/MQTTDCommand.h
+    src/MQTTDCommands.h
+    src/MQTTInterface.h
+    src/options.h
+    src/Parameter.h
+    src/PatternAction.h
+    src/PersistentStore.h
+    src/Plugin.h
+    src/PolledMessageHandler.h
+    src/PopListAction.h
+    src/PredicateAction.h
     src/process_data.h
+    src/process.h
+    src/ProcessingThread.h
+    src/rate.h
+    src/RateEstimatorInstance.h
+    src/read_file.h
+    src/regular_expressions.h
+    src/ResetAction.h
+    src/ResumeAction.h
+    src/Scheduler.h
+    src/SDOEntry.h
+    src/SendMessageAction.h
+    src/SetListEntriesAction.h
+    src/SetOperationAction.h
+    src/SetStateAction.h
+    src/SharedWorkSet.h
+    src/ShutdownAction.h
+    src/SimulatedRawInput.h
+    src/SimulatedRawOutput.h
+    src/SocketMonitor.h
+    src/SortListAction.h
+    src/split_string.h
+    src/StableState.h
+    src/State.h
+    src/Statistic.h
+    src/Statistics.h
+    src/symboltable.h
+    src/SyncRemoteStatesAction.h
+    src/Transition.h
+    src/Trigger.h
+    src/UnlockAction.h
+    src/value.h
+    src/WaitAction.h
 )
 if (USE_ETHERCAT)
 	LIST (APPEND Clockwork_Headers "src/EtherCATthread.h")
@@ -246,38 +317,91 @@ endif()
 set (Clockwork_SRCS
 	${Clockwork_Headers}
 	${cw_yacc_output} ${cw_lex_output}
-	src/MachineShadowInstance.cpp src/Transition.cpp src/MachineInstance.cpp
-	src/Action.cpp src/AbortAction.cpp src/CounterRateInstance.cpp
-	src/ConditionHandler.cpp src/StableState.cpp src/Parameter.cpp
-	src/MachineClass.cpp src/cwlang.ypp src/cwlang.lpp src/cmdline.ypp
-	src/cmdline.lpp src/CallMethodAction.cpp src/Channel.cpp
-	src/ClearListAction.cpp src/ClientInterface.cpp
-	src/CopyPropertiesAction.cpp src/DisableAction.cpp src/Dispatcher.cpp
-	src/ECInterface.cpp src/EnableAction.cpp src/ExecuteMessageAction.cpp
-	src/Expression.cpp src/ExpressionAction.cpp src/ActionList.cpp
-	src/RateEstimatorInstance.cpp src/SharedWorkSet.cpp
-	src/MachineInterface.cpp src/MachineDetails.cpp src/FireTriggerAction.cpp
-	src/HandleMessageAction.cpp src/IOComponent.cpp src/IODCommands.cpp
-	src/IfCommandAction.cpp src/IncludeAction.cpp src/LockAction.cpp
-	src/LogAction.cpp src/MQTTInterface.cpp src/MachineCommandAction.cpp
-	src/ModbusInterface.cpp src/PatternAction.cpp src/PersistentStore.cpp
-	src/Plugin.cpp src/PolledMessageHandler.cpp src/PopListAction.cpp
-	src/PredicateAction.cpp src/ProcessingThread.cpp src/ResumeAction.cpp
-	src/Scheduler.cpp src/SendMessageAction.cpp src/SetListEntriesAction.cpp
-	src/SetOperationAction.cpp src/SetStateAction.cpp src/ShutdownAction.cpp
-	src/SortListAction.cpp src/State.cpp src/UnlockAction.cpp
-	src/WaitAction.cpp src/clockwork.cpp src/dynamic_value.cpp
-	src/filtering.cpp src/options.cpp src/SyncRemoteStatesAction.cpp
-	src/MachineCommandList.cpp src/ControlSystemMachine.cpp
-    src/ExportState.cpp src/Trigger.cpp
-	src/HandleRequestAction.cpp src/AutoStats.cpp src/Configuration.cpp
-	src/ResetAction.cpp src/LoadPropertiesAction.cpp
-    src/split_string.c src/read_file.c src/copy_environment.c
-    src/exec_command.c src/debug_malloc.c
-    src/json_expr_parser.cpp src/json_expression.cpp src/process.cpp
+    src/AbortAction.cpp
+    src/Action.cpp
+    src/ActionList.cpp
+    src/AutoStats.cpp
+    src/CallMethodAction.cpp
+    src/Channel.cpp
+    src/ClearListAction.cpp
+    src/ClientInterface.cpp
+    src/clockwork.cpp
+    src/cmdline.lpp
+    src/cmdline.ypp
+    src/ConditionHandler.cpp
+    src/Configuration.cpp
+    src/ControlSystemMachine.cpp
+    src/copy_environment.c
+    src/CopyPropertiesAction.cpp
+    src/CounterRateInstance.cpp
+    src/cwlang.lpp
+    src/cwlang.ypp
+    src/debug_malloc.c
+    src/DisableAction.cpp
+    src/Dispatcher.cpp
+    src/dynamic_value.cpp
+    src/ECInterface.cpp
+    src/EnableAction.cpp
+    src/exec_command.c
     src/exec_web_request.c
+    src/ExecuteMessageAction.cpp
+    src/ExportState.cpp
+    src/Expression.cpp
+    src/ExpressionAction.cpp
+    src/filtering.cpp
+    src/FireTriggerAction.cpp
+    src/HandleMessageAction.cpp
+    src/HandleRequestAction.cpp
+    src/IfCommandAction.cpp
+    src/IncludeAction.cpp
+    src/IOComponent.cpp
+    src/IODCommands.cpp
+    src/json_expr_parser.cpp
+    src/json_expression.cpp
+    src/LoadPropertiesAction.cpp
+    src/LockAction.cpp
+    src/LogAction.cpp
+    src/MachineClass.cpp
+    src/MachineCommandAction.cpp
+    src/MachineCommandList.cpp
+    src/MachineDetails.cpp
+    src/MachineInstance.cpp
+    src/MachineInterface.cpp
+    src/MachineShadowInstance.cpp
+    src/ModbusInterface.cpp
+    src/MQTTInterface.cpp
+    src/options.cpp
+    src/Parameter.cpp
+    src/PatternAction.cpp
+    src/PersistentStore.cpp
+    src/Plugin.cpp
+    src/PolledMessageHandler.cpp
+    src/PopListAction.cpp
+    src/PredicateAction.cpp
     src/process_data.cpp
-	)
+    src/process.cpp
+    src/ProcessingThread.cpp
+    src/RateEstimatorInstance.cpp
+    src/read_file.c
+    src/ResetAction.cpp
+    src/ResumeAction.cpp
+    src/Scheduler.cpp
+    src/SendMessageAction.cpp
+    src/SetListEntriesAction.cpp
+    src/SetOperationAction.cpp
+    src/SetStateAction.cpp
+    src/SharedWorkSet.cpp
+    src/ShutdownAction.cpp
+    src/SortListAction.cpp
+    src/split_string.c
+    src/StableState.cpp
+    src/State.cpp
+    src/SyncRemoteStatesAction.cpp
+    src/Transition.cpp
+    src/Trigger.cpp
+    src/UnlockAction.cpp
+    src/WaitAction.cpp
+)
 if (USE_ETHERCAT)
 if (USE_SOEM)
 	include_directories("${PROJECT_SOURCE_DIR}/ext/SOEM/soem")
