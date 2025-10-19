@@ -26,12 +26,33 @@ int getIntValue(cwpi_Scope s, const char *property_name, const int64_t **res) {
         return 0;
     }
     const Value &value = scope->getValue(property_name);
+    if (value.kind == Value::t_bool) {
+        return value.bValue;
+    }
     if (value.kind != Value::t_integer) {
         return 0;
     }
     *res = &value.iValue;
     return 1;
 }
+
+
+int getBoolValue(cwpi_Scope s, const char *property_name) {
+    MachineInstance *scope = static_cast<MachineInstance *>(s);
+    if (!scope) {
+        MessageLog::instance()->add("getBoolValue was passed a null instance from a plugin");
+        return 0;
+    }
+    const Value &value = scope->getValue(property_name);
+    if (value.kind == Value::t_bool) {
+        return value.bValue;
+    }
+    if (value.kind == Value::t_integer) {
+        return value.bValue;
+    }
+    return 0;
+}
+
 
 namespace {
 
@@ -79,13 +100,18 @@ void setJsonValue(cwpi_Scope s, const char *property_name, const char *new_value
     }
 
     std::string name(property_name);
-    if (!new_value || strlen(new_value) == 0) { return; }
+    if (!new_value || strlen(new_value) == 0) {
+        scope->setValue(name, Value{cJSON_CreateObject()});
+        return;
+    }
     cJSON *json = cJSON_Parse(new_value);
     if (json) {
         scope->setValue(name, Value{json});
     }
     else {
-        MessageLog::instance()->add("setJsonValue failed to parse ", new_value);
+        json = cJSON_CreateObject();
+        cJSON_AddItemToObject(json, name.c_str(),cJSON_CreateString(new_value));
+        scope->setValue(name, Value{json});
     }
 
 }
