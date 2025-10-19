@@ -5,6 +5,8 @@ WebRequest MACHINE {
     OPTION Errors "";      # Errors / diagnostics
     OPTION PostData "";    # POST data
 
+    OPTION TrustHostCert FALSE; # Whether to trust host certificate
+
     PLUGIN "web_request.so.1.0";
 
     Running STATE;
@@ -16,7 +18,7 @@ WebRequest MACHINE {
     COMMAND start WITHIN Error { SET SELF TO Start; }
     COMMAND start WITHIN Done  { SET SELF TO Start; }
     COMMAND start WITHIN Idle  { SET SELF TO Start; }
-    COMMAND reset WITHIN Error { Request := ""; Result := ""; SET SELF TO Idle; }
+    COMMAND reset { Request := ""; Result := ""; SET SELF TO Idle; }
 }
 
 %BEGIN_PLUGIN

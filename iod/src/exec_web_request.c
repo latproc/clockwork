@@ -29,6 +29,7 @@ struct WebRequestData {
     char *result;
     char *errors;
     const int64_t *status;
+    int trust_host_certificate;
 };
 
 static pthread_once_t curl_once = PTHREAD_ONCE_INIT;
@@ -84,6 +85,12 @@ static void *worker(void *arg) {
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, data);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "ClockworkWebRequest/1.0");
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); /* good hygiene on macOS */
+    if (data->trust_host_certificate) {
+        // Disable verification of the server's certificate
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        // Disable verification of the host name in the certificate
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    }
 
     if (data->post_data && *data->post_data) {
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
@@ -153,6 +160,8 @@ int exec_web_request(void *scope) {
         } else if (post_data) {
             debug_free(post_data, "post_data");
         }
+
+        data->trust_host_certificate = getBoolValue(scope, "TrustHostCert");
 
         data->running = 1;
         data->done = 0;
