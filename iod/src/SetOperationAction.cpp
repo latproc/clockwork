@@ -129,7 +129,10 @@ Action::Status SetOperationAction::run() {
         source_a_machine = owner->lookup(source_a);
         source_b_machine = owner->lookup(source_b);
         dest_machine = owner->lookup(dest);
-        if (dest_machine && (dest_machine->_type == "LIST" || dest_machine->_type == "REFERENCE")) {
+        if (!source_a_machine || !source_b_machine || !dest_machine) {
+            status = Failed;
+        }
+        else if (dest_machine->_type == "LIST" || dest_machine->_type == "REFERENCE") {
             status = doOperation();
         }
         else {
