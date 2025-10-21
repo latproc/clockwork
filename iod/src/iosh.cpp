@@ -19,7 +19,10 @@
 */
 
 #include "Logger.h"
+#include <inttypes.h>
+#include <iomanip>
 #include <iostream>
+#include <iterator>
 #include <sstream>
 #include <stdio.h>
 #include <string.h>
@@ -33,6 +36,7 @@
 #endif
 #define _MAIN_
 #include "MessageEncoding.h"
+#include "cmdline.h"
 #include "value.h"
 #include <list>
 
@@ -61,8 +65,8 @@ void sendMessage(zmq::socket_t &socket, const char *message) {
 
 void initialise_machine_names(char *data);
 
-std::string history_file_path;
-const std::string history_name{".iosh_history"};
+char *history_file = 0; /* the full path of the command history file */
+const char *history_name = ".iosh_history";
 
 /* A static variable for holding the line. */
 static char *line_read = (char *)NULL;
@@ -90,7 +94,7 @@ char *rl_gets(const char *prompt) {
         if (!last_read) {
             add_history(line_read);
             std::cout << "adding to history\n";
-            if (write_history(history_name.c_str()) != 0) {
+            if (write_history(history_name) != 0) {
                 perror("writing history");
             }
             last_read = strdup(line_read);
@@ -112,7 +116,7 @@ char *send_command(std::list<Value> &params) {
     std::string msg = MessageEncoding::encodeCommand(cmd, params);
     if (cmd != "" && cmd != ";") {
         cmd += ";";
-        write_history(history_file_path.c_str());
+        write_history(history_file);
     }
     sendMessage(*psocket, msg.c_str());
     size_t size;
@@ -232,7 +236,7 @@ char *machine_name_generator(const char *text, int state) {
     return ((char *)NULL);
 }
 
-void cleanup_machine_name_list() {
+void cleanup() {
     std::list<char *>::iterator iter = machine_names.begin();
     while (iter != machine_names.end()) {
         char *name = *iter;
@@ -250,7 +254,7 @@ void initialise_machine_names(char *data) {
         did_alloc = true;
     }
     if (data) {
-        cleanup_machine_name_list();
+        cleanup();
         long buffer_size = 5000;
         std::vector<char> buffer(buffer_size);
         char *buf = buffer.data();
@@ -265,8 +269,8 @@ void initialise_machine_names(char *data) {
                 *q = 0;
                 machine_names.push_back(strdup(buf));
                 q = buf;
-                while (*p && *(p+1) != '\n')
-                    ++p;
+                while (*p && *p++ != '\n')
+                    ;
             }
         }
     }
@@ -332,9 +336,12 @@ int main(int argc, const char *argv[]) {
     program_name = strdup(basename(pn));
     free(pn);
 
-    history_file_path = std::string(getenv("HOME")) + "/" + history_name;
-    if (read_history(history_file_path.c_str()) != 0) {
-        printf("Error reading history from %s: %s\n", history_name.c_str(), strerror(errno));
+    const char *home_dir = getenv("HOME");
+    size_t len = strlen(home_dir) + strlen(history_name) + 2;
+    history_file = new char[len];
+    snprintf(history_file, len, "%s/%s", home_dir, history_name);
+    if (read_history(history_file) != 0) {
+        printf("Error reading history from %s: %s\n", history_name, strerror(errno));
     }
 
     context = new zmq::context_t;
@@ -373,6 +380,10 @@ int main(int argc, const char *argv[]) {
         psocket = &socket;
 
         socket.connect(url.c_str());
+        std::string word;
+        std::string msg;
+        std::string line;
+        std::stringstream line_input(line);
 
         // readline completion function
         rl_attempted_completion_function = my_rl_completion;
@@ -393,12 +404,12 @@ int main(int argc, const char *argv[]) {
         else {
             std::cerr << "Exception raised: " << e.what() << "\n";
         }
-        cleanup_machine_name_list();
+        cleanup();
         return 1;
     }
     catch (...) {
         std::cerr << "Exception of unknown type!\n";
     }
-    cleanup_machine_name_list();
+    cleanup();
     return 0;
 }
