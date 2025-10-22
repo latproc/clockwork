@@ -48,7 +48,7 @@ void debugParameterChange(MachineInstance *dest_machine) {
 tl::expected<bool, std::string> add_json_array(MachineInstance *list_machine, const Value &to_insert, int64_t pos,
                         bool before) {
     if (!to_insert.json) {
-        return tl::make_unexpected("Expected json array when inserting " + to_insert.asString());
+        return tl::make_unexpected("Unexpected null json when inserting " + to_insert.asString());
     }
     if (to_insert.json->type != cJSON_Array) {
         std::stringstream ss;
