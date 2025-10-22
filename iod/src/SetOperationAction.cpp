@@ -220,7 +220,8 @@ class IndexTracker {
 Action::Status IntersectSetOperation::doOperation() {
     long num_copied = 0;
     int64_t to_copy;
-    if (!source_a_machine) {
+    if (!source_a_machine || !source_b_machine) {
+        error_str = "Missing machine(s) for set operation";
         status = Failed;
         return status;
     }
@@ -378,6 +379,11 @@ UnionSetOperation::UnionSetOperation(MachineInstance *m, const SetOperationActio
     : SetOperationAction(m, dat) {}
 
 Action::Status UnionSetOperation::doOperation() {
+    if (!source_a_machine || !source_b_machine) {
+        error_str = "Missing machine(s) for set operation";
+        status = Failed;
+        return status;
+    }
     if (source_a_machine != dest_machine)
         for (unsigned int i = 0; i < source_a_machine->parameters.size(); ++i) {
             Value &a(source_a_machine->parameters.at(i).val);
@@ -426,6 +432,11 @@ DifferenceSetOperation::DifferenceSetOperation(MachineInstance *m,
     : SetOperationAction(m, dat) {}
 
 Action::Status DifferenceSetOperation::doOperation() {
+    if (!source_a_machine || !source_b_machine) {
+        error_str = "Missing machine(s) for set operation";
+        status = Failed;
+        return status;
+    }
     for (unsigned int i = 0; i < source_a_machine->parameters.size(); ++i) {
         Value &a(source_a_machine->parameters.at(i).val);
         bool found = false;
@@ -482,7 +493,6 @@ Action::Status SelectSetOperation::doOperation() {
         status = Failed;
         return status;
     }
-
     {
         if (start_pos.kind == Value::t_symbol || start_pos.kind == Value::t_string) {
             Value v = scope->properties.lookup(start_pos.sValue.c_str());
