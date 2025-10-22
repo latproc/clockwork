@@ -223,6 +223,7 @@ Action::Status IntersectSetOperation::doOperation() {
     if (!source_a_machine || !source_b_machine) {
         error_str = "Missing machine(s) for set operation";
         status = Failed;
+        owner->stop(this);
         return status;
     }
     if (count == -1 || !count.asInteger(to_copy)) {
@@ -372,6 +373,7 @@ doneIntersectOperation:
 #endif
     debugParameterChange(dest_machine);
     status = Complete;
+    owner->stop(this);
     return status;
 }
 
@@ -382,6 +384,7 @@ Action::Status UnionSetOperation::doOperation() {
     if (!source_a_machine || !source_b_machine) {
         error_str = "Missing machine(s) for set operation";
         status = Failed;
+        owner->stop(this);
         return status;
     }
     if (source_a_machine != dest_machine)
@@ -424,6 +427,7 @@ Action::Status UnionSetOperation::doOperation() {
         }
     debugParameterChange(dest_machine);
     status = Complete;
+    owner->stop(this);
     return status;
 }
 
@@ -435,6 +439,7 @@ Action::Status DifferenceSetOperation::doOperation() {
     if (!source_a_machine || !source_b_machine) {
         error_str = "Missing machine(s) for set operation";
         status = Failed;
+        owner->stop(this);
         return status;
     }
     for (unsigned int i = 0; i < source_a_machine->parameters.size(); ++i) {
@@ -476,6 +481,7 @@ Action::Status DifferenceSetOperation::doOperation() {
     ss << "]";
     dest_machine->setValue("DEBUG", Value(ss.str().c_str(), Value::t_string));
     status = Complete;
+    owner->stop(this);
     return status;
 }
 
@@ -491,6 +497,7 @@ Action::Status SelectSetOperation::doOperation() {
     if (!source_a_machine) {
         error_str = "No source machine for copy";
         status = Failed;
+        owner->stop(this);
         return status;
     }
     {
@@ -659,5 +666,6 @@ Action::Status SelectSetOperation::doOperation() {
     }
     source_a_machine->localised_names.erase("ITEM");
     status = Complete;
+    owner->stop(this);
     return status;
 }

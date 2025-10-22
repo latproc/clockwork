@@ -211,6 +211,7 @@ Action::Status IncludeAction::run() {
                     MessageLog::instance()->add(err_msg);
                     error_str = err_msg;
                     status = Failed;
+                    owner->stop(this);
                     return status;
                 }
             }
@@ -221,6 +222,7 @@ Action::Status IncludeAction::run() {
                 MessageLog::instance()->add(err_msg);
                 error_str = err_msg;
                 status = Failed;
+                owner->stop(this);
                 return status;
             }
             if (to_insert.kind == Value::t_symbol) {
@@ -256,6 +258,7 @@ Action::Status IncludeAction::run() {
                             if (!res) {
                                 error_str = res.error().c_str();
                                 status = Failed;
+                                owner->stop(this);
                                 return status;
                             }
                         }
@@ -284,6 +287,7 @@ Action::Status IncludeAction::run() {
                     if (!res) {
                         error_str = res.error().c_str();
                         status = Failed;
+                        owner->stop(this);
                         return status;
                     }
                 }
