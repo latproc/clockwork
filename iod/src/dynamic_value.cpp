@@ -1408,14 +1408,40 @@ DynamicValue *ClassNameValue::clone() const { return new ClassNameValue(*this); 
 const Value &ClassNameValue::operator()() {
     MachineInstance *mi = scope;
     machine = mi->lookup(machine_name);
-    if (!machine || !machine->getStateMachine()) {
+    if (machine && !machine->getStateMachine()) {
         std::stringstream ss;
-        ss << mi->getName() << " no machine " << machine_name << " for CLASS test\n";
+        ss << mi->getName() << " class for " << machine_name << " in CLASS test\n";
         MessageLog::instance()->add(ss.str().c_str());
         last_result = "NULL";
         return last_result;
     }
-    last_result = machine->getStateMachine()->name.c_str();
+    else if (machine) {
+        last_result = machine->getStateMachine()->name.c_str();
+    }
+    else if (!machine) {
+        auto & value = mi->getValue(machine_name);
+        switch (value.kind) {
+            case Value::t_empty: last_result = "NULL"; break;
+            case Value::t_symbol: last_result = "SYMBOL"; break;
+            case Value::t_string: last_result = "STRING"; break;
+            case Value::t_bool: last_result = "BOOL"; break;
+            case Value::t_float: last_result = "FLOAT"; break;
+            case Value::t_integer: last_result = "INTEGER"; break;
+            case Value::t_dynamic: last_result = "DYNAMIC"; break;
+            case Value::t_json:
+                if (!value.json) { last_result = "NULL_JSON"; }
+                else if (value.json->type == cJSON_Array) { last_result = "JSON_ARRAY"; }
+                else if (value.json->type == cJSON_Object) { last_result = "JSON_OBJECT"; }
+                else if (value.json->type == cJSON_String) { last_result = "JSON_STRING"; }
+                else if (value.json->type == cJSON_Number) { last_result = "JSON_NUMBER"; }
+                else if (value.json->type == cJSON_True || value.json->type == cJSON_False) {
+                    last_result = "JSON_BOOL";
+                }
+                else if (value.json->type == cJSON_NULL) { last_result = "JSON_NULL"; }
+                break;
+            break;
+        }
+    }
     return last_result;
 }
 std::ostream &ClassNameValue::operator<<(std::ostream &out) const {
