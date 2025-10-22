@@ -11,6 +11,7 @@ extern YYSTYPE yylval;
 int yycharno;
 static char json_delim;
 static int json_depth;
+extern const char *yyfilename;
 
 void prepare_buffer();
 void append_char(int ch);
@@ -226,12 +227,27 @@ JSON_VALUE        {
                     if (json_delim == 0) { json_delim = '{'; }
                     begin_group('{');
                   }
-<JSONSTR>"}"      { if (end_group('}') == 0) { return JSONVAL; } }
+<JSONSTR>"}"      { if (end_group('}') == 0) {
+                        if (yylval.jVal == nullptr) {
+                            printf("cannot parse JSON at %s:%d,%d\n", yyfilename, yylineno, yycharno);
+                            yyerror("error parsing JSON");
+                        }
+                        else { return JSONVAL; }
+                    }
+                  }
 <JSONSTR>"["      {
                     if (json_delim == 0) { json_delim = '['; }
                     begin_group('[');
                   }
-<JSONSTR>"]"      { if (end_group(']') == 0) { return JSONVAL; } }
+<JSONSTR>"]"      { if (end_group(']') == 0) {
+                       if (yylval.jVal == nullptr) {
+                           printf("cannot parse JSON at %s:%d,%d\n", yyfilename, yylineno, yycharno);
+                           yyerror("error parsing JSON");
+                       }
+                       else { return JSONVAL; }
+                    }
+                  }
+
 <JSONSTR>\n       { append_char(*yytext); yylineno++; yycharno=1; }
 <JSONSTR>.        {
                     if (json_delim == 0) {
@@ -387,7 +403,6 @@ int end_group(char end) {
     if ((json_delim == '{' && end == '}') || (json_delim == '[' && end == ']')) {
         if (--json_depth == 0) {
             BEGIN 0;
-            printf("JSON: %s\n", buf);
             yylval.jVal = cJSON_Parse(buf);
             buf = NULL;
         }
