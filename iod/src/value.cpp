@@ -173,7 +173,8 @@ Value::Value(double v)
 Value::Value(cJSON *v)
     : kind(t_json), fValue(0), json(nullptr), cached_machine(0), cached_value(0), token_id(0),
       dyn_value(0) {
-    *this = assign_value(v);
+    if (v) { *this = assign_value(v); }
+    else { kind = t_empty; }
 }
 
 Value::Value(const char *str, Kind k)
