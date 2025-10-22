@@ -1020,11 +1020,6 @@ value {
     $$ = new Predicate($1, opMatch, new Predicate( $3 ));
     delete $3;
 }
-| ITEM JSONEXPR OF SYMBOL {
-    Predicate *p = new Predicate($4);
-    p->json_expression = $2;
-    $$ = p;
-}
 ;
 
 value:
@@ -1544,9 +1539,16 @@ SET SYMBOL TO expression error_clause  {
 //    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5, $7);
 //	cleanupErrorClause(true);
 //}
+| SYMBOL BECOMES ITEM JSONEXPR OF SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    printf("%s := %s->%s\n", $1, $6, $4);
+    Predicate *source = new Predicate($6);
+    source->json_expression = $4;
+    current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opGetSubExpr, source)); // FIXME
+}
 | ITEM JSONEXPR OF SYMBOL BECOMES expression {
     if (current_action) current_actions->push_back(current_action);
-    //std::cout <<  $4 << "->" <<  $2 << " := " << *$6 << "\n";
+    std::cout <<  $4 << "->" <<  $2 << " := " << *$6 << "\n";
     Predicate *target = new Predicate($4);
     target->json_expression = $2;
     current_action = new PredicateActionTemplate(new Predicate(target, opPutSubExpr, new Predicate(*$6))); // FIXME
