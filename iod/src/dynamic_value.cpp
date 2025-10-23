@@ -1421,7 +1421,7 @@ const Value &ClassNameValue::operator()() {
     else if (!machine) {
         auto & value = mi->getValue(machine_name);
         switch (value.kind) {
-            case Value::t_empty: last_result = "NULL"; break;
+            case Value::t_empty: last_result = "EMPTY"; break;
             case Value::t_symbol: last_result = "SYMBOL"; break;
             case Value::t_string: last_result = "STRING"; break;
             case Value::t_bool: last_result = "BOOL"; break;
