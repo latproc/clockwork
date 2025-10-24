@@ -602,21 +602,38 @@ endif()
 
 install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib COMPONENT libs)
 install(TARGETS cw_interpreter ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib COMPONENT libs)
+install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib COMPONENT clientlib)
+
 add_custom_target(libs
   DEPENDS cw_client cw_interpreter
   COMMENT "Build only the Clockwork libraries (cw_client, cw_interpreter)"
 )
 
-add_custom_target(install_libs
-  COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --component libs
-  DEPENDS cw_client cw_interpreter
-  COMMENT "Install only the Clockwork libraries (component: libs)"
-)
-
-install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib COMPONENT clientlib)
-add_custom_target(install_client
-	COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --component clientlib
-	DEPENDS cw_client
-	COMMENT "Install only the cw_client library (component: clientlib)"
-)
+if (CMAKE_VERSION VERSION_LESS "3.15")
+    add_custom_target(install_libs
+      COMMAND "${CMAKE_COMMAND}" -DCMAKE_INSTALL_CONFIG_NAME=$<CONFIG> -DCOMPONENT=libs
+              -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+      DEPENDS cw_client cw_interpreter
+      COMMENT "Install only the Clockwork libraries (component: libs)"
+    )
+    
+    add_custom_target(install_client
+      COMMAND "${CMAKE_COMMAND}" -DCMAKE_INSTALL_CONFIG_NAME=$<CONFIG> -DCOMPONENT=clientlib
+              -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+      DEPENDS cw_client
+      COMMENT "Install only the cw_client library (component: clientlib)"
+    )
+else()
+    add_custom_target(install_libs
+      COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --component libs
+      DEPENDS cw_client cw_interpreter
+      COMMENT "Install only the Clockwork libraries (component: libs)"
+    )
+    
+    add_custom_target(install_client
+    	COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --component clientlib
+    	DEPENDS cw_client
+    	COMMENT "Install only the cw_client library (component: clientlib)"
+    )
+endif()
 #install(DIRECTORY src/ DESTINATION include/clockwork FILES_MATCHING PATTERN "*.h")
