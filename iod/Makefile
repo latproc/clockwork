@@ -18,6 +18,14 @@ release-install:
 	[ -d "build/Release" ] || mkdir build/Release
 	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make $(JOBS) install
 
+client:
+	[ -d "build" ] || mkdir build
+	[ -d "build/Release" ] || mkdir build/Release
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. -DRUN_TESTS=OFF && cmake --build . --target cw_client -- $(JOBS)
+
+client-install:	client
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --install . --component clientlib
+
 debug:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Debug" ] || mkdir build/Debug
