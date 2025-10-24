@@ -107,6 +107,7 @@ iod/persistd
 iod/iosh
 iod/device_connector
 iod/iocmd
+iod/dbd
 lib/
 ethercat-lib/
 examples/wecon/wecon
