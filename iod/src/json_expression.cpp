@@ -178,39 +178,62 @@ PathResult follow_json_expr_path(const std::string &str,
 } // namespace
 
 cJSON *apply(const std::string &str, cJSON *json) {
-    cJSON *result = follow_json_expr_path(str, json, boost::none).value;
-    if (result) {
-        auto str = cJSON_Print(result);
-        result = cJSON_Parse(str);
-        free(str);
+    try {
+        cJSON *result = follow_json_expr_path(str, json, boost::none).value;
+        if (result) {
+            auto str = cJSON_Print(result);
+            result = cJSON_Parse(str);
+            free(str);
+        }
+        return result;
     }
-    return result;
+    catch (const std::runtime_error &err) {
+        return nullptr;
+    }
 }
 
 cJSON *apply(const std::string &str, cJSON *json, SymbolTable* symbols) {
-    cJSON *result = follow_json_expr_path(str, json, symbols).value;
-    if (result) {
-        auto str = cJSON_Print(result);
-        result = cJSON_Parse(str);
-        free(str);
+    try {
+        cJSON *result = follow_json_expr_path(str, json, symbols).value;
+        if (result) {
+            auto str = cJSON_Print(result);
+            result = cJSON_Parse(str);
+            free(str);
+        }
+        return result;
     }
-    return result;
+    catch (const std::runtime_error &err) {
+        return nullptr;
+    }
 }
 
 cJSON *apply(const std::string &str, cJSON *json, MachineInstance* context) {
-    cJSON *result = follow_json_expr_path(str, json, boost::none, context).value;
-    if (result) {
-        auto str = cJSON_Print(result);
-        result = cJSON_Parse(str);
-        free(str);
+    try {
+        cJSON *result = follow_json_expr_path(str, json, boost::none, context).value;
+        if (result) {
+            auto str = cJSON_Print(result);
+            result = cJSON_Parse(str);
+            free(str);
+        }
+        return result;
     }
-    return result;
+    catch (const std::runtime_error &err) {
+        return nullptr;
+    }
 }
 
 cJSON *assign(const std::string &str, cJSON *json, const std::string &value,
                 boost::optional<SymbolTable *> symbols,
                 boost::optional<MachineInstance *> context) {
-    auto result = follow_json_expr_path(str, json, symbols, context);
+    if (!json) { return json; }
+    PathResult result;
+    try {
+         result = follow_json_expr_path(str, json, symbols, context);
+    }
+    catch (const std::runtime_error &err) {
+        result.parent = nullptr;
+        result.value = nullptr;
+    }
     auto string = cJSON_CreateString(value.c_str());
     if (result.value) {
         if (result.parent) {
