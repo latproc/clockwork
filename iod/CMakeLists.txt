@@ -599,6 +599,24 @@ install(TARGETS cw dbd iosh iocmd device_connector modbusd persistd RUNTIME DEST
 if(USE_SOEM)
 	install(TARGETS cw_ecat RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
-install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib)
-install(TARGETS cw_interpreter ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib)
+
+install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib COMPONENT libs)
+install(TARGETS cw_interpreter ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib COMPONENT libs)
+add_custom_target(libs
+  DEPENDS cw_client cw_interpreter
+  COMMENT "Build only the Clockwork libraries (cw_client, cw_interpreter)"
+)
+
+add_custom_target(install_libs
+  COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --component libs
+  DEPENDS cw_client cw_interpreter
+  COMMENT "Install only the Clockwork libraries (component: libs)"
+)
+
+install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib COMPONENT clientlib)
+add_custom_target(install_client
+	COMMAND "${CMAKE_COMMAND}" --install "${CMAKE_BINARY_DIR}" --component clientlib
+	DEPENDS cw_client
+	COMMENT "Install only the cw_client library (component: clientlib)"
+)
 #install(DIRECTORY src/ DESTINATION include/clockwork FILES_MATCHING PATTERN "*.h")
