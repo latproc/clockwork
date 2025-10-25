@@ -38,6 +38,15 @@ static void start_test_server() {
         ])", "application/json");
     });
 
+    // Minimal POST endpoint: echo the posted JSON body back verbatim
+    svr.Post("/api/echo", [](const httplib::Request& req, httplib::Response& res) {
+        if (req.body.empty()) {
+            res.set_content("{}", "application/json");
+        } else {
+            res.set_content(req.body, "application/json");
+        }
+    });
+
     std::thread([&]() {
         svr.listen("127.0.0.1", 8081);
     }).detach();
@@ -50,20 +59,7 @@ class WebRequestTests {
   public:
     WebRequestTests() : machine_class_{new MachineClass("WebTest")} {
         scope_ = MachineInstanceFactory::create("scope", machine_class_->name);
-        scope_->setStateMachine(machine_class_);
-        tests_.push_back(TestCase([this]() { return test_basic_request(); }));
-    }
-    ~WebRequestTests() { delete scope_; }
-    std::list<TestCase> tests() { return tests_; }
-
-  private:
-    std::list<TestCase> tests_;
-    MachineClass *machine_class_;
-    MachineInstance *scope_;
-
-    TestResult test_basic_request() {
-        MachineInstance *req = MachineInstanceFactory::create("req", machine_class_->name);
-        req->setStateMachine(machine_class_);
+        // Define states once for the class and disable automatic transitions
         machine_class_->addState("Idle", true);
         machine_class_->addState("Start", true);
         machine_class_->addState("Running", true);
@@ -73,10 +69,42 @@ class WebRequestTests {
         machine_class_->default_state = State("Idle");
         machine_class_->disableAutomaticStateChanges();
 
+        scope_->setStateMachine(machine_class_);
+        tests_.push_back(TestCase([this]() { return test_basic_request(); }));
+        tests_.push_back(TestCase([this]() { return test_post_request(); }));
+    }
+    ~WebRequestTests() { delete scope_; }
+    std::list<TestCase> tests() { return tests_; }
+
+  private:
+    std::list<TestCase> tests_;
+    MachineClass *machine_class_;
+    MachineInstance *scope_;
+
+    MachineInstance * create_web_request_machine() {
+        MachineInstance *req = MachineInstanceFactory::create("req_get", machine_class_->name);
+        req->setStateMachine(machine_class_);
         req->properties.add("Request", Value{"http://127.0.0.1:8081/api/test"});
         req->properties.add("Status", Value{0});
         req->properties.add("Result", Value{""});
         req->properties.add("Errors", Value{""});
+        return req;
+    }
+
+    MachineInstance * create_web_post_machine() {
+        MachineInstance *req = MachineInstanceFactory::create("req_post", machine_class_->name);
+        req->setStateMachine(machine_class_);
+        req->properties.add("Request", Value{"http://127.0.0.1:8081/api/echo"});
+        req->properties.add("Status", Value{0});
+        req->properties.add("Result", Value{""});
+        req->properties.add("Errors", Value{""});
+        // Minimal JSON body to exercise POST path; echoed back verbatim by the test server
+        req->properties.add("PostData", Value{R"({"hello":true})"});
+        return req;
+    }
+
+    TestResult test_basic_request() {
+        MachineInstance *req = create_web_request_machine();
         req->idle();
         usleep(10000);
 
@@ -109,6 +137,42 @@ class WebRequestTests {
         std::cout << "Result: " << req->getValue("Result") << "\n";
 
         EXPECT_TRUE(state == "Done");
+        EXPECT_TRUE(debug_mallocs_remaining() == 0);
+        delete req;
+        PASS;
+    }
+
+    TestResult test_post_request() {
+        MachineInstance *req = create_web_post_machine();
+        req->idle();
+        usleep(10000);
+
+        // Start the request
+        changeState(req,"Start");
+        EXPECT_TRUE(req->getCurrentStateVal() != nullptr);
+        Value st = *req->getCurrentStateVal();
+        EXPECT_TRUE(st == "Start");
+
+        exec_web_request((void*)req);
+        EXPECT_TRUE(*req->getCurrentStateVal() != Value{"Error"});
+
+        // Pump until the plugin finishes
+        while (req->getCurrentStateVal() != nullptr) {
+            req->idle();
+            exec_web_request((void*)req);
+            usleep(10000);
+            Value s = *req->getCurrentStateVal();
+            if (s == "Done" || s == "Error") break;
+        }
+
+        Value state = *req->getCurrentStateVal();
+        Value status = req->getValue("Status");
+        Value result = req->getValue("Result");
+        Value errors = req->getValue("Errors");
+
+        EXPECT_TRUE(state == "Done");
+        EXPECT_TRUE(status == 200);
+        EXPECT_TRUE(result.asString() == R"({"hello":true})");
         EXPECT_TRUE(debug_mallocs_remaining() == 0);
         delete req;
         PASS;
