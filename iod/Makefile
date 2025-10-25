@@ -24,7 +24,7 @@ client:
 	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. -DRUN_TESTS=OFF && cmake --build . --target cw_client -- $(JOBS)
 
 client-install:	client
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --install . --component clientlib
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build . --target install_client -- $(JOBS)
 
 debug:
 	[ -d "build" ] || mkdir build
