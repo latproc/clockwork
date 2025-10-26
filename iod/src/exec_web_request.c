@@ -154,7 +154,7 @@ int exec_web_request(void *scope) {
         data->request = req;
 
         char *post_data = getStringValue(scope, "PostData");
-        did_alloc("post_data");
+        if (post_data) { did_alloc("post_data"); }
         if (post_data && *post_data && strcmp(post_data, "null") != 0) {
             data->post_data = post_data;
         } else if (post_data) {
