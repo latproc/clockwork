@@ -13,11 +13,7 @@
 #include "exec_web_request.h"
 #include "stdio.h"
 #include "assert.h"
-#include <Plugin.h>
-#include <curl/curl.h>
 #include <pthread.h>
-#include <string.h>
-#include <stdlib.h>
 
 struct WebRequestData {
     pthread_t thread;
@@ -30,6 +26,8 @@ struct WebRequestData {
     char *errors;
     const int64_t *status;
     int trust_host_certificate;
+    /* NEW: optional Content-Type string */
+    char *content_type;
 };
 
 static pthread_once_t curl_once = PTHREAD_ONCE_INIT;
@@ -41,8 +39,7 @@ static void curl_global_init_once(void) {
     CURLcode rc = curl_global_init(CURL_GLOBAL_DEFAULT);
     if (rc != CURLE_OK) {
         log_message_2(initialisation_scope, "curl_global_init failed: ", curl_easy_strerror(rc));
-    }
-    else {
+    } else {
         curl_initialized = 1;
     }
 }
@@ -79,22 +76,49 @@ static void *worker(void *arg) {
         return NULL;
     }
 
+    /* Optional headers list (for Content-Type or others later) */
+    struct curl_slist *headers = NULL;
+
     curl_easy_setopt(curl, CURLOPT_URL, data->request);
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, data);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "ClockworkWebRequest/1.0");
     curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); /* good hygiene on macOS */
+
     if (data->trust_host_certificate) {
-        // Disable verification of the server's certificate
+        /* Disable TLS verification ONLY when explicitly requested */
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-        // Disable verification of the host name in the certificate
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
+    }
+
+    /* If caller provided Content-Type, set it */
+    if (data->content_type && *data->content_type) {
+        /* Build "Content-Type: <value>" */
+        const char *prefix = "Content-Type: ";
+        size_t need = strlen(prefix) + strlen(data->content_type) + 1;
+        char *ct_header = (char*)malloc(need);
+        if (ct_header) {
+            memcpy(ct_header, prefix, strlen(prefix));
+            memcpy(ct_header + strlen(prefix), data->content_type, strlen(data->content_type) + 1);
+            headers = curl_slist_append(headers, ct_header);
+            /* curl_slist_append copies the string, safe to free our buffer */
+            free(ct_header);
+            if (headers) {
+                curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+            } else if (!data->errors) {
+                data->errors = debug_strdup("Failed to append Content-Type header", "errors");
+            }
+        } else if (!data->errors) {
+            data->errors = debug_strdup("malloc failed building Content-Type header", "errors");
+        }
     }
 
     if (data->post_data && *data->post_data) {
         curl_easy_setopt(curl, CURLOPT_POST, 1L);
         curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data->post_data);
+        /* Note: if Content-Type not set above, libcurl may default to
+           application/x-www-form-urlencoded for POSTs. */
     }
 
     /* If you want to *avoid* macOS proxy auto-detection entirely, uncomment:
@@ -107,6 +131,9 @@ static void *worker(void *arg) {
         if (!data->errors) data->errors = debug_strdup(curl_easy_strerror(res), "errors");
     }
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &data->http_code);
+
+    /* Cleanup */
+    if (headers) curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 
     data->done = 1;
@@ -153,12 +180,22 @@ int exec_web_request(void *scope) {
         }
         data->request = req;
 
+        /* Optional POST body */
         char *post_data = getStringValue(scope, "PostData");
         if (post_data) { did_alloc("post_data"); }
         if (post_data && *post_data && strcmp(post_data, "null") != 0) {
             data->post_data = post_data;
         } else if (post_data) {
             debug_free(post_data, "post_data");
+        }
+
+        /* NEW: optional Content-Type */
+        char *content_type = getStringValue(scope, "ContentType");
+        if (content_type) { did_alloc("content_type"); }
+        if (content_type && *content_type && strcmp(content_type, "null") != 0) {
+            data->content_type = content_type;
+        } else if (content_type) {
+            debug_free(content_type, "content_type");
         }
 
         data->trust_host_certificate = getBoolValue(scope, "TrustHostCert");
@@ -198,10 +235,11 @@ int exec_web_request(void *scope) {
         }
 
     done_cleanup:
-        if (data->request) { debug_free(data->request, "Request"); data->request = 0; }
-        if (data->post_data) { debug_free(data->post_data, "post_data"); data->post_data = 0; }
-        if (data->result) { free(data->result); data->result = 0; }
-        if (data->errors) { free(data->errors); data->errors = 0; }
+        if (data->request)      { debug_free(data->request, "Request"); data->request = 0; }
+        if (data->post_data)    { debug_free(data->post_data, "post_data"); data->post_data = 0; }
+        if (data->content_type) { debug_free(data->content_type, "content_type"); data->content_type = 0; }
+        if (data->result)       { free(data->result); data->result = 0; }
+        if (data->errors)       { free(data->errors); data->errors = 0; }
         setInstanceData(scope, 0);
         debug_free(data, "WebRequestData");
     }
@@ -209,3 +247,4 @@ int exec_web_request(void *scope) {
     debug_free(current, "current");
     return PLUGIN_COMPLETED;
 }
+
