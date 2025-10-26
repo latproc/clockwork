@@ -26,8 +26,10 @@ struct WebRequestData {
     char *errors;
     const int64_t *status;
     int trust_host_certificate;
-    /* NEW: optional Content-Type string */
+    /* Optional: Content-Type header value */
     char *content_type;
+    /* NEW: Optional HTTP method override (e.g., PATCH/PUT/DELETE/HEAD/GET/POST) */
+    char *method;
 };
 
 static pthread_once_t curl_once = PTHREAD_ONCE_INIT;
@@ -35,7 +37,6 @@ static int curl_initialized = 0;
 static void *initialisation_scope = 0;
 
 static void curl_global_init_once(void) {
-    /* Initialize everything libcurl needs (SSL, resolver, CF proxies, etc.) */
     CURLcode rc = curl_global_init(CURL_GLOBAL_DEFAULT);
     if (rc != CURLE_OK) {
         log_message_2(initialisation_scope, "curl_global_init failed: ", curl_easy_strerror(rc));
@@ -66,7 +67,6 @@ static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
 static void *worker(void *arg) {
     struct WebRequestData *data = (struct WebRequestData*)arg;
 
-    /* Ensure global init happened before any easy handle is created */
     pthread_once(&curl_once, curl_global_init_once);
 
     CURL *curl = curl_easy_init();
@@ -84,17 +84,15 @@ static void *worker(void *arg) {
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, data);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, "ClockworkWebRequest/1.0");
-    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L); /* good hygiene on macOS */
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 
     if (data->trust_host_certificate) {
-        /* Disable TLS verification ONLY when explicitly requested */
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
     }
 
-    /* If caller provided Content-Type, set it */
+    /* Set Content-Type if provided */
     if (data->content_type && *data->content_type) {
-        /* Build "Content-Type: <value>" */
         const char *prefix = "Content-Type: ";
         size_t need = strlen(prefix) + strlen(data->content_type) + 1;
         char *ct_header = (char*)malloc(need);
@@ -102,7 +100,6 @@ static void *worker(void *arg) {
             memcpy(ct_header, prefix, strlen(prefix));
             memcpy(ct_header + strlen(prefix), data->content_type, strlen(data->content_type) + 1);
             headers = curl_slist_append(headers, ct_header);
-            /* curl_slist_append copies the string, safe to free our buffer */
             free(ct_header);
             if (headers) {
                 curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -114,17 +111,41 @@ static void *worker(void *arg) {
         }
     }
 
-    if (data->post_data && *data->post_data) {
-        curl_easy_setopt(curl, CURLOPT_POST, 1L);
-        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data->post_data);
-        /* Note: if Content-Type not set above, libcurl may default to
-           application/x-www-form-urlencoded for POSTs. */
+    /* Determine HTTP method: default behavior vs override */
+    const char *method = (data->method && *data->method) ? data->method : NULL;
+    if (method) {
+        /* Case-insensitive comparisons for convenience */
+        if (strcasecmp(method, "GET") == 0) {
+            curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+        } else if (strcasecmp(method, "POST") == 0) {
+            curl_easy_setopt(curl, CURLOPT_POST, 1L);
+        } else if (strcasecmp(method, "HEAD") == 0) {
+            curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
+            curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "HEAD");
+        } else {
+            /* PATCH, PUT, DELETE, OPTIONS, etc. */
+            curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
+        }
     }
 
-    /* If you want to *avoid* macOS proxy auto-detection entirely, uncomment:
-       curl_easy_setopt(curl, CURLOPT_PROXY, "");
-       // or: curl_easy_setopt(curl, CURLOPT_NOPROXY, "*");
-    */
+    /* Attach body if provided.
+       - Default (no method override): this will become POST if PostData is present.
+       - With override:
+           * POST: we also set CURLOPT_POST (above), so this is a POST with body.
+           * PATCH/PUT/DELETE/etc: we set CUSTOMREQUEST above; POSTFIELDS here supplies the body.
+           * HEAD: ignore any PostData. */
+    if (data->post_data && *data->post_data) {
+        if (!method) {
+            /* preserve original default: body => POST */
+            curl_easy_setopt(curl, CURLOPT_POST, 1L);
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data->post_data);
+        } else if (strcasecmp(method, "HEAD") == 0) {
+            /* HEAD must not have a body; do nothing */
+        } else {
+            /* For POST, PATCH, PUT, DELETE, etc., send body */
+            curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data->post_data);
+        }
+    }
 
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
@@ -132,7 +153,6 @@ static void *worker(void *arg) {
     }
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &data->http_code);
 
-    /* Cleanup */
     if (headers) curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 
@@ -158,7 +178,7 @@ int exec_web_request(void *scope) {
             return PLUGIN_ERROR;
         }
         {
-            initialisation_scope = scope; // used to log a startup error
+            initialisation_scope = scope;
             pthread_once(&curl_once, curl_global_init_once);
             initialisation_scope = 0;
         }
@@ -189,13 +209,22 @@ int exec_web_request(void *scope) {
             debug_free(post_data, "post_data");
         }
 
-        /* NEW: optional Content-Type */
+        /* Optional Content-Type */
         char *content_type = getStringValue(scope, "ContentType");
         if (content_type) { did_alloc("content_type"); }
         if (content_type && *content_type && strcmp(content_type, "null") != 0) {
             data->content_type = content_type;
         } else if (content_type) {
             debug_free(content_type, "content_type");
+        }
+
+        /* NEW: Optional Method override */
+        char *method = getStringValue(scope, "Method");
+        if (method) { did_alloc("method"); }
+        if (method && *method && strcmp(method, "null") != 0) {
+            data->method = method;
+        } else if (method) {
+            debug_free(method, "method");
         }
 
         data->trust_host_certificate = getBoolValue(scope, "TrustHostCert");
@@ -205,7 +234,6 @@ int exec_web_request(void *scope) {
 
         if (!changeState(scope, "Running")) goto done_cleanup;
 
-        /* Spawn worker thread */
         int rc = pthread_create(&data->thread, NULL, worker, data);
         if (rc != 0) {
             setStringValue(scope, "Errors", "pthread_create failed");
@@ -218,10 +246,9 @@ int exec_web_request(void *scope) {
     else if (current && strcmp(current, "Running") == 0 && data->running) {
         if (!data->done) {
             debug_free(current, "current");
-            return PLUGIN_COMPLETED; /* still running */
+            return PLUGIN_COMPLETED;
         }
 
-        /* Join and finalize */
         pthread_join(data->thread, NULL);
 
         setIntValue(scope, "Status", (int64_t)data->http_code);
@@ -238,6 +265,7 @@ int exec_web_request(void *scope) {
         if (data->request)      { debug_free(data->request, "Request"); data->request = 0; }
         if (data->post_data)    { debug_free(data->post_data, "post_data"); data->post_data = 0; }
         if (data->content_type) { debug_free(data->content_type, "content_type"); data->content_type = 0; }
+        if (data->method)       { debug_free(data->method, "method"); data->method = 0; }
         if (data->result)       { free(data->result); data->result = 0; }
         if (data->errors)       { free(data->errors); data->errors = 0; }
         setInstanceData(scope, 0);
