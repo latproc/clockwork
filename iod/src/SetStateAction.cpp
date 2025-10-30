@@ -63,7 +63,7 @@ void SetStateActionTemplate::toC(std::ostream &out, std::ostream &vars) const {
 
 SetStateAction::SetStateAction(MachineInstance *mi, SetStateActionTemplate &t, uint64_t auth)
     : Action(mi), target(t.target), saved_state(t.new_state), new_state(t.new_state),
-      value(t.new_state.sValue.c_str()), machine(0), reason(t.reason), authority(auth) {
+      value(t.new_state.sValue.c_str()), machine(0), authority(auth) {
     if (t.expression()) {
         expr = new Predicate(*t.expression());
     }
