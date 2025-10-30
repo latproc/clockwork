@@ -42,12 +42,12 @@ std::string MessageLog::add(const std::string a, const std::string b, const std:
 
 void MessageLog::add(const char *text) {
     size_t len = 50 + strlen(text);
-    char buf[len];
-    Logger::getTimeString(buf, 50);
+    std::vector<char> buf(len);
+    Logger::getTimeString(buf.data(), 50);
 
     boost::mutex::scoped_lock lock(mutex_);
-    strncat(buf, text, len);
-    size_t extra = strlen(buf) + 1 + sizeof(LogEntry);
+    strncat(buf.data(), text, len);
+    size_t extra = strlen(buf.data()) + 1 + sizeof(LogEntry);
     if (current_memory + extra > max_memory) {
         std::list<LogEntry *>::iterator iter = entries.begin();
         while (iter != entries.end() && current_memory + extra > max_memory) {
@@ -58,7 +58,7 @@ void MessageLog::add(const char *text) {
             delete e;
         }
     }
-    entries.push_back(new LogEntry(buf));
+    entries.push_back(new LogEntry(buf.data()));
     current_memory += extra;
 }
 
