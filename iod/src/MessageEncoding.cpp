@@ -232,7 +232,6 @@ std::string MessageEncoding::encodeState(const std::string &machine, const std::
 std::string MessageEncoding::encodeState(const std::string &machine, const std::string &state) {
     std::stringstream ss;
     ss << "{\"command\":\"STATE\", \"params\":[\"" <<machine << "\", \"" << state << "\"]} ";
-    size_t msglen = machine.length() + state.length() + 50;
     return ss.str();
 }
 

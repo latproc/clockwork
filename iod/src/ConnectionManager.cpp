@@ -57,41 +57,6 @@ std::string STATUS_NAMES[]{"not_used",
                            "error",
                            "e_connected"};
 
-std::string constructAlphaNumericString(const char *prefix, const char *val, const char *suffix,
-                                        const char *default_name) {
-    if (!val) {
-        return default_name;
-    }
-    auto len = strlen(val);
-    if (prefix) {
-        len += strlen(prefix);
-    }
-    if (suffix) {
-        len += strlen(suffix);
-    }
-    std::vector<char> buf(len + 1);
-    char *q = buf.data();
-    if (prefix) {
-        strcpy(buf.data(), prefix);
-        q += strlen(prefix);
-    }
-    const char *p = val;
-    while (*p && len--) {
-        if (isalnum(*p)) {
-            *q++ = *p;
-        }
-        ++p;
-    }
-    *q = 0;
-    if (q == buf.data()) { // no alpha/num found in the input string
-        return default_name;
-    }
-    if (suffix) {
-        strcpy(q, suffix);
-    }
-    return buf.data();
-}
-
 }
 
 SingleConnectionMonitor::SingleConnectionMonitor(zmq::socket_t &sm) : SocketMonitor(sm) {}

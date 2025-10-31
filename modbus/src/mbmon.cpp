@@ -1,24 +1,20 @@
 #include "ConnectionManager.h"
 #include "MessagingInterface.h"
 #include "SocketMonitor.h"
-#include "buffer_monitor.h"
 #include "cJSON.h"
 #include "modbus_client_thread.h"
 #include "modbus_helpers.h"
 #include "monitor.h"
 #include "options.h"
 #include "plc_interface.h"
-#include "symboltable.h"
 #include <Logger.h>
 #include <MessageEncoding.h>
 #include <MessagingInterface.h>
 #include <boost/thread.hpp>
-#include <fstream>
 #include <iostream>
 #include <libgen.h>
 #include <map>
 #include <modbus.h>
-#include <set>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
@@ -49,26 +45,21 @@ Options options;
 
 /* Clockwork interface */
 
-void sendMessage(zmq::socket_t &socket, const char *message) {
-    safeSend(socket, message, strlen(message));
+void sendMessage(zmq::socket_t &socket, const std::string &message) {
+    safeSend(socket, message.c_str(), message.size());
 }
 
 std::list<Value> params;
-char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
+char *send_command(zmq::socket_t &sock, const std::string &cmd, const std::list<Value> &params) {
     if (params.size() == 0)
         return 0;
-    Value cmd_val = params.front();
-    params.pop_front();
-    std::string cmd = cmd_val.asString();
-    char *msg = MessageEncoding::encodeCommand(cmd, &params);
+    std::string msg = MessageEncoding::encodeCommand(cmd, params);
     if (options.verbose)
         std::cerr << " sending: " << msg << "\n";
     sendMessage(sock, msg);
-    size_t size = strlen(msg);
-    free(msg);
     zmq::message_t reply;
     if (sock.recv(&reply)) {
-        size = reply.size();
+        auto size = reply.size();
         char *data = (char *)malloc(size + 1);
         memcpy(data, reply.data(), size);
         data[size] = 0;
@@ -78,8 +69,8 @@ char *send_command(zmq::socket_t &sock, std::list<Value> &params) {
     return 0;
 }
 
-void process_command(zmq::socket_t &sock, std::list<Value> &params) {
-    char *data = send_command(sock, params);
+void process_command(zmq::socket_t &sock,const std::string &cmd, const std::list<Value> &params) {
+    char *data = send_command(sock, cmd, params);
     if (data) {
         if (options.verbose)
             std::cerr << data << "\n";
@@ -97,11 +88,10 @@ void sendStatus(const char *s) {
     }
     if (options.status_machine.length()) {
         std::list<Value> cmd;
-        cmd.push_back("PROPERTY");
-        cmd.push_back(options.status_machine.c_str());
-        cmd.push_back(options.status_property.c_str());
-        cmd.push_back(s);
-        process_command(sock, cmd);
+        cmd.push_back(Value{options.status_machine});
+        cmd.push_back(Value{options.status_property});
+        cmd.push_back(Value{s});
+        process_command(sock, "PROPERTY", cmd);
     }
     else {
         FileLogger fl(program_name);
@@ -114,7 +104,7 @@ void sendStatus(const char *s) {
 class ClockworkClientThread {
 
 public:
-	ClockworkClientThread(): finished(false) { 
+	ClockworkClientThread(): finished(false) {
 		int linger = 0; // do not wait at socket close time
 
 		socket = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
@@ -124,7 +114,7 @@ public:
 	}
 	void operator()() {
 		while (!finished) {
-			usleep(500000);	
+			usleep(500000);
 		}
 	}
 	zmq::socket_t *socket;
@@ -133,38 +123,36 @@ public:
 };
 */
 
-std::map<int, UserData *> active_addresses;
-std::map<int, UserData *> ro_bits;
-std::map<int, UserData *> inputs;
+std::map<unsigned int, UserData *> active_addresses;
+std::map<unsigned int, UserData *> ro_bits;
+std::map<unsigned int, UserData *> inputs;
 //std::map<int, UserData *> registers;
 
 void sendStateUpdate(zmq::socket_t *sock, ModbusMonitor *mm, bool which) {
     std::list<Value> cmd;
-    cmd.push_back("SET");
-    cmd.push_back(mm->name().c_str());
-    cmd.push_back("TO");
+    cmd.push_back(Value{mm->name()});
+    cmd.push_back(Value{"TO"});
     if (which)
-        cmd.push_back("on");
+        cmd.push_back(Value{"on"});
     else
-        cmd.push_back("off");
-    process_command(*sock, cmd);
+        cmd.push_back(Value{"off"});
+    process_command(*sock, "SET", cmd);
 }
 
 void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
     std::list<Value> cmd;
     int16_t value = 0;
-    cmd.push_back("PROPERTY");
     char buf[100];
     snprintf(buf, 100, "%s", mm->name().c_str());
     char *p = strrchr(buf, '.');
     if (p) {
         *p++ = 0;
-        cmd.push_back(buf);
-        cmd.push_back(p);
+        cmd.push_back(Value{buf});
+        cmd.push_back(Value{p});
     }
     else {
-        cmd.push_back(buf);
-        cmd.push_back("VALUE");
+        cmd.push_back(Value{buf});
+        cmd.push_back(Value{"VALUE"});
     }
     // note: the monitor address is in the global range grp<<16 + offset
     // this method is only using the addresses in the local range
@@ -174,13 +162,12 @@ void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
         cmd.push_back(value);
     }
     else if (mm->length() == 1) {
-        value = *((uint16_t *)mm->value->getWordData());
-        cmd.push_back(value);
+        cmd.push_back(*((uint16_t *)mm->value->getWordData()));
     }
     else if (mm->length() == 2 && mm->format() == "Float") {
         uint16_t *xx = (uint16_t *)mm->value->getWordData();
         Value vv(*((float *)xx));
-        cmd.push_back(*((float *)xx));
+        cmd.push_back(std::move(vv));
     }
     else if (mm->length() == 2 && mm->format() == "SignedInt") {
         uint16_t modbus_value[2];
@@ -197,9 +184,9 @@ void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
         cmd.push_back((uint32_t)value);
     }
     else {
-        cmd.push_back(0); // TBD
+        cmd.push_back(Value{0}); // TBD
     }
-    process_command(*sock, cmd);
+    process_command(*sock, "PROPERTY", cmd);
 }
 
 ModbusClientThread *mb = 0;
@@ -226,11 +213,10 @@ void loadRemoteConfiguration(zmq::socket_t &iod, std::string &chn_instance_name,
                              MonitorConfiguration &mc) {
 
     std::list<Value> cmd;
-    cmd.push_back("REFRESH");
-    cmd.push_back(chn_instance_name.c_str());
+    cmd.push_back(Value{chn_instance_name});
     cJSON *obj = nullptr;
     {
-        char *response = send_command(iod, cmd);
+        char *response = send_command(iod, "REFRESH", cmd);
         if (options.verbose)
             std::cerr << response << "\n";
         obj = cJSON_Parse(response);
@@ -257,7 +243,7 @@ void loadRemoteConfiguration(zmq::socket_t &iod, std::string &chn_instance_name,
             if (name_js && name_js->type == cJSON_String) {
                 name = name_js->valuestring;
             }
-            int length = length_js->valueint;
+            long length = length_js->valueint;
             std::string type;
             if (type_js && type_js->type == cJSON_String) {
                 type = type_js->valuestring;
@@ -347,7 +333,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
     std::string ds;
     std::list<Value> *param_list = 0;
     if (MessageEncoding::getCommand(data, ds, &param_list)) {
-        params.push_back(ds);
+        params.push_back(Value{ds});
         if (param_list) {
             std::list<Value>::const_iterator iter = param_list->begin();
             while (iter != param_list->end()) {
@@ -363,7 +349,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
         while (iss >> ds) {
             if (options.verbose)
                 std::cerr << ds << "\n";
-            parts.push_back(ds.c_str());
+            parts.push_back(Value{ds});
             ++count;
         }
         std::copy(parts.begin(), parts.end(), std::back_inserter(params));
@@ -415,11 +401,10 @@ int main(int argc, const char *argv[]) {
         iod.connect("tcp://localhost:5555");
 
         std::list<Value> cmd;
-        cmd.push_back("CHANNEL");
-        cmd.push_back(options.channelName());
+        cmd.push_back(Value{options.channelName()});
         cJSON *obj = nullptr;
         {
-            char *response = send_command(iod, cmd);
+            char *response = send_command(iod, "CHANNEL", cmd);
             if (!response) {
                 FileLogger fl(program_name);
                 fl.f() << "null response to channel request. exiting\n";
@@ -506,7 +491,7 @@ int main(int argc, const char *argv[]) {
     mb = &modbus_interface;
     boost::thread monitor_modbus(boost::ref(modbus_interface));
 
-    enum ProgramState {
+    enum ProgramState : uint8_t {
         s_initialising,
         s_running,  // polling for io changes from clockwork
         s_finished, // about to exit
@@ -565,7 +550,7 @@ int main(int argc, const char *argv[]) {
         }
         error_count = 0;
 
-        long len = update.size();
+        size_t len = update.size();
         char *data = (char *)malloc(len + 1);
         memcpy(data, update.data(), len);
         data[len] = 0;
@@ -590,9 +575,9 @@ int main(int argc, const char *argv[]) {
                     std::cerr << m.name() << " " << ((m.readOnly()) ? "READONLY" : "") << "\n";
                 if (!m.readOnly()) {
                     if (params[2].asString() == "on")
-                        mb->requestUpdate(m.address(), true);
+                        mb->requestUpdate(static_cast<int>(m.address()), true);
                     else
-                        mb->requestUpdate(m.address(), false);
+                        mb->requestUpdate(static_cast<int>(m.address()), false);
                 }
                 //sendStateUpdate(&iosh_cmd, &m, *(m.value->getWordData()) );
             }
@@ -619,7 +604,7 @@ int main(int argc, const char *argv[]) {
                             double dval;
                             if (params[3].asFloat(dval)) {
                                 uint16_t value[2];
-                                float fval = dval;
+                                float fval = static_cast<float>(dval);
                                 if (options.verbose)
                                     std::cerr << "setting float value " << fval << " for address"
                                               << std::hex << "0x" << m.address() << std::dec
@@ -627,7 +612,7 @@ int main(int argc, const char *argv[]) {
                                 modbus_set_float_badc(fval, value);
                                 if (m.length() == 2) {
                                     m.setRaw(value, 2);
-                                    mb->requestRegisterUpdates(m.address(), value, 2);
+                                    mb->requestRegisterUpdates(static_cast<int>(m.address()), value, 2);
                                 }
                                 else {
                                     std::cerr << "Error: cannot set float value for " << params[1]
@@ -640,18 +625,18 @@ int main(int argc, const char *argv[]) {
                             }
                         }
                         else {
-                            long value;
+                            int64_t value;
                             if (params[2].asString() == "VALUE" && params[3].asInteger(value)) {
                                 if (m.length() == 1) {
                                     m.setRaw((uint16_t)value);
-                                    mb->requestRegisterUpdate(m.address(), (uint16_t)value);
+                                    mb->requestRegisterUpdate(static_cast<int>(m.address()), (uint16_t)value);
                                 }
                                 else if (m.length() == 2) {
                                     uint16_t modbus_value[2];
                                     MODBUS_SET_INT32_TO_INT16(modbus_value, 0,
                                                               (uint32_t)(value & 0xffffffff));
                                     m.setRaw(modbus_value, 2);
-                                    mb->requestRegisterUpdates(m.address(),
+                                    mb->requestRegisterUpdates(static_cast<int>(m.address()),
                                                                (uint16_t *)&modbus_value, 2);
                                 }
                             }

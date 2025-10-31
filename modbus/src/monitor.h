@@ -5,12 +5,9 @@
 #ifndef _monitor_h_
 #define _monitor_h_
 
-#include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <libgen.h>
 #include <map>
-#include <string.h>
 #include <string>
 #include <sys/time.h>
 
