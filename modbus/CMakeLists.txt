@@ -1,4 +1,4 @@
-cmake_minimum_required (VERSION 2.8.12)
+cmake_minimum_required (VERSION 3.5)
 project (MBM)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
@@ -69,7 +69,7 @@ add_library (Clockwork
     ${CLOCKWORK_DIR}/Message.cpp )
 
 
-FIND_PACKAGE(Boost COMPONENTS system thread date_time REQUIRED )
+FIND_PACKAGE(Boost COMPONENTS thread date_time REQUIRED )
 FIND_PACKAGE(MODBUS REQUIRED)
 FIND_PACKAGE(ZMQ 4.2 REQUIRED)
 

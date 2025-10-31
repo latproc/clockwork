@@ -1,20 +1,14 @@
 #include "src/modbus_client_thread.h"
-#include "ConnectionManager.h"
 #include "MessagingInterface.h"
-#include "SocketMonitor.h"
-#include "cJSON.h"
 #include "monitor.h"
-#include "plc_interface.h"
 #include "src/buffer_monitor.h"
 #include "src/cw_interface.h"
 #include "src/modbus_helpers.h"
 #include "src/options.h"
-#include "symboltable.h"
 #include <Logger.h>
 #include <MessageEncoding.h>
 #include <MessagingInterface.h>
 #include <boost/thread.hpp>
-#include <fstream>
 #include <iostream>
 #include <libgen.h>
 #include <map>
@@ -90,7 +84,13 @@ void ModbusClientThread::performUpdates() {
             vals[n++] = item.second;
             if (n == space) {
                 space += 10;
-                vals = (uint16_t *)realloc(vals, space * sizeof(uint16_t));
+                auto new_vals = (uint16_t *)realloc(vals, space * sizeof(uint16_t));
+                if (!new_vals) {
+                    std::cerr << "realloc failed performing modbus updates\n";
+                    free(vals);
+                    return;
+                }
+                vals = new_vals;
             }
             iter = register_changes.erase(iter);
         }
@@ -225,8 +225,8 @@ modbus_t *ModbusClientThread::openConnection() {
             std::cerr << "original response timeout: " << secs << "." << std::setw(3)
                       << std::setfill('0') << (usecs / 1000) << "\n";
         uint64_t new_timeout = options.getTimeout();
-        uint32_t new_secs = (new_timeout) ? new_timeout / 1000000 : secs * 2;
-        uint32_t new_usecs = (new_timeout) ? new_timeout % 1000000 : usecs * 2;
+        uint32_t new_secs = (new_timeout) ? static_cast<uint32_t>(new_timeout / 1000000) : secs * 2;
+        uint32_t new_usecs = (new_timeout) ? static_cast<uint32_t>(new_timeout % 1000000) : usecs * 2;
         while (new_usecs >= 1000000) {
             new_usecs -= 1000000;
             new_secs++;
@@ -378,8 +378,8 @@ int ModbusClientThread::setRegisters(int addr, uint16_t *val, unsigned int n) {
     boost::mutex::scoped_lock lock(update_mutex);
     int rc = 0;
     int retries = 3; // TODO: Make this a setting
-    rc = modbus_write_registers(ctx, addr, n, val);
-    while ((rc = modbus_write_registers(ctx, addr, n, val)) == -1) {
+    rc = modbus_write_registers(ctx, addr, static_cast<int>(n), val);
+    while ((rc = modbus_write_registers(ctx, addr, static_cast<int>(n), val)) == -1) {
         int saved_errno = errno;
         std::cerr << "modbus_write_registers: " << show_modbus_error(saved_errno) << "\n";
         if (check_error(saved_errno, "modbus_write_registers ", addr, &retries)) {
@@ -467,14 +467,14 @@ collect_selected_updates(ModbusClientThread &client, modbus_t *ctx, const Option
         return result;
     }
     int rc = 0;
-    int min = 100000;
-    int max = 0;
+    unsigned int min = 100000;
+    unsigned int max = 0;
     std::map<std::string, ModbusMonitor>::const_iterator iter = entries.begin();
     while (iter != entries.end()) {
         const std::pair<std::string, ModbusMonitor> &item = *iter++;
         if (item.second.group() == grp) {
-            int offset = item.second.address();
-            int end = offset + item.second.length() - 1;
+            unsigned int offset = item.second.address();
+            unsigned int end = offset + item.second.length() - 1;
             if (offset < min)
                 min = offset;
             if (end > max)
@@ -486,7 +486,7 @@ collect_selected_updates(ModbusClientThread &client, modbus_t *ctx, const Option
                 if (options.verbose)
                     std::cerr << "called: read_fn(ctx, " << offset << ", " << item.second.length()
                               << ", " << dest + offset << "))\n";
-                client.check_error(saved_errno, fn_name, offset, &retry);
+                client.check_error(saved_errno, fn_name, static_cast<int>(offset), &retry);
                 if (!client.connected) {
                     result.error = saved_errno;
                 }

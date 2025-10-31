@@ -41,10 +41,10 @@ template <typename T> void displayAscii(std::ostream &out, T *p, size_t len) {
 
 class SerialSettings {
   public:
-    unsigned int baud;
-    unsigned int bits;
+    int baud;
+    int bits;
     char parity;
-    unsigned int stop_bits;
+    int stop_bits;
     SerialSettings() {}
     SerialSettings(unsigned int rate, unsigned int width, char p, unsigned int stop)
         : baud(rate), bits(width), parity(p), stop_bits(stop) {}
