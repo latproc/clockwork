@@ -460,7 +460,7 @@ void MachineInstance::sort() {
     std::copy(tmp.begin(), tmp.end(), back_inserter(all_machines));
 
     DBG_PARSER << "Sorted machines (dependencies)\n";
-    BOOST_FOREACH(MachineInstance * m, all_machines) {
+    for ((MachineInstance * m : all_machines) {
         if (m->owner) {
             DBG_PARSER << m->owner->getName() << ".";
         }
@@ -1309,18 +1309,23 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
     return true;
 }
 
+#if 0
 void MachineInstance::displayAutomaticMachines() {
-    BOOST_FOREACH (MachineInstance *m, MachineInstance::automatic_machines) {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
+    for (MachineInstance *m : automatic_machines) {
         std::cout << *m << "\n";
     }
 }
 
 void MachineInstance::displayAll() {
-    BOOST_FOREACH (MachineInstance *m, all_machines) {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
+    for (MachineInstance *m : all_machines) {
         std::cout << "-------" << m->getName() << "\n";
         std::cout << *m << "\n";
     }
 }
+
+#endif
 
 // linear search through the machine list, tbd performance..
 MachineInstance *MachineInstance::find(const char *name) {
@@ -1335,6 +1340,7 @@ MachineInstance *MachineInstance::find(const char *name) {
         }
     }
     else {
+        std::unique_lock<std::mutex> lock(global_lists_mutex);
         std::list<MachineInstance *>::iterator iter = all_machines.begin();
         while (iter != all_machines.end()) {
             MachineInstance *m = *iter++;
