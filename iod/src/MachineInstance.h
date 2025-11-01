@@ -404,9 +404,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     static std::map<std::string, HardwareAddress> hw_names;
     MachineInstance &operator=(const MachineInstance &orig);
     MachineInstance(const MachineInstance &other);
+    static std::list<MachineInstance *> all_machines;
 
   protected:
-    static std::list<MachineInstance *> all_machines;
     static std::list<MachineInstance *>
         automatic_machines;                              // machines with auto state changes enabled
     static std::list<MachineInstance *> active_machines; // machines that require idle() processing
