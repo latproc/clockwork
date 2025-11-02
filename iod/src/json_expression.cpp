@@ -181,9 +181,9 @@ cJSON *apply(const std::string &str, cJSON *json) {
     try {
         cJSON *result = follow_json_expr_path(str, json, boost::none).value;
         if (result) {
-            auto str = cJSON_Print(result);
-            result = cJSON_Parse(str);
-            free(str);
+            auto result_Str = cJSON_Print(result);
+            result = cJSON_Parse(result_Str);
+            free(result_Str);
         }
         return result;
     }
@@ -196,9 +196,9 @@ cJSON *apply(const std::string &str, cJSON *json, SymbolTable* symbols) {
     try {
         cJSON *result = follow_json_expr_path(str, json, symbols).value;
         if (result) {
-            auto str = cJSON_Print(result);
-            result = cJSON_Parse(str);
-            free(str);
+            auto result_str = cJSON_Print(result);
+            result = cJSON_Parse(result_str);
+            free(result_str);
         }
         return result;
     }
@@ -211,9 +211,9 @@ cJSON *apply(const std::string &str, cJSON *json, MachineInstance* context) {
     try {
         cJSON *result = follow_json_expr_path(str, json, boost::none, context).value;
         if (result) {
-            auto str = cJSON_Print(result);
-            result = cJSON_Parse(str);
-            free(str);
+            auto result_str = cJSON_Print(result);
+            result = cJSON_Parse(result_str);
+            free(result_str);
         }
         return result;
     }
@@ -239,40 +239,58 @@ cJSON *assign(const std::string &str, cJSON *json, const std::string &value,
         if (result.parent) {
             if (result.key) {
                 cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), string);
+                return json;
             }
             else if (result.index) {
                 cJSON_ReplaceItemInArray(result.parent, *result.index, string);
+                return json;
             }
         }
         else {
             json = string;
+            return json;
         }
+        cJSON_Delete(string);
+        return json;
     }
-    else {
+    if (json->type == cJSON_Object) {
         // add a new key to the parent object
         cJSON_AddItemToObject(json, str.c_str(), string);
+        return json;
     }
+    cJSON_Delete(string);
     return json;
 }
 
 cJSON *assign(const std::string &str, cJSON *json, uint64_t value,
                 boost::optional<SymbolTable *> symbols,
                 boost::optional<MachineInstance *> context) {
-    auto result = follow_json_expr_path(str, json, symbols, context);
+    PathResult result;
+    try {
+        result = follow_json_expr_path(str, json, symbols, context);
+    }
+    catch (const std::runtime_error &err) {
+        result.parent = nullptr;
+        result.value = nullptr;
+    }
     auto number = cJSON_CreateNumber(value);
     if (result.value) {
         if (result.parent) {
             if (result.key) {
                 cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), number);
+                return json;
             }
             else if (result.index) {
                 cJSON_ReplaceItemInArray(result.parent, *result.index, number);
+                return json;
             }
         }
         else {
             json = number;
+            return json;
         }
     }
+    cJSON_Delete(number);
     return json;
 }
 
@@ -285,15 +303,19 @@ cJSON *assign(const std::string &str, cJSON *json, bool value,
         if (result.parent) {
             if (result.key) {
                 cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), boolean);
+                return json;
             }
             else if (result.index) {
                 cJSON_ReplaceItemInArray(result.parent, *result.index, boolean);
+                return json;
             }
         }
         else {
             json = boolean;
+            return json;
         }
     }
+    cJSON_Delete(boolean);
     return json;
 }
 
@@ -312,7 +334,7 @@ cJSON *assign(const std::string &str, cJSON *json, double value,
             }
         }
         else {
-            if (result.value) { cJSON_Delete(result.value); }
+            cJSON_Delete(result.value);
             result.value = number;
         }
     }
