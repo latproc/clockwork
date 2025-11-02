@@ -83,7 +83,7 @@ size_t findMovement(struct CircularBuffer *buf, double amount, size_t max_len) {
         abort();
     }
     size_t n = 0;
-    size_t idx = buf->front;
+    ssize_t idx = buf->front;
     double current = buf->values[idx];
 
     while (idx != buf->back && n < max_len) {
@@ -129,20 +129,21 @@ double bufferAverage(struct CircularBuffer *buf, size_t n) {
     return (n == 0) ? n : bufferSum(buf, n) / n;
 }
 
-double bufferStddev(struct CircularBuffer *buf, int n) {
+double bufferStddev(struct CircularBuffer *buf, size_t n) {
     double res = 0.0;
+    int count = (int)n;
     int i = bufferLength(buf);
-    if (i > n) {
-        i = n;
+    if (i > count) {
+        i = count;
     }
-    if (n > i) {
-        n = i;
+    if (count > i) {
+        count = i;
     }
-    if (n <= 1) {
+    if (count <= 1) {
         return 0.0;
     }
     {
-        double avg = bufferAverage(buf, n);
+        double avg = bufferAverage(buf, count);
         do {
             double val;
             i--;
@@ -150,7 +151,7 @@ double bufferStddev(struct CircularBuffer *buf, int n) {
             res = res + val * val;
         } while (i > 0);
     }
-    return sqrt(res / (double)(n - 1));
+    return sqrt(res / (double)(count - 1));
 }
 
 double getBufferValue(struct CircularBuffer *buf, size_t n) {

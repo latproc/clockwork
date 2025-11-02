@@ -67,7 +67,7 @@ double Buffer::average(size_t n) {
     }
     //  return total_ / (double)n;
 #if 1
-    auto i = (front + BUFSIZE - n + 1) % BUFSIZE;
+    int i = (front + BUFSIZE - n + 1) % BUFSIZE;
     while (i != front) {
 #ifdef TESTING
         std::cout << i << ":" << getFloatAtIndex(i) << " ";
@@ -98,10 +98,10 @@ double Buffer::stddev(size_t n) {
     if (len <= 1) {
         return 0.0;
     }
-    if (len < n) {
+    if (len < (ssize_t)n) {
         n = len;
     }
-    auto i = (front + BUFSIZE - n + 1) % BUFSIZE;
+    int i = (front + BUFSIZE - n + 1) % BUFSIZE;
     do {
         double val = getFloatAtIndex(i) - avg;
         res += val * val;
@@ -142,7 +142,7 @@ size_t findMovement(FloatBuffer *buf, double amount, size_t max_len) {
         abort();
     }
     size_t n = 0;
-    size_t idx = buf->front;
+    ssize_t idx = buf->front;
     double current = buf->buf[idx];
 
     while (idx != buf->back && n < max_len) {
@@ -216,7 +216,7 @@ double FloatBuffer::movingAverage(size_t n) const {
     if (n == 0) {
         return 0.0;
     }
-    if (length() < n) {
+    if (length() < static_cast<int>(n)) {
         n = length();
     }
     double sum = 0;
@@ -275,7 +275,7 @@ void SampleBuffer::append(double val, uint64_t time) {
             //DBG_MSG << "synthesizing missing data: " << missing << "\n";
             uint64_t last_time = times[front];
             reset();
-            if (missing > BUFSIZE / 2) {
+            if (missing > (ssize_t)BUFSIZE / 2) {
                 missing = BUFSIZE / 2;
             }
             for (auto i = missing; i > 0; --i) {
