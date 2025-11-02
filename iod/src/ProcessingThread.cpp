@@ -472,15 +472,10 @@ void ProcessingThread::handle_package(Package *p) {
         }
     }
     else {
-        auto receivers = Dispatcher::instance()->all_receivers.lock();
-        auto iter = receivers.begin();
-        while (iter != receivers.end()) {
-            Receiver *r = *iter++;
-            if (r->receives(m, from)) {
-                r->enqueue(*p);
-            }
-        }
-        Dispatcher::instance()->all_receivers.unlock();
+        Dispatcher::instance()->all_receivers.for_each(
+            [&](Receiver* r) {
+                if (r->receives(m, from)) { r->enqueue(*p); }
+        });
     }
 }
 }
