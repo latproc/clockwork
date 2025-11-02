@@ -145,6 +145,85 @@ TEST_F(EvaluatorTest, convert_string_to_json) {
     EXPECT_EQ(json_str, res_str) << "converts a string to json";
     delete scope;
 }
+TEST_F(EvaluatorTest, assigns_value_if_key_is_found) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    std::string json_str = R"JSON({"a":[1,2,3],"b":"hello"})JSON";
+    cJSON *json = cJSON_Parse(json_str.c_str());
+    scope->setValue("json", json);
+    scope->setValue("result", "");
+    Predicate *dest = new Predicate("test.result");
+    Predicate *source = new Predicate("json");
+    source->json_expression = "$.a";
+    Predicate pred(dest, opGetSubExpr, source);
+    Value res = eval.evaluate(&pred, scope);
+    auto result = scope->getValue("result");
+    EXPECT_EQ(result.kind, Value::t_json) << "doesn't return json";
+    auto result_array_str = cJSON_PrintUnformatted(result.json);
+    EXPECT_EQ(std::string("[1,2,3]"), std::string(result_array_str));
+    free(result_array_str);
+    auto res_str = cJSON_PrintUnformatted(res.json);
+    EXPECT_EQ(json_str, std::string(res_str)) << "changed the original json";
+}
+TEST_F(EvaluatorTest, assigns_value_if_key_is_found_but_null) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    std::string json_str = R"JSON({"a":null,"b":"hello"})JSON";
+    cJSON *json = cJSON_Parse(json_str.c_str());
+    scope->setValue("json", json);
+    scope->setValue("result", "");
+    Predicate *dest = new Predicate("test.result");
+    Predicate *source = new Predicate("json");
+    source->json_expression = "$.a";
+    source->default_value = Value("default-string", Value::t_string);
+    Predicate pred(dest, opGetSubExpr, source);
+    Value res = eval.evaluate(&pred, scope);
+    auto result = scope->getValue("result");
+    EXPECT_EQ(result.kind, Value::t_string) << "doesn't return string";
+    EXPECT_EQ(*source->default_value, result);
+    auto res_str = cJSON_PrintUnformatted(res.json);
+    EXPECT_EQ(json_str, std::string(res_str)) << "changed the original json";
+}
+
+TEST_F(EvaluatorTest, assigns_default_value_if_key_not_found) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    std::string json_str = R"JSON({"a":[1,2,3],"b":"hello"})JSON";
+    cJSON *json = cJSON_Parse(json_str.c_str());
+    scope->setValue("json", json);
+    scope->setValue("result", "");
+    Predicate *dest = new Predicate("test.result");
+    Predicate *source = new Predicate("json");
+    source->json_expression = "$.c"; // non-existent key
+    source->default_value = 7;
+    Predicate pred(dest, opGetSubExpr, source);
+    Value res = eval.evaluate(&pred, scope);
+    auto result = scope->getValue("result");
+    EXPECT_EQ(result.kind, Value::t_integer) << "doesn't return json";
+    EXPECT_EQ(7, result.iValue);
+    EXPECT_EQ(res.kind, Value::t_json) << "changes the original json";
+    auto res_str = cJSON_PrintUnformatted(res.json);
+    EXPECT_EQ(json_str, std::string(res_str)) << "changed the original json";
+}
+
+TEST_F(EvaluatorTest, assigns_null_value_if_key_not_found_and_no_default) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    std::string json_str = R"JSON({"a":[1,2,3],"b":"hello"})JSON";
+    cJSON *json = cJSON_Parse(json_str.c_str());
+    scope->setValue("json", json);
+    scope->setValue("result", "");
+    Predicate *dest = new Predicate("test.result");
+    Predicate *source = new Predicate("json");
+    source->json_expression = "$.c"; // non-existent key
+    Predicate pred(dest, opGetSubExpr, source);
+    Value res = eval.evaluate(&pred, scope);
+    auto result = scope->getValue("result");
+    EXPECT_EQ(result.kind, Value::t_empty);
+    EXPECT_EQ(res.kind, Value::t_json) << "changes the original json";
+    auto res_str = cJSON_PrintUnformatted(res.json);
+    EXPECT_EQ(json_str, std::string(res_str)) << "changed the original json";
+}
 
 
 #include <Dispatcher.h>

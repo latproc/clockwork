@@ -83,6 +83,7 @@ struct ExprNode {
     const Value *val;
     const Value *node;
     boost::optional<std::string> json_expression;
+    boost::optional<Value> default_value;
     PredicateOperator op;
     enum { t_int, t_op } kind;
 
@@ -132,6 +133,7 @@ class Predicate {
     const Value *cached_entry;
     const Value *last_calculation; // for dynamic values, retains the last value for display only
     boost::optional<std::string> json_expression;
+    boost::optional<Value> default_value;
     bool error() { return lookup_error; }
     const std::string &errorString() { return error_str; }
     void clearError() { lookup_error = false; }
