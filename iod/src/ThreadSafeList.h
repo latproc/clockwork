@@ -16,6 +16,50 @@
 #include <iostream>
 #include <boost/thread.hpp>
 
+#ifdef CW_DEBUG_LIST_REENTRY
+#include <vector>
+#include <algorithm>
+
+#include <execinfo.h>
+#include <unistd.h>
+#include <cstdio>
+#include <cstdlib>
+
+inline void dump_stack_trace() {
+    constexpr int MAX_FRAMES = 64;
+    void *frames[MAX_FRAMES];
+    int count = backtrace(frames, MAX_FRAMES);
+
+    // Print to stderr
+    fprintf(stderr, "\n========== ThreadSafeList Reentry Detected ==========\n");
+    backtrace_symbols_fd(frames, count, STDERR_FILENO);
+    fprintf(stderr, "=====================================================\n\n");
+}
+
+struct ThreadSafeListReentryProbe {
+    static thread_local std::vector<const void*> stack;
+    const void* obj;
+
+    explicit ThreadSafeListReentryProbe(const void* o) : obj(o) {
+        auto it = std::find(stack.begin(), stack.end(), obj);
+        // re-entry from the same thread into the same object
+        if (it != stack.end()) {
+            fprintf(stderr, "Reentrant call into ThreadSafeList @%p detected!\n", obj);
+            dump_stack_trace();
+            std::abort();
+        }
+        stack.push_back(obj);
+    }
+
+    ~ThreadSafeListReentryProbe() {
+        auto it = std::find(stack.begin(), stack.end(), obj);
+        if (it != stack.end()) {
+            stack.erase(it);
+        }
+    }
+};
+#endif
+
 // ThreadSafeList<T>
 // -----------------
 // A simple, self-contained, mutex-protected std::list<T>.
@@ -32,24 +76,36 @@ public:
     }
     // Adds an element at the end. Thread-safe.
     void push_back(const T& value) {
+#ifdef CW_DEBUG_LIST_REENTRY
+        ThreadSafeListReentryProbe guard(this);
+#endif
         std::lock_guard<std::mutex> lock(mutex_);
         list_.push_back(value);
     }
 
     // Adds an element at the end. Thread-safe.
     void push_back(T&& value) {
+#ifdef CW_DEBUG_LIST_REENTRY
+        ThreadSafeListReentryProbe guard(this);
+#endif
         std::lock_guard<std::mutex> lock(mutex_);
         list_.push_back(std::move(value));
     }
 
     // Adds an element at the front. Thread-safe.
     void push_front(const T& value) {
+#ifdef CW_DEBUG_LIST_REENTRY
+        ThreadSafeListReentryProbe guard(this);
+#endif
         std::lock_guard<std::mutex> lock(mutex_);
         list_.push_front(value);
     }
 
     // Adds an element at the front. Thread-safe.
     void push_front(T&& value) {
+#ifdef CW_DEBUG_LIST_REENTRY
+        ThreadSafeListReentryProbe guard(this);
+#endif
         std::lock_guard<std::mutex> lock(mutex_);
         list_.push_front(std::move(value));
     }
@@ -77,7 +133,11 @@ public:
     }
 
     // Removes all elements equal to value. Thread-safe but O(n).
-    void remove(T &value) {
+    // Take the parameter as const T& so callers can pass temporaries (e.g. a raw pointer literal).
+    void remove(const T &value) {
+#ifdef CW_DEBUG_LIST_REENTRY
+        ThreadSafeListReentryProbe guard(this);
+#endif
         std::lock_guard<std::mutex> lock(mutex_);
         list_.remove(value);
     }
@@ -94,6 +154,9 @@ public:
     // Applies `action` to every element that satisfies `pred`, while holding the mutex.
     template <typename Action>
     void for_each(Action&& action) {
+#ifdef CW_DEBUG_LIST_REENTRY
+        ThreadSafeListReentryProbe guard(this);
+#endif
         std::lock_guard<std::mutex> lock(mutex_);
         for (auto& elem : list_) {
             action(elem);
@@ -110,6 +173,9 @@ public:
     //   );
     template <typename Predicate, typename Action>
     void for_each_if(Predicate&& pred, Action&& action) {
+#ifdef CW_DEBUG_LIST_REENTRY
+        ThreadSafeListReentryProbe guard(this);
+#endif
         std::lock_guard<std::mutex> lock(mutex_);
         for (auto& elem : list_) {
             if (pred(elem)) {

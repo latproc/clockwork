@@ -60,6 +60,11 @@
 #endif //USE_SDO
 #endif
 
+#ifdef CW_DEBUG_LIST_REENTRY
+#include <ThreadSafeList.h>
+thread_local std::vector<const void*> ThreadSafeListReentryProbe::stack;
+#endif
+
 extern int yylineno;
 extern int yycharno;
 const char *yyfilename = 0;
