@@ -1546,6 +1546,14 @@ SET SYMBOL TO expression error_clause  {
     source->json_expression = $4;
     current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opGetSubExpr, source)); // FIXME
 }
+| SYMBOL BECOMES ITEM JSONEXPR OF SYMBOL DEFAULT value {
+    if (current_action) current_actions->push_back(current_action);
+    printf("%s := %s->%s default %s\n", $1, $6, $4, $8->asString().c_str());
+    Predicate *source = new Predicate($6);
+    source->json_expression = $4;
+    source->default_value = *$8;
+    current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opGetSubExpr, source)); // FIXME
+}
 | ITEM JSONEXPR OF SYMBOL BECOMES expression {
     if (current_action) current_actions->push_back(current_action);
     std::cout <<  $4 << "->" <<  $2 << " := " << *$6 << "\n";

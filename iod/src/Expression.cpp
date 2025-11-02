@@ -550,6 +550,7 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
         dyn_value = 0;
     }
     json_expression = other.json_expression;
+    default_value = other.default_value;
     entry.cached_machine = 0; // do not preserve any cached values in this clone
     priority = other.priority;
     mi = 0;
@@ -582,6 +583,7 @@ Predicate &Predicate::operator=(const Predicate &other) {
         dyn_value = 0;
     }
     json_expression = other.json_expression;
+    default_value = other.default_value;
     entry.cached_machine = 0; // do not preserve any cached machine pointers in this clone
     priority = other.priority;
     mi = 0;
@@ -1027,7 +1029,18 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
         assert(rhs.kind == Value::t_json);
         assert(b.json_expression);
         cJSON *sub_expr = apply(b.json_expression.value(), rhs.json, m);
-        m->setValue(stack_iter->node->sValue,Value(sub_expr));
+        if (sub_expr && sub_expr->type != cJSON_NULL) {
+            MessageLog::instance()->add("resolved sub expression");
+            m->setValue(stack_iter->node->sValue,Value(sub_expr));
+        }
+        else if (b.default_value) {
+            MessageLog::instance()->add("using default");
+            m->setValue(stack_iter->node->sValue, *b.default_value);
+        }
+        else {
+            MessageLog::instance()->add("no default");
+            m->setValue(stack_iter->node->sValue, SymbolTable::Null);
+        }
     }
     ExprNode a(eval_stack(m, stack_iter));
     assert(a.kind != ExprNode::t_op);
@@ -1105,8 +1118,12 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     }
     case opFloat:
         return rhs.toFloat();
-    case opString:
+    case opString: {
+        if (rhs.kind == Value::t_symbol) {
+            return Value(m->getValue(rhs.sValue).asString(), Value::t_string);
+        }
         return Value(rhs.asString(), Value::t_string);
+    }
     case opJson: {
         cJSON *json = cJSON_Parse(rhs.asString().c_str());
         return Value(json);
@@ -1210,6 +1227,7 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
             auto node = ExprNode(result, &p->entry);
             if (p->json_expression) {
                 node.json_expression = p->json_expression;
+                if (p->default_value) { node.default_value = *p->default_value; }
             }
             stack.push(std::move(node));
         }
@@ -1280,7 +1298,7 @@ ExprNode::ExprNode(PredicateOperator o) : val(0), node(0), op(o), kind(t_op) {
 
 ExprNode::ExprNode(const ExprNode &other)
     : tmpval(other.tmpval), val(other.val), node(other.node), json_expression(other.json_expression),
-        op(other.op), kind(other.kind) {
+        default_value((other.default_value)), op(other.op), kind(other.kind) {
     if (other.val == &other.tmpval) {
         val = &tmpval;
     }

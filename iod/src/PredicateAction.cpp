@@ -302,7 +302,15 @@ Action::Status PredicateAction::run() {
                     val = eval(predicate->right_p, owner);
                     if (val.kind == Value::t_json) {
                         cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), val.json, owner);
-                        val = Value(sub_expr);
+                        if (sub_expr && sub_expr->type != cJSON_NULL) {
+                            val = Value(sub_expr);
+                        }
+                        else if (predicate->right_p->default_value) {
+                            val = *predicate->right_p->default_value;
+                        }
+                        else {
+                            val = SymbolTable::Null;
+                        }
                     }
                     else {
                         std::stringstream ss;
