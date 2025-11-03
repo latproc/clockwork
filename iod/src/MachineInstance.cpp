@@ -71,6 +71,7 @@ extern std::list<std::string> error_messages;
 
 uint64_t rate_calc_process_time = 0; // used for idle calculations for rate estimation
 Value *MachineInstance::polling_delay = 0;
+static std::mutex pending_state_change_mutex;
 
 // machine idle processing will occur if this value is non zero
 unsigned int MachineInstance::num_machines_with_work = 1;
@@ -185,8 +186,11 @@ void MachineInstance::setNeedsCheck() {
         ProcessingThread::activate(this);
     }
     else if (getStateMachine()->allow_auto_states) {
-        DBG_M_MESSAGING << _name << " queued for stable state checks\n";
-        pending_state_change.insert(this);
+        {
+            std::lock_guard<std::mutex> lock(pending_state_change_mutex);
+            DBG_M_MESSAGING << _name << " queued for stable state checks\n";
+            pending_state_change.insert(this);
+        }
         ProcessingThread::activate(this);
     }
     else {
@@ -284,15 +288,20 @@ bool MachineInstance::workToDo() {
     if (!SharedWorkSet::instance()->empty()) {
         DBG_MSG << "!SharedWorkSet::instance()->empty()\n";
     }
-    if (!pending_state_change.empty()) {
-        DBG_MSG << "!pending_state_change.empty()\n";
+    bool pending_empty = true;
+    {
+        std::lock_guard<std::mutex> lock(pending_state_change_mutex);
+        if (!pending_state_change.empty()) {
+            pending_empty = false;
+            DBG_MSG << "!pending_state_change.empty()\n";
+        }
     }
     if (num_machines_with_work + total_machines_needing_check > 0) {
         DBG_MSG << "num_machines_with_work + total_machines_needing_check > 0 ("
                 << num_machines_with_work << "," << total_machines_needing_check << ") > 0\n";
     }
     return !pending_events.empty() || !SharedWorkSet::instance()->empty() ||
-           !pending_state_change.empty() ||
+           !pending_empty ||
            num_machines_with_work + total_machines_needing_check > 0;
 }
 std::list<Package *> &MachineInstance::pendingEvents() { return pending_events; }
@@ -752,7 +761,10 @@ void MachineInstance::remove_pending() {
             active_machines.remove(m);
             ::machines.erase(m->getName());
             SharedWorkSet::instance()->remove(m);
-            pending_state_change.erase(m);
+            {
+                std::lock_guard<std::mutex> lock(pending_state_change_mutex);
+                pending_state_change.erase(m);
+            }
         }
     }
 }
@@ -1019,7 +1031,10 @@ bool MachineInstance::needsCheck() { return needs_check != 0; }
 
 void MachineInstance::resetNeedsCheck() { needs_check = 0; }
 
-bool MachineInstance::queuedForStableStateTest() { return pending_state_change.count(this); }
+bool MachineInstance::queuedForStableStateTest() {
+    std::lock_guard<std::mutex> lock(pending_state_change_mutex);
+    return pending_state_change.count(this);
+}
 
 void MachineInstance::idle() {
     ProcessingThread::suspend(this);
@@ -1212,7 +1227,10 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
                     SharedWorkSet::instance()->remove(mi);
                     busy_it = to_process.erase(busy_it);
                     if (mi->is_active) {
+                        {
+                        std::lock_guard<std::mutex> lock(pending_state_change_mutex);
                         pending_state_change.insert(mi);
+                        }
                         ProcessingThread::activate(mi);
                     }
                 }
@@ -1296,13 +1314,17 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
             // unless the machine is disabled leave the state check on the queue until it is stable
             if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states ||
                 !mi->setStableState()) {
+                std::lock_guard<std::mutex> lock(pending_state_change_mutex);
                 pending_state_change.erase(mi);
             }
         }
         else if (mi->enabled()) {
             SharedWorkSet::instance()->add(mi);
-            pending_state_change.erase(
+            {
+              std::lock_guard<std::mutex> lock(pending_state_change_mutex);
+              pending_state_change.erase(
                 mi); // this machine has other work, it should no longer be on the pending state change queue
+            }
             ProcessingThread::activate(mi);
         }
     }
