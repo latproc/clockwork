@@ -242,16 +242,29 @@ Scheduler::Scheduler()
 }
 
 Scheduler::~Scheduler() {
-    stop();
+    if (internals && internals->thread_ptr) {
+        try {
+            internals->thread_ptr->interrupt(); // wakes sleep_for(...) via boost::thread_interrupted
+        } catch (...) {}
+
+        const auto own_thread = boost::this_thread::get_id();
+        const auto worker = internals->thread_ptr->get_id();
+        if (worker != own_thread) {
+            try {
+                // Re-interrupt in case it was cleared by a catch inside the loop
+                internals->thread_ptr->interrupt();
+                internals->thread_ptr->join();
+            } catch (...) {}
+        }
+    }
     delete update_notify;
     delete watch_dog;
-    delete internals;
     while (!items.empty()) {
         ScheduledItem *item = items.top();
         items.pop();
         delete item;
     }
-    delete instance_;
+    delete internals;
     instance_ = 0;
 }
 
@@ -361,7 +374,8 @@ void Scheduler::operator()() {
 }
 
 void Scheduler::stop() {
-    state = e_aborted;
+    state = e_aborted;                          // tell idle() to exit its main loop
+    delete instance_;
     //zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
     //update_notify.connect("inproc://sch_items");
     //safeSend(update_notify,"poke",4);
