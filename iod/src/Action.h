@@ -20,14 +20,9 @@
 
 #pragma once
 
-#include "Expression.h"
 #include "Message.h"
 #include "Trigger.h"
-#include <boost/foreach.hpp>
-#include <cstdlib>
-#include <cstring>
 #include <set>
-#include <sys/types.h>
 #include <vector>
 
 typedef std::vector<std::string> ActionParameterList;
@@ -45,7 +40,7 @@ class ActionTemplate {
 };
 std::ostream &operator<<(std::ostream &out, const ActionTemplate &a);
 
-// an action is started by operator(). If the action successfully starts,
+// An action is started by operator(). If the action successfully starts,
 // running() will return true. When the action is complete, complete() will
 // return true;
 class Action : public TriggerOwner {
@@ -61,14 +56,17 @@ class Action : public TriggerOwner {
     int references() const { return refs; }
     virtual void release();
 
-    const char *error() {
+    const char *error() const {
         const char *res = error_str.get();
         return (res) ? res : "";
     }
-    const char *result() {
+    const char *result() const {
         const char *res = result_str.get();
         return (res) ? res : "";
     }
+
+    virtual bool can_continue() const;
+
     void setError(const std::string &err);
 
     enum Status { New, Running, Complete, Failed, Suspended, NeedsRetry };
@@ -76,7 +74,7 @@ class Action : public TriggerOwner {
     Status operator()();
     bool complete();
     bool running();
-    bool suspended() { return status == Suspended; }
+    bool suspended() const { return status == Suspended; }
     void suspend();
     void resume();
     void recover(); // debug TBD
@@ -95,7 +93,7 @@ class Action : public TriggerOwner {
     void disableTrigger();
     void cleanupTrigger();
 
-    MachineInstance *getOwner() { return owner; }
+    MachineInstance *getOwner() const { return owner; }
     bool started() const;
     void start();
     void stop();
@@ -118,6 +116,7 @@ class Action : public TriggerOwner {
     uint64_t start_time{};
     bool started_ = false;
     bool aborted_ = false;
+    bool is_waiting = false;
     CStringHolder *timeout_msg = nullptr; // message to send on timeout
     CStringHolder *error_msg = nullptr;   // message to send on error
 };

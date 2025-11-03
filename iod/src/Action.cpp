@@ -7,7 +7,6 @@
 #include "MessageLog.h"
 #include <boost/thread/mutex.hpp>
 #include <iostream>
-#include <list>
 
 void ActionTemplate::toC(std::ostream &out, std::ostream &vars) const { operator<<(out); }
 
@@ -23,6 +22,8 @@ Action::Status Action::getStatus() { return status; }
 Action *Action::blocker() { return blocked; }
 bool Action::isBlocked() { return blocked != 0; }
 void Action::setBlocker(Action *a) { blocked = a; }
+
+bool Action::can_continue() const { return !trigger || trigger->fired(); }
 
 /* setTrigger does not do a retain on the trigger. It is expected to be called from a factory that returns a new trigger */
 void Action::setTrigger(Trigger *t) {
@@ -179,12 +180,12 @@ Action::Status Action::operator()() {
     status = run();
     if (status == Failed) {
         if (error_msg) {
-            AbortActionTemplate aat(true, error_msg->get());
+            AbortActionTemplate aat(true, Value{error_msg->get()});
             auto *aa = (AbortAction *)aat.factory(owner);
             owner->enqueueAction(aa);
         }
         else if (timeout_msg) {
-            AbortActionTemplate aat(true, timeout_msg->get());
+            AbortActionTemplate aat(true, Value{timeout_msg->get()});
             auto *aa = (AbortAction *)aat.factory(owner);
             owner->enqueueAction(aa);
         }
