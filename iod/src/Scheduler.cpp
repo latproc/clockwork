@@ -204,7 +204,8 @@ ScheduledItem::~ScheduledItem() {
     if (trigger) {
         trigger->release();
     }
-    if (package) { delete package; }
+    delete package;
+    delete action;
     trigger = 0;
 }
 
@@ -238,6 +239,20 @@ Scheduler::Scheduler()
     watch_dog = new Watchdog("Scheduler", 300, false);
     update_sync.bind("inproc://sch_items");
     next_time = 0;
+}
+
+Scheduler::~Scheduler() {
+    stop();
+    delete update_notify;
+    delete watch_dog;
+    delete internals;
+    while (!items.empty()) {
+        ScheduledItem *item = items.top();
+        items.pop();
+        delete item;
+    }
+    delete instance_;
+    instance_ = 0;
 }
 
 void Scheduler::setThreadRef(boost::thread &ref) { internals->thread_ptr = &ref; }
@@ -431,13 +446,13 @@ void Scheduler::idle() {
                               << item->package->receiver->getName() << "\n";
                 item->package->receiver->handle(*item->package->message,
                                                 item->package->transmitter);
-                delete item->package;
                 delete item;
             }
             else if (item->action) {
                 DBG_SCHEDULER << "Scheduler activating pushing action to  "
                               << item->action->getOwner()->getName() << "\n";
-                item->action->getOwner()->push(item->action);
+                item->action->getOwner()->push(item->action); // handover action its owner
+                item->action = nullptr;
                 delete item;
             }
             else {
