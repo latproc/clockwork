@@ -32,11 +32,11 @@ class Taker : public Receiver {
           const std::function<bool(const Message &, Transmitter *)> &can_receive)
         : Receiver(name_str), m_can_receive(can_receive) {}
     bool receives(const Message &msg, Transmitter *t) override { return m_can_receive(msg, t); }
-    void handle(const Message &msg, Transmitter *from, bool needs_receipt = false) override {
+    void handle(const Message &msg, Transmitter *from, bool needs_receipt) override {
         received_message = true;
     }
     void reset() { received_message = false; }
-    bool got_message() { return received_message; }
+    bool got_message() const { return received_message; }
 
   private:
     const std::function<bool(const Message &, Transmitter *)> m_can_receive;
@@ -47,8 +47,8 @@ class Giver : public Transmitter {
   public:
     Giver(CStringHolder name_str) : Transmitter(name_str) {}
     virtual bool receives(const Message &msg, Transmitter *t) { return true; }
-    virtual void sendMessageToReceiver(const Message &msg, Receiver *to,
-                                       bool expect_reply = false) {
+    void sendMessageToReceiver(const Message &msg, Receiver *to,
+                                       bool expect_reply) override {
         if (to->receives(msg, this)) {
             to->handle(msg, this, expect_reply);
         }
@@ -60,7 +60,75 @@ class TransmissionTest : public ::testing::Test {
     void SetUp() override {}
 };
 
+
 } // namespace
+
+// --- CStringHolder tests ---
+TEST(CStringHolderTest, CopySelfAssignmentNoCrashAndPreservesValue) {
+    CStringHolder h1(strdup("alpha")); // owning
+    ASSERT_STREQ(h1.get(), "alpha");
+
+    // Self copy-assign should be a no-op and not free/dup the same pointer
+    h1 = h1;
+    ASSERT_STREQ(h1.get(), "alpha");
+    ASSERT_TRUE(h1.will_free());
+}
+
+TEST(CStringHolderTest, MoveSelfAssignmentNoCrash) {
+    CStringHolder h1(strdup("beta"));
+    ASSERT_STREQ(h1.get(), "beta");
+
+    // Self move-assign should be a no-op
+    h1 = std::move(h1);
+    ASSERT_STREQ(h1.get(), "beta");
+    ASSERT_TRUE(h1.will_free());
+}
+
+TEST(CStringHolderTest, CopyAssignmentReplacesValueSafely) {
+    CStringHolder h1(strdup("first"));
+    CStringHolder h2(strdup("second"));
+
+    h1 = h2; // h1 should now equal "second"; old "first" must have been freed
+    ASSERT_STREQ(h1.get(), "second");
+    ASSERT_STREQ(h2.get(), "second");
+    ASSERT_TRUE(h1.will_free());
+    ASSERT_TRUE(h2.will_free());
+}
+
+TEST(CStringHolderTest, MoveAssignmentTransfersOwnership) {
+    CStringHolder src(strdup("payload"));
+    CStringHolder dst(strdup("old"));
+
+    dst = std::move(src);
+
+    ASSERT_STREQ(dst.get(), "payload");
+    ASSERT_TRUE(dst.will_free());
+    // After move, src relinquishes ownership; get() should be null
+    ASSERT_EQ(src.get(), nullptr);
+}
+
+TEST(MessageTest, CopyAssignmentSelfSafe) {
+    Message m1("hello");
+    m1 = m1; // self-assign must be safe
+    EXPECT_EQ(m1.getText(), std::string("hello"));
+}
+
+TEST(MessageTest, CopyAssignmentReplacesFields) {
+    Message a("one");
+    Message b("two",Message::ENTERMSG);
+
+    a = b;
+    EXPECT_EQ(a.getText(), std::string("two"));
+    EXPECT_EQ(a.getType(), b.getType());
+}
+
+TEST(MessageTest, MoveAssignmentTransfersFields) {
+    Message src("move_me");
+    Message dst("dest");
+
+    dst = std::move(src);
+    EXPECT_EQ(dst.getText(), std::string("move_me"));
+}
 
 // The following aren't particularly useful tests, just practice TDD.
 TEST(MessageTest, default_message_type_is_simple) {
@@ -136,7 +204,7 @@ TEST_F(TransmissionTest, can_send_to_receiver) {
     Message msg("test");
     Taker taker("taker", [](const Message &msg, Transmitter *t) { return true; });
     Giver giver("giver");
-    giver.sendMessageToReceiver(msg, &taker);
+    giver.sendMessageToReceiver(msg, &taker, false);
     EXPECT_TRUE(taker.got_message());
 }
 
@@ -144,12 +212,12 @@ TEST_F(TransmissionTest, receiver_can_refuse_message) {
     Message msg("test");
     Taker taker("taker", [](const Message &msg, Transmitter *t) { return false; });
     Giver giver("giver");
-    giver.sendMessageToReceiver(msg, &taker);
+    giver.sendMessageToReceiver(msg, &taker, false);
     EXPECT_FALSE(taker.got_message());
 }
 
 int main(int argc, char *argv[]) {
-    zmq::context_t *context = new zmq::context_t;
+    auto *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     Logger::instance();
     boost::condition_variable_any cond_var;
