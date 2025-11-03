@@ -144,9 +144,20 @@ continue_plugin:
         int stat = 0;
         int err = waitpid(data->child, &stat, WNOHANG);
         if (err == -1) {
-            perror("waitpid");
-            if (errno == ECHILD)
+            if (errno == ECHILD) {
                 printf("child exited %d (stat = %d)\n", WEXITSTATUS(stat), stat);
+                if (WEXITSTATUS(stat) == 0) {
+                    setIntValue(scope, "CommandStatus", 0);
+                    changeState(scope, "Done");
+                }
+                else {
+                    setIntValue(scope, "CommandStatus", WEXITSTATUS(stat));
+                    changeState(scope, "Error");
+                }
+                data->child = 0;
+                goto CommandFinished;
+            }
+            perror("waitpid");
         }
         else if (err == 0) {
             debug_free(current, "current");

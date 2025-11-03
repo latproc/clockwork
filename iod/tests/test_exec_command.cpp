@@ -62,7 +62,7 @@ class ExecuteTests {
         machine_class_->addState("Start", true);
         machine_class_->default_state = State("Init");
         machine_class_->initial_state = State("Init");
-        one->properties.add("Command", "/bin/ls");
+        one->properties.add("Command", "/bin/sleep 0.1");
         one->properties.add("CommandStatus", 0);
         one->properties.add("Result", "");
         one->properties.add("Errors", "");
