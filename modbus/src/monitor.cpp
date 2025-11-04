@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <iostream>
 #include <stdlib.h>
+#include <cstring>
 
 std::map<unsigned int, ModbusMonitor *> ModbusMonitor::addresses;
 
