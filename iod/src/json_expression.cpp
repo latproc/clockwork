@@ -57,6 +57,7 @@ PathResult follow_json_expr_path(const std::string &str,
     PathResult result(json);
 
     while (!done) {
+        std::cout << "token: " << token << " kind: " << kind << std::endl;
         switch (kind) {
         case Parser::TokenType::root:
             break;
@@ -149,11 +150,12 @@ PathResult follow_json_expr_path(const std::string &str,
                 result.value = cJSON_GetArrayItem(result.value, *result.index);
             }
             else if (result.value && result.value->type == cJSON_Object) {
-                if (symbol.kind != Value::t_symbol && symbol.kind != Value::t_string) {
+                if (symbol.kind != Value::t_symbol && symbol.kind != Value::t_string && symbol.kind != Value::t_integer) {
+                    std::cout << "expected a symbol or string but got: " << symbol.kind_to_string() << std::endl;
                     throw std::runtime_error("symbol not a string");
                 }
                 result.parent = result.value;
-                result.key = symbol.sValue;
+                result.key = symbol.kind == Value::t_integer ? symbol.asString() : symbol.sValue;
                 result.index.reset();
                 result.value = cJSON_GetObjectItem(result.value, result.key->c_str());
             }

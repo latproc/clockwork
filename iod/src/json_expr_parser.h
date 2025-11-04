@@ -87,6 +87,7 @@ class Parser {
     void member();
     void var();
     void key();
+    void numeric_key();
     void number();
     void symbol();
     void field();

@@ -1,5 +1,69 @@
 # Play with assignment
 
+W MACHINE {
+OPTION channel 1;
+OPTION index "";
+OPTION sample JSON_VALUE {
+      "id": 5,
+      "channel": 1,
+      "status": "completed",
+      "best_by_antenna": {
+        "1": {
+          "tag": "3376392D9000006767860903",
+          "rssi": -56
+        },
+        "2": {
+          "tag": "3376392D9000006767860904",
+          "rssi": -56
+        },
+        "3": {
+          "tag": "3376392D9000006767860905",
+          "rssi": -56
+        },
+        "4": {
+          "tag": "3376392D9000006767860906",
+          "rssi": -56
+        }
+      }
+    };
+    OPTION x "";
+
+    ENTER INIT {
+        # ordinary fields
+        x := ITEM ${id} OF sample;
+        LOG "Sample ID: " + x;
+        x := ITEM ${channel} OF sample;
+        LOG "Sample Channel: " + x;
+        x := ITEM ${status} OF sample;
+        LOG "Sample Status: " + x;
+
+        # nested fields with a numeric key
+
+        # using an integer variable for the key after converting to string
+        index := channel AS STRING;
+        x := ITEM ${best_by_antenna.@index.tag} OF sample;
+        LOG "Best by antenna 1 tag: " + x;
+
+        # using an integer variable directly as the key
+        x := ITEM ${best_by_antenna.@channel.tag} OF sample;
+        LOG "Best by antenna 2 tag: " + x;
+
+        # using a literal numeric key written as a string
+        x := ITEM ${best_by_antenna."3".tag} OF sample;
+        LOG "Best by antenna 3 tag: " + x;
+
+
+        # using a literal numeric key
+        x := ITEM ${best_by_antenna.4.tag} OF sample;
+        LOG "Best by antenna 4 tag: " + x;
+
+        # using a non-existing key with default value
+        x := ITEM ${best_by_antenna.5.tag} OF sample DEFAULT "no tag";
+        LOG "Best by antenna z tag: " + x;
+    }
+}
+w W;
+
 X MACHINE {
     OPTION a JSON_VALUE {"a": 1};
     OPTION b JSON_VALUE [1,2,3];
