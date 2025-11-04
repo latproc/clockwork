@@ -180,6 +180,19 @@ TEST(JsonExpr, SelectObjectMember) {
     cJSON_Delete(doc);
 }
 
+    TEST(JsonExpr, SelectNestedObjectMember) {
+    auto expr_str = "$.a.1.c";
+    JsonExpr expr(expr_str);
+    auto json_str = R"JSON({"a":{"1":{"c":"hello"}}})JSON";
+    auto doc = cJSON_Parse(json_str);
+    cJSON *json = expr.apply(doc);
+    EXPECT_NE(json, nullptr);
+    EXPECT_EQ(json->type, cJSON_String);
+    EXPECT_EQ(strcmp(json->valuestring, "hello"), 0);
+    cJSON_Delete(json);
+    cJSON_Delete(doc);
+}
+
 TEST(JsonExpr, SelectInvalidObjectMember) {
     auto expr_str = "$.c";
     JsonExpr expr(expr_str);

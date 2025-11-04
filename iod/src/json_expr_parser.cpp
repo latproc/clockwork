@@ -12,7 +12,7 @@
 // member = { ( "[" (key | symbol) "]" | "." field ) }
 // root = "$"
 // var  = alpha { alpha | digit | "_"}
-// field = var | number
+// field = symbol | var | numeric_key
 // key = "*" | var | number
 // symbol = "@" alpha { alpha | digit | "_"}
 
@@ -145,6 +145,9 @@ void Parser::field() {
         if (next == '@') {
            symbol();
         }
+        else if (isdigit(next)) {
+            numeric_key();
+        }
         else {
             var();
         }
@@ -170,13 +173,21 @@ void Parser::symbol() {
 }
 
 void Parser::var() {
-    if (isalpha(next)) {
+    if (isalpha(next) || next == '"') {
+        auto start_char = next;
+        if (start_char == '"') { scan(); }
         std::stringstream ss;
         while (!is.eof() && (isalpha(next) || isdigit(next) || next == '_')) {
             ss << next;
             next = pull();
         }
         value = ss.str();
+        if (start_char == '"') {
+            if (next != start_char) {
+                throw std::runtime_error(R"(parse error: expected '"')");
+            }
+            scan();
+        }
         cb_string(value, TokenType::var);
         is.mark();
         if (next == ' ') {
@@ -221,6 +232,24 @@ void Parser::key() {
     else if (next == '*') {
         cb(next, TokenType::wildcard);
         scan();
+    }
+    else {
+        throw std::runtime_error("parsing failed");
+    }
+}
+
+void Parser::numeric_key() {
+    if (isalpha(next) || isdigit(next)) {
+        std::stringstream ss;
+        while (!is.eof() && (isalpha(next) || isdigit(next) || next == '_')) {
+            ss << next;
+            next = pull();
+        }
+        value = ss.str();
+        cb_string(value, TokenType::key);
+        if (next == ' ') {
+            scan();
+        }
     }
     else {
         throw std::runtime_error("parsing failed");
