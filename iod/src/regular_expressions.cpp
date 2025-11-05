@@ -41,8 +41,7 @@ rexp_info *create_pattern(const char *pat) {
     }
     else {
         /* compiled ok, make space for matches */
-        info->num_matches = info->regex.re_nsub + 1;
-        info->matches.reset(new regmatch_t[info->num_matches]);
+        info->matches.resize(info->regex.re_nsub + 1);
     }
     return info;
 }
@@ -53,8 +52,8 @@ size_t numSubexpressions(const rexp_info *info) {
 
 int execute_pattern(rexp_info *info, const char *string) {
     int res = 0;
-    if (info->compilation_result == 0 && info->matches) {
-        res = regexec(&info->regex, string, info->num_matches, info->matches.get(), 0);
+    if (info->compilation_result == 0 && !info->matches.empty()) {
+        res = regexec(&info->regex, string, info->matches.size(), info->matches.data(), 0);
     }
     if (res) {
         assert(res == REG_NOMATCH);
@@ -70,11 +69,11 @@ int execute_pattern(rexp_info *info, const char *string) {
 */
 int find_matches(rexp_info *info, std::vector<std::string> &variables, const char *string) {
     int res = 0;
-    if (info->compilation_result == 0 && info->matches) {
-        res = regexec(&info->regex, string, info->num_matches, info->matches.get(), 0);
+    if (info->compilation_result == 0 && !info->matches.empty()) {
+        res = regexec(&info->regex, string, info->matches.size(), info->matches.data(), 0);
     }
 
-    if (res == 0 && info->matches) {
+    if (res == 0 && !info->matches.empty()) {
         unsigned int i;
         /* using length of entire match for a string buffer to avoid remallocing buf for each one */
         regoff_t len = info->matches[0].rm_eo - info->matches[0].rm_so + 1;
@@ -110,7 +109,7 @@ char *substitute_pattern(rexp_info *info, std::vector<std::string> &variables, c
         matched_ok = execute_pattern(info, string);
     }
 
-    if (matched_ok == 0 && info->matches) {
+    if (matched_ok == 0 && !info->matches.empty()) {
         size_t subst_len = strlen(subst);
         size_t str_len = strlen(string);
         size_t remainder = strlen(string);
@@ -161,7 +160,7 @@ int each_match(rexp_info *info, const char *text, size_t *end_idx, match_func f,
     matched_ok = execute_pattern(info, text);
     int offset = 0;
     int result = 0;
-    while (matched_ok == 0 && info->matches) {
+    while (matched_ok == 0 && !info->matches.empty()) {
         char *match;
         regoff_t so = info->matches[0].rm_so;
         regoff_t eo = info->matches[0].rm_eo;
