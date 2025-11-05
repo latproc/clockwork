@@ -32,11 +32,10 @@ struct rexp_info {
     int compilation_result;
     boost::optional<std::string> compilation_error;
     regex_t regex;
-    std::unique_ptr<regmatch_t[]> matches;
-    size_t num_matches;
+    std::vector<regmatch_t> matches;
     
     // Constructor
-    rexp_info() : compilation_result(0), num_matches(0) {}
+    rexp_info() : compilation_result(0) {}
     
     // Destructor to clean up regex resources
     ~rexp_info() {
