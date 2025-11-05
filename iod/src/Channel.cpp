@@ -1866,14 +1866,14 @@ bool Channel::patternMatches(const std::string &machine_name)
         rexp_info *rexp = create_pattern(pattern.c_str());
         if (!rexp->compilation_error) {
             if (execute_pattern(rexp, machine_name.c_str()) == 0) {
-                delete rexp;
+                release_pattern(rexp);
                 return true;
             }
         }
         else {
-            MessageLog::instance()->add(rexp->compilation_error);
-            DBG_CHANNELS << "Channel error: " << channel_name << " " << rexp->compilation_error << "\n";
-            delete rexp;
+            MessageLog::instance()->add(rexp->compilation_error->c_str());
+            DBG_CHANNELS << "Channel error: " << channel_name << " " << *rexp->compilation_error << "\n";
+            release_pattern(rexp);
             return false;
         }
     }
@@ -2795,11 +2795,11 @@ void Channel::setupFilters() {
             }
         }
         else {
-            MessageLog::instance()->add(rexp->compilation_error);
+            MessageLog::instance()->add(rexp->compilation_error->c_str());
             DBG_CHANNELS << "Channel error: " << definition()->name << " "
-                         << rexp->compilation_error << "\n";
+                         << *rexp->compilation_error << "\n";
         }
-        delete rexp;
+        release_pattern(rexp);
     }
     std::map<std::string, Value>::const_iterator prop_iter =
         definition()->monitors_properties.begin();
@@ -2892,8 +2892,9 @@ void ChannelDefinition::processIgnoresPatternList(std::set<std::string>::const_i
             }
         }
         else {
-            MessageLog::instance()->add(rexp->compilation_error);
-            DBG_CHANNELS << "Channel error: " << name << " " << rexp->compilation_error << "\n";
+            MessageLog::instance()->add(rexp->compilation_error->c_str());
+            DBG_CHANNELS << "Channel error: " << name << " " << *rexp->compilation_error << "\n";
         }
+        release_pattern(rexp);
     }
 }

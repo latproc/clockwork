@@ -31,19 +31,18 @@
 #include <vector>
 
 rexp_info *create_pattern(const char *pat) {
-    rexp_info *info = (rexp_info *)malloc(sizeof(rexp_info));
-    info->pattern = strdup(pat);
-    info->compilation_error = NULL;
-    info->matches = NULL;
+    rexp_info *info = new rexp_info();
+    info->pattern = std::string(pat);
     info->compilation_result = regcomp(&info->regex, pat, REG_EXTENDED);
     if (info->compilation_result != 0) {
         char buf[80];
         regerror(info->compilation_result, &info->regex, buf, 80);
-        info->compilation_error = strdup(buf);
+        info->compilation_error = std::string(buf);
     }
     else {
         /* compiled ok, make space for matches */
-        info->matches = (regmatch_t *)malloc(sizeof(regmatch_t) * (info->regex.re_nsub + 1));
+        info->num_matches = info->regex.re_nsub + 1;
+        info->matches.reset(new regmatch_t[info->num_matches]);
     }
     return info;
 }
@@ -54,8 +53,8 @@ size_t numSubexpressions(const rexp_info *info) {
 
 int execute_pattern(rexp_info *info, const char *string) {
     int res = 0;
-    if (info->compilation_result == 0) {
-        res = regexec(&info->regex, string, info->regex.re_nsub + 1, info->matches, 0);
+    if (info->compilation_result == 0 && info->matches) {
+        res = regexec(&info->regex, string, info->num_matches, info->matches.get(), 0);
     }
     if (res) {
         assert(res == REG_NOMATCH);
@@ -71,11 +70,11 @@ int execute_pattern(rexp_info *info, const char *string) {
 */
 int find_matches(rexp_info *info, std::vector<std::string> &variables, const char *string) {
     int res = 0;
-    if (info->compilation_result == 0) {
-        res = regexec(&info->regex, string, info->regex.re_nsub + 1, info->matches, 0);
+    if (info->compilation_result == 0 && info->matches) {
+        res = regexec(&info->regex, string, info->num_matches, info->matches.get(), 0);
     }
 
-    if (res == 0) {
+    if (res == 0 && info->matches) {
         unsigned int i;
         /* using length of entire match for a string buffer to avoid remallocing buf for each one */
         regoff_t len = info->matches[0].rm_eo - info->matches[0].rm_so + 1;
@@ -111,7 +110,7 @@ char *substitute_pattern(rexp_info *info, std::vector<std::string> &variables, c
         matched_ok = execute_pattern(info, string);
     }
 
-    if (matched_ok == 0) {
+    if (matched_ok == 0 && info->matches) {
         size_t subst_len = strlen(subst);
         size_t str_len = strlen(string);
         size_t remainder = strlen(string);
@@ -162,7 +161,7 @@ int each_match(rexp_info *info, const char *text, size_t *end_idx, match_func f,
     matched_ok = execute_pattern(info, text);
     int offset = 0;
     int result = 0;
-    while (matched_ok == 0) {
+    while (matched_ok == 0 && info->matches) {
         char *match;
         regoff_t so = info->matches[0].rm_so;
         regoff_t eo = info->matches[0].rm_eo;
@@ -190,15 +189,7 @@ int each_match(rexp_info *info, const char *text, size_t *end_idx, match_func f,
 }
 
 void release_pattern(rexp_info *info) {
-    regfree(&info->regex);
-    if (info->compilation_error != NULL) {
-        free(info->compilation_error);
-    }
-    free(info->pattern);
-    if (info->matches != NULL) {
-        free(info->matches);
-    }
-    free(info);
+    delete info;  // Destructor will handle regfree and unique_ptr will handle matches cleanup
 }
 
 int matches(const char *string, const char *pattern) {
