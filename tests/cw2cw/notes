@@ -1,0 +1,164 @@
+
+Run a: cw -cp 10001 -c iod.conf common a
+Run b: cw -cp 5555 -c iod.conf common b
+
+b determines there is no channel to start and creates on, arbitrarily selets a port
+b creates a command socket bound to an inproc address for external command messages
+The channel adds a shadow machine and filters
+Processing thread starts the channel with a command socket for processing to talk to the channel
+...
+
+Summary
+Note: there is internal routing within the client (and server)
+
+- A channel is created by sending a request to server side on the cw (command) channel
+- server creates a channel and returns the name
+- client connects and waits for a start message (WAITSTART)
+- server sends a start
+- client sets state to UPLOADING
+- server sends its state
+- client receives 'done' from server
+- client sents ack(?)
+- client received 'OK' from server and switches to DOWNLOADING
+- server sends ack
+
+
+Server log (b)
+
+
+ControlSystem version 0.9.7
+ZMQ version 4.3.5
+2024-07-06 16:23:36.672237 adding ^SYSTEM to ignore pattern list
+2024-07-06 16:23:36.672295 adding SYSTEM to ignore pattern list
+2024-07-06 16:23:36.672475 Instantiating SHADOW flasher_a for Channel Link
+2024-07-06 16:23:36.672492 shadow flasher_a requires authority 1825672435
+2024-07-06 16:23:36.673204 Client Interface available on port: 5555
+2024-07-06 16:23:36.673307 No channels to start
+no channel found, creating one
+default port for channel: (empty)
+instantiating a channel on port 7684
+2024-07-06 16:23:49.222840 creating command socket info for Link_7684 while setting its definition
+2024-07-06 16:23:49.222957 Bound command channel socket (processing side) of Link_7684 to inproc://chn_6 at index 6
+2024-07-06 16:23:49.222982 Channel Link_7684 adding shadow machine flasher_a
+2024-07-06 16:23:49.222987 Link_7684 setting up filters
+2024-07-06 16:23:49.222991 iod processing setting up command sockets
+2024-07-06 16:23:49.222994 channel Link_7684 already has a command socket.. using it
+2024-07-06 16:23:49.222998 Channel Link_7684 starting from thread iod processing
+2024-07-06 16:23:49.223021 using inproc://s_12554603_cmd for the client command socket
+2024-07-06 16:23:49.223071 Link_7684 connected channel command client
+2024-07-06 16:23:49.223160 inproc://s_12554632_1 0x14b004788 monitor started
+2024-07-06 16:23:49.223169 inproc://s_12554640_2 0x600003830090 monitor started
+2024-07-06 16:23:49.223185 Link_7684 sending command start message
+2024-07-06 16:23:49.223213 Link_7684 sent command start message
+2024-07-06 16:23:49.223244 Link_7684 bound channel command server
+2024-07-06 16:23:49.223989 channel Link_7684 thread waiting for start message from command server
+2024-07-06 16:23:49.224048 channel Link_7684 thread received start message
+2024-07-06 16:23:49.224052 Link_7684 connecting to remote socket inproc://chn_6
+2024-07-06 16:23:49.224079 Link_7684 command start message acknowledged
+2024-07-06 16:23:49.224084 Channel Link_7684 got response to start: ok
+2024-07-06 16:23:49.224119 Link_7684 DISCONNECTED
+2024-07-06 16:23:49.224122 Channel Link_7684 disabling shadow machine flasher_a
+2024-07-06 16:23:49.224175  added route 1
+2024-07-06 16:23:49.224179 Clockwork command processor on other end of inproc://chn_6
+2024-07-06 16:23:49.224181  added route 2
+2024-07-06 16:23:49.277947 Channel Link_7684 [DISCONNECTED] added connection 1
+2024-07-06 16:23:49.277956 Accepted
+2024-07-06 16:23:49.278174 inproc://s_12554632_1 on_event_unknown tcp://127.0.0.1:7684
+2024-07-06 16:23:49.278555 Channel Link_7684: (server) setting state to WAITSTART
+2024-07-06 16:23:49.278558 Channel Link_7684 enabling shadow machine flasher_a
+2024-07-06 16:23:49.278576 flasher_a (shadow) setState(undefined->inactive)
+2024-07-06 16:23:49.403391 Message router collecting message from remote
+2024-07-06 16:23:49.403437 Message router collected message from 3 for route 3
+2024-07-06 16:23:49.403444 forwarding status to 3
+2024-07-06 16:23:49.403548 CTRL got command status header 12735031 3:3:0
+2024-07-06 16:23:49.403556 Received status in WAITSTART on Link_7684
+2024-07-06 16:23:49.403598 Channel Link_7684: (server) setting state to UPLOADING
+2024-07-06 16:23:49.404695 Channel Link_7684 syncRemoteStates UPLOADING
+2024-07-06 16:23:49.404717 collecting properties for machine flasher_b:FlasherOneInterface
+2024-07-06 16:23:49.404721 Channel Link_7684 syncRemoteStatesDone
+2024-07-06 16:23:49.404844 activity on pollidx 2 route 2
+2024-07-06 16:23:49.404888  collected '{"command":"STATE", "params":["flasher_b", "inactive", 1825672435]} ' from route 2 with header 12736310 1:2:0
+2024-07-06 16:23:49.406222 activity on pollidx 2 route 2
+2024-07-06 16:23:49.406264  collected 'done' from route 2 with header 12736334 3:3:1
+2024-07-06 16:23:49.449818 Message router collecting message from remote
+2024-07-06 16:23:49.449867 Message router collected message from 1 for route 2
+2024-07-06 16:23:49.449873 forwarding OK to 2
+2024-07-06 16:23:49.451365 channel Link_7684 got OK from server
+2024-07-06 16:23:49.451460 Link_7684 DOWNLOADING
+2024-07-06 
+
+## Client log
+
+
+ControlSystem version 0.9.7
+ZMQ version 4.3.5
+2024-07-06 16:23:49.217075 adding ^SYSTEM to ignore pattern list
+2024-07-06 16:23:49.217133 adding SYSTEM to ignore pattern list
+2024-07-06 16:23:49.218425 creating command socket info for link while setting its definition
+2024-07-06 16:23:49.218534 Bound command channel socket (processing side) of link to inproc://chn_6 at index 6
+2024-07-06 16:23:49.218578 Instantiating SHADOW flasher_b for Channel Link
+2024-07-06 16:23:49.218596 shadow flasher_b requires authority 1433649235
+2024-07-06 16:23:49.218623 Channel link adding shadow machine flasher_b
+2024-07-06 16:23:49.219382 link DISCONNECTED
+2024-07-06 16:23:49.219387 Channel link disabling shadow machine flasher_b
+2024-07-06 16:23:49.219403 Channel link is already enabled
+2024-07-06 16:23:49.219423 Client Interface available on port: 10001
+2024-07-06 16:23:49.219459 starting link
+2024-07-06 16:23:49.219461 Channel link starting from thread iod processing
+2024-07-06 16:23:49.219482 using inproc://s_5256_cmd for the client command socket
+2024-07-06 16:23:49.219499  channel link starting subscription to "127.0.0.1":5555
+2024-07-06 16:23:49.219516 link connected channel command client
+2024-07-06 16:23:49.219578 link sending command start message
+2024-07-06 16:23:49.219601 link sent command start message
+2024-07-06 16:23:49.219615 inproc://s_5290_1 0x15870bea8 monitor started
+2024-07-06 16:23:49.219637 link bound channel command server
+2024-07-06 16:23:49.219659 inproc://s_5299_2 0x6000018b0990 monitor started
+2024-07-06 16:23:49.220403 channel link thread waiting for start message from command server
+2024-07-06 16:23:49.220458 channel link thread received start message
+2024-07-06 16:23:49.220460 link connecting to remote socket inproc://chn_6
+2024-07-06 16:23:49.220492 link command start message acknowledged
+2024-07-06 16:23:49.220499 Channel link got response to start: ok
+2024-07-06 16:23:49.220502 iod processing setting up command sockets
+2024-07-06 16:23:49.220505 channel link already has a command socket.. using it
+2024-07-06 16:23:49.220593  added route 1
+2024-07-06 16:23:49.220605 Clockwork command processor on other end of inproc://chn_6
+2024-07-06 16:23:49.220608  added route 2
+2024-07-06 16:23:49.220647  SubscriptionManager connecting to tcp://127.0.0.1:5555
+2024-07-06 16:23:49.220828  setup status 1 -> 3
+2024-07-06 16:23:49.221216 inproc://s_5299_2 on_event_connected tcp://127.0.0.1:5555
+2024-07-06 16:23:49.221222  Connected
+2024-07-06 16:23:49.221467 inproc://s_5299_2 on_event_unknown tcp://127.0.0.1:5555
+2024-07-06 16:23:49.221917  Link exception 156384763 Operation cannot be accomplished in current state checking for setup data
+2024-07-06 16:23:49.221977 Requesting channel Link
+2024-07-06 16:23:49.222282  setup status 3 -> 6
+2024-07-06 16:23:49.253281 link setting up filters
+2024-07-06 16:23:49.277362  safeRecv got data: {
+	"port":	7684,
+	"name":	"Link_7684",
+	"authority":	1825672435
+} in waiting setup
+2024-07-06 16:23:49.277397 Got channel {
+	"port":	7684,
+	"name":	"Link_7684",
+	"authority":	1825672435
+}
+2024-07-06 16:23:49.277398  setup status 6 -> 4
+2024-07-06 16:23:49.277432 Got channel {
+	"port":	7684,
+	"name":	"Link_7684",
+	"authority":	1825672435
+}
+2024-07-06 16:23:49.277434  Link_7684 set channel key to 1825672435
+2024-07-06 16:23:49.277461  connecting subscriber to tcp://127.0.0.1:7684
+2024-07-06 16:23:49.277462   connecting subscriber to tcp://127.0.0.1:7684
+2024-07-06 16:23:49.277905 inproc://s_5290_1 on_event_connected tcp://127.0.0.1:7684
+2024-07-06 16:23:49.277911 Channel link [DISCONNECTED] added connection 1
+2024-07-06 16:23:49.277932  Connected
+2024-07-06 16:23:49.278124 inproc://s_5290_1 on_event_unknown tcp://127.0.0.1:7684
+2024-07-06 16:23:49.332681 Channel link CONNECTED
+2024-07-06 16:23:49.332685 Channel link enabling shadow machine flasher_b
+2024-07-06 16:23:49.332692 Channel link (client); setting state to DOWNLOADING
+2024-07-06 16:23:49.332931 flasher_b (shadow) setState(undefined->inactive)
+2024-07-06 16:23:49.332992 link DOWNLOADING
+2024-07-06 16:23:49.332995 Channel link (client); sending 'status' to partner
+2024-07-06 16:23:49.387531  setup status 4 -> 7
