@@ -102,7 +102,7 @@ continue_plugin:
                 // Redirect stdout and stderr
                 int out_fd = open(data->stdout, O_CREAT | O_TRUNC | O_WRONLY, 0640);
                 if (out_fd == -1) {
-                    perror("create stdout filw");
+                    perror("create stdout file");
                     exit(3);
                 }
                 int err_fd = open(data->stderr, O_CREAT | O_TRUNC | O_WRONLY, 0640);
