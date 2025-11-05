@@ -145,6 +145,8 @@ ECModule::~ECModule() {
         delete[] entry_details;
     }
     entry_details = 0;
+    delete[] bit_positions;
+    delete[] offsets;
 }
 
 bool ECModule::online() { return slave_config_state.online; }
