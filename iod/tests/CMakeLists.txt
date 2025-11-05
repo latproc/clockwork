@@ -167,4 +167,10 @@ target_link_libraries(test_thread_safe_queue gmock_main cw_client
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_thread_safe_queue COMMAND test_thread_safe_queue)
 
+add_executable(test_regular_expressions test_regular_expressions.cpp )
+target_link_libraries(test_regular_expressions gmock_main cw_client cw_interpreter
+    ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_regular_expressions COMMAND test_regular_expressions)
+
 endif()
