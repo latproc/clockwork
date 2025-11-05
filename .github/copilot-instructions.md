@@ -64,7 +64,7 @@ ButtonController MACHINE button {
 - `state DEFAULT` - Default state automatic transition if no WHEN conditions match
 - `state INITIAL` - Initial state on machine start (only one per machine)
 - `state STATE` - declares a state without setting any automatic transitions
-- `new_state DURING command { actions }` - Command definition with an associated state change
+- `state DURING command { actions }` - Temporary state that executes actions then reevaluates WHEN conditions
 - `ENTER/LEAVE state { actions }` - State entry/exit actions
 - `COMMAND name { actions }` - Define commands callable externally
 - `COMMAND name WITHIN state { actions }` - Command scoped to a specific state
@@ -72,7 +72,13 @@ ButtonController MACHINE button {
 - `WAITFOR condition` - Synchronous wait for condition
 - `LOG "message"` - Logging
 - `CALL machine.command` - Call command on another machine and wait for completion
-- `SEND machine.command` - Asynchronous command call
+- `SEND command TO machine` - Asynchronous command call (correct pattern)
+- `SEND command TO list_variable` - Broadcast command to all machines in list
+- `RECEIVE command { actions }` - Define how machine responds to received commands
+- `INCLUDE item IN list` / `CLEAR list` - Dynamic list manipulation
+- `SET machine TO state` - Force state change
+- `DISABLE machine` / `ENABLE machine` - Stop/start machine execution
+- `ANY list ARE state` - Test if any items in list are in the given state
 - Use `+` to concatenate strings
 - Use backticks `` ` `` for regex patterns
 - States and machines use the pattern `name TYPE parameters;` for declaration/instantiation.
@@ -83,17 +89,58 @@ ButtonController MACHINE button {
     or referenced via the GLOBAL keyword.
 - A common pattern is to use `SELF` to refer to the current machine in WHEN conditions to trigger
     temporary state changes based on internal variables.
+- **FLAG variables** are better than complex state machines for simple on/off logic. FLAGs are also machines
+- **LIST variables** can hold multiple machine references for broadcast operations. Lists are also machines.
+- **WHEN conditions** are continuously evaluated - machines automatically transition when conditions become true
+- **Command vs State**: Use `COMMAND name { }` for external calls, `state DURING command { }` for temporary actions
+- **RECEIVE vs COMMAND**: `RECEIVE` defines response to messages, `COMMAND` defines callable operations
 
 ### Key example clockwork files and directories
 - `tests/assign.cw` - demonstrates JSON integration
-- `tests/unit` - basic language feature tests and clockwork test drivers
+- `tests/unit/` - basic language feature tests and clockwork test drivers
 - `tests/lists.cw` - list manipulation examples
+- `tests/cycling_counter.cw` - clean example of state-driven counter with WHEN conditions
+- `tests/channel_stress_test.cw` - multi-daemon communication and message broadcasting
+- `tests/cw2cw/` - complete inter-daemon machine shadowing example with INTERFACE and UPDATES
 - `tests/stdchannels.cw` - standard channel definitions for inter-daemon communication
 
 ### Communication Patterns
 - **Channels** - ZMQ-based inter-daemon communication (see `Channel.cpp`)
 - **MQTT** - Pub/sub messaging (`MQTTInterface.h`)
 - **Modbus** - Industrial protocol support
+
+### Inter-Daemon Communication (Machine Shadowing)
+```clockwork
+# Define interface that will be shared between daemons
+FlasherInterface INTERFACE {
+    inactive INITIAL;
+    on STATE;
+    off STATE;
+}
+
+# Channel configuration with UPDATES for bidirectional shadowing
+Link CHANNEL {
+    OPTION PORT 9000;
+    UPDATES machine_a FlasherInterface;
+    UPDATES machine_b FlasherInterface;
+}
+
+# Daemon A: Creates channel instance with connection details
+link Link(host: "127.0.0.1", port: 5555);
+machine_a FlasherMachine;
+
+# Daemon B: Simple machine definition - will be shadowed in A
+machine_b FlasherMachine;
+```
+
+**Key Inter-Daemon Patterns:**
+- **INTERFACE** - Defines the state contract for machine shadowing across daemons
+- **UPDATES machine Interface** - Creates bidirectional shadow where local commands on shadows are sent to owner
+- **Shadow machines** - Remote machines appear locally and can be controlled as if local
+- **Authority system** - Each daemon has authority over its own machines, shadows relay commands
+- **Channel connection states**: `DISCONNECTED` → `WAITSTART` → `UPLOADING` → `DOWNLOADING` → `CONNECTED` → `ACTIVE`
+- **Automatic shadow synchronization** - State changes propagate automatically between daemons
+- **Command routing** - Commands sent to shadows are automatically routed to owning daemon
 
 ## Development Workflow
 
@@ -157,5 +204,5 @@ output_02 POINT EL2008, 1, 3;
 - Channel-related code (`Channel.cpp`) requires careful buffer management
 - Message filters must free input buffers before setting `*buf = nullptr`
 - ZMQ message buffers need explicit cleanup in high-throughput scenarios
-- **Multi-daemon Testing**: Use `tests/channel_stress_test.cw` and `test_channel_memory_leaks.sh` for channel leak detection
+- **Multi-daemon Testing**: Use `tests/channel_stress_test.cw` and `scripts/test_channel_memory_leaks.sh` for channel leak detection
 - **Load Testing**: Channel memory leaks manifest under high-frequency state changes between daemons
