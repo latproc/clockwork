@@ -343,8 +343,8 @@ class Options {
         pattern_ = strdup(p);
         compiled_pattern = create_pattern(pattern_);
         got_pattern = compiled_pattern->compilation_result == 0;
-        if (!got_pattern) {
-            std::cerr << compiled_pattern->compilation_error << "\n";
+        if (!got_pattern && compiled_pattern->compilation_error) {
+            std::cerr << *compiled_pattern->compilation_error << "\n";
         }
     }
     rexp_info *regexpInfo() { return compiled_pattern; }

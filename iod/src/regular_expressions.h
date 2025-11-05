@@ -24,14 +24,29 @@
 #include <regex.h>
 #include <string>
 #include <vector>
+#include <boost/optional.hpp>
+#include <memory>
 
-typedef struct rexp_info {
-    char *pattern;
+struct rexp_info {
+    boost::optional<std::string> pattern;
     int compilation_result;
-    char *compilation_error;
+    boost::optional<std::string> compilation_error;
     regex_t regex;
-    regmatch_t *matches;
-} rexp_info;
+    std::unique_ptr<regmatch_t[]> matches;
+    size_t num_matches;
+    
+    // Constructor
+    rexp_info() : compilation_result(0), num_matches(0) {}
+    
+    // Destructor to clean up regex resources
+    ~rexp_info() {
+        regfree(&regex);
+    }
+    
+    // Delete copy constructor and assignment operator to prevent issues
+    rexp_info(const rexp_info&) = delete;
+    rexp_info& operator=(const rexp_info&) = delete;
+};
 
 rexp_info *create_pattern(const char *pat);
 
