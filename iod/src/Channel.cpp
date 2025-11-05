@@ -91,7 +91,6 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
     if (len == 0) {
         return true;
     }
-    *buf = nullptr;
     IODCommand *command = parseCommandString(data);
     if (command) {
         if (command->param(0) == Value{"STATE"}) {
@@ -104,13 +103,15 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
                         fl.f() << "skipping echoed command\n";
                     }
                     delete command;
+                    delete[] data;  // Free the original buffer
+                    *buf = nullptr;
                     return false;
                 }
                 else {
                         std::string msg =
                         MessageEncoding::encodeState(m->getName(), command->param(2).sValue.c_str(),
                                                      (int64_t)channel->getAuthority());
-                    delete[] *buf;
+                    delete[] data;  // Free the original buffer
                     len = msg.size() + 1;
                     *buf = new char[len];
                     memcpy(*buf, msg.c_str(), len);
@@ -118,6 +119,11 @@ bool RemoteClockworkCommandFilter::filter(char **buf, size_t &len) {
             }
         }
         delete command;
+    }
+    // If we reach here and haven't replaced the buffer, free the original
+    if (*buf == data) {
+        delete[] data;
+        *buf = nullptr;
     }
     return true;
 }
