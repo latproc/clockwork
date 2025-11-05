@@ -33,6 +33,13 @@
 rexp_info *create_pattern(const char *pat) {
     rexp_info *info = new rexp_info();
     info->pattern = std::string(pat);
+    // do not allow empty patterns
+    if (info->pattern->empty()) {
+        info->compilation_result = REG_BADPAT;
+        info->compilation_error = std::string("Empty pattern");
+        info->regex = {};
+        return info;
+    }
     info->compilation_result = regcomp(&info->regex, pat, REG_EXTENDED);
     if (info->compilation_result != 0) {
         char buf[80];
