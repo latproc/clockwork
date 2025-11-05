@@ -8,6 +8,7 @@
 #include <debug_malloc.h>
 #include <exec_command.h>
 #include <symboltable.h>
+#include <DebugExtra.h>
 
 #include "Statistics.h"
 #include <Dispatcher.h>
@@ -81,9 +82,14 @@ class ExecuteTests {
         EXPECT_TRUE(res == 0);
         res = *one->getCurrentStateVal();
         int count = 0;
-        while (res != "Done" && ++count < 10) {
+
+        // Pump until the plugin finishes
+        while (one->getCurrentStateVal() != nullptr) {
+            one->idle();
+            exec_command((void *)one);
             usleep(10000);
-            res = *one->getCurrentStateVal();
+            Value s = *one->getCurrentStateVal();
+            if (s == "Done" || s == "Error") break;
         }
         std::cout << "State: " << res << "\n";
         EXPECT_TRUE(res.kind == Value::t_symbol || res.kind == Value::t_string);
@@ -108,6 +114,8 @@ int main(int, char **) {
     SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> mqtt_queue(mqtt_cond_var, mqtt_mutex);
     Dispatcher::create(queue);
     Logger::instance();
+    DebugExtra::instance();
+    MachineClass *settings_class = new MachineClass("SYSTEMSETTINGS");
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");
     ControlSystemMachine machine;

@@ -191,6 +191,7 @@ int main() {
     SharedThreadSafeQueue<MQTTInterface::MQTTReceivedMessage*> mqtt_queue(mqtt_cond_var, mqtt_mutex);
     Dispatcher::create(queue);
     Logger::instance();
+    MachineClass *settings_class = new MachineClass("SYSTEMSETTINGS");
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");
     ControlSystemMachine machine;
