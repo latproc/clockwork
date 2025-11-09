@@ -57,7 +57,6 @@ PathResult follow_json_expr_path(const std::string &str,
     PathResult result(json);
 
     while (!done) {
-        std::cout << "token: " << token << " kind: " << kind << std::endl;
         switch (kind) {
         case Parser::TokenType::root:
             break;
