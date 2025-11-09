@@ -269,8 +269,8 @@ void initialise_machine_names(char *data) {
                 *q = 0;
                 machine_names.push_back(strdup(buf));
                 q = buf;
-                while (*p && *p++ != '\n')
-                    ;
+                while (*p && *p != '\n')
+                    ++p;
             }
         }
     }
@@ -380,10 +380,6 @@ int main(int argc, const char *argv[]) {
         psocket = &socket;
 
         socket.connect(url.c_str());
-        std::string word;
-        std::string msg;
-        std::string line;
-        std::stringstream line_input(line);
 
         // readline completion function
         rl_attempted_completion_function = my_rl_completion;
