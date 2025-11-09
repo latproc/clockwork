@@ -269,8 +269,12 @@ void initialise_machine_names(char *data) {
                 *q = 0;
                 machine_names.push_back(strdup(buf));
                 q = buf;
-                while (*p && *p != '\n')
+                while (*p && *p != '\n') {
                     ++p;
+                }
+                if (*p == '\n') {
+                    ++p;
+                }
             }
         }
     }
