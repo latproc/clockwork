@@ -1,5 +1,37 @@
 # Play with assignment
 
+U MACHINE {
+    OPTION a JSON_VALUE [{"key": "value1"}, {"key": "value2"}, {"key": "value3"}];
+    OPTION current NULL;
+    OPTION i 0;
+
+    process_all WHEN SELF IS idle AND CLASS OF current IS NOT EMPTY;
+    idle DEFAULT;
+    
+    ENTER INIT {
+        CALL update ON SELF;
+    }
+
+    COMMAND update {
+        current := ITEM ${[@i]} OF a;
+    }
+
+    ENTER process_all {
+        CALL process ON SELF;
+        INC i;
+        CALL update ON SELF;
+    }
+
+    COMMAND process {
+        LOG "a before: " + a AS STRING;
+        current := ITEM ${[@i]} OF a;
+        ITEM ${key} OF current := "updated " + (i+1) AS STRING;
+        ITEM ${[@i]} OF a := current;
+        LOG "a after: " + a AS STRING;
+    }
+}
+u U;
+
 W MACHINE {
 OPTION channel 1;
 OPTION index "";
