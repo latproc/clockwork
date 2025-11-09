@@ -52,7 +52,7 @@ cmake_policy(SET CMP0015 NEW)
 #set (CMAKE_VERBOSE_MAKEFILE false)
 set (CMAKE_EXPORT_COMPILE_COMMANDS true)
 
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -DUSE_READLINE ")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall ")
 if (USE_ASAN)
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address")
@@ -574,8 +574,9 @@ SET_SOURCE_FILES_PROPERTIES(${iosh_yacc_output} GENERATED)
 
 add_executable(iosh src/iosh.cpp ${iosh_yacc_output} ${iosh_lex_output})
 target_link_libraries(iosh cw_client "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+target_compile_definitions(iosh PRIVATE USE_READLINE )
 
-add_executable(iocmd src/iocmd.cpp)
+add_executable(iocmd src/iocmd.cpp ${iosh_yacc_output} ${iosh_lex_output})
 target_link_libraries(iocmd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 add_executable(device_connector src/device_connector.cpp src/options.cpp )

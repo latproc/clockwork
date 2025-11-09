@@ -172,24 +172,35 @@ int end_group(char end) {
     if ((json_delim == '{' && end == '}') || (json_delim == '[' && end == ']')) {
         if (--json_depth == 0) {
             BEGIN 0;
-            printf("JSON: %s\n", buf);
             yylval.jVal = cJSON_Parse(buf);
+            if (!yylval.jVal) {
+                printf("JSON parse error: %s\n", buf);
+                yyerror("JSON parse error");
+            }
             buf = NULL;
         }
     }
     return json_depth;
 }
 
+#ifndef USE_READLINE
+std::string get_input_line();
+#endif
+
 int get_input(char *buf, unsigned int size)
 {
     char *line;
     static char *last_read = (char *)NULL;
     if (feof(yyin)) { return YY_NULL; }
+#ifdef USE_READLINE
     line = readline("> ");
     if (!line) {
 		cmdline_done = true;
     	return YY_NULL;
 	}
+#else
+    line = strdup(get_input_line().c_str());
+#endif
     if (strlen(line) > size - 2) {
         yyerror("input line too long");
         return YY_NULL;
@@ -197,6 +208,7 @@ int get_input(char *buf, unsigned int size)
     strcpy(buf, line);
     free(line);
     
+#ifdef USE_READLINE
     if (strlen(buf)) {
         if (last_read && strcmp(buf, last_read) != 0) {
             free(last_read);
@@ -207,6 +219,7 @@ int get_input(char *buf, unsigned int size)
             last_read = strdup(buf);
         }
     }
-    return strlen(buf);
+#endif
+    return static_cast<int>(strlen(buf));
 }
 
