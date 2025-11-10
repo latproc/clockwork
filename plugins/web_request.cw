@@ -18,6 +18,7 @@ WebRequest MACHINE {
     COMMAND start WITHIN Error { SET SELF TO Start; }
     COMMAND start WITHIN Done  { SET SELF TO Start; }
     COMMAND start WITHIN Idle  { SET SELF TO Start; }
+    COMMAND stop WITHIN Running { SET SELF TO Idle; }
     COMMAND reset { Request := ""; Result := ""; SET SELF TO Idle; }
 }
 
