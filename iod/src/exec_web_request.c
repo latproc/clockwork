@@ -30,6 +30,7 @@ struct WebRequestData {
     char *content_type;
     /* NEW: Optional HTTP method override (e.g., PATCH/PUT/DELETE/HEAD/GET/POST) */
     char *method;
+    int abort;
 };
 
 static pthread_once_t curl_once = PTHREAD_ONCE_INIT;
@@ -48,6 +49,9 @@ static void curl_global_init_once(void) {
 static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
     size_t realsize = size * nmemb;
     struct WebRequestData *data = (struct WebRequestData*)userp;
+    if (data->abort) {
+        return 0;
+    }
     size_t old_len = data->result ? strlen(data->result) : 0;
     char *new_buf = 0;
     if (data->result) {
@@ -64,6 +68,37 @@ static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
     return realsize;
 }
 
+static int xferinfo_cb(void *clientp,
+                       curl_off_t dltotal, curl_off_t dlnow,
+                       curl_off_t ultotal, curl_off_t ulnow) {
+    struct WebRequestData *data = (struct WebRequestData *)clientp;
+    if (data && data->abort) {
+        printf("aborting\n");
+        /* Returning non-zero tells libcurl to abort the transfer. */
+        return 1;
+    }
+    (void)dltotal;
+    (void)dlnow;
+    (void)ultotal;
+    (void)ulnow;
+    return 0;
+}
+
+static int progress_cb(void *clientp,
+                       double dltotal, double dlnow,
+                       double ultotal, double ulnow) {
+    struct WebRequestData *data = (struct WebRequestData *)clientp;
+    if (data && data->abort) {
+        printf("aborting (progress)\n");
+        return 1;
+    }
+    (void)dltotal;
+    (void)dlnow;
+    (void)ultotal;
+    (void)ulnow;
+    return 0;
+}
+
 static void *worker(void *arg) {
     struct WebRequestData *data = (struct WebRequestData*)arg;
 
@@ -75,6 +110,12 @@ static void *worker(void *arg) {
         data->done = 1;
         return NULL;
     }
+
+    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, data);
+    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, xferinfo_cb);
+    curl_easy_setopt(curl, CURLOPT_PROGRESSDATA, data);
+    curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, progress_cb);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 
     /* Optional headers list (for Content-Type or others later) */
     struct curl_slist *headers = NULL;
@@ -231,6 +272,7 @@ int exec_web_request(void *scope) {
 
         data->running = 1;
         data->done = 0;
+        data->abort = 0;
 
         if (!changeState(scope, "Running")) goto done_cleanup;
 
@@ -271,8 +313,26 @@ int exec_web_request(void *scope) {
         setInstanceData(scope, 0);
         debug_free(data, "WebRequestData");
     }
+    else if (data && data->running && (!current
+                                   || (strcmp(current, "Running") != 0 && strcmp(current, "Start") != 0))) {
+        /* Cancellation path: thread is still running, but the state is no longer "Running".
+           This happens when a Clockwork command (e.g., stop) moves the machine back to Idle. */
+        if (!data->abort) {
+            data->abort = 1;
+        }
+        if (!data->done) {
+            /* Wait for the worker to notice the abort and finish. */
+            debug_free(current, "current");
+            return PLUGIN_COMPLETED;
+        }
+        /* Thread is finished, join and clean up, but do not update Result/Status/Errors
+           or change the state (Clockwork has already set it, typically to Idle). */
+        pthread_join(data->thread, NULL);
+        setIntValue(scope, "Status", (int64_t)0L);
+        setStringValue(scope, "Errors", "aborted");
+        goto done_cleanup;
+    }
 
     debug_free(current, "current");
     return PLUGIN_COMPLETED;
 }
-
