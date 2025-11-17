@@ -45,6 +45,7 @@
 #include "MachineInterface.h"
 #include "ResetAction.h"
 #include "LoadPropertiesAction.h"
+#include "UpdateListItemsAction.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -207,6 +208,7 @@ struct Subcondition {
 %token <jVal> JSONVAL
 %token <jsExpr> JSONEXPR
 %type <symbol> transition_state
+%type <symbol> serialisable
 
 %left BECOMES
 %left OR
@@ -1417,6 +1419,12 @@ RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ error_clause action  {
 }
 ;
 
+serialisable:
+  STATE   { $$ = "STATE"; }
+| ENABLED { $$ = "ENABLED"; }
+| SYMBOL  { $$ = $1; }
+;
+
 action_list:
 action  {
 	current_actions_stack.push_back(current_actions);
@@ -1883,13 +1891,37 @@ SET SYMBOL TO expression error_clause  {
     current_action = new GetListItemActionTemplate($5, $3);
 }
 */
-| DESERIALISE STATE DELIMITED BY STRINGVAL FROM SYMBOL TO ITEMS IN SYMBOL {
-    //if (current_action) current_actions->push_back(current_action);
-    //current_action = new UpdateListItemsActionTemplate($4, $2, $8);
-    std::stringstream ss;
-    ss << "DESERIALISE is not yet implemented, " << yyfilename << ":" << yylineno;
-    error_messages.push_back(ss.str());
-    ++num_errors;
+| DESERIALISE serialisable SEPARATED BY STRINGVAL FROM SYMBOL TO ITEMS IN SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    if (std::string($2) == "STATE") {
+        current_action = new UpdateListItemsActionTemplate("STATE", $5, $7, $11);
+    }
+    else if (std::string($2) == "ENABLED") {
+        current_action = new UpdateListItemsActionTemplate("ENABLED", $5, $7, $11);
+    }
+    else {
+        current_action = new UpdateListItemsActionTemplate($2, $5, $7, $11);
+    }
+}
+| DESERIALISE serialisable FROM SYMBOL TO ITEMS IN SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    if (std::string($2) == "STATE") {
+        current_action = new UpdateListItemsActionTemplate("STATE", ",", $4, $8);
+    }
+    else if (std::string($2) == "ENABLED") {
+        current_action = new UpdateListItemsActionTemplate("ENABLED", ",", $4, $8);
+    }
+    else {
+        current_action = new UpdateListItemsActionTemplate($2, ",", $4, $8);
+    }
+}
+| DESERIALISE SYMBOL TO ITEMS IN SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new UpdateListItemsActionTemplate(nullptr, ",", $2, $6);
+}
+| DESERIALISE SYMBOL SEPARATED BY STRINGVAL TO ITEMS IN SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new UpdateListItemsActionTemplate(nullptr, $5, $2, $9);
 }
 | LOG expression /* log message to stdout */ {
     if (current_action) current_actions->push_back(current_action);

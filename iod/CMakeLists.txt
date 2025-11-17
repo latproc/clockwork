@@ -306,7 +306,8 @@ set (Clockwork_Headers
     src/Transition.h
     src/Trigger.h
     src/UnlockAction.h
-    src/value.h
+	src/UpdateListItemsAction.cpp
+	src/value.h
     src/WaitAction.h
 )
 if (USE_ETHERCAT)
@@ -398,6 +399,7 @@ set (Clockwork_SRCS
     src/Transition.cpp
     src/Trigger.cpp
     src/UnlockAction.cpp
+    src/UpdateListItemsAction.cpp
     src/WaitAction.cpp
 )
 if (USE_ETHERCAT)

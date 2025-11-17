@@ -433,6 +433,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     friend class PopListBackValue;
     friend class PopListFrontValue;
     friend class ItemAtPosValue;
+    friend class UpdateListItemsAction;
     friend void fixListState(MachineInstance &list);
     friend void initialiseOutputs();
 
