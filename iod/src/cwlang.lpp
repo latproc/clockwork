@@ -85,6 +85,7 @@ DEFAULT             return DEFAULT;
 DEFAULTS            return DEFAULTS;
 DESCENDING          return DESCENDING;
 DESC                return DESC;
+DESERIALISE         return DESERIALISE;
 DIFFERENCE          return DIFFERENCE;
 DISABLE             return DISABLE;
 DISABLED            return DISABLED;

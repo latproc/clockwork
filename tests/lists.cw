@@ -129,10 +129,23 @@ dt2 DigitTest numbers;
 
 
 SerialiseDemo MACHINE list_of_machines, list_of_numbers {
+
+  my_list LIST;
+  OPTION cache "";
   ENTER INIT {
+    CLEAR my_list;
+    COPY ALL FROM list_of_machines TO my_list;
     LOG "Flag names: " + (SERIALISE name FROM list_of_machines SEPARATED BY ",");
-    LOG SERIALISE list_of_numbers SEPARATED BY " ";
+    LOG "numbers: " + SERIALISE list_of_numbers SEPARATED BY " ";
+    LOG "states: " + SERIALISE STATE FROM list_of_machines SEPARATED BY ";";
+    LOG "enabled: " + SERIALISE ENABLED FROM list_of_machines SEPARATED BY ";";
+    LOG "VALUE if found, otherwise state: " + SERIALISE list_of_machines;
+
+    SEND turnOn TO list_of_machines;
+    cache := SERIALISE list_of_machine;
+    DESERIALISE STATE FROM cache TO ITEMS IN list_of_machines;
   }
+
 }
 serialise SerialiseDemo Flags, digits;
 
