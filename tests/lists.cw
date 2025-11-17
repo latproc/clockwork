@@ -142,8 +142,11 @@ SerialiseDemo MACHINE list_of_machines, list_of_numbers {
     LOG "VALUE if found, otherwise state: " + SERIALISE list_of_machines;
 
     SEND turnOn TO list_of_machines;
-    cache := SERIALISE list_of_machine;
-    DESERIALISE STATE FROM cache TO ITEMS IN list_of_machines;
+    cache := SERIALISE list_of_machine; # cache <- "on,on,on"
+    DESERIALISE STATE SEPARATED BY "," FROM cache TO ITEMS IN list_of_machines;
+    SEND turnOff TO list_of_machines;
+    cache := SERIALISE list_of_machine; # cache <- "off,off,off"
+    DESERIALISE FROM cache TO ITEMS IN list_of_machines;
   }
 
 }
