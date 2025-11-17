@@ -180,7 +180,7 @@ struct Subcondition {
 %token ASCENDING ASC DESCENDING DESC INDEX
 %token REFERS FIND SEEK CPU BOARD
 %token DIGITALIN ADC TOUCH PIN ETHERNET DIGITALIO DAC SPI SDIO JTAG UART
-%token FORMAT SEPARATED SERIALISE RESET LOAD JSON
+%token FORMAT SEPARATED SERIALISE RESET LOAD JSON DESERIALISE
 
 %union {
 	bool bVal;
@@ -1090,8 +1090,20 @@ INTEGERVAL   {
 | SERIALISE SYMBOL FROM SYMBOL {
     $$ = new Value(new SerialiseValue($2, $4, ","));
 }
+| SERIALISE STATE FROM SYMBOL SEPARATED BY STRINGVAL {
+    $$ = new Value(new SerialiseValue("STATE", $4, $7));
+}
+| SERIALISE ENABLED FROM SYMBOL SEPARATED BY STRINGVAL {
+    $$ = new Value(new SerialiseValue("ENABLED", $4, $7));
+}
 | SERIALISE SYMBOL FROM SYMBOL SEPARATED BY STRINGVAL {
     $$ = new Value(new SerialiseValue($2, $4, $7));
+}
+| SERIALISE STATE FROM SYMBOL {
+    $$ = new Value(new SerialiseValue("STATE", $4, ","));
+}
+| SERIALISE ENABLED FROM SYMBOL {
+    $$ = new Value(new SerialiseValue("ENABLED", $4, ","));
 }
 | SERIALISE SYMBOL {
     $$ = new Value(new SerialiseValue($2, ","));
@@ -1871,6 +1883,14 @@ SET SYMBOL TO expression error_clause  {
     current_action = new GetListItemActionTemplate($5, $3);
 }
 */
+| DESERIALISE STATE DELIMITED BY STRINGVAL FROM SYMBOL TO ITEMS IN SYMBOL {
+    //if (current_action) current_actions->push_back(current_action);
+    //current_action = new UpdateListItemsActionTemplate($4, $2, $8);
+    std::stringstream ss;
+    ss << "DESERIALISE is not yet implemented, " << yyfilename << ":" << yylineno;
+    error_messages.push_back(ss.str());
+    ++num_errors;
+}
 | LOG expression /* log message to stdout */ {
     if (current_action) current_actions->push_back(current_action);
     DBG_PARSER << " log action: log " << *$2 << "\n";

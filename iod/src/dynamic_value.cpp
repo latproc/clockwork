@@ -659,8 +659,20 @@ const Value &SerialiseValue::operator()() {
                 continue;
             }
 
-            val = machine_list->parameters[i].machine->getValue(property.empty() ? "VALUE"
+            if (property == "STATE") {
+                val = machine_list->parameters[i].machine->getCurrent().getName();
+            }
+            else if (property == "ENABLED") {
+                val = machine_list->parameters[i].machine->enabled();
+            }
+            else {
+                // By default use VALUE but if that isn't found, use the machine's state.
+                val = machine_list->parameters[i].machine->getValue(property.empty() ? "VALUE"
                                                                                  : property);
+                if (property.empty() && val.isNull()) {
+                    val = machine_list->parameters[i].machine->getCurrent().getName();
+                }
+            }
         }
         else {
             val = machine_list->parameters[i].val;
