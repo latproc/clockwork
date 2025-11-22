@@ -194,6 +194,10 @@ TEST_F(EvaluatorTest, assigns_value_if_key_is_found) {
     free(result_array_str);
     auto res_str = cJSON_PrintUnformatted(res.json);
     EXPECT_EQ(json_str, std::string(res_str)) << "changed the original json";
+    source->json_expression = "$.b";
+    res = eval.evaluate(&pred, scope);
+    result = scope->getValue("result");
+    EXPECT_EQ(result.kind, Value::t_string) << "doesn't return a string";
 }
 TEST_F(EvaluatorTest, assigns_value_if_key_is_found_but_null) {
     MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
