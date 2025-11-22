@@ -115,8 +115,15 @@ Action::Status MachineCommand::runActions() {
             owner->stop(a);
             last_step = current_step;      // remember the command that aborted
             current_step = actions.size(); // jump to the end of the action list
-            a->release();
             setBlocker(0);
+            Action *x = owner->executingCommand();
+            if (x == a) {
+                std::stringstream ss;
+                ss << owner->getName() << " " << (*this) << " action '" << *a;
+                MessageLog::instance()->add(ss.str().c_str());
+                owner->stop(a);
+            }
+            a->release();
             return Complete;
         }
         if (stat == Action::Failed) {
