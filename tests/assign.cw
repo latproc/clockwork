@@ -176,11 +176,13 @@ z Z;
 g_value1 VARIABLE 0;
 g_value2 VARIABLE ""; # initial value doesn't matter
 g_value3 VARIABLE JSON_VALUE {"test": ""}; # initial value with correct structure
+g_value4 VARIABLE JSON_VALUE {};
 test_json_variable TestJSONVariable;
 
 TestJSONVariable MACHINE {
     OPTION json JSON_VALUE { "a": {"one":1, "two":2}, "b": [10,20,30] };
     OPTION key "test";
+    OPTION new_key "new_key";
 
     ENTER INIT {
         g_value1 := JSON_VALUE {"test": ""};  # the key has to exist in the destination
@@ -190,10 +192,14 @@ TestJSONVariable MACHINE {
         ITEM ${@key} OF g_value2.VALUE := json; # VALUE can be given explicitly
 
         ITEM ${@key} OF g_value3 := json; # VARIABLE can be assigned if the structure matches
+
+        # add a new key to g_value4 through a property assignment
+        ITEM ${@new_key} OF g_value4 := JSON_VALUE {"added": true};
     }
 
     # Check that assignment to VARIABLEs works as expected, all g_values should be identical
     error WHEN g_value1 != g_value2 OR g_value1 != g_value3;
+    error WHEN g_value4 != JSON_VALUE {"new_key": {"added": true}};
     idle DEFAULT;
 
     ENTER error { LOG "Error: JSON variable assignment did not work as expected."; }
