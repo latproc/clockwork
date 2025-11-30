@@ -7,6 +7,7 @@
 #include <string>
 #include <symboltable.h>
 #include <MachineInstance.h>
+#include <MessageLog.h>
 
 namespace {
 
@@ -176,6 +177,13 @@ PathResult follow_json_expr_path(const std::string &str,
     return result;
 }
 
+void show_json_error(const std::string & err, const std::string &str, cJSON *json) {
+    auto json_str = cJSON_PrintUnformatted(json);
+    MessageLog::instance()->get_stream() << err << " when assigning " << str << " in " << json_str << std::endl;
+    MessageLog::instance()->release_stream();
+    free(json_str);
+}
+
 } // namespace
 
 cJSON *apply(const std::string &str, cJSON *json) {
@@ -189,6 +197,7 @@ cJSON *apply(const std::string &str, cJSON *json) {
         return result;
     }
     catch (const std::runtime_error &err) {
+        show_json_error(err.what(), str, json);
         return nullptr;
     }
 }
@@ -204,6 +213,7 @@ cJSON *apply(const std::string &str, cJSON *json, SymbolTable* symbols) {
         return result;
     }
     catch (const std::runtime_error &err) {
+        show_json_error(err.what(), str, json);
         return nullptr;
     }
 }
@@ -219,6 +229,7 @@ cJSON *apply(const std::string &str, cJSON *json, MachineInstance* context) {
         return result;
     }
     catch (const std::runtime_error &err) {
+        show_json_error(err.what(), str, json);
         return nullptr;
     }
 }
@@ -232,34 +243,35 @@ cJSON *assign(const std::string &str, cJSON *json, const std::string &value,
          result = follow_json_expr_path(str, json, symbols, context);
     }
     catch (const std::runtime_error &err) {
+        show_json_error(err.what(), str, json);
         result.parent = nullptr;
         result.value = nullptr;
     }
-    auto string = cJSON_CreateString(value.c_str());
+    auto item = cJSON_CreateString(value.c_str());
     if (result.value) {
         if (result.parent) {
             if (result.key) {
-                cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), string);
+                cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), item);
                 return json;
             }
-            else if (result.index) {
-                cJSON_ReplaceItemInArray(result.parent, *result.index, string);
+            if (result.index) {
+                cJSON_ReplaceItemInArray(result.parent, *result.index, item);
                 return json;
             }
         }
         else {
-            json = string;
+            cJSON_Delete(json);
+            json = item;
             return json;
         }
-        cJSON_Delete(string);
-        return json;
     }
     if (json->type == cJSON_Object) {
         // add a new key to the parent object
-        cJSON_AddItemToObject(json, str.c_str(), string);
+        cJSON_AddItemToObject(json, result.key ? result.key->c_str() : str.c_str(), item);
         return json;
     }
-    cJSON_Delete(string);
+    show_json_error("could not resolve key/index: ",str, json);
+    cJSON_Delete(item);
     return json;
 }
 
@@ -271,52 +283,74 @@ cJSON *assign(const std::string &str, cJSON *json, uint64_t value,
         result = follow_json_expr_path(str, json, symbols, context);
     }
     catch (const std::runtime_error &err) {
+        show_json_error(err.what(), str, json);
         result.parent = nullptr;
         result.value = nullptr;
     }
-    auto number = cJSON_CreateNumber(value);
+    auto item = cJSON_CreateNumber(value);
     if (result.value) {
         if (result.parent) {
             if (result.key) {
-                cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), number);
+                cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), item);
                 return json;
             }
-            else if (result.index) {
-                cJSON_ReplaceItemInArray(result.parent, *result.index, number);
+            if (result.index) {
+                cJSON_ReplaceItemInArray(result.parent, *result.index, item);
                 return json;
             }
         }
         else {
-            json = number;
+            cJSON_Delete(json); // FIXME: not a reference paraemter
+            json = item;
             return json;
         }
     }
-    cJSON_Delete(number);
+    if (json->type == cJSON_Object) {
+        // add a new key to the parent object
+        cJSON_AddItemToObject(json, result.key ? result.key->c_str() : str.c_str(), item);
+        return json;
+    }
+    show_json_error("could not resolve key/index: ",str, json);
+    cJSON_Delete(item);
     return json;
 }
 
 cJSON *assign(const std::string &str, cJSON *json, bool value,
                 boost::optional<SymbolTable *> symbols,
                 boost::optional<MachineInstance *> context) {
-    auto result = follow_json_expr_path(str, json, symbols, context);
-    auto boolean = value ? cJSON_CreateTrue() : cJSON_CreateFalse();
+    PathResult result;
+    try {
+        result = follow_json_expr_path(str, json, symbols, context);
+    }
+    catch (const std::runtime_error &err) {
+        show_json_error(err.what(), str, json);
+        result.parent = nullptr;
+        result.value = nullptr;
+    }
+    auto item = value ? cJSON_CreateTrue() : cJSON_CreateFalse();
     if (result.value) {
         if (result.parent) {
             if (result.key) {
-                cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), boolean);
+                cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), item);
                 return json;
             }
-            else if (result.index) {
-                cJSON_ReplaceItemInArray(result.parent, *result.index, boolean);
+            if (result.index) {
+                cJSON_ReplaceItemInArray(result.parent, *result.index, item);
                 return json;
             }
         }
         else {
-            json = boolean;
+            cJSON_Delete(json); // FIXME: not a reference parameter
+            json = item;
             return json;
         }
     }
-    cJSON_Delete(boolean);
+    if (json->type == cJSON_Object) {
+        // add a new key to the parent object
+        cJSON_AddItemToObject(json, result.key ? result.key->c_str() : str.c_str(), item);
+        return json;
+    }
+    cJSON_Delete(item);
     return json;
 }
 
@@ -324,24 +358,30 @@ cJSON *assign(const std::string &str, cJSON *json, double value,
                 boost::optional<SymbolTable *> symbols,
                 boost::optional<MachineInstance *> context) {
     auto result = follow_json_expr_path(str, json, symbols, context);
-    auto number = cJSON_CreateDouble(value);
+    auto item = cJSON_CreateDouble(value);
     if (result.value) {
         if (result.parent) {
             if (result.key) {
-                cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), number);
+                cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), item);
+                return json;
             }
-            else if (result.index) {
-                cJSON_ReplaceItemInArray(result.parent, *result.index, number);
+            if (result.index) {
+                cJSON_ReplaceItemInArray(result.parent, *result.index, item);
+                return json;
             }
         }
         else {
-            cJSON_Delete(result.value);
-            result.value = number;
+            cJSON_Delete(json);
+            json = item;
+            return json;
         }
     }
-    else {
-        result.value = number;
+    if (json->type == cJSON_Object) {
+        // add a new key to the parent object
+        cJSON_AddItemToObject(json, result.key ? result.key->c_str() : str.c_str(), item);
+        return json;
     }
+    cJSON_Delete(item);
     return json;
 }
 
@@ -353,18 +393,18 @@ cJSON *assign(const std::string &str, cJSON *json, cJSON *value,
         if (result.parent) {
             if (result.key) {
                 cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), value);
+                return json;
             }
-            else if (result.index) {
+            if (result.index) {
                 cJSON_ReplaceItemInArray(result.parent, *result.index, value);
+                return json;
             }
-        }
-        else {
-            if (result.value) { cJSON_Delete(result.value); }
-            result.value = value;
         }
     }
-    else {
-        result.value = value;
+    if (json->type == cJSON_Object) {
+        // add a new key to the parent object
+        cJSON_AddItemToObject(json, result.key ? result.key->c_str() : str.c_str(), value);
+        return json;
     }
     return json;
 }
@@ -394,5 +434,5 @@ cJSON *assign(const std::string &str, cJSON *json, const Value &value,
 cJSON *assign(const std::string &str, cJSON *json, int value,
                 boost::optional<SymbolTable *> symbols,
                 boost::optional<MachineInstance *> context) {
-    return assign(str, json, (uint64_t)value, symbols, context);
+    return assign(str, json, static_cast<uint64_t>(value), symbols, context);
 }
