@@ -394,6 +394,73 @@ TEST(AssignJsonExpr, AssignIntoArray) {
     cJSON_Delete(doc);
 }
 
+TEST(AssignJsonExpr, AssignNewKeyInJsonObject) {
+    auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
+    auto expr_str = "$.new";
+    JsonExpr expr(expr_str);
+    auto doc = cJSON_Parse(json_str);
+    auto new_json = cJSON_Parse(R"JSON({"c":3})JSON");
+    assign(expr_str, doc, new_json);
+    cJSON *json = expr.apply(doc);
+    EXPECT_NE(json, nullptr);
+    EXPECT_EQ(json->type, cJSON_Object);
+    auto updated_json_str = cJSON_PrintUnformatted(doc);
+    auto expected_json = cJSON_Parse(R"JSON({"a":1,"b":"hello","new":{"c":3}})JSON");
+    auto expected_json_str = cJSON_PrintUnformatted(expected_json);
+    EXPECT_EQ(strcmp(updated_json_str, expected_json_str), 0);
+    free(updated_json_str);
+    free(expected_json_str);
+    cJSON_Delete(expected_json);
+    cJSON_Delete(json);
+    cJSON_Delete(doc);
+}
+
+
+TEST(JsonExpr, CanSetExistinhValueInObjectUsingProperty) {
+    auto json_str = R"JSON({"b":1})JSON";
+    auto expr_str = "$.@property";
+    JsonExpr expr(expr_str);
+    SymbolTable symbols;
+    symbols.add("property", Value{"b"});
+    auto doc = cJSON_Parse(json_str);
+    EXPECT_NE(nullptr, doc);
+    cJSON *json = assign(expr_str, doc, 4, &symbols, nullptr);
+    EXPECT_EQ(json, doc);
+    EXPECT_EQ(doc->type, cJSON_Object);
+    auto updated_json_str = cJSON_PrintUnformatted(doc);
+    auto expected_json = cJSON_Parse(R"JSON({"b":4})JSON");
+    EXPECT_NE(updated_json_str, nullptr);
+    auto expected_json_str = cJSON_PrintUnformatted(expected_json);
+    EXPECT_EQ(strcmp(updated_json_str, expected_json_str), 0);
+    free(updated_json_str);
+    free(expected_json_str);
+    cJSON_Delete(expected_json);
+    cJSON_Delete(doc);
+}
+
+TEST(JsonExpr, CanSetNewValueInObjectUsingProperty) {
+    auto json_str = R"JSON({"b":1})JSON";
+    auto expr_str = "$.@property";
+    JsonExpr expr(expr_str);
+    SymbolTable symbols;
+    symbols.add("property", Value{"a"});
+    auto doc = cJSON_Parse(json_str);
+    EXPECT_NE(nullptr, doc);
+    cJSON *json = assign(expr_str, doc, 4, &symbols, nullptr);
+    EXPECT_EQ(json, doc);
+    EXPECT_EQ(doc->type, cJSON_Object);
+    auto updated_json_str = cJSON_PrintUnformatted(doc);
+    auto expected_json = cJSON_Parse(R"JSON({"b":1,"a":4})JSON");
+    EXPECT_NE(updated_json_str, nullptr);
+    auto expected_json_str = cJSON_PrintUnformatted(expected_json);
+    EXPECT_EQ(strcmp(updated_json_str, expected_json_str), 0);
+    free(updated_json_str);
+    free(expected_json_str);
+    cJSON_Delete(expected_json);
+    cJSON_Delete(doc);
+}
+
+
 TEST(JsonExpr, CanGetValueFromArrayUsingIndexProperty) {
     auto json_str = R"JSON({"a":[1,2,3],"b":"hello"})JSON";
     auto expr_str = "$.a[@index]";
