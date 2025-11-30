@@ -223,6 +223,23 @@ JSON_VALUE        {
                     json_depth = 0;
                     prepare_buffer();
                   }
+<JSONSTR>"null"   {
+                     if (json_delim != 0) {
+                         append_char('n');
+                         append_char('u');
+                         append_char('l');
+                         append_char('l');
+                     }
+                     else {
+                         BEGIN 0;
+                         yylval.jVal = cJSON_CreateNull();
+                         if (buf) {
+                             free(buf);
+                             buf = NULL;
+                         }
+                         return JSONVAL;
+                     }
+                  }
 <JSONSTR>" "      {   if (json_delim != 0) { append_char(*yytext); } }
 <JSONSTR>"{"      {
                     if (json_delim == 0) { json_delim = '{'; }
@@ -405,7 +422,10 @@ int end_group(char end) {
         if (--json_depth == 0) {
             BEGIN 0;
             yylval.jVal = cJSON_Parse(buf);
-            buf = NULL;
+            if (buf) {
+                free(buf);
+                buf = NULL;
+            }
         }
     }
     return json_depth;
