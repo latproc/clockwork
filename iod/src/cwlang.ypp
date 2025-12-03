@@ -1199,6 +1199,11 @@ INTEGERVAL   {
 | MATCHES OF expression IN SYMBOL {
     $$ = new Value(new PatternMatchValue($3, $5));
 }
+| ITEM JSONEXPR OF SYMBOL {
+    Predicate *source = new Predicate($4);
+    source->json_expression = $2;
+    $$ = new Value(new ExpressionValue(source));
+}
 
 command:
 enter_command
@@ -1559,13 +1564,6 @@ SET SYMBOL TO expression error_clause  {
 //    current_action = new ExpressionActionTemplate($2, ExpressionActionTemplate::opSet, $5, $7);
 //	cleanupErrorClause(true);
 //}
-| SYMBOL BECOMES ITEM JSONEXPR OF SYMBOL {
-    if (current_action) current_actions->push_back(current_action);
-    printf("%s := %s->%s\n", $1, $6, $4);
-    Predicate *source = new Predicate($6);
-    source->json_expression = $4;
-    current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opGetSubExpr, source)); // FIXME
-}
 | SYMBOL BECOMES ITEM JSONEXPR OF SYMBOL DEFAULT value {
     if (current_action) current_actions->push_back(current_action);
     printf("%s := %s->%s default %s\n", $1, $6, $4, $8->asString().c_str());

@@ -48,3 +48,14 @@ AssignJSONNullTest MACHINE {
   }
 }
 
+assign_null_into_json AssignNullIntoJson;
+
+AssignNullIntoJson MACHINE {
+  OPTION myJson JSON_VALUE {"key": "value"};
+  OPTION key2 "a";
+  
+  ENTER INIT {
+    ITEM ${key} OF myJson := NULL;
+    ITEM ${@key2} OF myJson := NULL;
+  }
+}

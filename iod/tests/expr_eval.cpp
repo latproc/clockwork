@@ -18,37 +18,6 @@
 bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate);
 ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &stack_iter);
 
-namespace {
-
-class Evaluator {
-  private:
-    Stack stack;
-
-  public:
-    Value evaluate(Predicate *p, MachineInstance *m);
-};
-
-Value Evaluator::evaluate(Predicate *predicate, MachineInstance *m) {
-    if (!predicate || !m) {
-        return SymbolTable::Null;
-    }
-    if (stack.stack.size() != 0) {
-        stack.stack.clear();
-    }
-    if (stack.stack.size() == 0)
-        if (!prep(stack, predicate, m, true, true)) {
-            std::stringstream ss;
-            ss << m->getName() << " Predicate failed to resolve: " << *predicate << "\n";
-            MessageLog::instance()->add(ss.str().c_str());
-            return false;
-        }
-    std::list<ExprNode>::const_iterator work = stack.stack.begin();
-    ExprNode evaluated(eval_stack(m, work));
-    return *(evaluated.val);
-}
-
-} // namespace
-
 #include <Dispatcher.h>
 #include <Logger.h>
 #include <MessagingInterface.h>

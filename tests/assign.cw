@@ -205,3 +205,46 @@ TestJSONVariable MACHINE {
     ENTER error { LOG "Error: JSON variable assignment did not work as expected."; }
 }
 
+request VARIABLE JSON_VALUE {};
+request_test RequestTest request;
+
+RequestTest MACHINE Request{
+    OPTION requestField "";
+    OPTION request_json JSON_VALUE {"a": 1, "b": 2};
+    OPTION post_data JSON_VALUE {};
+
+    ok  WHEN Request AS STRING == JSON_VALUE {"PostData":{"one":{"a":1,"b":2}}} AS STRING;
+    error DEFAULT;
+
+    ENTER INIT {
+        # nested assignments aren't working yet.
+        #ITEM ${@requestField} OF PostData := request_json;
+
+        requestField := "one";
+        ITEM ${@requestField} OF post_data := request_json;
+        ITEM ${PostData} OF Request := post_data;
+
+        LOG "RequestTest initialized with request: " + Request AS STRING;
+    }
+}
+
+WebRequest MACHINE {
+    OPTION PostData JSON_VALUE {};
+}
+request2 WebRequest;
+request_test2 RequestTest2 request2;
+RequestTest2 MACHINE Request {
+    OPTION requestField "";
+    OPTION request_json JSON_VALUE {"a": 1, "b": 2};
+
+    ok  WHEN Request AS STRING == JSON_VALUE {"one":{"a":1,"b":2}} AS STRING;
+    error DEFAULT;
+
+    ENTER INIT {
+        requestField := "one";
+        ITEM ${@requestField} OF Request.PostData := request_json;
+
+        LOG "RequestTest2 initialized with request: " + Request AS STRING;
+    }
+}
+

@@ -227,14 +227,6 @@ Predicate::~Predicate() {
     delete dyn_value;
 }
 
-class Evaluator {
-  private:
-    Stack stack;
-
-  public:
-    Value evaluate(Predicate *p, MachineInstance *m);
-};
-
 bool Predicate::usesTimer(Value &timer_val) const {
     if (left_p) {
         if (!left_p->left_p) {

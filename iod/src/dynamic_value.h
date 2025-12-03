@@ -288,7 +288,7 @@ class AbsoluteValue : public DynamicValue {
 
 class ExpressionValue : public DynamicValue {
   public:
-    ExpressionValue(Predicate *pred) : condition(pred) {}
+    ExpressionValue(Predicate *pred) : m_predicate(*pred) {}
     virtual ~ExpressionValue() {}
     virtual const Value &operator()();
     virtual DynamicValue *clone() const;
@@ -297,7 +297,7 @@ class ExpressionValue : public DynamicValue {
 
   private:
     ExpressionValue(const DynamicValue &);
-    Condition condition;
+    Predicate m_predicate;
 };
 
 class IncludesValue : public DynamicValue {
