@@ -184,6 +184,14 @@ class Predicate {
 
 std::ostream &operator<<(std::ostream &out, const Predicate &p);
 
+class Evaluator {
+private:
+    Stack stack;
+
+public:
+    Value evaluate(Predicate *p, MachineInstance *m);
+};
+
 class Condition {
   public:
     Predicate *predicate;

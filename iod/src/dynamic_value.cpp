@@ -13,6 +13,8 @@
 #include <sstream>
 #include <utility>
 
+#include "json_expression.h"
+
 namespace {
 
 void LogMissingMachine(MachineInstance *current_scope, const std::string &name,
@@ -166,7 +168,7 @@ std::ostream &operator<<(std::ostream &out, const AbsoluteValue &val) {
 
 DynamicValue *ExpressionValue::clone() const { return new ExpressionValue(*this); }
 std::ostream &ExpressionValue::operator<<(std::ostream &out) const {
-    return out << *(condition.predicate) << " (" << last_result << ")";
+    return out << m_predicate << " (" << last_result << ")";
 }
 std::ostream &operator<<(std::ostream &out, const ExpressionValue &val) {
     return val.operator<<(out);
@@ -875,13 +877,22 @@ const Value &MaxValue::operator()() {
     return last_result;
 }
 
-ExpressionValue::ExpressionValue(const ExpressionValue &other) { condition = other.condition; }
+ExpressionValue::ExpressionValue(const ExpressionValue &other) :m_predicate(other.m_predicate) {}
+
+bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate);
+ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &stack_iter);
+
+cJSON *apply(const std::string &str, cJSON *json, MachineInstance* context);
 
 const Value &ExpressionValue::operator()() {
     MachineInstance *mi = scope;
     last_process_time = currentTime();
-
-    last_result = condition(mi);
+    Evaluator evaluator;
+    last_result = evaluator.evaluate(&m_predicate, mi);
+    if (last_result.kind == Value::t_json && m_predicate.json_expression) {
+        last_result = apply(*m_predicate.json_expression, last_result.json, mi);
+    }
+    m_predicate.last_evaluation_time = microsecs();
     return last_result;
 }
 

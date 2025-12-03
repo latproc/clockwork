@@ -80,6 +80,7 @@ static const double ZERO_DISTANCE = 1.0E-8;
 namespace {
 
 Value assign_value(cJSON *json) {
+    if (json == nullptr) { return Value(); }
     Value result;
     switch (json->type) {
     case cJSON_NULL:
