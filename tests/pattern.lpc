@@ -67,3 +67,11 @@ TimeSeq MACHINE {
 	COMMAND checkOctal { x := "020"; val := 0.0 + x; }
 }
 time_sequence TimeSeq;
+
+InverseMatches MACHINE {
+    OPTION value "123";
+
+    invalid WHEN NOT value MATCHES `^[0-9]+$`;
+    ok DEFAULT;
+}
+inverse_matches InverseMatches;
