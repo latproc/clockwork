@@ -40,6 +40,24 @@
 static bool stringToLong(const std::string &s, int64_t &x);
 static bool stringToFloat(const std::string &s, double &x);
 
+const int short_form_string_length = 50;
+
+std::string short_form_value(const Value &val) {
+    std::string result{val.asString()};
+    if (result.size() > short_form_string_length) {
+        result = result.substr(0, short_form_string_length) + "...";
+    }
+    return result;
+}
+
+std::string short_form_value(const std::string &str) {
+    if (str.size() > short_form_string_length) {
+        std::string result{str.substr(0, short_form_string_length) + "..."};
+        return result;
+    }
+    return str;
+}
+
 std::string Value::kind_to_string() const {
     std::string result;
     switch (kind) {

@@ -177,9 +177,10 @@ PathResult follow_json_expr_path(const std::string &str,
     return result;
 }
 
-void show_json_error(const std::string & err, const std::string &str, cJSON *json) {
+void show_json_error(const std::string & err, const std::string &str, cJSON *json, MachineInstance *context = nullptr) {
     auto json_str = cJSON_PrintUnformatted(json);
-    MessageLog::instance()->get_stream() << err << " when assigning " << str << " in " << json_str << std::endl;
+    MessageLog::instance()->get_stream() << (context ? context->fullName() : "") << " " << err
+    << " when assigning " << str << " in " << short_form_value(json_str) << std::endl;
     MessageLog::instance()->release_stream();
     free(json_str);
 }
@@ -229,7 +230,7 @@ cJSON *apply(const std::string &str, cJSON *json, MachineInstance* context) {
         return result;
     }
     catch (const std::runtime_error &err) {
-        show_json_error(err.what(), str, json);
+        show_json_error(err.what(), str, json, context);
         return nullptr;
     }
 }
@@ -243,7 +244,7 @@ cJSON *assign(const std::string &str, cJSON *json, const std::string &value,
          result = follow_json_expr_path(str, json, symbols, context);
     }
     catch (const std::runtime_error &err) {
-        show_json_error(err.what(), str, json);
+        show_json_error(err.what(), str, json, context ? *context : nullptr);
         result.parent = nullptr;
         result.value = nullptr;
     }
@@ -270,7 +271,7 @@ cJSON *assign(const std::string &str, cJSON *json, const std::string &value,
         cJSON_AddItemToObject(json, result.key ? result.key->c_str() : str.c_str(), item);
         return json;
     }
-    show_json_error("could not resolve key/index: ",str, json);
+    show_json_error("could not resolve key/index: ",str, json, context ? *context : nullptr);
     cJSON_Delete(item);
     return json;
 }
@@ -283,7 +284,7 @@ cJSON *assign(const std::string &str, cJSON *json, uint64_t value,
         result = follow_json_expr_path(str, json, symbols, context);
     }
     catch (const std::runtime_error &err) {
-        show_json_error(err.what(), str, json);
+        show_json_error(err.what(), str, json, context ? *context : nullptr);
         result.parent = nullptr;
         result.value = nullptr;
     }
@@ -310,7 +311,7 @@ cJSON *assign(const std::string &str, cJSON *json, uint64_t value,
         cJSON_AddItemToObject(json, result.key ? result.key->c_str() : str.c_str(), item);
         return json;
     }
-    show_json_error("could not resolve key/index: ",str, json);
+    show_json_error("could not resolve key/index: ",str, json, context ? *context : nullptr);
     cJSON_Delete(item);
     return json;
 }
@@ -323,7 +324,7 @@ cJSON *assign(const std::string &str, cJSON *json, bool value,
         result = follow_json_expr_path(str, json, symbols, context);
     }
     catch (const std::runtime_error &err) {
-        show_json_error(err.what(), str, json);
+        show_json_error(err.what(), str, json, context ? *context : nullptr);
         result.parent = nullptr;
         result.value = nullptr;
     }
