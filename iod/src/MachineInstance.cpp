@@ -807,7 +807,7 @@ void MachineInstance::describe(std::ostream &out) {
         out << "Locals:\n";
         for (unsigned int i = 0; i < locals.size(); ++i) {
             if (locals[i].machine) {
-                out << "  " << locals[i].val << " (" << locals[i].machine->getName()
+                out << "  " << short_form_value(locals[i].val) << " (" << locals[i].machine->getName()
                     << "):   " << locals[i].machine->getCurrent().getName() << "\n";
             }
             else {

@@ -73,7 +73,9 @@ cJSON *clone_json(cJSON *json);
 Value get_value(cJSON *json); // returns a plain value if possible
 Value getFromJSON(const std::string &key);
 cJSON *getFromJSON(cJSON *json, const std::string &key); // lookup the named property
-                                                             //
+
+std::string short_form_value(const Value &val);
+
 class Value {
   public:
     enum Kind {

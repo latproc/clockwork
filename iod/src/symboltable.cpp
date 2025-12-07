@@ -469,7 +469,7 @@ std::ostream &SymbolTable::operator<<(std::ostream &out) const {
             column = 5;
         }
         column += len;
-        out << (*iter).first << ':' << (*iter).second;
+        out << (*iter).first << ':' << short_form_value((*iter).second);
         delim = ", ";
         iter++;
     }
