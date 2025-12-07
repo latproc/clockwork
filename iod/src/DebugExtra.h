@@ -31,25 +31,25 @@ class DebugExtra {
         }
         return instance_;
     }
-    int DEBUG_PARSER;
-    int DEBUG_PREDICATES;
-    int DEBUG_MESSAGING;
-    int DEBUG_STATECHANGES;
-    int DEBUG_SCHEDULER;
-    int DEBUG_AUTOSTATES;
-    int DEBUG_MACHINELOOKUPS;
-    int DEBUG_PROPERTIES;
-    int DEBUG_DEPENDANCIES;
-    int DEBUG_ACTIONS;
-    int DEBUG_INITIALISATION;
-    int DEBUG_MODBUS;
-    int DEBUG_DISPATCHER;
-    int DEBUG_CHANNELS;
-    int DEBUG_ETHERCAT;
-    int DEBUG_PROCESSING;
-    int DEBUG_ETHERCAT_CALLS;
-    int DEBUG_ETHERCAT_SDO;
-    int DEBUG_ETHERCAT_PACKETS;
+    int DEBUG_PARSER = 0;
+    int DEBUG_PREDICATES = 0;
+    int DEBUG_MESSAGING = 0;
+    int DEBUG_STATECHANGES = 0;
+    int DEBUG_SCHEDULER = 0;
+    int DEBUG_AUTOSTATES = 0;
+    int DEBUG_MACHINELOOKUPS = 0;
+    int DEBUG_PROPERTIES = 0;
+    int DEBUG_DEPENDANCIES = 0;
+    int DEBUG_ACTIONS = 0;
+    int DEBUG_INITIALISATION = 0;
+    int DEBUG_MODBUS = 0;
+    int DEBUG_DISPATCHER = 0;
+    int DEBUG_CHANNELS = 0;
+    int DEBUG_ETHERCAT = 0;
+    int DEBUG_PROCESSING = 0;
+    int DEBUG_ETHERCAT_CALLS = 0;
+    int DEBUG_ETHERCAT_SDO = 0;
+    int DEBUG_ETHERCAT_PACKETS = 0;
 
   private:
     DebugExtra();
