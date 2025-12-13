@@ -676,12 +676,15 @@ void IODCommandThread::operator()() {
         fl.f() << "Client thread finished\n";
     }
     //monit.abort();
-    cti->socket.close();
+    if (cti->socket.connected()) {
+        cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+        cti->socket.close();
+    }
 }
 
 ClientInterfaceInternals::~ClientInterfaceInternals() {}
 
-IODCommandThread::IODCommandThread() : done(false), internals(0) {
+IODCommandThread:: IODCommandThread() : done(false), internals(0) {
     internals = new CommandThreadInternals;
 }
 
@@ -689,7 +692,10 @@ IODCommandThread::~IODCommandThread() { delete internals; }
 
 void IODCommandThread::stop() {
     CommandThreadInternals *cti = dynamic_cast<CommandThreadInternals *>(internals);
+    done = true;
     if ((void *)cti->socket != 0) {
+        int linger = 0;
+        cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
         cti->socket.close();
     }
 }

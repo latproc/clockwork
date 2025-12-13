@@ -91,8 +91,8 @@ class MessagingInterface : public Receiver {
     virtual void handle(const Message &, Transmitter *from, bool needs_receipt);
     virtual void handle(const Message &, Transmitter *from);
     zmq::socket_t *getSocket() { return socket; }
-    static bool aborted() { return abort_all; }
-    static void abort() { abort_all = true; }
+    static bool aborted();
+    static void abort();
     const std::string &getURL() const { return url; }
 
   private:
