@@ -221,6 +221,7 @@ Channel::~Channel() {
     }
     remove(channel_name);
     prepare_to_remove(this);
+    delete communications_manager;
     delete internals;
 }
 
@@ -815,6 +816,14 @@ void Channel::startServer(ProtocolType proto) {
     mif->start();
 }
 
+void Channel::abort_all() {
+    if (!all) { return; }
+    for (auto iter = all->begin(); iter != all->end(); ) {
+        iter->second->abort();
+        iter = all->erase(iter);
+    }
+}
+
 void Channel::startClient() {
     DBG_CHANNELS << channel_name << " startClient\n";
     if (mif) {
@@ -954,7 +963,13 @@ void Channel::checkStateChange(std::string event) {
 bool Channel::isClient() { return (definition_file != "dynamic"); }
 
 // used to stop the channel thread
-void Channel::abort() { aborted = true; }
+void Channel::abort() {
+    aborted = true;
+    if (monit_subs) {
+
+        monit_subs->abort();
+    }
+}
 
 void Channel::operator()() {
     std::string thread_name(channel_name);
@@ -1207,6 +1222,7 @@ void Channel::operator()() {
             NB_MSG << "Channel " << channel_name << " saw exception " << ex.what() << "\n";
         }
     }
+    delete sm;
 }
 
 void Channel::sendMessage(const char *msg, zmq::socket_t &sock) {

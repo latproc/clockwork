@@ -282,8 +282,8 @@ class Channel : public MachineInstance, public ChannelImplementation {
     bool started();
     void enable() override; // enable messages to pass through the channel
     void disable() override;
-    void
-    checkStateChange(std::string event); // change state after receiving a done from current state
+    void checkStateChange(std::string event); // change state after receiving a done from current state
+    static void abort_all();
 
     bool matches(MachineInstance *machine, const std::string &name);
     bool patternMatches(const std::string &machine_name);

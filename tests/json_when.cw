@@ -28,3 +28,17 @@ DelayedWhenTest MACHINE {
 }
 delayed_when_test DelayedWhenTest;
 
+Keyring MACHINE {
+    OPTION key "a";
+}
+
+PropertyWhenTest MACHINE index {
+   OPTION one JSON_VALUE {"a": 1, "b": 2};
+
+   ok WHEN 1 == ITEM ${@index.key} OF one;
+   error DEFAULT;
+}
+
+key_ring Keyring;
+property_when_test PropertyWhenTest key_ring;
+

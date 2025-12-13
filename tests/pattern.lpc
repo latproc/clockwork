@@ -24,6 +24,20 @@ PatternFromProperty MACHINE {
 }
 pattern_from_property PatternFromProperty;
 
+Properties MACHINE {
+    OPTION a "hello";
+    OPTION b "world";
+}
+
+PatternFromRemoteProperty MACHINE obj {
+    OPTION monitor "a";
+    OPTION pattern "t..t";
+    found WHEN (PROPERTY monitor OF obj) MATCHES pattern;
+}
+properties Properties;
+pattern_from_remote_property PatternFromRemoteProperty properties;
+
+
 Matches MACHINE {
     OPTION message "";
     OPTION sep ",";
@@ -75,3 +89,15 @@ InverseMatches MACHINE {
     ok DEFAULT;
 }
 inverse_matches InverseMatches;
+
+TrailingChars MACHINE {
+    OPTION value 23;
+    OPTION x "";
+    OPTION y "";
+
+    ENTER INIT {
+        x := "z000" + value;
+        y := COPY `(...)$` FROM x;
+    }
+}
+trailing_chars TrailingChars;

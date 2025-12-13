@@ -390,6 +390,15 @@ MessagingInterface *MessagingInterface::create(const std::string &host, int port
     }
 }
 
+bool MessagingInterface::aborted() { return abort_all; }
+
+void MessagingInterface::abort() {
+    abort_all = true;
+    for (auto interface : interfaces) {
+        interface.second->stop();
+    }
+}
+
 MessagingInterface::MessagingInterface(int num_threads, int port_, bool deferred_start,
                                        ProtocolType proto)
     : Receiver("messaging_interface"), protocol(proto), socket(nullptr), is_publisher(false),
@@ -433,7 +442,12 @@ void MessagingInterface::start() {
     }
 }
 
-void MessagingInterface::stop() { started_ = false; }
+void MessagingInterface::stop() {
+    started_ = false;
+    if (socket->connected()) {
+        socket->close();
+    }
+}
 
 bool MessagingInterface::started() const { return started_; }
 
@@ -529,6 +543,10 @@ void MessagingInterface::connect() {
 }
 
 MessagingInterface::~MessagingInterface() {
+    auto found = interfaces.find(this->Transmitter::getName());
+    if (found != interfaces.end()) {
+        interfaces.erase(found);
+    }
     int retries = 3;
     while (retries-- && connection != -1) {
         int err = close(connection);
@@ -540,7 +558,10 @@ MessagingInterface::~MessagingInterface() {
     if (current == this) {
         current = nullptr;
     }
-    socket->disconnect(url.c_str());
+    if (socket->connected()) {
+        socket->close();
+        socket->disconnect(url.c_str());
+    }
     delete socket;
 }
 

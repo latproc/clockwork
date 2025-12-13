@@ -760,15 +760,17 @@ int main(int argc, char const *argv[]) {
         then = now;
     }
     try {
+        MessagingInterface::abort();
         MQTTInterface::instance()->stop();
         Dispatcher::instance()->stop();
         processMonitor.stop();
-        kill(0, SIGTERM); // interrupt select() and poll()s to enable termination
         process.join();
         stateMonitor->stop();
         monitor.join();
         delete dbg_instance;
-        delete context;
+        //kill(0, 0); // interrupt select() and poll()s to enable termination
+        //context->close();
+        //delete context;
     }
     catch (const zmq::error_t &) {
     }

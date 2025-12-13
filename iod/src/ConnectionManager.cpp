@@ -96,8 +96,9 @@ ConnectionManager::ConnectionManager() : owner_thread(pthread_self()), has_abort
 
 ConnectionManager::~ConnectionManager() = default;
 
-void ConnectionManager::abort() { has_aborted = true; }
-
+void ConnectionManager::abort() {
+    has_aborted = true;
+}
 
 class SubscriptionManagerInternals : public ConnectionManagerInternals {
 
@@ -109,7 +110,10 @@ class SubscriptionManagerInternals : public ConnectionManagerInternals {
     bool sent_request;
     uint64_t send_time;
     static const uint64_t channel_request_timeout = 3000000;
+    static std::list<SubscriptionManager*> all;
 };
+
+std::list<SubscriptionManager*> SubscriptionManagerInternals::all;
 
 SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
                                          const char *remote_host, int remote_port,
@@ -120,6 +124,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
       sender_(0), subscriber_port(remote_port), monit_subs(subscriber_), monit_pubs(0),
       monit_setup(0), setup_(0), _setup_status(e_startup), sub_status_(ss_init) {
     internals = new SubscriptionManagerInternals();
+    SubscriptionManagerInternals::all.push_back(this);
     state_start = microsecs();
     //createSubscriberSocket(chname);
     if (isClient()) {
@@ -141,15 +146,33 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
     }
 }
 
-SubscriptionManager::~SubscriptionManager() {}
+SubscriptionManager::~SubscriptionManager() {
+    std::cout << "SubscriptionManagers: " << SubscriptionManagerInternals::all.size() << std::endl;
+    auto iter = SubscriptionManagerInternals::all.begin();
+    while (iter != SubscriptionManagerInternals::all.end()) {
+        auto found = iter++;
+        if (*found == this) {
+            SubscriptionManagerInternals::all.erase(found);
+            break;
+        }
+    }
+    if (!monit_subs.disconnected()) {
+        monit_subs.abort();
+    }
+    if (monit_pubs && !monit_pubs->disconnected()) {
+        monit_pubs->abort();
+    }
+    if (monit_setup &&!monit_setup->disconnected()) {
+        monit_setup->abort();
+    }
+    delete internals;
+}
 
 SubscriptionManager::SubStatus SubscriptionManager::subscriberStatus() { return sub_status_; }
 
 void SubscriptionManager::setSetupMonitor(SingleConnectionMonitor *monitor) {
     assert(isClient());
-    if (monit_setup) {
-        delete monit_setup;
-    }
+    delete monit_setup;
     monit_setup = monitor;
 }
 
