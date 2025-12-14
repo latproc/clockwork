@@ -105,6 +105,7 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/rate.h
 	${CLOCKWORK_DIR}/watchdog.h
 	${CLOCKWORK_DIR}/Message.h
+	${CLOCKWORK_DIR}/Parameter.h
 	${CLOCKWORK_DIR}/Receiver.h
     ${CLOCKWORK_DIR}/json_expr_parser.h
     ${CLOCKWORK_DIR}/json_expression.h
@@ -132,6 +133,7 @@ add_library (cw_client
 	${CLOCKWORK_DIR}/symboltable.cpp
 	${CLOCKWORK_DIR}/rate.cpp
 	${CLOCKWORK_DIR}/Message.cpp
+	${CLOCKWORK_DIR}/Parameter.cpp
 	${CLOCKWORK_DIR}/watchdog.cpp
     ${CLOCKWORK_DIR}/json_expr_parser.cpp
     ${CLOCKWORK_DIR}/json_expression.cpp
@@ -269,7 +271,6 @@ set (Clockwork_Headers
     src/MQTTDCommands.h
     src/MQTTInterface.h
     src/options.h
-    src/Parameter.h
     src/PatternAction.h
     src/PersistentStore.h
     src/Plugin.h
@@ -371,7 +372,6 @@ set (Clockwork_SRCS
     src/ModbusInterface.cpp
     src/MQTTInterface.cpp
     src/options.cpp
-    src/Parameter.cpp
     src/PatternAction.cpp
     src/PersistentStore.cpp
     src/Plugin.cpp
