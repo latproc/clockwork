@@ -25,12 +25,7 @@
 
 class DebugExtra {
   public:
-    static DebugExtra *instance() {
-        if (!instance_) {
-            instance_ = new DebugExtra;
-        }
-        return instance_;
-    }
+    static DebugExtra *instance();
     int DEBUG_PARSER = 0;
     int DEBUG_PREDICATES = 0;
     int DEBUG_MESSAGING = 0;

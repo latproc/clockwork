@@ -19,13 +19,14 @@
 */
 
 #include "Logger.h"
-#include "boost/thread/mutex.hpp"
 #include <cassert>
 #include <fstream>
 #include <iostream>
-#include <stdio.h>
 #include <string>
 #include <sys/time.h>
+#include <mutex>
+
+#include "MessageLog.h"
 
 class Logger::Internals {
   public:
@@ -33,16 +34,21 @@ class Logger::Internals {
     Level log_level;
     std::stringstream *dummy_output = nullptr;
     std::ostream *log_stream = nullptr;
-    boost::mutex mutex_;
 
     Internals() : log_level(None), dummy_output(0), log_stream(&std::cout) {}
 };
 
+static std::mutex logger_mutex;
+
 Logger::Internals *Logger::internals = nullptr;
 LogState *LogState::state_instance = nullptr;
-static std::string header;
 Logger *Logger::Internals::logger_instance = nullptr;
-struct timeval last_time;
+timeval last_time;
+
+LogState::LogState() {
+    std::cout << "creating LogState\n";
+    flag_names.reserve(50);
+}
 
 LogState *LogState::instance() {
     if (!state_instance) {
@@ -52,16 +58,18 @@ LogState *LogState::instance() {
 }
 
 void LogState::cleanup() {
+    std::lock_guard<std::mutex> lock(logger_mutex);
     delete state_instance;
     state_instance = nullptr;
 }
 
-int LogState::define(std::string new_name) {
-    int logid = name_map[new_name] = static_cast<int>(flag_names.size());
+int LogState::define(const std::string & new_name) {
     flag_names.push_back(new_name);
+    int logid = name_map[new_name] = static_cast<int>(flag_names.size()-1);
     return logid;
 }
 int LogState::lookup(const std::string &name) {
+    std::lock_guard<std::mutex> lock(logger_mutex);
     NameMapIterator iter = name_map.find(name);
     if (iter != name_map.end()) {
         return (*iter).second;
@@ -71,10 +79,13 @@ int LogState::lookup(const std::string &name) {
     }
 }
 int LogState::insert(int flag_num) {
+    std::lock_guard<std::mutex> lock(logger_mutex);
     state_flags.insert(flag_num);
     return flag_num;
 }
 int LogState::insert(std::string name) {
+    std::lock_guard<std::mutex> lock(logger_mutex);
+
     NameMapIterator iter = name_map.find(name);
     if (iter != name_map.end()) {
         int n = (*iter).second;
@@ -83,41 +94,53 @@ int LogState::insert(std::string name) {
     }
     return -1;
 }
-void LogState::erase(int flag_num) { state_flags.erase(flag_num); }
-void LogState::erase(std::string name) {
+void LogState::erase(int flag_num) {
+    std::lock_guard<std::mutex> lock(logger_mutex);
+    state_flags.erase(flag_num);
+}
+void LogState::erase(std::string name){
+    std::lock_guard<std::mutex> lock(logger_mutex);
     NameMapIterator iter = name_map.find(name);
     if (iter != name_map.end()) {
         state_flags.insert((*iter).second);
     }
 }
-bool LogState::includes(std::string name) { return name_map.find(name) != name_map.end(); }
+bool LogState::includes(std::string name) {
+    std::lock_guard<std::mutex> lock(logger_mutex);
+    return name_map.find(name) != name_map.end();
+}
 
-int Logger::None;
-int Logger::Debug;
-int Logger::Important;
-int Logger::Everything;
+int Logger::None = 0;
+int Logger::Debug = 0;
+int Logger::Important = 0;
+int Logger::Everything = 0;
 
 Logger::Logger() {
-    internals = new Internals();
     last_time.tv_sec = 0;
     last_time.tv_usec = 0;
-    None = LogState::instance()->insert(LogState::instance()->define("None"));
-    Important = LogState::instance()->insert(LogState::instance()->define("Important"));
-    Debug = LogState::instance()->insert(LogState::instance()->define("Debug"));
-    Everything = LogState::instance()->insert(LogState::instance()->define("Everything"));
 }
 
 Logger::~Logger() { delete internals; }
 
 Logger *Logger::instance() {
     if (!internals->logger_instance) {
+        internals = new Internals();
         internals->logger_instance = new Logger;
+        auto logstate = LogState::instance();
+        None = logstate->insert(LogState::instance()->define("None"));
+        Important = logstate->insert(LogState::instance()->define("Important"));
+        Debug = logstate->insert(LogState::instance()->define("Debug"));
+        Everything = logstate->insert(LogState::instance()->define("Everything"));
     }
     return internals->logger_instance;
 }
-Logger::Level Logger::level() { return internals->log_level; }
+Logger::Level Logger::level() {
+    return internals->log_level;
+}
 
-void Logger::setLevel(Level n) { internals->log_level = n; }
+void Logger::setLevel(Level n) {
+    internals->log_level = n;
+}
 
 void Logger::setOutputStream(std::ostream *out) { internals->log_stream = out; }
 
@@ -128,8 +151,8 @@ void Logger::cleanup() {
 
 class FileLogger::Internals {
   public:
-    boost::mutex mutex_;
-    boost::unique_lock<boost::mutex> lock;
+    std::mutex m_mutex;
+    std::unique_lock<std::mutex> lock;
     bool allocated;
     std::ostream *f;
     std::ofstream &file() {
@@ -139,7 +162,9 @@ class FileLogger::Internals {
         }
         return *(std::ofstream *)f;
     }
-    Internals() : lock(mutex_), allocated(false), f(0) {}
+    Internals() : lock(m_mutex), allocated(false), f(0) {
+        lock.unlock();
+    }
     ~Internals() { /**f << std::flush;*/
         if (allocated) {
             delete f;
@@ -149,6 +174,7 @@ class FileLogger::Internals {
 
 FileLogger::FileLogger(const char *fname) : internals(0) {
     internals = new Internals;
+    internals->lock.lock();
     char buf[40];
     getTimeString(buf, 40);
 #if 0
@@ -219,7 +245,7 @@ void Logger::getTimeString(char *buf, size_t buf_size) {
 bool LogState::includes(int flag_num) { return state_flags.count(flag_num); }
 
 std::ostream &Logger::log(Level l) {
-    boost::mutex::scoped_lock lock(internals->mutex_);
+    std::lock_guard<std::mutex> lock(logger_mutex);
     if (!internals->dummy_output) {
         internals->dummy_output = new std::stringstream;
     }

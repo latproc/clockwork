@@ -48,7 +48,7 @@ class LogState {
   public:
     static LogState *instance();
     static void cleanup();
-    int define(std::string new_name);
+    int define(const std::string & new_name);
     int lookup(const std::string &name);
     int insert(int flag_num);
     int insert(std::string name);
@@ -61,7 +61,9 @@ class LogState {
     typedef std::map<std::string, int>::iterator NameMapIterator;
 
   private:
-    LogState() {}
+    LogState();
+    LogState(const LogState &) = delete;
+    LogState &operator=(const LogState &) = delete;
     static LogState *state_instance;
     std::set<int> state_flags;
     std::vector<std::string> flag_names;
