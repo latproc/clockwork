@@ -2,6 +2,7 @@
 #include "Channel.h"
 #include "ProcessingThread.h"
 #include "Logger.h"
+#include "ClientInterface.h"
 
 void ProcessingThread::handle_command(zmq::pollitem_t items[],
         unsigned int command_channel_index,
@@ -103,6 +104,9 @@ void ProcessingThread::handle_command(zmq::pollitem_t items[],
                             //char *response = strdup(command->result());
                             //safeSend(*sock, response, strlen(response));
                             //free(response);
+                        }
+                        if (command->param(0) == "SHUTDOWN") {
+                            ClientInterface::instance()->stop();
                         }
                     }
                     else {

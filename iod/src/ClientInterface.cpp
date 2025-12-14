@@ -562,6 +562,7 @@ void IODCommandThread::operator()() {
             int rc;
             try {
                 rc = zmq::poll(&items[0], 3, poll_time);
+                if (done) { break; }
                 if (poll_time < 20) {
                     poll_time += 1;
                 }
@@ -581,6 +582,7 @@ void IODCommandThread::operator()() {
                     FileLogger fl(program_name);
                     fl.f() << "Client Interface exception during poll() " << zex.what() << "\n";
                 }
+                if (zex.num() == ENOTSOCK) { break; }
                 usleep(100);
                 continue;
             }
@@ -696,6 +698,8 @@ void IODCommandThread::stop() {
     if ((void *)cti->socket != 0) {
         int linger = 0;
         cti->socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-        cti->socket.close();
+        if (cti->socket.connected()) {
+            cti->socket.send("stop", sizeof("stop"));
+        }
     }
 }

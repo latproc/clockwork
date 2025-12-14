@@ -554,19 +554,17 @@ int main(int argc, char const *argv[]) {
     //processMonitor();
     try {
         process.join();
-        return 0;
-        MQTTInterface::instance()->stop();
-        Scheduler::instance()->stop();
         stateMonitor->stop();
-        ethercat.stop();
-        ecat_thread.join();
+        MessagingInterface::abort();
+        MQTTInterface::instance()->stop();
         Dispatcher::instance()->stop();
-        delete Dispatcher::instance();
-        delete context;
+        processMonitor.stop();
+        ethercat.stop();
+        usleep(200);
+        return 0;
     }
     catch (const zmq::error_t &ex) { // expected error when we remove the zmq context
         std::cerr << "Error on exit: " << ex.what() << "\n";
     }
-    //monitor.join();
     return 0;
 }
