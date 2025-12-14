@@ -574,12 +574,21 @@ set(iosh_yacc_output ${CMAKE_BINARY_DIR}/cmdline.tab.cpp)
 SET_SOURCE_FILES_PROPERTIES(${iosh_lex_output} GENERATED)
 SET_SOURCE_FILES_PROPERTIES(${iosh_yacc_output} GENERATED)
 
-add_executable(iosh src/iosh.cpp ${iosh_yacc_output} ${iosh_lex_output})
-target_link_libraries(iosh cw_client "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+# Build the generated cmdline parser once and link it into both tools.
+add_library(cmdline_parser STATIC ${iosh_yacc_output} ${iosh_lex_output})
+set(USE_READLINE on)
+if (USE_READLINE)
+target_compile_definitions(cmdline_parser PRIVATE USE_READLINE )
+target_link_libraries(cmdline_parser "readline")
+endif()
+
+add_executable(iosh src/iosh.cpp)
+target_link_directories(iosh PRIVATE "/opt/homebrew/lib")
+target_link_libraries(iosh cmdline_parser cw_client "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 target_compile_definitions(iosh PRIVATE USE_READLINE )
 
-add_executable(iocmd src/iocmd.cpp ${iosh_yacc_output} ${iosh_lex_output})
-target_link_libraries(iocmd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+add_executable(iocmd src/iocmd.cpp)
+target_link_libraries(iocmd cmdline_parser cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
 add_executable(device_connector src/device_connector.cpp src/options.cpp )
 target_link_libraries(device_connector cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
