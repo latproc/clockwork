@@ -357,6 +357,7 @@ void Value::toSymbol() {
 
 Value &Value::operator=(const Value &orig) {
     //      listValue.erase(listValue.begin(), listValue.end());
+    if (&orig == this) { return *this; }
     if (dyn_value) {
         dyn_value = dyn_value->deref();
     }
@@ -386,6 +387,7 @@ Value &Value::operator=(const Value &orig) {
         auto str = cJSON_PrintUnformatted(orig.json);
         json = cJSON_Parse(str);
         free(str);
+        break;
     }
     case t_dynamic:
         dyn_value = DynamicValueBase::ref(orig.dyn_value);
@@ -440,6 +442,9 @@ Value &Value::operator=(double val) {
 }
 
 Value &Value::operator=(cJSON *val) {
+    if (kind == t_json && json == val) {
+        return *this;
+    }
     *this = assign_value(val);
     return *this;
 }
