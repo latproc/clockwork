@@ -160,48 +160,48 @@ void simple_deltat(std::ostream &out, int64_t dt) {
 DynamicValueBase::~DynamicValueBase() {}
 
 Value::Value()
-    : kind(t_empty), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+    : kind(t_empty), json(0), cached_machine(0), token_id(0), dyn_value(0) {}
 
 Value::Value(Kind k)
-    : kind(k), json(0), cached_machine(0), cached_value(0), token_id(0), dyn_value(0) {}
+    : kind(k), json(0), cached_machine(0), token_id(0), dyn_value(0) {}
 
 Value::Value(bool v)
-    : kind(t_bool), bValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+    : kind(t_bool), bValue(v), json(0), cached_machine(0), token_id(0),
       dyn_value(0) {}
 
 Value::Value(int64_t v)
-    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+    : kind(t_integer), iValue(v), json(0), cached_machine(0), token_id(0),
       dyn_value(0) {}
 
 Value::Value(int v)
-    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+    : kind(t_integer), iValue(v), json(0), cached_machine(0), token_id(0),
       dyn_value(0) {}
 
 Value::Value(unsigned int v)
-    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+    : kind(t_integer), iValue(v), json(0), cached_machine(0), token_id(0),
       dyn_value(0) {}
 
 Value::Value(uint64_t v)
-    : kind(t_integer), iValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+    : kind(t_integer), iValue(v), json(0), cached_machine(0), token_id(0),
       dyn_value(0) {}
 
 Value::Value(float v)
-    : kind(t_float), fValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+    : kind(t_float), fValue(v), json(0), cached_machine(0), token_id(0),
       dyn_value(0) {}
 
 Value::Value(double v)
-    : kind(t_float), fValue(v), json(0), cached_machine(0), cached_value(0), token_id(0),
+    : kind(t_float), fValue(v), json(0), cached_machine(0), token_id(0),
       dyn_value(0) {}
 
 Value::Value(cJSON *v)
-    : kind(t_json), fValue(0), json(nullptr), cached_machine(0), cached_value(0), token_id(0),
+    : kind(t_json), fValue(0), json(nullptr), cached_machine(0), token_id(0),
       dyn_value(0) {
     if (v) { *this = assign_value(v); }
     else { kind = t_empty; }
 }
 
 Value::Value(const char *str, Kind k)
-    : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0),
+    : kind(k), json(nullptr), sValue(str), cached_machine(0), token_id(0),
       dyn_value(0) {
     if (kind == t_symbol && !sValue.empty()) {
         if (sValue == "FALSE") {
@@ -225,7 +225,7 @@ Value::Value(const char *str, Kind k)
 }
 
 Value::Value(const std::string & str, Kind k)
-    : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0),
+    : kind(k), json(nullptr), sValue(str), cached_machine(0), token_id(0),
       dyn_value(0) {
     if (kind == t_symbol && !str.empty()) {
         if (sValue == "FALSE") {
@@ -286,7 +286,7 @@ Value::~Value() {
 
 Value::Value(const Value &other)
     : kind(other.kind), bValue(other.bValue), iValue(other.iValue), fValue(other.fValue),
-      json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine), cached_value(0),
+      json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine),
       token_id(other.token_id), dyn_value(DynamicValueBase::ref(other.dyn_value)) {
     if (other.json) {
         auto str = cJSON_PrintUnformatted(other.json);
@@ -307,7 +307,7 @@ Value::Value(const Value &other)
 
 Value::Value(Value &&other)
     : kind(other.kind), bValue(other.bValue), iValue(other.iValue), fValue(other.fValue),
-      json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine), cached_value(0),
+      json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine),
       token_id(other.token_id), dyn_value(DynamicValueBase::ref(other.dyn_value)) {
     if (other.kind == t_string) {
         sValue = std::move(other.sValue);
@@ -334,12 +334,12 @@ Value::Value(Value &&other)
     //      }
 }
 
-Value::Value(DynamicValueBase &dv) : kind(t_dynamic), cached_value(0) {
+Value::Value(DynamicValueBase &dv) : kind(t_dynamic) {
     dyn_value = DynamicValueBase::ref(&dv);
 }
 
 // this form takes ownership of the passed DynamiValue rather than makes a clone
-Value::Value(DynamicValueBase *dv) : kind(t_dynamic), cached_value(0) {
+Value::Value(DynamicValueBase *dv) : kind(t_dynamic) {
     dyn_value = DynamicValueBase::ref(dv);
 }
 
@@ -406,7 +406,6 @@ Value &Value::operator=(const Value &orig) {
         break;
     }
     cached_machine = orig.cached_machine;
-    cached_value = orig.cached_value;
     return *this;
 }
 
