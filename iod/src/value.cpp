@@ -98,7 +98,9 @@ static const double ZERO_DISTANCE = 1.0E-8;
 namespace {
 
 Value assign_value(cJSON *json) {
-    if (json == nullptr) { return Value(); }
+    if (json == nullptr) {
+        return Value();
+    }
     Value result;
     switch (json->type) {
     case cJSON_NULL:
@@ -132,7 +134,9 @@ Value assign_value(cJSON *json) {
     case cJSON_Object:
         result.kind = Value::t_json;
         result.json = json;
+        return result; // Take ownership of json
     }
+    cJSON_Delete(json);
     return result;
 }
 
