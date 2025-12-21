@@ -383,10 +383,9 @@ Value &Value::operator=(const Value &orig) {
         sValue = orig.sValue;
         token_id = orig.token_id;
         break;
-    case t_json: {
+    case t_json:
         json = clone_json(orig.json);
         break;
-    }
     case t_dynamic:
         dyn_value = DynamicValueBase::ref(orig.dyn_value);
         break;
