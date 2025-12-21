@@ -138,7 +138,8 @@ TEST(Value, CanAssignJSONValue) {
 TEST(Value, CanGetStringFromJSONObject) {
     Value v(cJSON_CreateObject());
     cJSON_AddItemToObject(v.json, "greeting", cJSON_CreateString("hello"));
-    Value result = v.getFromJSON("greeting");
+    EXPECT_EQ(v.kind, Value::t_json);
+    Value result = clone_json(getFromJSON(v.json, "greeting"));
     EXPECT_EQ(result.asString(), std::string("hello"));
     EXPECT_EQ(result.kind, Value::t_string);
 }
@@ -146,7 +147,7 @@ TEST(Value, CanGetStringFromJSONObject) {
 TEST(Value, CanGetFloatFromJSONObject) {
     Value v(cJSON_CreateObject());
     cJSON_AddItemToObject(v.json, "Pi", cJSON_CreateDouble(M_PI));
-    Value result = v.getFromJSON("Pi");
+    Value result = clone_json(getFromJSON(v.json, "Pi"));
     EXPECT_EQ(result, M_PI);
     EXPECT_EQ(result.kind, Value::t_float);
 }
@@ -154,7 +155,7 @@ TEST(Value, CanGetFloatFromJSONObject) {
 TEST(Value, CanGetIntFromJSONObject) {
     Value v(cJSON_CreateObject());
     cJSON_AddItemToObject(v.json, "answer", cJSON_CreateNumber(42));
-    Value result = v.getFromJSON("answer");
+    Value result = clone_json(getFromJSON(v.json, "answer"));
     EXPECT_EQ(result, 42);
     EXPECT_EQ(result.kind,Value::t_integer);
 }
@@ -162,7 +163,7 @@ TEST(Value, CanGetIntFromJSONObject) {
 TEST(Value, CanGetTrueFromJSONObject) {
     Value v(cJSON_CreateObject());
     cJSON_AddItemToObject(v.json, "truth", cJSON_CreateTrue());
-    Value result = v.getFromJSON("truth");
+    Value result = clone_json(getFromJSON(v.json, "truth"));
     EXPECT_EQ(result, true);
     EXPECT_EQ(result.kind, Value::t_bool);
 }
@@ -170,7 +171,7 @@ TEST(Value, CanGetTrueFromJSONObject) {
 TEST(Value, CanGetFalseFromJSONObject) {
     Value v(cJSON_CreateObject());
     cJSON_AddItemToObject(v.json, "false", cJSON_CreateFalse());
-    Value result = v.getFromJSON("false");
+    Value result = clone_json(getFromJSON(v.json, "false"));
     EXPECT_EQ(result, false);
 }
 

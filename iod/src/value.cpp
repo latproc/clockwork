@@ -291,9 +291,7 @@ Value::Value(const Value &other)
       json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine), cached_value(0),
       token_id(other.token_id), dyn_value(DynamicValueBase::ref(other.dyn_value)) {
     if (other.json) {
-        auto str = cJSON_PrintUnformatted(other.json);
-        json = cJSON_Parse(str);
-        free(str);
+        json = clone_json(other.json);
     }
 
     //      if (kind == t_list) {
@@ -385,9 +383,8 @@ Value &Value::operator=(const Value &orig) {
         token_id = orig.token_id;
         break;
     case t_json: {
-        auto str = cJSON_PrintUnformatted(orig.json);
-        json = cJSON_Parse(str);
-        free(str);
+        json = clone_json(orig.json);
+        break;
     }
     case t_dynamic:
         dyn_value = DynamicValueBase::ref(orig.dyn_value);
@@ -1772,10 +1769,7 @@ bool Value::asFloat(double &x) const {
 
 cJSON *Value::asJSON() const {
     if (kind == t_json) {
-        auto str = cJSON_PrintUnformatted(json);
-        auto result = cJSON_Parse(str);
-        free(str);
-        return result;
+        return clone_json(json);
     }
     else if (kind == t_string) {
         return cJSON_Parse(sValue.c_str());
@@ -1808,11 +1802,117 @@ cJSON *getFromJSON(cJSON *json, const std::string &key) { // lookup the named pr
     return res;
 }
 
+/* Duplication */
+/* From git@github.com:DaveGamble/cJSON.git */
+cJSON * cJSON_Duplicate_rec(const cJSON *item, size_t depth);
+
+cJSON * cJSON_Duplicate(const cJSON *item)
+{
+    return cJSON_Duplicate_rec(item, 0 );
+}
+
+static void *(*cJSON_malloc)(size_t sz) = malloc;
+static void (*cJSON_free)(void *ptr) = free;
+
+static char *cJSON_strdup(const char *str) {
+    size_t len;
+    char *copy;
+
+    len = strlen(str) + 1;
+    if (!(copy = (char *)cJSON_malloc(len))) {
+        return 0;
+    }
+    memcpy(copy, str, len);
+    return copy;
+}
+
+constexpr int CJSON_CIRCULAR_LIMIT = 1000;
+
+cJSON * cJSON_Duplicate_rec(const cJSON *item, size_t depth)
+{
+    cJSON *newitem = NULL;
+    cJSON *child = NULL;
+    cJSON *next = NULL;
+    cJSON *newchild = NULL;
+
+    /* Bail on bad ptr */
+    if (!item)
+    {
+        goto fail;
+    }
+    /* Create new item */
+    newitem = cJSON_CreateNull();
+    if (!newitem)
+    {
+        goto fail;
+    }
+    /* Copy over all vars */
+    newitem->type = item->type & (~cJSON_IsReference);
+    newitem->valueint = item->valueint;
+    newitem->valueNumber = item->valueNumber;
+    newitem->valuedouble = item->valuedouble;
+    if (item->valuestring)
+    {
+        newitem->valuestring = (char*)cJSON_strdup(item->valuestring);
+        if (!newitem->valuestring)
+        {
+            goto fail;
+        }
+    }
+    if (item->string)
+    {
+        newitem->string = cJSON_strdup(item->string);
+        if (!newitem->string)
+        {
+            goto fail;
+        }
+    }
+
+    /* Walk the ->next chain for the child. */
+    child = item->child;
+    while (child != NULL)
+    {
+        if(depth >= CJSON_CIRCULAR_LIMIT) {
+            goto fail;
+        }
+        newchild = cJSON_Duplicate_rec(child, depth + 1); /* Duplicate (with recurse) each item in the ->next chain */
+        if (!newchild)
+        {
+            goto fail;
+        }
+        if (next != NULL)
+        {
+            /* If newitem->child already set, then crosswire ->prev and ->next and move on */
+            next->next = newchild;
+            newchild->prev = next;
+            next = newchild;
+        }
+        else
+        {
+            /* Set newitem->child and move to it */
+            newitem->child = newchild;
+            next = newchild;
+        }
+        child = child->next;
+    }
+    if (newitem && newitem->child)
+    {
+        newitem->child->prev = newchild;
+    }
+
+    return newitem;
+
+fail:
+    if (newitem != NULL)
+    {
+        cJSON_Delete(newitem);
+    }
+
+    return NULL;
+}
+
 cJSON *clone_json(cJSON *json) {
-    auto str = cJSON_PrintUnformatted(json);
-    cJSON *res = cJSON_Parse(str);
-    free(str);
-    return res;
+    return cJSON_Duplicate(json);
 }
 
 Value get_value(cJSON *json) { return assign_value(json); }
@@ -1820,6 +1920,6 @@ Value get_value(cJSON *json) { return assign_value(json); }
 Value Value::getFromJSON(const std::string &key) {
     Value res;
     if (kind != t_json || !json) { return res; }
-    res = assign_value(::getFromJSON(json, key));
+    res = assign_value(clone_json(::getFromJSON(json, key)));
     return res;
 }

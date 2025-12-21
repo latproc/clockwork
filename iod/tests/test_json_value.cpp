@@ -143,7 +143,16 @@ TEST(Parser, ParsingCStringStopsAtInvalidCharacter) {
 TEST(Value, AssignJSON) {
     auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
     Value val{cJSON_Parse(json_str)};
-    EXPECT_EQ(val.kind, Value::t_json) << "A JSON object is an object";
+    EXPECT_EQ(val.kind, Value::t_json);
+    Value val2{val};
+    EXPECT_EQ(val2.kind, Value::t_json);
+    std::string val_str = val.asString();
+    std::string val2_str = val2.asString();
+    EXPECT_EQ(val_str, val2_str);
+    val = val; // self assignment
+    EXPECT_EQ(val.kind, Value::t_json);
+    std::string val_str2 = val.asString();
+    EXPECT_EQ(val_str2, val_str) << "object changed by assignment to itself";
 }
 
 bool equal(cJSON *a, cJSON *b) {

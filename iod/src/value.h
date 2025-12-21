@@ -71,7 +71,6 @@ std::ostream &operator<<(std::ostream &, const DynamicValue &);
 // The caller does not own the returned value.
 cJSON *clone_json(cJSON *json);
 Value get_value(cJSON *json); // returns a plain value if possible
-Value getFromJSON(const std::string &key);
 cJSON *getFromJSON(cJSON *json, const std::string &key); // lookup the named property
 
 std::string short_form_value(const Value &val);
@@ -129,8 +128,6 @@ class Value {
 
     void toString(); // convert the value to a string from a symbol
     void toSymbol(); // convert the value to a symbol from a string
-
-    Value getFromJSON(const std::string &key);
 
     Kind kind = t_empty;
     bool bValue = false;
@@ -195,6 +192,8 @@ class Value {
   private:
     DynamicValueBase *dyn_value;
     std::string name() const;
+
+    Value getFromJSON(const std::string &key);
 };
 
 std::ostream &operator<<(std::ostream &out, const Value &val);
