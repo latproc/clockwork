@@ -25,6 +25,26 @@
 #include <iterator>
 #include <utility>
 #include <chrono>
+#include <string>
+#include <functional>
+
+namespace {
+    uint64_t hash_string(const std::string& s) {
+        return static_cast<uint64_t>(std::hash<std::string>{}(s));
+    }
+
+    void assign_hashed(std::map<int, uint64_t> & dest, int key, const Value & src) {
+        dest[key] = hash_string(src.asString());
+    }
+
+    void update_token(std::map<int, uint64_t> &tokens, const std::string &key, const Value &value) {
+        if (value.kind == Value::t_symbol) {
+            int tok = Tokeniser::instance()->getTokenId((key));
+            assign_hashed(tokens, tok, value);
+        }
+     }
+
+}
 
 const Value SymbolTable::Null;
 const Value SymbolTable::True(true);
