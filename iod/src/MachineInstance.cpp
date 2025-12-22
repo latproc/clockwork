@@ -3829,18 +3829,26 @@ const Value *MachineInstance::resolve(std::string property) {
 }
 
 const Value *MachineInstance::getValuePtr(Value &property) {
+    if (property.cached_value) {
+        return property.cached_value;
+    }
     assert(property.kind == Value::t_symbol || property.kind == Value::t_string);
     Value *res = getMutableValue(property.sValue.c_str());
     if (res) {
+        property.cached_value = res;
         return res;
     }
     return &SymbolTable::Null;
 }
 
 const Value &MachineInstance::getValue(Value &property) {
+    if (property.cached_value) {
+        return *property.cached_value;
+    }
     assert(property.kind == Value::t_symbol || property.kind == Value::t_string);
     Value *res = getMutableValue(property.sValue.c_str());
     if (res) {
+        property.cached_value = res;
         return *res;
     }
     return SymbolTable::Null;
