@@ -140,6 +140,7 @@ class Value {
     std::string sValue; // used for strings and for symbols
     MachineInstance *cached_machine = nullptr;
 
+    Value *cached_value = nullptr;
     int token_id;
 
     bool numeric() const;
