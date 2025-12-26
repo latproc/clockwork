@@ -229,10 +229,10 @@ bool SubscriptionManager::requestChannel() {
                 }
                 else {
                     long len = m.size();
-                    char *buf = new char(len + 1);
-                    buf[len] = 0;
+                    const char* data = static_cast<const char*>(m.data());
+                    std::string unexpected(data, data + len);
                     FileLogger fl(program_name);
-                    fl.f() << channel_name << " got unexpected: " << buf << "\n" << std::flush;
+                    fl.f() << channel_name << " got unexpected: " << unexpected << "\n" << std::flush;
                 }
             }
             catch (const zmq::error_t &ex) {
@@ -1143,3 +1143,4 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
     }
     return true;
 }
+
