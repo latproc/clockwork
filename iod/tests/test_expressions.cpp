@@ -281,7 +281,7 @@ int main(int argc, char *argv[]) {
 
     MessagingInterface::abort();
     Dispatcher::instance()->stop();
-    LogState::cleanup();
     Logger::cleanup();
+    LogState::cleanup();
     return result;
 }

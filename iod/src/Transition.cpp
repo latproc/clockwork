@@ -20,6 +20,7 @@ Transition::Transition(const Transition &other)
 Transition::~Transition() { delete condition; }
 
 Transition &Transition::operator=(const Transition &other) {
+    if (this == &other) { return *this; }
     source = other.source;
     dest = other.dest;
     trigger = other.trigger;

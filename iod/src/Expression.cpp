@@ -618,6 +618,7 @@ Predicate::Predicate(const Predicate &other) : left_p(0), op(opNone), right_p(0)
 }
 
 Predicate &Predicate::operator=(const Predicate &other) {
+    if (this == &other) { return *this; }
     delete left_p;
     delete right_p;
     delete dyn_value;

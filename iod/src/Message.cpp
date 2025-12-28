@@ -215,6 +215,7 @@ Package::Package(Package &&other)
 Package::~Package() { delete message; }
 
 Package &Package::operator=(const Package &other) {
+    if (this == &other) { return *this; }
     transmitter = other.transmitter;
     receiver = other.receiver;
     if (message) {
