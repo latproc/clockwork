@@ -356,6 +356,7 @@ void Value::toSymbol() {
 }
 
 Value &Value::operator=(const Value &orig) {
+    if (this == &orig) { return *this; }
     //      listValue.erase(listValue.begin(), listValue.end());
     if (dyn_value) {
         dyn_value = dyn_value->deref();
