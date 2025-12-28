@@ -167,13 +167,21 @@ void Logger::setOutputStream(std::ostream *out) {
 }
 
 void Logger::cleanup() {
-    std::lock_guard<std::mutex> lock(logger_mutex);
-    if (internals) {
-        delete internals->logger_instance;
-        internals->logger_instance = nullptr;
-        delete internals;
-        internals = nullptr;
+    // Phase 1: grab pointers and reset shared state under lock
+    Logger *logger_to_delete = nullptr;
+    Internals *internals_to_delete = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(logger_mutex);
+        if (internals) {
+            logger_to_delete = internals->logger_instance;
+            internals->logger_instance = nullptr;
+            internals_to_delete = internals;
+            internals = nullptr;
+        }
     }
+    // Phase 2: perform deletions without holding logger_mutex to avoid re-entrancy deadlocks
+    delete logger_to_delete;
+    delete internals_to_delete;
 }
 
 class FileLogger::Internals {
