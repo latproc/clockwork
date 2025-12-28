@@ -633,27 +633,27 @@ void predefine_special_machines() {
     }
 
     auto settings_class = makeSettingsClass(host_name);
-    auto cw_class = makeClockworkClass();
-    auto point_class = makePointMachineClass();
-    auto flag_class = makeStatusFlagMachineClass();
-    auto ain_class = makeAnalogueInMachineClass();
-    auto cnt_class = makeCounterMachineClass();
-    auto dv_class = makeDigitalValueMachineClass();
-    auto re_class = makeRateEstimatorMachineClass();
-    auto cr_class = makeCounterRateMachineClass();
-    auto aout_class = makeAnalogueOutputMachineClass();
+    makeClockworkClass();
+    makePointMachineClass();
+    makeStatusFlagMachineClass();
+    makeAnalogueInMachineClass();
+    makeCounterMachineClass();
+    makeDigitalValueMachineClass();
+    makeRateEstimatorMachineClass();
+    makeCounterRateMachineClass();
+    makeAnalogueOutputMachineClass();
     auto list_class = makeListMachineClass();
-    auto ref_class = makeReferenceMachineClass();
+    makeReferenceMachineClass();
 
-    auto module_class = makeModuleMachineClass();
-    auto publisher_class = makePublisherMachineClass();
-    auto subscriber_class = makeSubscriberMachineClass();
-    auto broker_class = makeBrokerMachineClass();
-    auto condition_class = makeConditionMachineClass();
-    auto flag = makeFlagMachineClass();
-    auto mc_variable = makeVariableMachineClass();
-    auto mc_constant = makeConstantMachineClass();
-    auto mc_external = makeExternalMachineClass();
+    makeModuleMachineClass();
+    makePublisherMachineClass();
+    makeSubscriberMachineClass();
+    makeBrokerMachineClass();
+    makeConditionMachineClass();
+    makeFlagMachineClass();
+    makeVariableMachineClass();
+    makeConstantMachineClass();
+    makeExternalMachineClass();
 
 #ifndef EC_SIMULATOR
     auto mcwc = makeEtherCatWorkingCounterMachineClass();

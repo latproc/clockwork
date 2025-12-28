@@ -1523,6 +1523,7 @@ bool IODCommandFreeze::run(std::vector<Value> &params) {
     uint64_t now = start;
     while (now - start < 10000000) {
         usleep(100000);
+        now = microsecs();
     }
     result_str = "OK";
     return true;
@@ -1532,14 +1533,12 @@ extern bool program_done;
 extern bool all_ok;
 
 bool IODCommandToggleEtherCAT::run(std::vector<Value> &params) {
-    uint64_t start = microsecs();
     all_ok = !all_ok;
     result_str = "OK";
     return true;
 }
 
 bool IODCommandShutdown::run(std::vector<Value> &params) {
-    uint64_t start = microsecs();
     program_done = true;
     result_str = "OK";
     return true;
