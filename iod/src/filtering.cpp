@@ -67,13 +67,14 @@ double Buffer::average(size_t n) {
     }
     //  return total_ / (double)n;
 #if 1
-    int i = (front + BUFSIZE - n + 1) % BUFSIZE;
+    int buf_size = static_cast<int>(BUFSIZE);
+    int i = (front + buf_size - n + 1) % buf_size;
     while (i != front) {
 #ifdef TESTING
         std::cout << i << ":" << getFloatAtIndex(i) << " ";
 #endif
         res += getFloatAtIndex(i);
-        i = (i + 1) % BUFSIZE;
+        i = (i + 1) % buf_size;
     }
 #ifdef TESTING
     std::cout << i << ":" << getFloatAtIndex(i) << "\n";
@@ -101,11 +102,12 @@ double Buffer::stddev(size_t n) {
     if (len < (ssize_t)n) {
         n = len;
     }
-    int i = (front + BUFSIZE - n + 1) % BUFSIZE;
+    int buf_size = static_cast<int>(BUFSIZE);
+    int i = (front + buf_size - n + 1) % buf_size;
     do {
         double val = getFloatAtIndex(i) - avg;
         res += val * val;
-        i = (i + 1) % BUFSIZE;
+        i = (i + 1) % buf_size;
     } while (i != front);
     return sqrt(res / (double)(n - 1));
 }

@@ -530,7 +530,7 @@ chn_definition_section:
 }
 
 | OPTION chn_option_settings ';'
-| THROTTLE INTEGERVAL ';' { current_channelclass->setThrottleTime($2 * 1000); }
+| THROTTLE INTEGERVAL ';' { current_channelclass->setThrottleTime(static_cast<unsigned int>($2 * 1000)); }
 | tokPUBLISHER ';' { current_channelclass->setPublisher(true); }
 | MODBUS ';' { current_channelclass->addFeature(ChannelDefinition::ReportModbusUpdates); }
 ;

@@ -266,10 +266,9 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         }
         if (strcmp("LOCALTIME", name) == 0) {
             char buf[40];
-            const char *fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03lu";
-            if (sizeof(long long) == sizeof(uint64_t)) {
-                fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03llu";
-            }
+            const char *fmt = sizeof(long long) == sizeof(uint64_t)
+                ? "%04d/%02d/%02d %02d:%02d:%02d.%03llu"
+                : "%04d/%02d/%02d %02d:%02d:%02d.%03lu";
             snprintf(buf, 40, fmt, lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour,
                      lt.tm_min, lt.tm_sec, local.time_of_day().total_milliseconds());
             res = Value(buf, Value::t_string);
@@ -277,10 +276,9 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         }
         if (strcmp("UTCTIME", name) == 0) {
             char buf[40];
-            const char *fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03lu";
-            if (sizeof(long long) == sizeof(uint64_t)) {
-                fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03llu";
-            }
+            const char *fmt = sizeof(long long) == sizeof(uint64_t)
+                ? "%04d/%02d/%02d %02d:%02d:%02d.%03lu"
+                : "%04d/%02d/%02d %02d:%02d:%02d.%03llu";
             lt = to_tm(utc);
             snprintf(buf, 40, fmt, lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour,
                      lt.tm_min, lt.tm_sec, local.time_of_day().total_milliseconds());
@@ -289,10 +287,9 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         }
         if (strcmp("TIMESEQ", name) == 0) {
             char buf[40];
-            const char *fmt = "%02d%02d%02d%02d%02d%02d%03lu";
-            if (sizeof(long long) == sizeof(uint64_t)) {
-                fmt = "%02d%02d%02d%02d%02d%02d%03llu";
-            }
+            const char *fmt = sizeof(long long) == sizeof(uint64_t)
+                ? "%02d%02d%02d%02d%02d%02d%03lu"
+                : "%02d%02d%02d%02d%02d%02d%03llu";
             snprintf(buf, 40, fmt, lt.tm_year - 100, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour,
                      lt.tm_min, lt.tm_sec, local.time_of_day().total_milliseconds());
             res = Value(buf, Value::t_string);
