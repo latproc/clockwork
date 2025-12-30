@@ -153,31 +153,31 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
                 return false;
             }
             const State *s = mi->getStateMachine()->findState(state_name.c_str());
-            if (!s) {
-                if (mi->isShadow()) {
-                    // shadow machines are intended to move to their initial state if the requested state is unknown
-                    s = &mi->getStateMachine()->initial_state;
-                }
-                else {
-                    char buf[150];
-                    snprintf(buf, 150, "Error: machine %s has no state called '%s'",
-                             mi->getName().c_str(), state_name.c_str());
-                    MessageLog::instance()->add(buf);
-                    error_str = buf;
-                    return false;
-                }
+            if (!s && mi->isShadow()) {
+                // shadow machines are intended to move to their initial state if the requested state is unknown
+                s = &mi->getStateMachine()->initial_state;
+                auto & log = MessageLog::instance()->get_stream();
+                log << "Error: " << mi->fullName() << "has no state called " << state_name << " and no initial state; ";
+                auto error_msg = MessageLog::instance()->access_stream_message();
+                MessageLog::instance()->release_stream();
+                error_str = error_msg.c_str();
+                return false;
             }
-            /*  it would be safer to push the requested state change onto the machine's
-                action list but some machines do not poll their action list because they
-                do not expect to receive events
-            */
+            if (!s) {
+                auto & log = MessageLog::instance()->get_stream();
+                log << "Error: " << mi->fullName() << "has no state called " << state_name;
+                auto error_msg = MessageLog::instance()->access_stream_message();
+                MessageLog::instance()->release_stream();
+                error_str = error_msg.c_str();
+                return false;
+            }
             if (mi->isShadow()) {
-                mi->setState(state_name.c_str(), auth, false);
+                mi->setState(*s, auth, false); //Request the control to change state
             }
             else {
                 SetStateActionTemplate ssat("SELF", state_name);
-                mi->enqueueAction(ssat.factory(
-                    mi)); // execute this state change once all other actions are complete
+                // execute this state change once all other actions are complete
+                mi->enqueueAction(ssat.factory( mi));
             }
             result_str = "OK";
             return true;
