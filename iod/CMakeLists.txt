@@ -149,7 +149,9 @@ add_library (cw_client
 	${HEADER_FILES}
 )
 
+if (EXISTS "/usr/local/include")
 include_directories("/usr/local/include")
+endif()
 if (EXISTS "/opt/local/include")
 include_directories("/opt/local/include")
 endif()
@@ -157,7 +159,9 @@ include_directories("${PROJECT_SOURCE_DIR}/include")
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${CLOCKWORK_DIR}")
 
+if (EXISTS "/user/local/lib")
 LINK_DIRECTORIES("/usr/local/lib")
+endif()
 if (EXISTS "/opt/local/lib")
 LINK_DIRECTORIES("/opt/local/lib")
 endif()
@@ -591,7 +595,9 @@ target_link_libraries(cmdline_parser "readline")
 endif()
 
 add_executable(iosh src/iosh.cpp)
-target_link_directories_compat(iosh "/opt/homebrew/lib")
+if (EXISTS "/opt/homebrew/lib")
+target_link_directories(iosh PRIVATE "/opt/homebrew/lib")
+endif()
 target_link_libraries(iosh cmdline_parser cw_client "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 target_compile_definitions(iosh PRIVATE USE_READLINE )
 
