@@ -197,7 +197,7 @@ Value::Value(cJSON *v)
 }
 
 Value::Value(const char *str, Kind k)
-    : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0),
+    : kind(k), iValue(0), fValue(0.0f), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0),
       dyn_value(0) {
     if (kind == t_symbol && !sValue.empty()) {
         if (sValue == "FALSE") {
@@ -221,7 +221,7 @@ Value::Value(const char *str, Kind k)
 }
 
 Value::Value(const std::string & str, Kind k)
-    : kind(k), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0),
+    : kind(k), iValue(0), fValue(0.0f), json(nullptr), sValue(str), cached_machine(0), cached_value(0), token_id(0),
       dyn_value(0) {
     if (kind == t_symbol && !str.empty()) {
         if (sValue == "FALSE") {
