@@ -2866,7 +2866,11 @@ void ChannelDefinition::processIgnoresPatternList(std::set<std::string>::const_i
             std::list<MachineInstance *>::iterator machines = MachineInstance::begin();
             while (machines != MachineInstance::end()) {
                 MachineInstance *machine = *machines++;
-                if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
+                if (!machine) {
+                    NB_MSG << "null machine detected in machine list when processing channel IGNORES" << "\n";
+                    assert(false);
+                }
+                if (execute_pattern(rexp, machine->getName().c_str()) == 0) {
                     if (chn->channel_machines.count(machine)) {
                         DBG_CHANNELS << "unpublished " << machine->getName() << "\n";
                         machine->unpublish();
