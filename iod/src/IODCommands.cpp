@@ -1123,7 +1123,7 @@ bool IODCommandModbus::run(std::vector<Value> &params) {
                 }
                 else {
                     found.getOwner()->modbusUpdated(found, (int)(address - found.getAddress()),
-                                                    params[3].sValue.c_str());
+                                                    params[3].sValue.c_str(), Value::t_string);
                 }
             }
             else {

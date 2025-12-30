@@ -24,6 +24,7 @@
 #include <list>
 #include <map>
 #include <string>
+#include "value.h"
 
 /*  when a Modbus addressable object changes value, it informs the interface by calling update()
 
@@ -147,12 +148,9 @@ class ModbusAddressable {
   public:
     virtual ~ModbusAddressable();
     void updateModbus(int new_value);
-    virtual void modbusUpdated(ModbusAddress &addr, unsigned int offset, int new_value) {
-    } // sent to the owner when the interface changes a value
-    virtual void modbusUpdated(ModbusAddress &addr, unsigned int offset, float new_value) {
-    } // sent to the owner when the interface changes a value
-    virtual void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value) {
-    } // sent to the owner when the interface changes a value
+    virtual void modbusUpdated(ModbusAddress &addr, unsigned int offset, int new_value) = 0;
+    virtual void modbusUpdated(ModbusAddress &addr, unsigned int offset, float new_value) = 0;
+    virtual void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value, Value::Kind kind) = 0; // sent to the owner when the interface changes a value
     virtual int getModbusValue(ModbusAddress &addr, unsigned int offset, int len) = 0;
 };
 

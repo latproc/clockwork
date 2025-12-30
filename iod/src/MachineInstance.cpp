@@ -4925,7 +4925,7 @@ void MachineInstance::setupModbusInterface() {
 }
 
 void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offset,
-                                    const char *new_value) {
+                                    const char *new_value, Value::Kind kind) {
     std::string name = fullName();
     DBG_MODBUS << name << " modbusUpdated " << base_addr << " " << offset << " " << new_value
                << "\n";
@@ -4949,13 +4949,13 @@ void MachineInstance::modbusUpdated(ModbusAddress &base_addr, unsigned int offse
     if (addr.getGroup() == ModbusAddress::holding_register) {
         DBG_MODBUS << name << " holding register update\n";
         std::string property_name = modbus_addresses[index];
-        DBG_MODBUS << _name << " set property " << property_name << " via modbus index " << index
+        DBG_MODBUS << _name << " set property " << property_name << " (" << kind << ") via modbus index " << index
                    << " (" << addr << ")\n";
         if (property_name == _name) {
-            setValue("VALUE", new_value);
+            setValue("VALUE", Value(new_value, kind));
         }
         else {
-            setValue(property_name, new_value);
+            setValue(property_name, Value(new_value, kind));
         }
     }
     else {
