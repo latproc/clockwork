@@ -900,25 +900,26 @@ bool IODCommandShowMessages::run(std::vector<Value> &params) {
         ++idx;
     }
 
-    cJSON *result = log->toJSON((unsigned int)num);
-    if (result) {
-        if (use_json) {
+    if (use_json) {
+        auto result = log->toJSON((unsigned int)num);
+        if (result) {
             char *text = cJSON_Print(result);
             result_str = text;
             free(text);
+            cJSON_Delete(result);
+            return true;
+        } else {
+            error_str = "Failed to read the error log";
+            return false;
         }
-        else {
-            char *res = log->toString((unsigned int)num);
+    } else {
+        char *res = log->toString((unsigned int)num);
+        if (res) {
             result_str = res;
             free(res);
         }
-        cJSON_Delete(result);
-        return true;
     }
-    else {
-        error_str = "Failed to read the error log";
-        return false;
-    }
+    return true;
 }
 
 bool IODCommandTriggers::run(std::vector<Value> &params) {
