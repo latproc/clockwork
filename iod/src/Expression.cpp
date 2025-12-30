@@ -865,12 +865,14 @@ Condition::Condition(const Condition &other) : predicate(0) {
 }
 
 Condition &Condition::operator=(const Condition &other) {
+    if (this == &other) { return *this; }
+    delete predicate;
+    predicate = nullptr;
     if (other.predicate) {
         predicate = new Predicate(*(other.predicate));
     }
     return *this;
 }
-
 std::ostream &operator<<(std::ostream &out, const Stack &s) { return s.operator<<(out); }
 
 std::ostream &Stack::operator<<(std::ostream &out) const {
