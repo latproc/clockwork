@@ -1162,16 +1162,16 @@ bool IODCommandModbus::run(std::vector<Value> &params) {
 
 bool IODCommandModbusExport::run(std::vector<Value> &params) {
 
-    const char *file_name = modbus_map();
+    std::string file_name_str = modbus_map();
     if (params.size() == 3) {
-        file_name = params[2].asString().c_str();
+        file_name_str = params[2].asString();
     }
     const char *backup_file_name = "modbus_mappings.bak";
-    if (rename(file_name, backup_file_name)) {
+    if (rename(file_name_str.c_str(), backup_file_name)) {
         std::cerr << "file rename error: " << strerror(errno) << "\n";
     }
     std::list<MachineInstance *>::iterator m_iter = MachineInstance::begin();
-    std::ofstream out(file_name);
+    std::ofstream out(file_name_str);
     if (!out) {
         error_str = "not able to open mapping file for write";
         return false;
@@ -1625,3 +1625,4 @@ bool IODCommandSDO::run(std::vector<Value> &params) {
     }
     }
 */
+
