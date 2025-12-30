@@ -14,16 +14,22 @@ class LogEntry {
     LogEntry(const char *msg) : message(msg) { size_ = strlen(msg) + 1 + sizeof(LogEntry); }
     const std::string &entry() const { return message; }
     size_t size() { return size_; }
-    cJSON *toJSON() const {
-        cJSON *res = cJSON_CreateObject();
-        cJSON_AddStringToObject(res, "message", message.c_str());
-        return res;
-    }
     const std::string &getText() const { return message; }
 
+protected:
+  cJSON *toJSON() const {
+    cJSON *res = cJSON_CreateObject();
+    cJSON_AddStringToObject(res, "message", message.c_str());
+    return res;
+  }
+
   private:
+    LogEntry(const LogEntry &) = delete;
+    LogEntry &operator=(const LogEntry &) = delete;
     size_t size_;
     std::string message;
+
+    friend class MessageLog;
 };
 
 class MessageLog {
