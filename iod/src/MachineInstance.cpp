@@ -759,19 +759,31 @@ MachineInstance::~MachineInstance() {
 }
 
 void MachineInstance::remove_pending() {
-    std::unique_lock<std::mutex> lock(global_lists_mutex);
-    while (!to_remove.is_empty()) {
-        MachineInstance *m;
-        if (to_remove.try_pop_front(m)) {
+    if (to_remove.is_empty()) { return; }
+
+    // make a local copy of the machines/channels that are to be removed
+    // and use that list to remove the machines from other lists
+    // TODO: examine parameters and locals of remaining machines and
+    // remove/flag affected references
+    std::vector<MachineInstance*> copy_of_to_remove;
+    copy_of_to_remove.reserve(8);
+    to_remove.for_each([&copy_of_to_remove](MachineInstance *m){
+        copy_of_to_remove.push_back(m);
+    });
+    while (!copy_of_to_remove.empty()) {
+        MachineInstance *m = copy_of_to_remove.back();
+        copy_of_to_remove.pop_back();
+        {
+            std::unique_lock<std::mutex> lock(global_lists_mutex);
             all_machines.remove(m);
             automatic_machines.remove(m);
             active_machines.remove(m);
             ::machines.erase(m->getName());
             SharedWorkSet::instance()->remove(m);
-            {
-                std::lock_guard<std::mutex> lock(pending_state_change_mutex);
-                pending_state_change.erase(m);
-            }
+        }
+        {
+            std::lock_guard<std::mutex> lock(pending_state_change_mutex);
+            pending_state_change.erase(m);
         }
     }
 }
