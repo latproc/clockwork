@@ -146,7 +146,7 @@ SerialiseDemo MACHINE list_of_machines, list_of_numbers {
     DESERIALISE STATE SEPARATED BY "," FROM cache TO ITEMS IN list_of_machines;
     SEND turnOff TO list_of_machines;
     cache := SERIALISE list_of_machine; # cache <- "off,off,off"
-    DESERIALISE FROM cache TO ITEMS IN list_of_machines;
+    DESERIALISE cache TO ITEMS IN list_of_machines;
   }
 
 }

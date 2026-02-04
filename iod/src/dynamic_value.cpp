@@ -680,9 +680,11 @@ const Value &SerialiseValue::operator()() {
             val = machine_list->parameters[i].val;
         }
         if (val.kind == Value::t_string) {
-            val.toSymbol();
+            ss << val.quoted();
         }
-        ss << val;
+        else {
+            ss << val;
+        }
         if (i < machine_list->parameters.size() - 1) {
             ss << delim;
         }
