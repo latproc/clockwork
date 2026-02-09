@@ -200,6 +200,7 @@ SORT                return SORT;
 STATE               return STATE;
 STATES              return STATES;
 STRING              return STRINGTYPE;
+SYMBOL              return SYMBOLTYPE;
 TAG					return TAG;
 TAKE                return TAKE;
 THROTTLE			return THROTTLE;

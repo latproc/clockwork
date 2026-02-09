@@ -228,6 +228,9 @@ Value eval(Predicate *p, MachineInstance *m) {
         case opString:
             res = Value(r.asString(), Value::t_string);
             break;
+        case opSymbol:
+            res = Value(r.asString(), Value::t_symbol);
+            break;
         case opJson: {
             auto str = r.asString();
             res = Value(cJSON_Parse(str.c_str()));
@@ -256,7 +259,7 @@ Value eval(Predicate *p, MachineInstance *m) {
 
         if (m && m->debug()) {
             if (p->op == opNOT || p->op == opInteger || p->op == opFloat ||
-                p->op == opString || p->op == opSquareRoot) {
+                p->op == opString || p->op == opSymbol || p->op == opSquareRoot) {
                 DBG_PREDICATES << " expr: " << p->op << " " << *(p->right_p) << " returns " << res
                                << "\n";
             }

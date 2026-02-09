@@ -62,6 +62,7 @@ enum PredicateOperator {
     opAbsoluteValue,
     opSquareRoot,
     opString,
+    opSymbol,
     opGetSubExpr,
     opPutSubExpr
 };

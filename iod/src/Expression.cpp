@@ -61,7 +61,7 @@ void toC(std::ostream &out, const PredicateOperator op) {
 std::ostream &operator<<(std::ostream &out, const Predicate &p) { return p.operator<<(out); }
 
 static bool isUnaryRightOperator(PredicateOperator op) {
-    return op == opNOT || op == opInteger || op == opFloat || op == opString || op == opJson ||
+    return op == opNOT || op == opInteger || op == opFloat || op == opString || op == opSymbol || op == opJson ||
            op == opSquareRoot;
 }
 
@@ -162,6 +162,10 @@ std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
         break;
     case opString:
         opstr = "AS STRING";
+        break;
+    case opSymbol:
+        opstr = "AS SYMBOL";
+        break;
     case opJson:
         opstr = "AS JSON";
         break;
@@ -1197,6 +1201,12 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
         }
         return Value(rhs.asString(), Value::t_string);
     }
+    case opSymbol: {
+        if (rhs.kind == Value::t_string) {
+            return Value(m->getValue(rhs.sValue).asString(), Value::t_symbol);
+        }
+        return Value(rhs.asString(), Value::t_symbol);
+    }
     case opJson: {
         cJSON *json = cJSON_Parse(rhs.asString().c_str());
         return Value(json);
@@ -1276,7 +1286,7 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
         }
         stack.push(p->op);
     }
-    else if (p->op == opInteger || p->op == opFloat || p->op == opString || p->op == opJson ||
+    else if (p->op == opInteger || p->op == opFloat || p->op == opString || p->op == opSymbol || p->op == opJson ||
              p->op == opSquareRoot) {
         stack.push(ExprNode(SymbolTable::True));
         if (!prep(stack, p->right_p, m, false, reevaluate)) {

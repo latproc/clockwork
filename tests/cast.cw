@@ -4,6 +4,7 @@ check_string CheckString;
 
 Monitor MACHINE other {
     string WHEN CLASS OF other.check == "STRING";
+    symbol WHEN CLASS OF other.check == "SYMBOL";
     unknown DEFAULT;
 }
 
@@ -37,6 +38,12 @@ CheckString MACHINE {
           status := "Casting check to string";
           check := boolean AS STRING;
           WAITFOR monitor IS string;
+
+          check := NULL;
+          WAITFOR monitor IS unknown;
+          status := "Casting check to symbol";
+          check := check AS SYMBOL;
+          WAITFOR monitor IS symbol;
      }
 
      ENTER INIT { WAIT 2000;  SEND run TO SELF; }
