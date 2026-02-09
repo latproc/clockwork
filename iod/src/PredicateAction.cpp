@@ -207,7 +207,7 @@ Value eval(Predicate *p, MachineInstance *m) {
             res = r.toFloat();
             break;
         case opString:
-            res = r.asString();
+            res = Value(r.asString(), Value::t_string);
             break;
         case opJson: {
             auto str = r.asString();
