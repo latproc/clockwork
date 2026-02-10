@@ -1,51 +1,57 @@
-IfTest MACHINE timer, output {
+# Start a timer and turn an output on when the timer starts and off when the timer expires
 
-	Error WHEN SELF IS Running AND TIMER >= 1500;
-	Done WHEN timer IS expired;
-    Running WHEN timer IS running;
+# Note: Machines can be defined and instantiated in any order.
+switch TimedSwitch global_timer, flag;
+global_timer Timer;
+flag    FLAG;
+
+TimedSwitch MACHINE timer, output {
+  # The output should be turned off within the Running state.
+  Error WHEN SELF IS Done AND output IS on; 
+  Done WHEN timer IS expired;
+
+  Error WHEN SELF IS Running AND TIMER > timer.expiry_time;
+
+  Running WHEN timer IS running;
     
-    ENTER Error { LOG "Delay did not complete in 1500ms"; }
+  ENTER Error { LOG "Delay did not complete in " + timer.expiry_time + "ms"; }
 
-	ENTER Done { SET output TO off; LOG "done"; }
-	RECEIVE timer.running_enter{ LOG "timer is running"; }
-	RECEIVE timer.expired_enter{ LOG "timer has expired"; }
+  ENTER Done { LOG "done"; }
+  RECEIVE timer.running_enter{ LOG "timer is running"; }
+  RECEIVE timer.expired_enter{ LOG "timer has expired"; }
 
-	ENTER Running {
-	    LOG "before first if";
-		IF ( timer IS running ) {
-			SET output TO on;
-			LOG "First Test";
-		};
-		LOG "after first if";
-		IF ( timer IS expired ) {
-			SET output TO off;
-			LOG "Second Test";
-		};
-		LOG "after second if";
-	}
-	
-	ENTER INIT { SEND start TO timer ;}
+  ENTER Running {
+    LOG "before first if";
+    IF ( timer IS running ) {
+      SET output TO on;
+      LOG "First Test";
+    };
+    WAITFOR timer IS expired;
+    LOG "after first if";
+    IF ( timer IS expired ) {
+      SET output TO off;
+      LOG "Second Test";
+    };
+    LOG "after second if";
+  }
+  
+  ENTER INIT {
+    # initialisation order is not guaranteed, wait
+    # for the timer to be initialised before starting it.
+    WAITFOR timer IS stopped;
+    LOG "starting timer"; SEND start TO timer;
+  }
 }
 
 Timer MACHINE {
+  OPTION expiry_time 1000;
+  # There is no default state here so the machine won't leave running
+  # until the test on expired becomes true.
+  expired WHEN SELF IS expired || (SELF IS running && TIMER >=expiry_time);
 
-	expired WHEN SELF IS expired || (SELF IS running && TIMER >=3000);
-	running STATE;
-	stopped INITIAL;
+  running STATE;
+  stopped INITIAL;
 
-	starting DURING start { }
-	TRANSITION stopped TO running USING start;
-
+  TRANSITION stopped TO running USING start;
+  TRANSITION ANY TO stopped USING reset;
 }
-
-iftest IfTest (tab:Tests) global_timer, EL2008_OUT_1;
-global_timer Timer(tab:Tests) ;
-#EL2008_OUT_1    POINT (type:Output, tab:Outputs, image:output64x64) Beckhoff_EL2008, 1;
-EL2008_OUT_1    FLAG (tab:Outputs);
-
-#MODULES {
-#    Beckhoff_EK1100 (position:0) ;
-#    Beckhoff_EK1814 (position:3) ;#6000 7000;  # 4 IN, 4 OUT 
-#    Beckhoff_EL1008 (position:1) ;#6000;  # 8 IN
-#    Beckhoff_EL2008 (position:2) ;#7000;  # 8 OUT 
-#}
