@@ -190,7 +190,7 @@ class Value {
     std::ostream &operator<<(std::ostream &out) const;
 
   private:
-    DynamicValueBase *dyn_value;
+    DynamicValueBase *dyn_value = nullptr;
     std::string name() const;
 
     Value getFromJSON(const std::string &key);
