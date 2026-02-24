@@ -119,7 +119,7 @@ Value assign_value(cJSON *json) {
         break;
     case cJSON_String: {
         std::string s(json->valuestring);
-        if (*s.begin() == '"' && *s.end() == '"') {
+        if (s.size() >= 2 && s.front() == '"' && s.back() == '"') {
             result = s.substr(1, s.length() - 2);
         }
         else {
@@ -384,7 +384,7 @@ Value &Value::operator=(const Value &orig) {
         token_id = orig.token_id;
         break;
     case t_json:
-        json = clone_json(orig.json);
+        json = orig.json ? clone_json(orig.json) : nullptr;
         break;
     case t_dynamic:
         dyn_value = DynamicValueBase::ref(orig.dyn_value);
@@ -1530,6 +1530,7 @@ std::ostream &Value::operator<<(std::ostream &out) const {
         auto json_str = cJSON_PrintUnformatted(json);
         out << json_str;
         free(json_str);
+        break;
     }
     case t_symbol:
         out << sValue;
@@ -1769,12 +1770,9 @@ bool Value::asFloat(double &x) const {
 
 cJSON *Value::asJSON() const {
     if (kind == t_json) {
-        return clone_json(json);
+        return json ? clone_json(json) : nullptr;
     }
-    else if (kind == t_string) {
-        return cJSON_Parse(sValue.c_str());
-    }
-    else if (kind == t_symbol) {
+    else if (kind == t_string || kind == t_symbol) {
         return cJSON_Parse(sValue.c_str());
     }
     else if (kind == t_dynamic) {
@@ -1797,6 +1795,7 @@ cJSON *Value::asJSON() const {
 }
 
 cJSON *getFromJSON(cJSON *json, const std::string &key) { // lookup the named property
+    if (!json) { return nullptr; }
     if (json->type != cJSON_Object) { return nullptr; }
     cJSON *res = cJSON_GetObjectItem(json, key.c_str());
     return res;
@@ -1912,7 +1911,7 @@ fail:
 }
 
 cJSON *clone_json(cJSON *json) {
-    return cJSON_Duplicate(json);
+    return json ? cJSON_Duplicate(json) : nullptr;
 }
 
 Value get_value(cJSON *json) { return assign_value(json); }

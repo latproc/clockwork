@@ -155,6 +155,11 @@ target_link_libraries(test_json_value gmock_main cw_interpreter cw_client ${Zero
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_json_value COMMAND test_json_value)
 
+add_executable(test_json_ownership test_json_ownership.cpp )
+target_link_libraries(test_json_ownership gmock_main cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_json_ownership COMMAND test_json_ownership)
+
 add_executable(test_scheduler test_scheduler.cpp )
 target_link_libraries(test_scheduler gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} dl pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")

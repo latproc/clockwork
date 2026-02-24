@@ -1,0 +1,47 @@
+#include "gtest/gtest.h"
+
+#include <cJSON.h>
+#include <json_expression.h>
+#include <value.h>
+
+#include "library_globals.cpp"
+
+namespace {
+
+std::string jsonToString(cJSON *json) {
+    if (!json) {
+        return "";
+    }
+    char *str = cJSON_PrintUnformatted(json);
+    std::string out = str ? str : "";
+    free(str);
+    return out;
+}
+
+TEST(JsonOwnership, AssignFromJsonValueClonesPayload) {
+    cJSON *doc = cJSON_Parse(R"JSON({"a":1})JSON");
+    ASSERT_NE(nullptr, doc);
+
+    {
+        Value rhs(cJSON_Parse(R"JSON({"x":7})JSON"));
+        ASSERT_EQ(Value::t_json, rhs.kind);
+        cJSON *updated = assign("$.a", doc, rhs);
+        ASSERT_EQ(doc, updated);
+    }
+
+    EXPECT_EQ(std::string(R"JSON({"a":{"x":7}})JSON"), jsonToString(doc));
+    cJSON_Delete(doc);
+}
+
+TEST(JsonOwnership, AssignFromTemporaryJsonValueKeepsDocumentValid) {
+    cJSON *doc = cJSON_Parse(R"JSON({"a":1})JSON");
+    ASSERT_NE(nullptr, doc);
+
+    cJSON *updated = assign("$.a", doc, Value(cJSON_Parse(R"JSON({"x":9})JSON")));
+    ASSERT_EQ(doc, updated);
+
+    EXPECT_EQ(std::string(R"JSON({"a":{"x":9}})JSON"), jsonToString(doc));
+    cJSON_Delete(doc);
+}
+
+} // namespace

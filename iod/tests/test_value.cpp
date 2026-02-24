@@ -4,6 +4,7 @@
 #include "cJSON.h"
 #include <cmath>
 #include <utility>
+#include <sstream>
 
 namespace {
 
@@ -133,6 +134,20 @@ TEST(Value, CanAssignJSONValue) {
     Value w(cJSON_CreateNull());
     v = w;
     EXPECT_EQ(v.asString(), std::string("null"));
+}
+
+TEST(Value, CanAssignEmptyJSONString) {
+    Value v(cJSON_CreateString(""));
+    EXPECT_EQ(v.kind, Value::t_string);
+    EXPECT_EQ(v.asString(), std::string(""));
+}
+
+TEST(Value, StreamingJSONDoesNotAppendStaleSymbolText) {
+    Value v("stale_symbol", Value::t_symbol);
+    v = cJSON_Parse(R"JSON({"a":1})JSON");
+    std::stringstream ss;
+    ss << v;
+    EXPECT_EQ(ss.str(), std::string(R"JSON({"a":1})JSON"));
 }
 
 TEST(Value, CanGetStringFromJSONObject) {

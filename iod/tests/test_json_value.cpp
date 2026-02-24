@@ -424,6 +424,17 @@ TEST(AssignJsonExpr, AssignNewKeyInJsonObject) {
     cJSON_Delete(doc);
 }
 
+TEST(AssignJsonExpr, AssignToNullDocumentReturnsNull) {
+    cJSON *doc = nullptr;
+    EXPECT_EQ(nullptr, assign("$.a", doc, std::string("x")));
+    EXPECT_EQ(nullptr, assign("$.a", doc, 1));
+    EXPECT_EQ(nullptr, assign("$.a", doc, static_cast<uint64_t>(1)));
+    EXPECT_EQ(nullptr, assign("$.a", doc, true));
+    EXPECT_EQ(nullptr, assign("$.a", doc, 1.5));
+    EXPECT_EQ(nullptr, assign("$.a", doc, cJSON_CreateObject()));
+    EXPECT_EQ(nullptr, assign("$.a", doc, Value(cJSON_CreateObject())));
+}
+
 
 TEST(JsonExpr, CanSetExistinhValueInObjectUsingProperty) {
     auto json_str = R"JSON({"b":1})JSON";
