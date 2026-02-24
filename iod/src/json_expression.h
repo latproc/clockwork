@@ -22,15 +22,22 @@ cJSON *assign(const std::string &str, cJSON *json, uint64_t value,
                 boost::optional<SymbolTable *> symbols = boost::none,
                 boost::optional<MachineInstance *> context = boost::none);
 
+// Takes ownership of `value` regardless of assignment success.
+cJSON *assign_take(const std::string &str, cJSON *json, cJSON *value,
+                boost::optional<SymbolTable *> symbols = boost::none,
+                boost::optional<MachineInstance *> context = boost::none);
+
+// Clones `value`; caller retains ownership of the input.
+cJSON *assign_clone(const std::string &str, cJSON *json, const cJSON *value,
+                boost::optional<SymbolTable *> symbols = boost::none,
+                boost::optional<MachineInstance *> context = boost::none);
+
+// Assigns from a Value using copy semantics; JSON payloads are cloned.
 cJSON *assign(const std::string &str, cJSON *json, const Value &value,
                 boost::optional<SymbolTable *> symbols = boost::none,
                 boost::optional<MachineInstance *> context = boost::none);
 
 cJSON *assign(const std::string &str, cJSON *json, double value,
-                boost::optional<SymbolTable *> symbols = boost::none,
-                boost::optional<MachineInstance *> context = boost::none);
-
-cJSON *assign(const std::string &str, cJSON *json, cJSON *value,
                 boost::optional<SymbolTable *> symbols = boost::none,
                 boost::optional<MachineInstance *> context = boost::none);
 

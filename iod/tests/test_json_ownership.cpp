@@ -44,4 +44,20 @@ TEST(JsonOwnership, AssignFromTemporaryJsonValueKeepsDocumentValid) {
     cJSON_Delete(doc);
 }
 
+TEST(JsonOwnership, AssignCloneKeepsSourceOwnedByCaller) {
+    cJSON *doc = cJSON_Parse(R"JSON({"a":1})JSON");
+    ASSERT_NE(nullptr, doc);
+    cJSON *source = cJSON_Parse(R"JSON({"x":11})JSON");
+    ASSERT_NE(nullptr, source);
+
+    cJSON *updated = assign_clone("$.a", doc, source);
+    ASSERT_EQ(doc, updated);
+
+    EXPECT_EQ(std::string(R"JSON({"a":{"x":11}})JSON"), jsonToString(doc));
+    EXPECT_EQ(std::string(R"JSON({"x":11})JSON"), jsonToString(source));
+
+    cJSON_Delete(source);
+    cJSON_Delete(doc);
+}
+
 } // namespace

@@ -346,7 +346,7 @@ TEST(AssignJsonExpr, AssignJsonValue) {
     JsonExpr expr(expr_str);
     auto doc = cJSON_Parse(json_str);
     auto new_json = cJSON_Parse(R"JSON({"c":3})JSON");
-    assign(expr_str, doc, new_json);
+    assign_take(expr_str, doc, new_json);
     cJSON *json = expr.apply(doc);
     EXPECT_NE(json, nullptr);
     EXPECT_EQ(json->type, cJSON_Object);
@@ -367,7 +367,7 @@ TEST(AssignJsonExpr, AssignArrayValue) {
     JsonExpr expr(expr_str);
     auto doc = cJSON_Parse(json_str);
     auto new_json = cJSON_Parse(R"JSON([1,2,3])JSON");
-    assign(expr_str, doc, new_json);
+    assign_take(expr_str, doc, new_json);
     cJSON *json = expr.apply(doc);
     EXPECT_NE(json, nullptr);
     EXPECT_EQ(json->type, cJSON_Array);
@@ -409,7 +409,7 @@ TEST(AssignJsonExpr, AssignNewKeyInJsonObject) {
     JsonExpr expr(expr_str);
     auto doc = cJSON_Parse(json_str);
     auto new_json = cJSON_Parse(R"JSON({"c":3})JSON");
-    assign(expr_str, doc, new_json);
+    assign_take(expr_str, doc, new_json);
     cJSON *json = expr.apply(doc);
     EXPECT_NE(json, nullptr);
     EXPECT_EQ(json->type, cJSON_Object);
@@ -431,7 +431,7 @@ TEST(AssignJsonExpr, AssignToNullDocumentReturnsNull) {
     EXPECT_EQ(nullptr, assign("$.a", doc, static_cast<uint64_t>(1)));
     EXPECT_EQ(nullptr, assign("$.a", doc, true));
     EXPECT_EQ(nullptr, assign("$.a", doc, 1.5));
-    EXPECT_EQ(nullptr, assign("$.a", doc, cJSON_CreateObject()));
+    EXPECT_EQ(nullptr, assign_take("$.a", doc, cJSON_CreateObject()));
     EXPECT_EQ(nullptr, assign("$.a", doc, Value(cJSON_CreateObject())));
 }
 

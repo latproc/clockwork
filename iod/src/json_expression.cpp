@@ -403,10 +403,25 @@ cJSON *assign(const std::string &str, cJSON *json, double value,
     return json;
 }
 
-cJSON *assign(const std::string &str, cJSON *json, cJSON *value,
+cJSON *assign_take(const std::string &str, cJSON *json, cJSON *value,
                 boost::optional<SymbolTable *> symbols,
                 boost::optional<MachineInstance *> context) {
-    auto result = follow_json_expr_path(str, json, symbols, context);
+    if (!value) {
+        return json;
+    }
+    if (!json) {
+        cJSON_Delete(value);
+        return json;
+    }
+    PathResult result;
+    try {
+        result = follow_json_expr_path(str, json, symbols, context);
+    }
+    catch (const std::runtime_error &err) {
+        show_json_error(err.what(), str, json, context ? *context : nullptr);
+        result.parent = nullptr;
+        result.value = nullptr;
+    }
     if (result.value) {
         if (result.parent) {
             if (result.key) {
@@ -418,13 +433,28 @@ cJSON *assign(const std::string &str, cJSON *json, cJSON *value,
                 return json;
             }
         }
+        else {
+            cJSON_Delete(json);
+            return value;
+        }
     }
     if (json->type == cJSON_Object) {
         // add a new key to the parent object
         cJSON_AddItemToObject(json, result.key ? result.key->c_str() : str.c_str(), value);
         return json;
     }
+    show_json_error("could not resolve key/index: ",str, json, context ? *context : nullptr);
+    cJSON_Delete(value);
     return json;
+}
+
+cJSON *assign_clone(const std::string &str, cJSON *json, const cJSON *value,
+                boost::optional<SymbolTable *> symbols,
+                boost::optional<MachineInstance *> context) {
+    if (!value) {
+        return json;
+    }
+    return assign_take(str, json, clone_json(const_cast<cJSON *>(value)), symbols, context);
 }
 
 cJSON *assign(const std::string &str, cJSON *json, const Value &value,
@@ -439,11 +469,11 @@ cJSON *assign(const std::string &str, cJSON *json, const Value &value,
     case Value::t_float:
         return assign(str, json, value.fValue, symbols, context);
     case Value::t_bool:
-        return assign(str, json, value.bValue ? cJSON_CreateTrue() : cJSON_CreateFalse(), symbols, context);
+        return assign_take(str, json, value.bValue ? cJSON_CreateTrue() : cJSON_CreateFalse(), symbols, context);
     case Value::t_empty:
-        return assign(str, json, cJSON_CreateNull(), symbols, context);
+        return assign_take(str, json, cJSON_CreateNull(), symbols, context);
     case Value::t_json:
-        return assign(str, json, clone_json(value.json), symbols, context);
+        return assign_clone(str, json, value.json, symbols, context);
     default:
         throw std::runtime_error("unsupported value type for assignment");
     }
