@@ -178,11 +178,17 @@ PathResult follow_json_expr_path(const std::string &str,
 }
 
 void show_json_error(const std::string & err, const std::string &str, cJSON *json, MachineInstance *context = nullptr) {
-    auto json_str = cJSON_PrintUnformatted(json);
+    char *json_str = nullptr;
+    if (json) {
+        json_str = cJSON_PrintUnformatted(json);
+    }
     MessageLog::instance()->get_stream() << (context ? context->fullName() : "") << " " << err
-    << " when assigning " << str << " in " << short_form_value(json_str) << std::endl;
+    << " when assigning " << str << " in "
+    << short_form_value(json_str ? json_str : "<null>") << std::endl;
     MessageLog::instance()->release_stream();
-    free(json_str);
+    if (json_str) {
+        free(json_str);
+    }
 }
 
 } // namespace
@@ -279,6 +285,7 @@ cJSON *assign(const std::string &str, cJSON *json, const std::string &value,
 cJSON *assign(const std::string &str, cJSON *json, uint64_t value,
                 boost::optional<SymbolTable *> symbols,
                 boost::optional<MachineInstance *> context) {
+    if (!json) { return json; }
     PathResult result;
     try {
         result = follow_json_expr_path(str, json, symbols, context);
@@ -319,6 +326,7 @@ cJSON *assign(const std::string &str, cJSON *json, uint64_t value,
 cJSON *assign(const std::string &str, cJSON *json, bool value,
                 boost::optional<SymbolTable *> symbols,
                 boost::optional<MachineInstance *> context) {
+    if (!json) { return json; }
     PathResult result;
     try {
         result = follow_json_expr_path(str, json, symbols, context);
@@ -358,7 +366,16 @@ cJSON *assign(const std::string &str, cJSON *json, bool value,
 cJSON *assign(const std::string &str, cJSON *json, double value,
                 boost::optional<SymbolTable *> symbols,
                 boost::optional<MachineInstance *> context) {
-    auto result = follow_json_expr_path(str, json, symbols, context);
+    if (!json) { return json; }
+    PathResult result;
+    try {
+        result = follow_json_expr_path(str, json, symbols, context);
+    }
+    catch (const std::runtime_error &err) {
+        show_json_error(err.what(), str, json, context ? *context : nullptr);
+        result.parent = nullptr;
+        result.value = nullptr;
+    }
     auto item = cJSON_CreateDouble(value);
     if (result.value) {
         if (result.parent) {
@@ -426,7 +443,7 @@ cJSON *assign(const std::string &str, cJSON *json, const Value &value,
     case Value::t_empty:
         return assign(str, json, cJSON_CreateNull(), symbols, context);
     case Value::t_json:
-        return assign(str, json, value.json, symbols, context);
+        return assign(str, json, clone_json(value.json), symbols, context);
     default:
         throw std::runtime_error("unsupported value type for assignment");
     }
