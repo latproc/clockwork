@@ -163,7 +163,11 @@ add_test(NAME test_json_ownership COMMAND test_json_ownership)
 add_executable(test_scheduler test_scheduler.cpp )
 target_link_libraries(test_scheduler gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} dl pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
-add_test(NAME test_scheduler COMMAND test_scheduler)
+if (USE_ASAN)
+    message(STATUS "Skipping test_scheduler under ASan (Boost.Context fcontext reports false positives)")
+else()
+    add_test(NAME test_scheduler COMMAND test_scheduler)
+endif()
 
 add_executable(test_shared_queue test_shared_queue.cpp )
 target_link_libraries(test_shared_queue gmock_main cw_client
