@@ -69,7 +69,7 @@ std::ostream &operator<<(std::ostream &, const DynamicValue &);
 // Helpers
 // Lookup a property and return it as a cJSON object.
 // The caller does not own the returned value.
-cJSON *clone_json(cJSON *json);
+cJSON *clone_json(const cJSON *json);
 Value get_value(cJSON *json); // returns a plain value if possible
 cJSON *getFromJSON(cJSON *json, const std::string &key); // lookup the named property
 

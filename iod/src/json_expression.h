@@ -2,12 +2,28 @@
 
 #include "cJSON.h"
 #include <iostream>
+#include <memory>
 #include <string>
 #include <value.h>
 #include <boost/optional.hpp>
 
 class SymbolTable;
 class MachineInstance;
+
+struct JsonDeleter {
+    void operator()(cJSON *json) const {
+        if (json) {
+            cJSON_Delete(json);
+        }
+    }
+};
+
+using OwnedJson = std::unique_ptr<cJSON, JsonDeleter>;
+
+inline OwnedJson own_json(cJSON *json) {
+    return OwnedJson(json);
+}
+
 cJSON *apply(const std::string &str, cJSON *json);
 cJSON *apply(const std::string &str, cJSON *json, SymbolTable *symbols);
 cJSON *apply(const std::string &str, cJSON *json, MachineInstance* context);
@@ -22,8 +38,9 @@ cJSON *assign(const std::string &str, cJSON *json, uint64_t value,
                 boost::optional<SymbolTable *> symbols = boost::none,
                 boost::optional<MachineInstance *> context = boost::none);
 
-// Takes ownership of `value` regardless of assignment success.
-cJSON *assign_take(const std::string &str, cJSON *json, cJSON *value,
+// Consumes `value` (pass `std::move(...)`); caller must not use moved-from payload.
+// Ownership is released to the target JSON tree on success, otherwise deleted on return.
+cJSON *assign_take(const std::string &str, cJSON *json, OwnedJson value,
                 boost::optional<SymbolTable *> symbols = boost::none,
                 boost::optional<MachineInstance *> context = boost::none);
 

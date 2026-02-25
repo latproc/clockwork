@@ -2,6 +2,7 @@
 
 #include <cJSON.h>
 #include <json_expression.h>
+#include <utility>
 #include <value.h>
 
 #include "library_globals.cpp"
@@ -73,14 +74,30 @@ TEST(JsonOwnership, AssignTakePathErrorDoesNotMutateDocument) {
     cJSON *doc = cJSON_Parse(R"JSON({"a":1})JSON");
     ASSERT_NE(nullptr, doc);
 
-    cJSON *payload = cJSON_Parse(R"JSON({"x":11})JSON");
-    ASSERT_NE(nullptr, payload);
+    OwnedJson payload = own_json(cJSON_Parse(R"JSON({"x":11})JSON"));
+    ASSERT_NE(nullptr, payload.get());
 
-    cJSON *updated = assign_take("$.a[0]", doc, payload);
+    cJSON *updated = assign_take("$.a[0]", doc, std::move(payload));
+    ASSERT_EQ(nullptr, payload.get());
     ASSERT_EQ(doc, updated);
     EXPECT_EQ(std::string(R"JSON({"a":1})JSON"), jsonToString(doc));
 
     cJSON_Delete(doc);
+}
+
+TEST(JsonOwnership, AssignTakeRootReplacementConsumesOwnedPayload) {
+    cJSON *doc = cJSON_Parse(R"JSON({"a":1})JSON");
+    ASSERT_NE(nullptr, doc);
+    OwnedJson payload = own_json(cJSON_Parse(R"JSON({"z":5})JSON"));
+    ASSERT_NE(nullptr, payload.get());
+
+    cJSON *updated = assign_take("$", doc, std::move(payload));
+    ASSERT_EQ(nullptr, payload.get());
+    ASSERT_NE(nullptr, updated);
+    EXPECT_NE(doc, updated);
+    EXPECT_EQ(std::string(R"JSON({"z":5})JSON"), jsonToString(updated));
+
+    cJSON_Delete(updated);
 }
 
 } // namespace

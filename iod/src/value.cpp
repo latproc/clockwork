@@ -1910,7 +1910,7 @@ fail:
     return NULL;
 }
 
-cJSON *clone_json(cJSON *json) {
+cJSON *clone_json(const cJSON *json) {
     return json ? cJSON_Duplicate(json) : nullptr;
 }
 

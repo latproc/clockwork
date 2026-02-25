@@ -403,14 +403,13 @@ cJSON *assign(const std::string &str, cJSON *json, double value,
     return json;
 }
 
-cJSON *assign_take(const std::string &str, cJSON *json, cJSON *value,
+cJSON *assign_take(const std::string &str, cJSON *json, OwnedJson value,
                 boost::optional<SymbolTable *> symbols,
                 boost::optional<MachineInstance *> context) {
     if (!value) {
         return json;
     }
     if (!json) {
-        cJSON_Delete(value);
         return json;
     }
     PathResult result;
@@ -425,32 +424,30 @@ cJSON *assign_take(const std::string &str, cJSON *json, cJSON *value,
         path_error = true;
     }
     if (path_error) {
-        cJSON_Delete(value);
         return json;
     }
     if (result.value) {
         if (result.parent) {
             if (result.key) {
-                cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), value);
+                cJSON_ReplaceItemInObject(result.parent, result.key->c_str(), value.release());
                 return json;
             }
             if (result.index) {
-                cJSON_ReplaceItemInArray(result.parent, *result.index, value);
+                cJSON_ReplaceItemInArray(result.parent, *result.index, value.release());
                 return json;
             }
         }
         else {
             cJSON_Delete(json);
-            return value;
+            return value.release();
         }
     }
     if (json->type == cJSON_Object) {
         // add a new key to the parent object
-        cJSON_AddItemToObject(json, result.key ? result.key->c_str() : str.c_str(), value);
+        cJSON_AddItemToObject(json, result.key ? result.key->c_str() : str.c_str(), value.release());
         return json;
     }
     show_json_error("could not resolve key/index: ",str, json, context ? *context : nullptr);
-    cJSON_Delete(value);
     return json;
 }
 
@@ -460,7 +457,7 @@ cJSON *assign_clone(const std::string &str, cJSON *json, const cJSON *value,
     if (!value) {
         return json;
     }
-    return assign_take(str, json, clone_json(const_cast<cJSON *>(value)), symbols, context);
+    return assign_take(str, json, own_json(clone_json(value)), symbols, context);
 }
 
 cJSON *assign(const std::string &str, cJSON *json, const Value &value,
@@ -475,9 +472,9 @@ cJSON *assign(const std::string &str, cJSON *json, const Value &value,
     case Value::t_float:
         return assign(str, json, value.fValue, symbols, context);
     case Value::t_bool:
-        return assign_take(str, json, value.bValue ? cJSON_CreateTrue() : cJSON_CreateFalse(), symbols, context);
+        return assign_take(str, json, own_json(value.bValue ? cJSON_CreateTrue() : cJSON_CreateFalse()), symbols, context);
     case Value::t_empty:
-        return assign_take(str, json, cJSON_CreateNull(), symbols, context);
+        return assign_take(str, json, own_json(cJSON_CreateNull()), symbols, context);
     case Value::t_json:
         return assign_clone(str, json, value.json, symbols, context);
     default:
