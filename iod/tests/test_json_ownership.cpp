@@ -60,4 +60,27 @@ TEST(JsonOwnership, AssignCloneKeepsSourceOwnedByCaller) {
     cJSON_Delete(doc);
 }
 
+TEST(JsonOwnership, AssignTakePathErrorDoesNotMutateDocument) {
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
+    GTEST_SKIP() << "Boost.Context exception path reports false positives under ASAN.";
+#endif
+#endif
+#if defined(__SANITIZE_ADDRESS__)
+    GTEST_SKIP() << "Boost.Context exception path reports false positives under ASAN.";
+#endif
+
+    cJSON *doc = cJSON_Parse(R"JSON({"a":1})JSON");
+    ASSERT_NE(nullptr, doc);
+
+    cJSON *payload = cJSON_Parse(R"JSON({"x":11})JSON");
+    ASSERT_NE(nullptr, payload);
+
+    cJSON *updated = assign_take("$.a[0]", doc, payload);
+    ASSERT_EQ(doc, updated);
+    EXPECT_EQ(std::string(R"JSON({"a":1})JSON"), jsonToString(doc));
+
+    cJSON_Delete(doc);
+}
+
 } // namespace

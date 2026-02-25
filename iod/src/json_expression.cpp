@@ -414,6 +414,7 @@ cJSON *assign_take(const std::string &str, cJSON *json, cJSON *value,
         return json;
     }
     PathResult result;
+    bool path_error = false;
     try {
         result = follow_json_expr_path(str, json, symbols, context);
     }
@@ -421,6 +422,11 @@ cJSON *assign_take(const std::string &str, cJSON *json, cJSON *value,
         show_json_error(err.what(), str, json, context ? *context : nullptr);
         result.parent = nullptr;
         result.value = nullptr;
+        path_error = true;
+    }
+    if (path_error) {
+        cJSON_Delete(value);
+        return json;
     }
     if (result.value) {
         if (result.parent) {
