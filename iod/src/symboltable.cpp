@@ -27,6 +27,9 @@
 #include <chrono>
 #include <string>
 #include <functional>
+#include <random>
+#include <mutex>
+#include <boost/optional.hpp>
 
 namespace {
     uint64_t hash_string(const std::string& s) {
@@ -42,8 +45,71 @@ namespace {
             int tok = Tokeniser::instance()->getTokenId((key));
             assign_hashed(tokens, tok, value);
         }
-     }
+    }
 
+    // Clockwork RNG: deterministic when seeded via the RANDOMSEED keyword.
+    // We use mt19937_64 to get a full 64-bit output.
+    std::mutex rng_mutex;
+    std::mt19937_64 rng_engine;
+    bool rng_seeded = false;
+
+    uint64_t make_time_seed() {
+        // A simple time-based seed for the default case.
+        return static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::high_resolution_clock::now().time_since_epoch())
+                .count());
+    }
+
+    void seed_rng(uint64_t seed) {
+        std::lock_guard<std::mutex> lock(rng_mutex);
+        rng_engine.seed(seed);
+        rng_seeded = true;
+    }
+
+    uint64_t next_u64() {
+        std::lock_guard<std::mutex> lock(rng_mutex);
+        if (!rng_seeded) {
+            // Default: seed once from time so RANDOM works out of the box.
+            rng_engine.seed(make_time_seed());
+            rng_seeded = true;
+        }
+        // mt19937_64 produces 64-bit results directly.
+        return static_cast<uint64_t>(rng_engine());
+    }
+
+    uint64_t seed_from_value(const Value &v) {
+        if (v.kind == Value::t_integer) {
+            return static_cast<uint64_t>(v.iValue);
+        }
+        if (v.kind == Value::t_float) {
+            return static_cast<uint64_t>(v.fValue);
+        }
+        if (v.kind == Value::t_string || v.kind == Value::t_symbol) {
+            const std::string s = v.asString();
+            return s.empty() ? make_time_seed() : hash_string(s);
+        }
+        return make_time_seed();
+    }
+
+    boost::optional<Value> try_set_keyword(SymbolTable *keywords_table, const char *name, const Value &val) {
+        if (!keywords_table || !name || !keywords_table->exists(name)) {
+            return boost::none;
+        }
+
+        // Only allow mutation of specific keywords.
+        if (strcmp(name, "RANDOMSEED") == 0) {
+            const uint64_t seed = seed_from_value(val);
+            seed_rng(seed);
+            // Store the effective seed back into the keyword table as an integer.
+            return Value{static_cast<uint64_t>(seed)};
+        }
+
+        // Other keywords remain read-only.
+        return boost::none;
+    }
+
+    // ... next_u64, etc.
 }
 
 const Value SymbolTable::Null;
@@ -142,6 +208,7 @@ SymbolTable::SymbolTable() {
         keyword_table->add("UTCTIMESTAMP", "");
         keyword_table->add("ISOTIMESTAMP", "");
         keyword_table->add("RANDOM", "");
+        keyword_table->add("RANDOMSEED", "");
         keywords = keyword_table;
         reserved = new std::set<std::string>;
         reserved->insert("NAME");
@@ -213,8 +280,11 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             clock = (uint64_t)microsecs();
             return clock;
         }
+        else if (strcmp("SEED", name) == 0) {
+
+        }
         else if (strcmp("RANDOM", name) == 0) {
-            uint64_t val = random();
+            uint64_t val = next_u64() / 2; // Avoid the possibility of negative values
             res = val;
             return res;
         }
@@ -330,6 +400,13 @@ const Value &SymbolTable::getKeyValue(const char *name) {
 }
 
 bool SymbolTable::add(const char *name, const Value &val, ReplaceMode replace_mode) {
+    if (keywords && keywords->exists(name)) {
+        if (auto new_value = try_set_keyword(keywords, name, val)) {
+            keywords->st[std::string(name)] = *new_value;
+            return true;
+        }
+        return false;
+    }
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
         std::string s(name);
         st[s] = val;
@@ -345,6 +422,13 @@ bool SymbolTable::add(const char *name, const Value &val, ReplaceMode replace_mo
 }
 
 bool SymbolTable::add(const std::string &name, const Value &val, ReplaceMode replace_mode) {
+    if (keywords && keywords->exists(name.c_str())) {
+        if (auto new_value = try_set_keyword(keywords, name.c_str(), val)) {
+            keywords->st[std::string(name)] = *new_value;
+            return true;
+        }
+        return false;
+    }
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
         st[name] = val;
         if (val.kind == Value::t_symbol) {
