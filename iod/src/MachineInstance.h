@@ -39,6 +39,7 @@
 #include "Transition.h"
 #include "dynamic_value.h"
 #include "symboltable.h"
+#include <array>
 #include <boost/foreach.hpp>
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/recursive_mutex.hpp>
@@ -76,6 +77,13 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
   public:
     enum PollType { BUILTINS, NO_BUILTINS };
     enum InstanceType { MACHINE_INSTANCE, MACHINE_TEMPLATE, MACHINE_SHADOW };
+
+    struct StateHistoryEntry {
+        std::string state_name;
+        uint64_t entered_at = 0; // microsecond timestamp when state was entered
+        uint64_t left_at = 0;    // microsecond timestamp when state was left
+    };
+    static constexpr size_t STATE_HISTORY_SIZE = 8;
 
   protected:
     MachineInstance(InstanceType instance_type = MACHINE_INSTANCE);
@@ -326,6 +334,13 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     int definition_line;
     uint64_t start_time;    // time the current state started
     uint64_t disabled_time; // time the current state started
+
+    // Circular buffer of recently completed state visits, most recently written at index
+    // (state_history_head - 1 + STATE_HISTORY_SIZE) % STATE_HISTORY_SIZE.
+    std::array<StateHistoryEntry, STATE_HISTORY_SIZE> state_history;
+    size_t state_history_head = 0;  // next write position
+    size_t state_history_count = 0; // number of valid entries (capped at STATE_HISTORY_SIZE)
+    void pushStateHistory(const std::string &state_name, uint64_t entered_at, uint64_t left_at);
 
     static void sort();
 
