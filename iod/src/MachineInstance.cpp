@@ -927,6 +927,19 @@ void MachineInstance::describe(std::ostream &out) {
     }
     const Value *current_timer_val = getTimerVal();
     out << "Timer: " << *current_timer_val << "\n";
+    if (state_history_count > 0) {
+        uint64_t now = microsecs();
+        out << "Recent states (most recent first):\n";
+        for (size_t i = 0; i < state_history_count; ++i) {
+            size_t idx = (state_history_head + STATE_HISTORY_SIZE - 1 - i) % STATE_HISTORY_SIZE;
+            const StateHistoryEntry &entry = state_history[idx];
+            out << "  " << entry.state_name << ": entered ";
+            simple_deltat(out, (int64_t)(now - entry.entered_at));
+            out << " ago, held ";
+            simple_deltat(out, (int64_t)(entry.left_at - entry.entered_at));
+            out << "\n";
+        }
+    }
     if (stable_states.size() || state_machine->token_id == ClockworkToken::LIST) {
         long now_t = microsecs();
         uint64_t delta = now_t - last_state_evaluation_time;
@@ -1842,6 +1855,18 @@ uint64_t MachineInstance::setupSubconditionTriggers(const StableState &s,
     return (uint64_t)result;
 }
 
+void MachineInstance::pushStateHistory(const std::string &state_name, uint64_t entered_at,
+                                       uint64_t left_at) {
+    if (state_name.empty() || state_name == "undefined") {
+        return;
+    }
+    state_history[state_history_head] = {state_name, entered_at, left_at};
+    state_history_head = (state_history_head + 1) % STATE_HISTORY_SIZE;
+    if (state_history_count < STATE_HISTORY_SIZE) {
+        ++state_history_count;
+    }
+}
+
 Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
     if (expected_authority != 0 && authority == 0) { //expected_authority != authority ) {
         //FileLogger fl(program_name);
@@ -1864,6 +1889,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
         //<< " needed: " << expected_authority << " got " << authority << "\n";
         return Action::Failed;
     }
+    pushStateHistory(getCurrent().getName(), start_time, microsecs());
 
     if (!resume && current_state == new_state) {
         return Action::Complete;
