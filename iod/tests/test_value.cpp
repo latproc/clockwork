@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
 #include <symboltable.h>
 #include <value.h>
-#include <cJSON.h>
+#include "cJSON.h"
 #include <cmath>
 
 namespace {
