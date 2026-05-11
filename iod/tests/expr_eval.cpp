@@ -8,7 +8,7 @@
 #include <memory>
 #include <symboltable.h>
 #include <json_expression.h>
-#include <cJSON.h>
+#include "cJSON.h"
 #include <json_expr_parser.h>
 #include <ThreadSafeQueue.h>
 #include <Message.h>
