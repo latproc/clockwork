@@ -1889,7 +1889,9 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
         //<< " needed: " << expected_authority << " got " << authority << "\n";
         return Action::Failed;
     }
-    pushStateHistory(getCurrent().getName(), start_time, microsecs());
+    if (new_state.getName() != getCurrent().getName()) {
+        pushStateHistory(getCurrent().getName(), start_time, microsecs());
+    }
 
     if (!resume && current_state == new_state) {
         return Action::Complete;
