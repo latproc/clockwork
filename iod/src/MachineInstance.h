@@ -296,7 +296,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     int getModbusValue(ModbusAddress &addr, unsigned int offset, int len);
     void modbusUpdated(ModbusAddress &addr, unsigned int offset, int new_value);
     void modbusUpdated(ModbusAddress &addr, unsigned int offset, float new_value);
-    void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value);
+    void modbusUpdated(ModbusAddress &addr, unsigned int offset, const char *new_value, Value::Kind kind);
     void exportModbusMapping(std::ostream &out);
     bool isModbusExported() { return modbus_exported != ModbusExport::none; }
     bool needsThrottle();
