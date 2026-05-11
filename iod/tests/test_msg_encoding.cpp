@@ -1,7 +1,7 @@
 #include "library_globals.cpp"
 #include "gtest/gtest.h"
 #include <MessageEncoding.h>
-#include <cJSON.h>
+#include "cJSON.h"
 
 TEST(EncodeValue, EncodesBoolean) {
     cJSON *obj = cJSON_CreateObject();

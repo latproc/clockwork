@@ -1,7 +1,7 @@
 #include "gtest/gtest.h"
 #include <symboltable.h>
 #include <value.h>
-#include <cJSON.h>
+#include "cJSON.h"
 #include <boost/context/fiber.hpp>
 #include <iostream>
 #include <sstream>

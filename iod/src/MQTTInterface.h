@@ -22,6 +22,7 @@
 #define __MQTTInterface
 
 #include "Message.h"
+#include "cJSON.h"
 #include "symboltable.h"
 #include <boost/optional.hpp>
 #include <mosquitto.h>
