@@ -27,6 +27,7 @@
 #include "dynamic_value.h"
 #include "regular_expressions.h"
 #include "value.h"
+#include <cmath>
 #include <iostream>
 #include "json_expression.h"
 
@@ -181,6 +182,16 @@ Value eval(Predicate *p, MachineInstance *m) {
                 res = r;
             }
             break;
+        case opSquareRoot: {
+            double val;
+            if (r.asFloat(val) && val >= 0) {
+                res = std::sqrt(val);
+            }
+            else {
+                res = 0;
+            }
+            break;
+        }
         case opMod:
             res = l % r;
             break;
@@ -236,7 +247,8 @@ Value eval(Predicate *p, MachineInstance *m) {
         }
 
         if (m && m->debug()) {
-            if (p->op == opNOT || p->op == opInteger || p->op == opFloat || p->op == opString) {
+            if (p->op == opNOT || p->op == opInteger || p->op == opFloat ||
+                p->op == opString || p->op == opSquareRoot) {
                 DBG_PREDICATES << " expr: " << p->op << " " << *(p->right_p) << " returns " << res
                                << "\n";
             }

@@ -31,6 +31,7 @@
 #include "dynamic_value.h"
 #include "json_expression.h"
 #include "regular_expressions.h"
+#include <cmath>
 #include <iomanip>
 
 static int count_instances = 0;
@@ -58,6 +59,12 @@ void toC(std::ostream &out, const PredicateOperator op) {
 }
 
 std::ostream &operator<<(std::ostream &out, const Predicate &p) { return p.operator<<(out); }
+
+static bool isUnaryRightOperator(PredicateOperator op) {
+    return op == opNOT || op == opInteger || op == opFloat || op == opString || op == opJson ||
+           op == opSquareRoot;
+}
+
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
     const char *opstr = "UNKNOWN";
     switch (op) {
@@ -115,6 +122,9 @@ std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
         break;
     case opAbsoluteValue:
         opstr = "ABS";
+        break;
+    case opSquareRoot:
+        opstr = "SQRT";
         break;
     case opMod:
         opstr = "%";
@@ -482,9 +492,15 @@ void Predicate::clearTimerEvents(
 }
 
 std::ostream &Predicate::operator<<(std::ostream &out) const {
+    if (isUnaryRightOperator(op) && right_p) {
+        out << "(" << op << " ";
+        right_p->operator<<(out);
+        out << ")";
+    }
+    else
     if (left_p) {
         out << "(";
-        if (op != opNOT && op != opInteger && op != opFloat && op != opString && op != opJson) {
+        if (!isUnaryRightOperator(op)) {
             left_p->operator<<(out); // ignore the lhs for NOT operators
         }
         out << " " << op << " ";
@@ -669,11 +685,17 @@ void Predicate::findSymbols(std::set<PredicateSymbolDetails> &symbols,
 
 void Predicate::toC(std::ostream &out) const {
     std::map<std::string, PredicateSymbolDetails> &symbols(ExportState::all_symbol_names());
+    if (op == opSquareRoot && right_p) {
+        out << "sqrt(";
+        right_p->toC(out);
+        out << ")";
+        return;
+    }
     if (left_p) {
         if (op != opAssign) {
             out << "(";
         }
-        if (op != opNOT && op != opInteger && op != opFloat && op != opJson) {
+        if (!isUnaryRightOperator(op)) {
             left_p->toC(out); // ignore the lhs for NOT operators
         }
         out << " ";
@@ -716,11 +738,17 @@ void Predicate::toC(std::ostream &out) const {
 
 void Predicate::toCstring(std::ostream &out, std::stringstream &vars) const {
     std::map<std::string, PredicateSymbolDetails> &symbols(ExportState::all_symbol_names());
+    if (op == opSquareRoot && right_p) {
+        out << "sqrt(";
+        right_p->toCstring(out, vars);
+        out << ")";
+        return;
+    }
     if (left_p) {
         if (op != opAssign) {
             out << "(";
         }
-        if (op != opNOT && op != opInteger && op != opFloat && op != opJson) {
+        if (!isUnaryRightOperator(op)) {
             left_p->toCstring(out, vars); // ignore the lhs for NOT operators
         }
         out << " ";
@@ -827,7 +855,7 @@ std::ostream &Stack::traverse(std::ostream &out, std::list<ExprNode>::const_iter
     const ExprNode &n = *iter++;
     if (n.kind == ExprNode::t_op) {
         out << "(";
-        if (n.op != opNOT && n.op != opInteger && n.op != opFloat && n.op != opJson)
+        if (!isUnaryRightOperator(n.op))
         // ignore lhs for the not operator
         {
             traverse(out, iter, end);
@@ -1091,6 +1119,13 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
         else {
             return rhs;
         }
+    case opSquareRoot: {
+        double val;
+        if (rhs.asFloat(val) && val >= 0) {
+            return std::sqrt(val);
+        }
+        return Value(0);
+    }
     case opMod:
         return lhs % rhs;
     case opBitAnd:
@@ -1195,7 +1230,8 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
         }
         stack.push(p->op);
     }
-    else if (p->op == opInteger || p->op == opFloat || p->op == opString || p->op == opJson) {
+    else if (p->op == opInteger || p->op == opFloat || p->op == opString || p->op == opJson ||
+             p->op == opSquareRoot) {
         stack.push(ExprNode(SymbolTable::True));
         if (!prep(stack, p->right_p, m, false, reevaluate)) {
             return false;

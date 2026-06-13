@@ -47,6 +47,7 @@ JTAG return JTAG;
 UART return UART;
 ABORT               return ABORT;
 ABS                 return ABS;
+SQRT                return SQRT;
 ADD                 return ADD;
 AFTER               return AFTER;
 ALL                 return ALL;
