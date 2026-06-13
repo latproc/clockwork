@@ -65,6 +65,13 @@ static bool isUnaryRightOperator(PredicateOperator op) {
            op == opSquareRoot;
 }
 
+static void logInvalidSquareRoot(const Value &rhs) {
+    std::ostream &out = MessageLog::instance()->get_stream();
+    out << "Warning: attempt to take sqrt of " << rhs;
+    MessageLog::instance()->release_stream();
+    DBG_MSG << "Warning: attempt to take sqrt of " << rhs;
+}
+
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
     const char *opstr = "UNKNOWN";
     switch (op) {
@@ -1124,6 +1131,7 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
         if (rhs.asFloat(val) && val >= 0) {
             return std::sqrt(val);
         }
+        logInvalidSquareRoot(rhs);
         return Value(0);
     }
     case opMod:
