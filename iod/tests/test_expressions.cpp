@@ -118,6 +118,22 @@ TEST_F(EvaluatorTest, convert_string_to_json) {
     EXPECT_EQ(json_str, res_str) << "converts a string to json";
     delete scope;
 }
+
+TEST_F(EvaluatorTest, square_root_integer_expression) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    Predicate pred(0, opSquareRoot, new Predicate(9));
+    EXPECT_EQ(Value(3.0), eval.evaluate(&pred, scope)) << "evaluates square root of an integer";
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, square_root_float_expression) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    Predicate pred(0, opSquareRoot, new Predicate(Value(2.25)));
+    EXPECT_EQ(Value(1.5), eval.evaluate(&pred, scope)) << "evaluates square root of a float";
+    delete scope;
+}
 TEST_F(EvaluatorTest, assigns_value_if_key_is_found) {
     MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
     Evaluator eval;

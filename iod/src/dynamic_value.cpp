@@ -6,6 +6,7 @@
 #include "regular_expressions.h"
 #include "symboltable.h"
 #include <boost/foreach.hpp>
+#include <cmath>
 #include <functional>
 #include <iostream>
 #include <iterator>
@@ -163,6 +164,14 @@ std::ostream &AbsoluteValue::operator<<(std::ostream &out) const {
     return out << "ABS" << property << " (" << last_result << ")";
 }
 std::ostream &operator<<(std::ostream &out, const AbsoluteValue &val) {
+    return val.operator<<(out);
+}
+
+DynamicValue *SquareRootValue::clone() const { return new SquareRootValue(*this); }
+std::ostream &SquareRootValue::operator<<(std::ostream &out) const {
+    return out << "SQRT" << property << " (" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const SquareRootValue &val) {
     return val.operator<<(out);
 }
 
@@ -903,6 +912,19 @@ Value &AbsoluteValue::operator()(MachineInstance *mi) {
     last_result = mi->getValue(property);
     if (last_result < 0) {
         last_result = -mi->getValue(property);
+    }
+    return last_result;
+}
+
+SquareRootValue::SquareRootValue(const SquareRootValue &other) { property = other.property; }
+Value &SquareRootValue::operator()(MachineInstance *mi) {
+    double val;
+    last_result = mi->getValue(property);
+    if (last_result.asFloat(val) && val >= 0) {
+        last_result = std::sqrt(val);
+    }
+    else {
+        last_result = 0;
     }
     return last_result;
 }

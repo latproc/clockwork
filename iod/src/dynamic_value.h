@@ -286,6 +286,20 @@ class AbsoluteValue : public DynamicValue {
     std::string property;
 };
 
+class SquareRootValue : public DynamicValue {
+  public:
+    SquareRootValue(const char *property_name) : property(property_name) {}
+    virtual ~SquareRootValue() {}
+    virtual Value &operator()(MachineInstance *mi);
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    SquareRootValue(const SquareRootValue &);
+
+  private:
+    SquareRootValue(const DynamicValue &);
+    std::string property;
+};
+
 class ExpressionValue : public DynamicValue {
   public:
     ExpressionValue(Predicate *pred) : m_predicate(*pred) {}

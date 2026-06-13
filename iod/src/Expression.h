@@ -60,6 +60,7 @@ enum PredicateOperator {
     opFloat,
     opJson,
     opAbsoluteValue,
+    opSquareRoot,
     opString,
     opGetSubExpr,
     opPutSubExpr
