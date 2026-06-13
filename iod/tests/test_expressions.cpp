@@ -2,7 +2,9 @@
 #include <Expression.h>
 #include <MachineInstance.h>
 #include <MessageLog.h>
+#include <cstdlib>
 #include <memory>
+#include <string>
 #include <symboltable.h>
 #include <ThreadSafeQueue.h>
 #include <Message.h>
@@ -28,6 +30,30 @@ class EvaluatorTest : public ::testing::Test {
   protected:
     void SetUp() override {}
 };
+
+std::string messageLogContents() {
+    char *messages = MessageLog::instance()->toString(MessageLog::instance()->count());
+    std::string result(messages);
+    free(messages);
+    return result;
+}
+
+void expectSquareRootResultAndWarning(const Value &input, const Value &expected,
+                                      const std::string &warning = "") {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    MessageLog::instance()->purge();
+    Evaluator eval;
+    Predicate pred(0, opSquareRoot, new Predicate(input));
+    EXPECT_EQ(expected, eval.evaluate(&pred, scope));
+    std::string messages = messageLogContents();
+    if (warning.empty()) {
+        EXPECT_EQ(std::string::npos, messages.find("Warning: attempt to take sqrt of"));
+    }
+    else {
+        EXPECT_NE(std::string::npos, messages.find(warning));
+    }
+    delete scope;
+}
 
 } // namespace
 
@@ -120,19 +146,34 @@ TEST_F(EvaluatorTest, convert_string_to_json) {
 }
 
 TEST_F(EvaluatorTest, square_root_integer_expression) {
-    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
-    Evaluator eval;
-    Predicate pred(0, opSquareRoot, new Predicate(9));
-    EXPECT_EQ(Value(3.0), eval.evaluate(&pred, scope)) << "evaluates square root of an integer";
-    delete scope;
+    expectSquareRootResultAndWarning(9, Value(3.0));
 }
 
 TEST_F(EvaluatorTest, square_root_float_expression) {
-    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
-    Evaluator eval;
-    Predicate pred(0, opSquareRoot, new Predicate(Value(2.25)));
-    EXPECT_EQ(Value(1.5), eval.evaluate(&pred, scope)) << "evaluates square root of a float";
-    delete scope;
+    expectSquareRootResultAndWarning(Value(2.25), Value(1.5));
+}
+
+TEST_F(EvaluatorTest, square_root_numeric_string_expression) {
+    expectSquareRootResultAndWarning(Value("16", Value::t_string), Value(4.0));
+}
+
+TEST_F(EvaluatorTest, square_root_negative_expression_logs_warning) {
+    expectSquareRootResultAndWarning(-1, Value(0), "Warning: attempt to take sqrt of -1");
+}
+
+TEST_F(EvaluatorTest, square_root_negative_float_expression_logs_warning) {
+    expectSquareRootResultAndWarning(Value(-2.25), Value(0),
+                                     "Warning: attempt to take sqrt of -2.250000");
+}
+
+TEST_F(EvaluatorTest, square_root_negative_numeric_string_expression_logs_warning) {
+    expectSquareRootResultAndWarning(Value("-4", Value::t_string), Value(0),
+                                     "Warning: attempt to take sqrt of \"-4\"");
+}
+
+TEST_F(EvaluatorTest, square_root_string_conversion_failure_logs_warning) {
+    expectSquareRootResultAndWarning(Value("not-a-number", Value::t_string), Value(0),
+                                     "Warning: attempt to take sqrt of \"not-a-number\"");
 }
 TEST_F(EvaluatorTest, assigns_value_if_key_is_found) {
     MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");

@@ -25,6 +25,13 @@ void LogMissingMachine(MachineInstance *current_scope, const std::string &name,
     MessageLog::instance()->add(ss.str().c_str());
 }
 
+void LogInvalidSquareRoot(const Value &rhs) {
+    std::ostream &out = MessageLog::instance()->get_stream();
+    out << "Warning: attempt to take sqrt of " << rhs;
+    MessageLog::instance()->release_stream();
+    DBG_MSG << "Warning: attempt to take sqrt of " << rhs;
+}
+
 } // namespace
 
 static uint64_t currentTime() { return microsecs(); }
@@ -924,6 +931,7 @@ Value &SquareRootValue::operator()(MachineInstance *mi) {
         last_result = std::sqrt(val);
     }
     else {
+        LogInvalidSquareRoot(last_result);
         last_result = 0;
     }
     return last_result;

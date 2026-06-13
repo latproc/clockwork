@@ -33,6 +33,13 @@
 
 void breakpoint() {}
 
+static void logInvalidSquareRoot(const Value &rhs) {
+    std::ostream &out = MessageLog::instance()->get_stream();
+    out << "Warning: attempt to take sqrt of " << rhs;
+    MessageLog::instance()->release_stream();
+    DBG_MSG << "Warning: attempt to take sqrt of " << rhs;
+}
+
 PredicateActionTemplate::~PredicateActionTemplate() { delete predicate; }
 
 std::ostream &PredicateActionTemplate::operator<<(std::ostream &out) const {
@@ -188,6 +195,7 @@ Value eval(Predicate *p, MachineInstance *m) {
                 res = std::sqrt(val);
             }
             else {
+                logInvalidSquareRoot(r);
                 res = 0;
             }
             break;
