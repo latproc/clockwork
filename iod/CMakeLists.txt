@@ -49,6 +49,14 @@ endif() # USE_ETHERCAT
 cmake_policy(SET CMP0008 NEW)
 cmake_policy(SET CMP0015 NEW)
 
+function(target_link_directories_compat target dir)
+       if(CMAKE_VERSION VERSION_LESS "3.13")
+               target_link_libraries(${target} "-L${dir}")
+       else()
+               target_link_directories(${target} PRIVATE "${dir}")
+       endif()
+endfunction()
+
 #set (CMAKE_VERBOSE_MAKEFILE false)
 set (CMAKE_EXPORT_COMPILE_COMMANDS true)
 
@@ -431,7 +439,7 @@ if (USE_ETHERCAT)
 if(USE_SOEM)
 add_executable(cw_ecat src/cw.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw_ecat PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR;SOEM_ETHERCAT" )
-target_link_directories(cw_ecat PRIVATE "${CW_ETHERCAT_DIR}")
+target_link_directories_compat(cw_ecat "${CW_ETHERCAT_DIR}")
 target_link_libraries(cw_ecat cw_interpreter cw_client dl ${CW_ETHERCAT_LIB} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 endif()
 
@@ -583,7 +591,7 @@ target_link_libraries(cmdline_parser "readline")
 endif()
 
 add_executable(iosh src/iosh.cpp)
-target_link_directories(iosh PRIVATE "/opt/homebrew/lib")
+target_link_directories_compat(iosh "/opt/homebrew/lib")
 target_link_libraries(iosh cmdline_parser cw_client "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 target_compile_definitions(iosh PRIVATE USE_READLINE )
 
