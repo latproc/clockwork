@@ -63,6 +63,7 @@
 
 extern bool program_done;
 extern bool machine_is_ready;
+extern "C" long cJSON_LiveNodeCount(void);
 extern Statistics *statistics;
 extern uint64_t client_watchdog_timer;
 uint64_t clockwork_watchdog_timer = 0;
@@ -821,6 +822,7 @@ void ProcessingThread::operator()() {
                           << " mail_items=" << mail_items
                           << " throttled_items=" << throttled_items
                           << " message_log=" << MessageLog::instance()->count()
+                          << " cjson_nodes=" << cJSON_LiveNodeCount()
                           << " malloc_in_use_kb=" << allocator.uordblks / 1024
                           << " malloc_free_kb=" << allocator.fordblks / 1024
                           << " malloc_arena_kb=" << allocator.arena / 1024

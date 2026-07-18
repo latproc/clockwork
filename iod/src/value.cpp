@@ -192,7 +192,13 @@ Value::Value(double v)
 Value::Value(cJSON *v)
     : kind(t_json), fValue(0), json(nullptr), cached_machine(0), cached_value(0), token_id(0),
       dyn_value(0) {
-    if (v) { *this = assign_value(v); }
+    if (v) {
+        Value converted = assign_value(v);
+        if (converted.kind != t_json) {
+            cJSON_Delete(v);
+        }
+        *this = converted;
+    }
     else { kind = t_empty; }
 }
 
@@ -437,7 +443,11 @@ Value &Value::operator=(double val) {
 }
 
 Value &Value::operator=(cJSON *val) {
-    *this = assign_value(val);
+    Value converted = assign_value(val);
+    if (val && converted.kind != t_json) {
+        cJSON_Delete(val);
+    }
+    *this = converted;
     return *this;
 }
 

@@ -87,6 +87,8 @@ bool CStringHolder::will_free() { return str != 0; }
 
 std::set<Receiver *> Receiver::working_machines; // machines that have non-empty work queues
 
+Message::Message(MessageType t) : kind(t), seq(++sequence), text(""), params(0) {}
+
 // in this form, the message takes ownership of the parameters
 Message::Message(CStringHolder msg, MessageType t, std::list<Value> *param_list)
     : kind(t), seq(++sequence), text(msg.get()), params(0) {
@@ -188,6 +190,11 @@ bool Message::operator==(const char *msg) const {
     }
     return strcmp(text.c_str(), msg) == 0;
 }
+
+Package::Package() : transmitter(0), receiver(0), message(0), needs_receipt(false) {}
+
+Package::Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt)
+    : transmitter(t), receiver(r), message(new Message(m)), needs_receipt(need_receipt) {}
 
 Package::Package(const Package &other)
     : transmitter(other.transmitter), receiver(other.receiver),

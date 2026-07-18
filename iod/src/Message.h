@@ -57,7 +57,7 @@ class Message {
     enum MessageType { SIMPLEMSG, ENTERMSG, LEAVEMSG, ENABLEMSG, DISABLEMSG };
     typedef std::list<Value> Parameters;
 
-    Message(MessageType t = SIMPLEMSG) : kind(t), seq(++sequence), text(""), params(0) {}
+    Message(MessageType t = SIMPLEMSG);
     Message(CStringHolder msg, MessageType t = SIMPLEMSG, Parameters *p = 0);
     Message(const Message &orig);
     Message(Message &&orig);
@@ -128,9 +128,8 @@ struct Package {
     Receiver *receiver;
     Message *message;
     bool needs_receipt;
-    Package() : transmitter(0), receiver(0), message(0), needs_receipt(false) {}
-    Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt = false)
-        : transmitter(t), receiver(r), message(new Message(m)), needs_receipt(need_receipt) {}
+    Package();
+    Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt = false);
     Package(const Package &);
     Package(Package &&);
     ~Package();
