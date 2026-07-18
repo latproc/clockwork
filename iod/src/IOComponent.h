@@ -76,7 +76,7 @@ struct Update {
 
 class IOUpdate {
   public:
-    IOUpdate() : size_(0), data_(nullptr), mask_(nullptr) {}
+    IOUpdate() : size_(0), data_(nullptr), mask_(nullptr), owns_mask_(false) {}
     ~IOUpdate();
 
     uint32_t size() const;
@@ -86,12 +86,13 @@ class IOUpdate {
     void setData(uint8_t *dt);
 
     uint8_t *mask() const;
-    void setMask(uint8_t *ms);
+    void setMask(uint8_t *ms, bool take_ownership = false);
 
   private:
     uint32_t size_;
     uint8_t *data_; // shared pointer to process data
-    uint8_t *mask_; // allocated pointer to current mask
+    uint8_t *mask_;
+    bool owns_mask_;
 };
 
 class MachineInstance;
