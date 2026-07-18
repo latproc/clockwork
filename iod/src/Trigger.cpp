@@ -42,6 +42,11 @@ void removeTrigger(Trigger *t) {
     all_triggers.remove(t);
 }
 
+size_t Trigger::liveCount() {
+    boost::recursive_mutex::scoped_lock scoped_lock(trigger_list_mutex);
+    return all_triggers.size();
+}
+
 void Trigger::addHolder(Action *h) { _internals->holders.push_back(h); }
 
 void Trigger::removeHolder(Action *h) { _internals->holders.remove(h); }
@@ -127,4 +132,3 @@ void Trigger::fire() {
 void Trigger::disable() { is_active = false; }
 const std::string &Trigger::getName() const { return name; }
 bool Trigger::matches(const std::string &event) { return is_active && event == name; }
-

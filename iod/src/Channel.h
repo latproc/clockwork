@@ -241,6 +241,7 @@ class Channel : public MachineInstance, public ChannelImplementation {
 
     const std::string &getName() const override { return channel_name; }
     const std::set<MachineInstance *> &channelMachines() const { return channel_machines; }
+    size_t pendingThrottledCount() const { return throttled_items.size(); }
 
     static std::map<std::string, Channel *> *channels() { return all; }
     static Channel *create(unsigned int port, ChannelDefinition *defn);

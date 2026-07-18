@@ -109,6 +109,29 @@ TEST(MessageTest, messages_with_different_text_are_unequal) {
     EXPECT_NE(m1, m2);
 }
 
+TEST(MessageTest, copyAssignmentReplacesExistingParameters) {
+    Message source("source", Message::SIMPLEMSG, Message::makeParams(Value(1)));
+    Message destination("destination", Message::SIMPLEMSG, Message::makeParams(Value(2)));
+
+    destination = source;
+
+    ASSERT_NE(destination.getParams(), nullptr);
+    EXPECT_EQ(destination.getParams()->size(), 1);
+    EXPECT_EQ(destination.getParams()->front(), Value(1));
+}
+
+TEST(MessageTest, moveAssignmentReplacesExistingParameters) {
+    Message source("source", Message::SIMPLEMSG, Message::makeParams(Value(1)));
+    Message destination("destination", Message::SIMPLEMSG, Message::makeParams(Value(2)));
+
+    destination = std::move(source);
+
+    EXPECT_EQ(source.getParams(), nullptr);
+    ASSERT_NE(destination.getParams(), nullptr);
+    EXPECT_EQ(destination.getParams()->size(), 1);
+    EXPECT_EQ(destination.getParams()->front(), Value(1));
+}
+
 TEST_F(TransmissionTest, can_send_to_receiver) {
     Message msg("test");
     Taker taker("taker", [](const Message &msg, Transmitter *t) { return true; });
