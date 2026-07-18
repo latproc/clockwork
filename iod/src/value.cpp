@@ -304,7 +304,7 @@ Value::Value(const Value &other)
 Value::Value(Value &&other)
     : kind(other.kind), bValue(other.bValue), iValue(other.iValue), fValue(other.fValue),
       json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine), cached_value(0),
-      token_id(other.token_id), dyn_value(DynamicValueBase::ref(other.dyn_value)) {
+      token_id(other.token_id), dyn_value(nullptr) {
     if (other.kind == t_string) {
         sValue = std::move(other.sValue);
     }
@@ -1813,4 +1813,3 @@ Value Value::getFromJSON(const std::string &key) {
     res = assign_value(::getFromJSON(json, key));
     return res;
 }
-

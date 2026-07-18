@@ -107,6 +107,11 @@ Message::Message(Message &&orig) : kind(orig.kind), seq(orig.seq), text(orig.tex
 }
 
 Message &Message::operator=(const Message &other) {
+    if (this == &other) {
+        return *this;
+    }
+    delete params;
+    params = nullptr;
     kind = other.kind;
     seq = other.seq;
     text = other.text;
@@ -121,6 +126,10 @@ Message &Message::operator=(const Message &other) {
 }
 
 Message &Message::operator=(Message && other) {
+    if (this == &other) {
+        return *this;
+    }
+    delete params;
     kind = other.kind;
     seq = other.seq;
     text = other.text;
@@ -204,8 +213,12 @@ Package &Package::operator=(const Package &other) {
 }
 
 Package &Package::operator=(Package &&other) {
+    if (this == &other) {
+        return *this;
+    }
     transmitter = other.transmitter;
     receiver = other.receiver;
+    delete message;
     message = other.message;
     other.message = 0;
     needs_receipt = other.needs_receipt;

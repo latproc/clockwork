@@ -95,6 +95,7 @@ class Scheduler {
     bool ready(uint64_t start);
     void idle();
     bool empty() { return items.empty(); }
+    size_t pendingCount() const { return items.size(); }
     int clear(const Transmitter *transmitter, const Receiver *receiver, const char *message);
     std::string getStatus();
 

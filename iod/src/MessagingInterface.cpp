@@ -444,7 +444,7 @@ void MessagingInterface::start() {
 
 void MessagingInterface::stop() {
     started_ = false;
-    if (socket->connected()) {
+    if (socket && socket->connected()) {
         socket->close();
     }
 }
@@ -558,11 +558,12 @@ MessagingInterface::~MessagingInterface() {
     if (current == this) {
         current = nullptr;
     }
-    if (socket->connected()) {
+    if (socket && socket->connected()) {
         socket->close();
         socket->disconnect(url.c_str());
     }
     delete socket;
+    socket = nullptr;
 }
 
 bool MessagingInterface::receives(const Message &, Transmitter *t) { return true; }

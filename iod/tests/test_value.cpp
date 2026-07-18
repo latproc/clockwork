@@ -3,6 +3,7 @@
 #include <value.h>
 #include "cJSON.h"
 #include <cmath>
+#include <utility>
 
 namespace {
 
@@ -19,6 +20,32 @@ class ValueTest : public ::testing::Test {
     Value y;
 };
 
+class TrackedDynamicValue : public DynamicValueBase {
+  public:
+    explicit TrackedDynamicValue(int &destructions) : destructions_(destructions) {}
+    ~TrackedDynamicValue() override { ++destructions_; }
+
+    DynamicValueBase *clone() const override { return nullptr; }
+    const Value *lastResult() const override { return nullptr; }
+    void setScope(MachineInstance *) override {}
+    MachineInstance *getScope() const override { return nullptr; }
+    std::ostream &operator<<(std::ostream &out) const override { return out; }
+    const Value &operator()(MachineInstance *) override { return result_; }
+    const Value &operator()() override { return result_; }
+    int references() const { return refs; }
+
+  private:
+    int &destructions_;
+    Value result_;
+};
+
+TEST(Value, InitializesInactiveScalarFields) {
+    Value empty;
+    EXPECT_FALSE(empty.bValue);
+    EXPECT_EQ(empty.iValue, 0);
+    EXPECT_DOUBLE_EQ(empty.fValue, 0.0);
+}
+
 TEST(Value, CompareBool) {
     Value val(true);
     EXPECT_EQ(val.kind, Value::t_bool) << "Value has a bool kind when assigned a bool";
@@ -29,6 +56,38 @@ TEST(Value, CompareBool) {
     EXPECT_EQ(val.kind, Value::t_bool) << "symbol FALSE evaluates as a bool";
     val = "TRUE";
     EXPECT_EQ(val.kind, Value::t_bool) << "symbol TRUE evaluates as a bool";
+}
+
+TEST(Value, MoveTransfersDynamicValueWithoutRetainingAnExtraReference) {
+    int destructions = 0;
+    {
+        auto *tracked = new TrackedDynamicValue(destructions);
+        Value source(tracked);
+        EXPECT_EQ(tracked->references(), 1);
+        Value destination(std::move(source));
+
+        EXPECT_EQ(source.kind, Value::t_empty);
+        EXPECT_NE(destination.dynamicValue(), nullptr);
+        EXPECT_EQ(tracked->references(), 1);
+    }
+    EXPECT_EQ(destructions, 1);
+}
+
+TEST(Value, CopyRetainsDynamicValueReference) {
+    int destructions = 0;
+    {
+        auto *tracked = new TrackedDynamicValue(destructions);
+        Value source(tracked);
+        EXPECT_EQ(tracked->references(), 1);
+        {
+            Value destination(source);
+            EXPECT_EQ(destination.dynamicValue(), tracked);
+            EXPECT_EQ(tracked->references(), 2);
+        }
+        EXPECT_EQ(tracked->references(), 1);
+        EXPECT_EQ(destructions, 0);
+    }
+    EXPECT_EQ(destructions, 1);
 }
 
 TEST(Value, SymbolTableNullIsNull) {
