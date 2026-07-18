@@ -40,6 +40,8 @@ State::State(const State &orig) {
     local = orig.local;
 }
 
+State::~State() = default;
+
 State &State::operator=(const State &other) {
     text = other.text;
     val = other.val;

@@ -83,6 +83,7 @@ extern char *cJSON_Print(cJSON *item);
 extern char *cJSON_PrintUnformatted(cJSON *item);
 // Delete a cJSON entity and all subentities.
 extern void cJSON_Delete(cJSON *c);
+extern long cJSON_LiveNodeCount(void);
 
 // Returns the number of items in an array (or object).
 extern int cJSON_GetArraySize(cJSON *array);

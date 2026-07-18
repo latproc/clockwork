@@ -101,6 +101,15 @@ TEST(Value, CanConstructWithJSON) {
     EXPECT_EQ(v.asString(), std::string("null"));
 }
 
+TEST(Value, ConstructingFromJSONScalarTakesOwnership) {
+    const long live_before = cJSON_LiveNodeCount();
+    {
+        Value v(cJSON_Parse("413"));
+        EXPECT_EQ(v, Value(413));
+    }
+    EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
+}
+
 TEST(Value, CanAssignJSON) {
     Value v;
     v = cJSON_CreateNull();
@@ -109,6 +118,14 @@ TEST(Value, CanAssignJSON) {
     auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
     v = cJSON_Parse(json_str);
     EXPECT_EQ(v.kind, Value::t_json);
+}
+
+TEST(Value, AssigningFromJSONScalarTakesOwnership) {
+    Value v;
+    const long live_before = cJSON_LiveNodeCount();
+    v = cJSON_Parse("\"hello\"");
+    EXPECT_EQ(v.asString(), std::string("hello"));
+    EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
 }
 
 TEST(Value, CanAssignJSONValue) {
