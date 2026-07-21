@@ -132,16 +132,16 @@ class Value {
 
     Value getFromJSON(const std::string &key);
 
-    Kind kind;
-    bool bValue;
-    int64_t iValue;
-    double fValue;
+    Kind kind = t_empty;
+    bool bValue = false;
+    int64_t iValue = 0;
+    double fValue = 0.0;
     cJSON *json = nullptr;
     std::string sValue; // used for strings and for symbols
     MachineInstance *cached_machine = nullptr;
 
     Value *cached_value = nullptr;
-    int token_id;
+    int token_id = 0;
 
     bool numeric() const;
     bool identical(const Value &other) const; // bypasses default == for floats

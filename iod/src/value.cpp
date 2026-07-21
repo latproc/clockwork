@@ -192,7 +192,13 @@ Value::Value(double v)
 Value::Value(cJSON *v)
     : kind(t_json), fValue(0), json(nullptr), cached_machine(0), cached_value(0), token_id(0),
       dyn_value(0) {
-    if (v) { *this = assign_value(v); }
+    if (v) {
+        Value converted = assign_value(v);
+        if (converted.kind != t_json) {
+            cJSON_Delete(v);
+        }
+        *this = converted;
+    }
     else { kind = t_empty; }
 }
 
@@ -304,7 +310,7 @@ Value::Value(const Value &other)
 Value::Value(Value &&other)
     : kind(other.kind), bValue(other.bValue), iValue(other.iValue), fValue(other.fValue),
       json(nullptr), sValue(other.sValue), cached_machine(other.cached_machine), cached_value(0),
-      token_id(other.token_id), dyn_value(DynamicValueBase::ref(other.dyn_value)) {
+      token_id(other.token_id), dyn_value(nullptr) {
     if (other.kind == t_string) {
         sValue = std::move(other.sValue);
     }
@@ -437,7 +443,11 @@ Value &Value::operator=(double val) {
 }
 
 Value &Value::operator=(cJSON *val) {
-    *this = assign_value(val);
+    Value converted = assign_value(val);
+    if (val && converted.kind != t_json) {
+        cJSON_Delete(val);
+    }
+    *this = converted;
     return *this;
 }
 
@@ -1813,4 +1823,3 @@ Value Value::getFromJSON(const std::string &key) {
     res = assign_value(::getFromJSON(json, key));
     return res;
 }
-

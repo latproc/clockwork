@@ -147,7 +147,7 @@ void reset_parser() {
 
 struct Subcondition {
   Predicate *predicate;
-	const char *name;
+	char *name;
 	const char *command;
 };
 
@@ -934,7 +934,7 @@ SYMBOL WHEN predicate {
 		ch.set_command_name("FLAG");
 		ch.set_flag_name($3->name);
 	}
-	delete $3->name;
+		free($3->name);
 	DBG_PARSER << current_machineclass->name << " pushing stable state test " << ch.command_name() << "\n";
 	ss.subcondition_handlers->push_back(ch);
 	delete $3;
@@ -947,7 +947,7 @@ state_subcondition:
 EXECUTE SYMBOL WHEN predicate {
     Subcondition *sc = new Subcondition;
     sc->predicate = $4;
-    sc->name = strdup($2);
+    sc->name = const_cast<char *>($2);
 	sc->command = "EXECUTE";
     DBG_PARSER << " executing " << $2 << " when " << *$4 << "\n" ;
     $$ = sc;
@@ -955,7 +955,7 @@ EXECUTE SYMBOL WHEN predicate {
 | TAG SYMBOL WHEN predicate {
     Subcondition *sc = new Subcondition;
     sc->predicate = $4;
-    sc->name = strdup($2);
+    sc->name = const_cast<char *>($2);
 	sc->command = "FLAG";
     DBG_PARSER << " executing " << $2 << " when " << *$4 << "\n" ;
     $$ = sc;

@@ -1170,6 +1170,14 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
             if (proc_cpu) {
                 set_cpu_affinity("processing", proc_cpu);
             }
+            int ecat_priority = conf.asInt("ethercat_thread_rt_priority");
+            if (ecat_priority) {
+                set_thread_rt_priority("ethercat", ecat_priority);
+            }
+            int ecat_timer_priority = conf.asInt("ethercat_timer_thread_rt_priority");
+            if (ecat_timer_priority) {
+                set_thread_rt_priority("ethercat_timer", ecat_timer_priority);
+            }
         }
 #if 0
         // disabled this code as it isn't working properly yet

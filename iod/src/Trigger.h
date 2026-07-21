@@ -50,6 +50,7 @@ class Trigger {
     Trigger *retain();
     virtual Trigger *release();
     static char *getTriggers();
+    static size_t liveCount();
     void addHolder(Action *h);
     void removeHolder(Action *h);
 

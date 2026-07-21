@@ -497,24 +497,6 @@ int main(int argc, char const *argv[]) {
     DBG_INITIALISATION << "-------- Starting EtherCAT Interface ---------\n";
     EtherCATThread ethercat;
     boost::thread ecat_thread(boost::ref(ethercat));
-#ifdef __linux__
-    {
-        int ecat_cpu = cpu_affinity("ethercat");
-        if (ecat_cpu) {
-            cpu_set_t cpuset;
-            CPU_ZERO(&cpuset);
-            CPU_SET(ecat_cpu, &cpuset);
-            int rc =
-                pthread_setaffinity_np(ecat_thread.native_handle(), sizeof(cpu_set_t), &cpuset);
-            if (rc != 0) {
-                std::cerr << "Error calling pthread_setaffinity_np: " << rc << "\n";
-            }
-            else {
-                DBG_INITIALISATION << "Set ethercat thread cpu affinity to " << ecat_cpu << "\n";
-            }
-        }
-    }
-#endif
     DBG_INITIALISATION << "-------- Starting Scheduler ---------\n";
     boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
     Scheduler::instance()->setThreadRef(scheduler_thread);

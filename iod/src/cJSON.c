@@ -48,6 +48,11 @@ static int cJSON_strcasecmp(const char *s1, const char *s2) {
 
 static void *(*cJSON_malloc)(size_t sz) = malloc;
 static void (*cJSON_free)(void *ptr) = free;
+static long cJSON_live_nodes;
+
+long cJSON_LiveNodeCount(void) {
+    return __atomic_load_n(&cJSON_live_nodes, __ATOMIC_RELAXED);
+}
 
 static char *cJSON_strdup(const char *str) {
     size_t len;
@@ -73,12 +78,19 @@ void cJSON_InitHooks(cJSON_Hooks *hooks) {
 }
 
 // Internal constructor.
-static cJSON *cJSON_New_Item() {
+static __attribute__((noinline)) cJSON *cJSON_New_Item() {
     cJSON *node = (cJSON *)cJSON_malloc(sizeof(cJSON));
     if (node) {
         memset(node, 0, sizeof(cJSON));
+        __atomic_add_fetch(&cJSON_live_nodes, 1, __ATOMIC_RELAXED);
     }
     return node;
+}
+
+static __attribute__((noinline)) void cJSON_Free_Item(cJSON *node) {
+    __atomic_sub_fetch(&cJSON_live_nodes, 1, __ATOMIC_RELAXED);
+    cJSON_free(node);
+    __asm__ __volatile__("" ::: "memory");
 }
 
 // Delete a cJSON structure.
@@ -95,7 +107,7 @@ void cJSON_Delete(cJSON *c) {
         if (c->string) {
             cJSON_free(c->string);
         }
-        cJSON_free(c);
+        cJSON_Free_Item(c);
         c = next;
     }
 }

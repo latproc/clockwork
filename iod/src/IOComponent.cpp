@@ -171,7 +171,9 @@ void copyMaskedBits(uint8_t *dest, uint8_t *src, uint8_t *mask, size_t len) {
 
 IOUpdate::~IOUpdate() {
     assert(mask_);
-    //  delete mask_;
+    if (owns_mask_) {
+        delete[] mask_;
+    }
 }
 
 uint32_t IOUpdate::size() const { return size_; }
@@ -184,9 +186,10 @@ void IOUpdate::setData(uint8_t *dt) {
 }
 
 uint8_t *IOUpdate::mask() const { return mask_; }
-void IOUpdate::setMask(uint8_t *ms) {
+void IOUpdate::setMask(uint8_t *ms, bool take_ownership) {
     assert("memory leak setting IO Component data" && !mask_);
     mask_ = ms;
+    owns_mask_ = take_ownership;
 }
 
 // these components need to synchronise with clockwork
@@ -1437,7 +1440,7 @@ IOUpdate *IOComponent::getUpdates() {
     res->setSize(max_offset - min_offset + 1);
     res->setData(getUpdateData());
     //MEMCHECK();
-    res->setMask(mask);
+    res->setMask(mask, true);
     //MEMCHECK();
 #if VERBOSE_DEBUG
     std::cout << std::flush << "IOComponent::getUpdates preparing to send " << res->size() << " d:";

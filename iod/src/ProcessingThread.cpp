@@ -55,12 +55,15 @@
 #include "SharedWorkSet.h"
 #include "Dispatcher.h"
 #include "Scheduler.h"
+#include "Trigger.h"
 #include <sstream>
 
 #include <iostream>
+#include <malloc.h>
 
 extern bool program_done;
 extern bool machine_is_ready;
+extern "C" long cJSON_LiveNodeCount(void);
 extern Statistics *statistics;
 extern uint64_t client_watchdog_timer;
 uint64_t clockwork_watchdog_timer = 0;
@@ -792,6 +795,41 @@ void ProcessingThread::operator()() {
             }
             curr_t = nowMicrosecs();
             internals->process_manager.SetTime(curr_t);
+            static uint64_t last_memory_snapshot = 0;
+            if (curr_t - program_start >= 300000000 &&
+                curr_t - last_memory_snapshot >= 60000000) {
+                size_t mail_items = 0;
+                size_t active_actions = 0;
+                for (auto machine_iter = MachineInstance::begin();
+                     machine_iter != MachineInstance::end(); ++machine_iter) {
+                    mail_items += (*machine_iter)->mailQueueSize();
+                    active_actions += (*machine_iter)->active_actions.size();
+                }
+                size_t throttled_items = 0;
+                const auto *channels = Channel::channels();
+                if (channels) {
+                    for (const auto &channel : *channels) {
+                        throttled_items += channel.second->pendingThrottledCount();
+                    }
+                }
+                const struct mallinfo2 allocator = mallinfo2();
+                last_memory_snapshot = curr_t;
+                std::cerr << "MEMSNAPSHOT"
+                          << " scheduler=" << Scheduler::instance()->pendingCount()
+                          << " triggers=" << Trigger::liveCount()
+                          << " pending_events=" << MachineInstance::pendingEvents().size()
+                          << " active_actions=" << active_actions
+                          << " mail_items=" << mail_items
+                          << " throttled_items=" << throttled_items
+                          << " message_log=" << MessageLog::instance()->count()
+                          << " cjson_nodes=" << cJSON_LiveNodeCount()
+                          << " malloc_in_use_kb=" << allocator.uordblks / 1024
+                          << " malloc_free_kb=" << allocator.fordblks / 1024
+                          << " malloc_arena_kb=" << allocator.arena / 1024
+                          << " malloc_mmap_kb=" << allocator.hblkhd / 1024
+                          << " malloc_releasable_kb=" << allocator.keepcost / 1024
+                          << "\n";
+            }
             //TBD add a guard here to detect/prevent rapid cycling
 
             for (int i = 0; i < dynamic_poll_start_idx; ++i) {

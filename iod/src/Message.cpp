@@ -87,6 +87,8 @@ bool CStringHolder::will_free() { return str != 0; }
 
 std::set<Receiver *> Receiver::working_machines; // machines that have non-empty work queues
 
+Message::Message(MessageType t) : kind(t), seq(++sequence), text(""), params(0) {}
+
 // in this form, the message takes ownership of the parameters
 Message::Message(CStringHolder msg, MessageType t, std::list<Value> *param_list)
     : kind(t), seq(++sequence), text(msg.get()), params(0) {
@@ -107,6 +109,11 @@ Message::Message(Message &&orig) : kind(orig.kind), seq(orig.seq), text(orig.tex
 }
 
 Message &Message::operator=(const Message &other) {
+    if (this == &other) {
+        return *this;
+    }
+    delete params;
+    params = nullptr;
     kind = other.kind;
     seq = other.seq;
     text = other.text;
@@ -121,6 +128,10 @@ Message &Message::operator=(const Message &other) {
 }
 
 Message &Message::operator=(Message && other) {
+    if (this == &other) {
+        return *this;
+    }
+    delete params;
     kind = other.kind;
     seq = other.seq;
     text = other.text;
@@ -180,6 +191,11 @@ bool Message::operator==(const char *msg) const {
     return strcmp(text.c_str(), msg) == 0;
 }
 
+Package::Package() : transmitter(0), receiver(0), message(0), needs_receipt(false) {}
+
+Package::Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt)
+    : transmitter(t), receiver(r), message(new Message(m)), needs_receipt(need_receipt) {}
+
 Package::Package(const Package &other)
     : transmitter(other.transmitter), receiver(other.receiver),
       message(new Message(*other.message)), needs_receipt(other.needs_receipt) {}
@@ -204,8 +220,12 @@ Package &Package::operator=(const Package &other) {
 }
 
 Package &Package::operator=(Package &&other) {
+    if (this == &other) {
+        return *this;
+    }
     transmitter = other.transmitter;
     receiver = other.receiver;
+    delete message;
     message = other.message;
     other.message = 0;
     needs_receipt = other.needs_receipt;
