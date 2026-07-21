@@ -169,8 +169,12 @@ void sync(zmq::socket_t &clock_sync) { waitForSync(clock_sync); }
 
 #include <atomic>
 #include <condition_variable>
+#include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <poll.h>
+#include <pthread.h>
+#include <sched.h>
 #include <sys/syscall.h>
 
 namespace {
@@ -183,6 +187,67 @@ timer_t timerid = nullptr;
 
 std::mutex pipe_mtx;
 std::condition_variable pipe_cv; // Signalled when the pipe has been written to
+std::mutex timer_start_mtx;
+std::condition_variable timer_start_cv;
+enum TimerStartState { timer_starting, timer_ready, timer_failed };
+TimerStartState timer_start_state = timer_starting;
+std::atomic<uint64_t> timer_sequence(0);
+
+bool configure_timing_thread(const char *name, int cpu, int priority) {
+    if (cpu > 0) {
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        CPU_SET(cpu, &cpuset);
+        int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpuset), &cpuset);
+        if (rc != 0) {
+            std::cerr << "ERROR: unable to set " << name << " affinity to CPU " << cpu
+                      << ": " << strerror(rc) << "\n";
+            return false;
+        }
+    }
+
+    if (priority <= 0) {
+        std::cerr << "ERROR: no real-time priority configured for " << name << "\n";
+        return false;
+    }
+
+    int minimum = sched_get_priority_min(SCHED_FIFO);
+    int maximum = sched_get_priority_max(SCHED_FIFO);
+    if (priority < minimum || priority > maximum) {
+        std::cerr << "ERROR: invalid SCHED_FIFO priority " << priority << " for " << name
+                  << "; valid range is " << minimum << ".." << maximum << "\n";
+        return false;
+    }
+
+    struct sched_param params = {};
+    params.sched_priority = priority;
+    int rc = pthread_setschedparam(pthread_self(), SCHED_FIFO, &params);
+    if (rc != 0) {
+        std::cerr << "ERROR: unable to set SCHED_FIFO priority " << priority << " for " << name
+                  << ": " << strerror(rc) << "\n";
+        return false;
+    }
+
+    int actual_policy = 0;
+    struct sched_param actual_params = {};
+    rc = pthread_getschedparam(pthread_self(), &actual_policy, &actual_params);
+    if (rc != 0 || actual_policy != SCHED_FIFO || actual_params.sched_priority != priority) {
+        std::cerr << "ERROR: failed to verify real-time scheduling for " << name << "\n";
+        return false;
+    }
+
+    std::cerr << "Configured " << name << " on CPU " << cpu
+              << " with SCHED_FIFO priority " << priority << "\n";
+    return true;
+}
+
+void report_timer_start(TimerStartState state) {
+    {
+        std::lock_guard<std::mutex> lock(timer_start_mtx);
+        timer_start_state = state;
+    }
+    timer_start_cv.notify_one();
+}
 
 void handle_timer(int sig, siginfo_t *si, void *uc) {
     if (timer_pipe_fds[1] != -1) {
@@ -236,27 +301,42 @@ bool flush_input(int fd) {
 }
 
 void timer_thread_proc() {
+    pthread_setname_np(pthread_self(), "iod ecat timer");
+    if (!configure_timing_thread("iod ecat timer", cpu_affinity("ethercat"),
+                                 thread_rt_priority("ethercat_timer"))) {
+        report_timer_start(timer_failed);
+        return;
+    }
+
     // Configure the timer to send a signal to this thread
-    struct sigevent sev;
+    struct sigevent sev = {};
     // Setup signal handler
-    struct sigaction sa;
+    struct sigaction sa = {};
     sa.sa_flags = SA_SIGINFO;
     sa.sa_sigaction = handle_timer;
     sigemptyset(&sa.sa_mask);
     if (sigaction(SIGRTMIN, &sa, nullptr) == -1) {
         perror("sigaction");
+        report_timer_start(timer_failed);
         return;
     }
 
     sev.sigev_notify = SIGEV_THREAD_ID;
     sev.sigev_signo = SIGRTMIN;
     sev._sigev_un._tid = syscall(SYS_gettid);  // Get the thread ID
-    if (timer_create(CLOCK_REALTIME, &sev, &timerid) == -1) {
+    if (timer_create(CLOCK_MONOTONIC, &sev, &timerid) == -1) {
         perror("timer_create");
+        report_timer_start(timer_failed);
         return;
     }
 
-    adjust_timer_frequency(1, 0);
+    if (adjust_timer_frequency(1, 0) != 0) {
+        timer_delete(timerid);
+        timerid = nullptr;
+        report_timer_start(timer_failed);
+        return;
+    }
+    report_timer_start(timer_ready);
 
     char buf;
     while (true) {
@@ -266,7 +346,7 @@ void timer_thread_proc() {
 
         read(timer_pipe_fds[0], &buf, 1);  // Block until the signal handler writes to the pipe
         if (buf == monitor_stop_command) { break; }
-        std::unique_lock<std::mutex> lock(pipe_mtx);
+        timer_sequence.fetch_add(1, std::memory_order_release);
         pipe_cv.notify_one();
     }
     timer_delete(timerid);
@@ -291,11 +371,15 @@ void sync() {
     }
 
     // Delay until the next clock tick after 50us
+    static uint64_t observed_sequence = timer_sequence.load(std::memory_order_acquire);
     static auto last_notify = microsecs();
     auto now = last_notify;
     while (true) {
         std::unique_lock<std::mutex> lock(pipe_mtx);
-        pipe_cv.wait(lock);  // Wait for the next signal
+        pipe_cv.wait(lock, [] {
+            return timer_sequence.load(std::memory_order_acquire) != observed_sequence;
+        });
+        observed_sequence = timer_sequence.load(std::memory_order_acquire);
         now = microsecs();
         if (now - last_notify < 50) { continue; } // 
         last_notify = now;
@@ -813,6 +897,11 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
 
 void EtherCATThread::operator()() {
     pthread_setname_np(pthread_self(), "iod ethercat");
+    if (!configure_timing_thread("iod ethercat", cpu_affinity("ethercat"),
+                                 thread_rt_priority("ethercat"))) {
+        std::cerr << "FATAL: EtherCAT cyclic thread real-time setup failed; stopping IOD\n";
+        std::exit(EXIT_FAILURE);
+    }
     Statistic *keep_alive_stat = new Statistic("keep alive margin");
     Statistic::add(keep_alive_stat);
 
@@ -824,7 +913,20 @@ void EtherCATThread::operator()() {
         }
     }
 
+    {
+        std::lock_guard<std::mutex> lock(timer_start_mtx);
+        timer_start_state = timer_starting;
+    }
     std::thread timer_thread(timer_thread_proc);
+    {
+        std::unique_lock<std::mutex> lock(timer_start_mtx);
+        timer_start_cv.wait(lock, [] { return timer_start_state != timer_starting; });
+        if (timer_start_state != timer_ready) {
+            std::cerr << "FATAL: EtherCAT timer thread startup failed; stopping IOD\n";
+            timer_thread.join();
+            std::exit(EXIT_FAILURE);
+        }
+    }
 #endif
 
     uint64_t then = nowMicrosecs();

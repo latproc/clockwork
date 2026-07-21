@@ -75,6 +75,8 @@ void set_export_to_c(bool c_export);
 
 int cpu_affinity(const char *thread_name);
 void set_cpu_affinity(const char *thread_name, int cpu);
+int thread_rt_priority(const char *thread_name);
+void set_thread_rt_priority(const char *thread_name, int priority);
 
 bool fix_invalid_transitions();
 void set_fix_invalid_transitions(bool which);

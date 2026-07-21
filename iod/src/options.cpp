@@ -47,6 +47,7 @@ static bool fix_invalid_auto_transitions = false;
 static std::string ethercat_adapter_name;
 
 static std::map<std::string, int> thread_cpu_affinities;
+static std::map<std::string, int> thread_rt_priorities;
 
 const char *device_name() { return dev_name; }
 void set_device_name(const char *new_name) {
@@ -138,6 +139,22 @@ void set_cpu_affinity(const char *thread_name, int cpu) {
     std::string property_name = thread_name;
     property_name += "_thread_cpu_affinity";
     thread_cpu_affinities[property_name] = cpu;
+}
+
+int thread_rt_priority(const char *thread_name) {
+    std::string property_name = thread_name;
+    property_name += "_thread_rt_priority";
+    std::map<std::string, int>::iterator found = thread_rt_priorities.find(property_name);
+    if (found != thread_rt_priorities.end()) {
+        return (*found).second;
+    }
+    return 0;
+}
+
+void set_thread_rt_priority(const char *thread_name, int priority) {
+    std::string property_name = thread_name;
+    property_name += "_thread_rt_priority";
+    thread_rt_priorities[property_name] = priority;
 }
 
 bool fix_invalid_transitions() { return fix_invalid_auto_transitions; }
