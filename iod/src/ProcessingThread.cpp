@@ -812,7 +812,14 @@ void ProcessingThread::operator()() {
                         throttled_items += channel.second->pendingThrottledCount();
                     }
                 }
+#if defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 33)
                 const struct mallinfo2 allocator = mallinfo2();
+#else
+                // mallinfo2() arrived in glibc 2.33.  Older controller
+                // images retain the same fields in mallinfo(), using int
+                // counters that are sufficient for this diagnostic snapshot.
+                const struct mallinfo allocator = mallinfo();
+#endif
                 last_memory_snapshot = curr_t;
                 std::cerr << "MEMSNAPSHOT"
                           << " scheduler=" << Scheduler::instance()->pendingCount()
