@@ -1037,6 +1037,12 @@ void EtherCATThread::operator()() {
         //else
         //    DBG_ETHERCAT << "machine is not ready; no state collected\n";
 
+        // Catch a cyclic response that arrived after the receive at the start
+        // of this cycle. This must happen before getClockworkMessage() applies
+        // new output values, because domain processing restores the preceding
+        // LRW image, including its output bytes.
+        ECInterface::instance()->receivePendingDomainState();
+
         // check for communication from clockwork
         if (getClockworkMessage(out_sock, ec_ok) && microsecs() < next_ecat_receive - 300) {
             DBG_ETHERCAT_PACKETS << "ecat thread got clockwork message. next ecat: "

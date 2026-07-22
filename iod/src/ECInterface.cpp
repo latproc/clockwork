@@ -32,6 +32,7 @@
 #include <iomanip>
 #include <iostream>
 #include <list>
+#include <limits>
 #include <signal.h>
 #include <stdio.h>
 #include <string.h>
@@ -169,7 +170,7 @@ SDOEntry::SDOEntry(std::string nam, uint16_t index, uint8_t subindex, const uint
                    size_t size, uint8_t offset)
     : name(nam), module_(0), index_(index), subindex_(subindex), offset_(offset), data_(0),
       size_(size), realtime_request(0), sync_done(false), error_count(0), op(READ),
-      machine_instance(0) {
+      machine_instance(0), next_poll_time(0), read_pending(true) {
     if (data && size != 0) {
         data_ = new uint8_t[size];
         assert(data_);
@@ -249,6 +250,30 @@ void SDOEntry::success() {
 
 bool SDOEntry::ok() { return error_count == 0; }
 
+uint32_t SDOEntry::pollIntervalMs() const {
+    if (machine_instance && machine_instance->properties.exists("poll_interval")) {
+        int64_t interval = machine_instance->properties.lookup("poll_interval").iValue;
+        return interval > 0 ? static_cast<uint32_t>(interval) : 0;
+    }
+    return 0;
+}
+
+bool SDOEntry::pollDue(uint64_t now) const {
+    return (read_pending || pollIntervalMs() != 0) && now >= next_poll_time;
+}
+
+void SDOEntry::schedulePoll(uint64_t now, uint32_t delay_ms) {
+    read_pending = false;
+    uint32_t interval = delay_ms ? delay_ms : pollIntervalMs();
+    next_poll_time = interval ? now + static_cast<uint64_t>(interval) * 1000
+                              : std::numeric_limits<uint64_t>::max();
+}
+
+void SDOEntry::requestRead(uint64_t now, uint32_t delay_ms) {
+    read_pending = true;
+    next_poll_time = now + static_cast<uint64_t>(delay_ms) * 1000;
+}
+
 SDOEntry *SDOEntry::find(std::string name) {
     std::list<SDOEntry *>::iterator iter = prepared_sdo_entries.begin();
     while (iter != prepared_sdo_entries.end()) {
@@ -289,16 +314,9 @@ void SDOEntry::resolveSDOModules() {
             if (module && entry->prepareRequest(module)) {
                 DBG_ETHERCAT << "Prepared SDO entry: " << entry->getName() << "\n";
                 iter = new_sdo_entries.erase(iter);
-                if (entry->machineInstance() &&
-                    entry->machineInstance()->properties.exists("default")) {
-                    const Value &val = entry->machineInstance()->properties.lookup("default");
-                    DBG_ETHERCAT << "setting default value of " << entry->getName() << " to " << val
-                                 << "\n";
-                    ECInterface::instance()->queueInitialisationRequest(entry, val);
-                }
-                else {
-                    DBG_ETHERCAT << "no default value for " << entry->getName() << "\n";
-                }
+                // Every SDO is read first. An explicit default is queued only
+                // after that upload succeeds, so VALUE briefly reflects the
+                // device value before the configured value is applied.
                 ECInterface::instance()->queueRuntimeRequest(entry);
             }
             else {
@@ -322,7 +340,7 @@ ECInterface::ECInterface()
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
       current_init_entry(initialisation_entries.begin()),
-      current_update_entry(sdo_update_entries.begin()), sdo_entry_state(e_None),
+      current_update_entry(sdo_update_entries.begin()), sdo_entry_state(e_None), sdo_not_before(0),
 #endif //USE_SDO
 #endif
       ethercat_status(0), failure_tolerance(0), failure_count(0)
@@ -400,6 +418,9 @@ ec_sdo_request_t *SDOEntry::prepareRequest(ECModule *module) {
                      << ":" << subindex_ << std::dec << " (" << sz << ")" << "\n";
     DBG_ETHERCAT_CALLS << "ecrt_slave_config_create_sdo_request\n";
     realtime_request = ecrt_slave_config_create_sdo_request(x, index_, subindex_, sz);
+    if (realtime_request) {
+        ecrt_sdo_request_timeout(realtime_request, 2000);
+    }
     prepared_sdo_entries.push_back(this);
     return realtime_request;
 }
@@ -426,13 +447,51 @@ SDOEntry *ECInterface::createSDORequest(std::string name, ECModule *module, uint
 
 #ifdef USE_SDO
 void ECInterface::queueInitialisationRequest(SDOEntry *entry, Value val) {
-    initialisation_entries.push_back(std::make_pair(entry, val));
+    if (!entry) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(pending_sdo_mutex);
+    for (auto &pending : pending_sdo_writes) {
+        if (pending.first == entry) {
+            pending.second = val;
+            return;
+        }
+    }
+    pending_sdo_writes.push_back(std::make_pair(entry, val));
 }
 
 void ECInterface::queueRuntimeRequest(SDOEntry *entry) { sdo_update_entries.push_back(entry); }
 
+void ECInterface::acceptPendingSDOWrites() {
+    std::unique_lock<std::mutex> lock(pending_sdo_mutex, std::try_to_lock);
+    if (!lock.owns_lock()) {
+        return;
+    }
+    while (!pending_sdo_writes.empty()) {
+        auto pending = pending_sdo_writes.front();
+        pending_sdo_writes.pop_front();
+
+        // Preserve an in-flight value. A later queued value for the same entry
+        // is replaced, otherwise the newest value is appended.
+        auto queued = initialisation_entries.begin();
+        for (; queued != initialisation_entries.end(); ++queued) {
+            if (sdo_entry_state == e_Busy_Initialisation && queued == current_init_entry) {
+                continue;
+            }
+            if (queued->first == pending.first) {
+                queued->second = pending.second;
+                break;
+            }
+        }
+        if (queued == initialisation_entries.end()) {
+            initialisation_entries.push_back(pending);
+        }
+    }
+}
+
 void ECInterface::beginModulePreparation() {
     DBG_ETHERCAT << "beginning module preparation\n";
+    acceptPendingSDOWrites();
     current_init_entry = initialisation_entries.begin();
     sdo_entry_state = e_None;
 }
@@ -499,6 +558,10 @@ Value SDOEntry::readValue() {
 }
 
 void ECInterface::checkSDOUpdates() {
+    const uint64_t now = microsecs();
+    if (now < sdo_not_before) {
+        return;
+    }
     if (current_update_entry == sdo_update_entries.end()) {
         if (sdo_update_entries.size() == 0) {
             return;
@@ -514,9 +577,10 @@ void ECInterface::checkSDOUpdates() {
         } // odd: no entry at this position
 
         // disabled entries are not automatically polled for changes unless they were already
-        // in the middle of a poll when they were disabled
+        // in the middle of a poll when they were disabled. Initial and
+        // write-confirmation reads are required and are allowed to complete.
         if (sdo_entry_state == e_None && entry->machineInstance() &&
-            !entry->machineInstance()->enabled()) {
+            !entry->machineInstance()->enabled() && !entry->readPending()) {
             current_update_entry++;
             return;
         }
@@ -530,8 +594,21 @@ void ECInterface::checkSDOUpdates() {
 
             switch (entry->operation()) {
             case SDOEntry::READ:
+                if (!entry->pollDue(now)) {
+                    current_update_entry++;
+                    return;
+                }
+                if (ecrt_sdo_request_state(sdo) == EC_REQUEST_BUSY) {
+                    return;
+                }
                 DBG_ETHERCAT_CALLS << "ecrt_sdo_request_read\n";
-                ecrt_sdo_request_read(sdo); // trigger first read
+                if (ecrt_sdo_request_read(sdo) != 0) {
+                    entry->failure();
+                    entry->requestRead(now, 250);
+                    sdo_not_before = now + 250000;
+                    current_update_entry++;
+                    return;
+                }
                 sdo_entry_state = e_Busy_Update;
                 break;
             case SDOEntry::WRITE:
@@ -559,8 +636,18 @@ void ECInterface::checkSDOUpdates() {
             // before updating the value of the object check whether a new value is about to
             // be written to the io
             if (entry->operation() == SDOEntry::READ) {
+                bool first_read = !entry->ready();
                 entry->syncValue();
                 entry->success();
+                entry->schedulePoll(now);
+                if (first_read && entry->machineInstance() &&
+                    entry->machineInstance()->properties.exists("default")) {
+                    const Value &val =
+                        entry->machineInstance()->properties.lookup("default");
+                    DBG_ETHERCAT_SDO << "Applying SDO default after initial read for "
+                                     << entry->getName() << ": " << val << "\n";
+                    queueInitialisationRequest(entry, val);
+                }
             }
             // prepare to get the next entry
             current_update_entry++;
@@ -573,6 +660,8 @@ void ECInterface::checkSDOUpdates() {
             MessageLog::instance()->add(error.str());
             NB_MSG << error.str() << "\n";
             entry->failure();
+            entry->requestRead(now, 250);
+            sdo_not_before = now + 250000;
             current_update_entry++; // move on to the next item and retry soon
             sdo_entry_state = e_None;
         } break;
@@ -589,6 +678,11 @@ void ECInterface::checkSDOUpdates() {
 
 bool ECInterface::checkSDOInitialisation() // returns true when no more initialisation is required
 {
+    acceptPendingSDOWrites();
+    const uint64_t now = microsecs();
+    if (now < sdo_not_before) {
+        return false;
+    }
     if (sdo_entry_state == e_Busy_Update) {
         return true;
     }
@@ -608,9 +702,18 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             return false;
         } // odd: no entry at this position
 
+        // A write, including an explicit startup default, must never overtake
+        // the entry's initial upload.
+        if (!entry->ready()) {
+            return true;
+        }
+
         ec_sdo_request_t *sdo = entry->getRequest();
 
         if (sdo_entry_state == e_None) {
+            if (ecrt_sdo_request_state(sdo) == EC_REQUEST_BUSY) {
+                return false;
+            }
             entry->setOperation(SDOEntry::WRITE);
             if (entry->getSize() == 1) {
                 entry->setData((bool)curr.second.iValue);
@@ -627,7 +730,11 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             DBG_ETHERCAT_SDO << "SDO entry - trigger write " << curr.second << "\n";
             readValue(sdo, entry->getSize());
             DBG_ETHERCAT_CALLS << "ecrt_sdo_request_write\n";
-            ecrt_sdo_request_write(sdo);
+            if (ecrt_sdo_request_write(sdo) != 0) {
+                entry->failure();
+                sdo_not_before = now + 250000;
+                return false;
+            }
             sdo_entry_state = e_Busy_Initialisation;
             return false;
         }
@@ -649,6 +756,7 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             }
             entry->syncValue();
             entry->success();
+            entry->requestRead(now, 1); // confirm the write with a prompt read
             // prepare to get the next entry
             current_init_entry = initialisation_entries.erase(current_init_entry);
             sdo_entry_state = e_None;
@@ -663,12 +771,14 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
             DBG_ETHERCAT_SDO << std::hex << "0x" << entry->getIndex() << ":"
                              << (int)entry->getSubindex() << std::dec << "\n";
             entry->failure();
+            sdo_not_before = now + 250000;
             if (entry->getErrorCount() < 4) {
                 current_init_entry++; // move on to the next item and retry soon
             }
             else {
                 current_init_entry = initialisation_entries.erase(current_init_entry);
                 entry->setOperation(SDOEntry::READ);
+                entry->requestRead(now, 250);
             }
             sdo_entry_state = e_None;
             break;
@@ -1537,6 +1647,23 @@ void ECInterface::receiveState() {
     if (checkSDOInitialisation()) {
         checkSDOUpdates();
     }
+#endif
+}
+
+void ECInterface::receivePendingDomainState() {
+    if (!master || !initialised || !active || !domain1) {
+        return;
+    }
+
+#ifndef EC_SIMULATOR
+    // A cyclic LRW response can occasionally arrive after the receive at the
+    // start of the cycle. Give EtherLab another opportunity to complete and
+    // dequeue it before the same domain is queued with a new index.
+    DBG_ETHERCAT_CALLS << "ecrt_master_receive (late)\n";
+    ecrt_master_receive(master);
+    DBG_ETHERCAT_CALLS << "ecrt_domain_process (late)\n";
+    ecrt_domain_process(domain1);
+    check_domain1_state();
 #endif
 }
 

@@ -32,6 +32,7 @@
 
 #include <ecrt.h>
 #include <map>
+#include <mutex>
 #include <set>
 #include <string>
 #include <time.h>
@@ -140,6 +141,7 @@ class ECInterface {
     void check_master_state(void);
     void check_slave_config_states(void);
     void receiveState(); // get state from EtherCAT, use collectState() to process it
+    void receivePendingDomainState(); // collect a response that arrived late in this cycle
     int collectState(); // returns non-zero if there are machines that are affected by the new state
     void sendUpdates();
     void updateDomain(uint32_t size, uint8_t *data, uint8_t *mask);
@@ -181,6 +183,7 @@ class ECInterface {
 
     void queueInitialisationRequest(SDOEntry *entry, Value val);
     void queueRuntimeRequest(SDOEntry *entry);
+    void acceptPendingSDOWrites();
 #endif //USE_SDO
 
 #endif // ifndef EC_SIMULATOR
@@ -194,11 +197,14 @@ class ECInterface {
     std::set<ECModule *> operational_modules;
 #ifdef USE_SDO
     std::list<std::pair<SDOEntry *, Value>> initialisation_entries;
+    std::list<std::pair<SDOEntry *, Value>> pending_sdo_writes;
+    std::mutex pending_sdo_mutex;
     std::list<std::pair<SDOEntry *, Value>>::iterator current_init_entry;
     std::list<SDOEntry *> sdo_update_entries;
     std::list<SDOEntry *>::iterator current_update_entry;
     enum SDOEntryState { e_None, e_Busy_Initialisation, e_Busy_Update };
     SDOEntryState sdo_entry_state;
+    uint64_t sdo_not_before;
 #endif //USE_SDO
 #endif
     MachineInstance *ethercat_status;

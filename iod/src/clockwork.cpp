@@ -613,6 +613,7 @@ MachineClass *makeSdoEntryMachineClass() {
     mc_sdo->parameters.push_back(Parameter("SIZE"));
     mc_sdo->parameters.push_back(Parameter("OFFSET"));
     mc_sdo->setOption("VALUE", 0);
+    mc_sdo->setOption("poll_interval", 0);
     return mc_sdo;
 }
 

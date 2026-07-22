@@ -87,6 +87,11 @@ class SDOEntry {
     void failure();
     void success();
     bool ok();
+    bool pollDue(uint64_t now) const;
+    bool readPending() const { return read_pending; }
+    void schedulePoll(uint64_t now, uint32_t delay_ms = 0);
+    void requestRead(uint64_t now, uint32_t delay_ms = 0);
+    uint32_t pollIntervalMs() const;
 
   private:
     SDOEntry(const SDOEntry &);
@@ -106,6 +111,8 @@ class SDOEntry {
     bool readonly;
     Operation op;
     MachineInstance *machine_instance;
+    uint64_t next_poll_time;
+    bool read_pending;
 };
 #endif //USE_SDO
 
