@@ -168,6 +168,9 @@ class ECInterface {
 
     uint32_t getReferenceTime();
     void setReferenceTime(uint32_t now);
+#ifdef USE_DC
+    uint64_t getApplicationTimeNs() const { return dc_application_time_ns; }
+#endif
 
     void report_module_state_change(ECModule *m, int i);
 
@@ -191,6 +194,23 @@ class ECInterface {
     ECInterface();
     static ECInterface *instance_;
     uint32_t reference_time;
+#ifdef USE_DC
+    uint64_t dc_application_time_ns;
+    int64_t dc_cycle_adjustment_ns;
+    int64_t dc_difference_total_ns;
+    int64_t dc_delta_total_ns;
+    int32_t dc_last_difference_ns;
+    unsigned int dc_filter_count;
+    unsigned int dc_monitor_countdown;
+    unsigned int dc_monitor_wait_cycles;
+    bool dc_reference_valid;
+    bool dc_monitor_pending;
+    int dc_last_reference_result;
+
+    static uint64_t monotonicTimeNs();
+    void processDistributedClock();
+    void queueDistributedClockSync();
+#endif
 #ifndef EC_SIMULATOR
     static std::vector<ECModule *> modules;
     std::set<ECModule *> online_modules;

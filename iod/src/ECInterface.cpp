@@ -337,6 +337,12 @@ void SDOEntry::resolveSDOModules() {
 
 ECInterface::ECInterface()
     : initialised(0), reference_time(0),
+#ifdef USE_DC
+      dc_application_time_ns(0), dc_cycle_adjustment_ns(0), dc_difference_total_ns(0),
+      dc_delta_total_ns(0), dc_last_difference_ns(0), dc_filter_count(0),
+      dc_monitor_countdown(0), dc_monitor_wait_cycles(0), dc_reference_valid(false),
+      dc_monitor_pending(false), dc_last_reference_result(0),
+#endif
 #ifndef EC_SIMULATOR
 #ifdef USE_SDO
       current_init_entry(initialisation_entries.begin()),
@@ -354,6 +360,90 @@ void ECInterface::setup(void *data) { instance()->init(); }
 void ECInterface::setReferenceTime(uint32_t now) { reference_time = now; }
 
 uint32_t ECInterface::getReferenceTime() { return reference_time; }
+
+#ifdef USE_DC
+uint64_t ECInterface::monotonicTimeNs() {
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return static_cast<uint64_t>(now.tv_sec) * 1000000000ULL + now.tv_nsec;
+}
+
+void ECInterface::processDistributedClock() {
+    uint32_t reference = 0;
+    const int result = ecrt_master_reference_clock_time(master, &reference);
+    if (result == 0) {
+        reference_time = reference;
+        // Deliberate 32-bit subtraction handles the reference clock rollover.
+        int32_t difference = static_cast<int32_t>(
+            static_cast<uint32_t>(dc_application_time_ns) - reference);
+        const int64_t cycle_ns = 1000000000ULL / FREQUENCY;
+        int64_t normalized = static_cast<int64_t>(difference) % cycle_ns;
+        if (normalized > cycle_ns / 2) normalized -= cycle_ns;
+        if (normalized < -cycle_ns / 2) normalized += cycle_ns;
+        difference = static_cast<int32_t>(normalized);
+
+        if (dc_reference_valid) {
+            dc_difference_total_ns += difference;
+            dc_delta_total_ns += static_cast<int64_t>(difference) - dc_last_difference_ns;
+            if (++dc_filter_count >= 1024) {
+                dc_cycle_adjustment_ns += dc_delta_total_ns / 1024;
+                dc_cycle_adjustment_ns += (dc_difference_total_ns > 0) -
+                                          (dc_difference_total_ns < 0);
+                if (dc_cycle_adjustment_ns > 1000) dc_cycle_adjustment_ns = 1000;
+                if (dc_cycle_adjustment_ns < -1000) dc_cycle_adjustment_ns = -1000;
+                dc_difference_total_ns = 0;
+                dc_delta_total_ns = 0;
+                dc_filter_count = 0;
+            }
+        }
+        dc_last_difference_ns = difference;
+        dc_reference_valid = true;
+        if (dc_last_reference_result != 0) {
+            std::cerr << "EtherCAT DC reference clock time resumed\n";
+        }
+    }
+    else {
+        if (dc_last_reference_result != result) {
+            std::cerr << "EtherCAT DC reference clock read failed: " << strerror(-result) << "\n";
+        }
+        dc_reference_valid = false;
+    }
+    dc_last_reference_result = result;
+
+    if (dc_monitor_pending) {
+        const uint32_t deviation = ecrt_master_sync_monitor_process(master);
+        if (deviation != static_cast<uint32_t>(-1)) {
+            std::cout << "EtherCAT DC: reference difference " << dc_last_difference_ns
+                      << " ns, maximum slave deviation " << deviation
+                      << " ns, cycle adjustment " << dc_cycle_adjustment_ns << " ns\n";
+            dc_monitor_pending = false;
+            dc_monitor_wait_cycles = 0;
+        }
+        else if (++dc_monitor_wait_cycles >= 10) {
+            std::cerr << "EtherCAT DC synchrony monitor timed out\n";
+            dc_monitor_pending = false;
+            dc_monitor_wait_cycles = 0;
+        }
+    }
+}
+
+void ECInterface::queueDistributedClockSync() {
+    const int64_t phase_step = (dc_last_difference_ns > 0) - (dc_last_difference_ns < 0);
+    // A positive (application - reference) difference means application time
+    // is ahead, so slow it by subtracting the positive correction.
+    dc_application_time_ns += 1000000000ULL / FREQUENCY - dc_cycle_adjustment_ns - phase_step;
+    ecrt_master_application_time(master, dc_application_time_ns);
+    ecrt_master_sync_slave_clocks(master);
+
+    if (!dc_monitor_pending && dc_monitor_countdown-- == 0) {
+        if (ecrt_master_sync_monitor_queue(master) == 0) {
+            dc_monitor_pending = true;
+            dc_monitor_wait_cycles = 0;
+        }
+        dc_monitor_countdown = FREQUENCY;
+    }
+}
+#endif
 
 bool ECModule::ecrtMasterSlaveConfig(ec_master_t *master) {
     if (master) {
@@ -1334,6 +1424,33 @@ bool ECInterface::activate() {
     }
     DBG_ETHERCAT << "Activating master...";
     char buf[200];
+#ifdef USE_DC
+    // A NULL selection tells EtherLab to use the first DC-capable slave.
+    res = ecrt_master_select_reference_clock(master, nullptr);
+    if (res < 0) {
+        snprintf(buf, 200, "EtherCAT DC: failed to select reference clock: %d", res);
+        MessageLog::instance()->add(buf);
+        DBG_ETHERCAT << buf << "\n";
+        return false;
+    }
+
+    // Seed application time before activation so EtherLab can initialise DC
+    // offsets without its "No application time received" startup warning.
+    const uint64_t cycle_ns = 1000000000ULL / FREQUENCY;
+    dc_application_time_ns = monotonicTimeNs();
+    dc_application_time_ns -= dc_application_time_ns % cycle_ns;
+    dc_cycle_adjustment_ns = 0;
+    dc_difference_total_ns = 0;
+    dc_delta_total_ns = 0;
+    dc_last_difference_ns = 0;
+    dc_filter_count = 0;
+    dc_monitor_countdown = 0;
+    dc_monitor_wait_cycles = 0;
+    dc_reference_valid = false;
+    dc_monitor_pending = false;
+    dc_last_reference_result = 0;
+    ecrt_master_application_time(master, dc_application_time_ns);
+#endif
     DBG_ETHERCAT_CALLS << "ecrt_master_activate\n";
     if ((res = ecrt_master_activate(master))) {
         snprintf(buf, 200, "EtherCAT interface: Activating master failed with code: %d", res);
@@ -1630,11 +1747,7 @@ void ECInterface::receiveState() {
         DBG_ETHERCAT_CALLS << "ecrt_domain_process\n";
         ecrt_domain_process(domain1);
 #ifdef USE_DC
-        DBG_ETHERCAT_CALLS << "ecrt_imaster_reference_clock_time\n";
-        int err = ecrt_master_reference_clock_time(master, &reference_time);
-        if (err == -ENXIO) {
-            reference_time = -1; // no reference clocks
-        }
+        processDistributedClock();
 #endif
         check_domain1_state();
     }
@@ -1851,12 +1964,7 @@ void ECInterface::sendUpdates() {
 
 #ifndef EC_SIMULATOR
 #ifdef USE_DC
-    DBG_ETHERCAT_CALLS << "ecrt_master_application_time\n";
-    ecrt_master_application_time(master, EC_TIMEVAL2NANO(now));
-    DBG_ETHERCAT_CALLS << "ecrt_master_sync_reference_clock\n";
-    ecrt_master_sync_reference_clock(master);
-    DBG_ETHERCAT_CALLS << "ecrt_master_sync_slave_clocks\n";
-    ecrt_master_sync_slave_clocks(master);
+    queueDistributedClockSync();
 #endif
     DBG_ETHERCAT_CALLS << "ecrt_domain_queue\n";
     ecrt_domain_queue(domain1);
