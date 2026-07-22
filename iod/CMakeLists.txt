@@ -530,7 +530,7 @@ add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 	src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
 )
 
-set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT;KEEP_STATS" )
+set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT;KEEP_STATS;USE_DC" )
 if(USE_ETHERCAT_SOURCE)
 target_link_libraries(iod cw_client ec_tool ethercat dl
         ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl)
@@ -544,7 +544,7 @@ add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 	src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
 )
 #set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
-target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 )
+target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 USE_DC=1 )
 if(USE_ETHERCAT_SOURCE)
 target_link_libraries(iod_sdo cw_client ec_tool ethercat dl
         ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl)
