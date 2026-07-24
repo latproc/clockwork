@@ -527,7 +527,7 @@ INCLUDE_DIRECTORIES(${LIBXML2_INCLUDE_DIR})
 LINK_DIRECTORIES("LIBXML2_LIBRARIES")
 
 add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
-	src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
+	src/EtherCATEntrySelector.cpp src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
 )
 
 set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT;KEEP_STATS;USE_DC" )
@@ -541,7 +541,7 @@ endif()
 install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 
 add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
-	src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
+	src/EtherCATEntrySelector.cpp src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
 )
 #set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
 target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 USE_DC=1 )

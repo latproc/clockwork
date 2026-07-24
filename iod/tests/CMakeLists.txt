@@ -34,6 +34,11 @@ endif()
 
 set(DL_LIBRARY "dl")
 
+add_executable(test_ecat_entry_selector test_ecat_entry_selector.cpp
+  ${PROJECT_SOURCE_DIR}/src/EtherCATEntrySelector.cpp)
+target_link_libraries(test_ecat_entry_selector gtest_main pthread)
+add_test(NAME test_ecat_entry_selector COMMAND test_ecat_entry_selector)
+
 # Now simply link against gtest or gtest_main as needed. Eg
 add_executable(test_value test_value.cpp )
 target_link_libraries(test_value gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${DL_LIBRARY} pthread)

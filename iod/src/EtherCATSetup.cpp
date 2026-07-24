@@ -19,6 +19,7 @@
 */
 
 #include "ControlSystemMachine.h"
+#include "EtherCATEntrySelector.h"
 #include "ECInterface.h"
 #include "IOComponent.h"
 #include "boost/filesystem/operations.hpp"
@@ -124,7 +125,7 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
         std::cout << "Linking clockwork machines to hardware\n";
         std::list<MachineInstance *>::iterator iter = MachineInstance::begin();
         while (iter != MachineInstance::end()) {
-            const int error_buf_size = 100;
+            const int error_buf_size = 256;
             char error_buf[error_buf_size];
             MachineInstance *m = *iter++;
             if ((m->_type == "POINT" || m->_type == "ANALOGINPUT" || m->_type == "COUNTERRATE" ||
@@ -204,6 +205,76 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                     error_messages.push_back(error_buf);
                     ++num_errors;
                     continue;
+                }
+
+                const bool has_entry_index = m->properties.exists("entry_index");
+                const bool has_entry_subindex = m->properties.exists("entry_subindex");
+                const bool has_entry_pdo_index = m->properties.exists("entry_pdo_index");
+                if (has_entry_index || has_entry_subindex || has_entry_pdo_index) {
+                    if (!has_entry_index || !has_entry_subindex) {
+                        snprintf(error_buf, error_buf_size,
+                                 "Machine %s must specify both entry_index and entry_subindex",
+                                 m->getName().c_str());
+                        MessageLog::instance()->add(error_buf);
+                        std::cerr << error_buf << "\n";
+                        error_messages.push_back(error_buf);
+                        ++num_errors;
+                        continue;
+                    }
+
+                    int64_t object_index = 0;
+                    int64_t object_subindex = 0;
+                    int64_t object_pdo_index = 0;
+                    const Value &index_value = m->properties.lookup("entry_index");
+                    const Value &subindex_value = m->properties.lookup("entry_subindex");
+                    const Value &pdo_index_value = m->properties.lookup("entry_pdo_index");
+                    if (!index_value.asInteger(object_index) || object_index < 0 ||
+                        object_index > UINT16_MAX ||
+                        !subindex_value.asInteger(object_subindex) || object_subindex < 0 ||
+                        object_subindex > UINT8_MAX ||
+                        (has_entry_pdo_index &&
+                         (!pdo_index_value.asInteger(object_pdo_index) ||
+                          object_pdo_index < 0 || object_pdo_index > UINT16_MAX))) {
+                        snprintf(error_buf, error_buf_size,
+                                 "Machine %s has an invalid EtherCAT entry object selector",
+                                 m->getName().c_str());
+                        MessageLog::instance()->add(error_buf);
+                        std::cerr << error_buf << "\n";
+                        error_messages.push_back(error_buf);
+                        ++num_errors;
+                        continue;
+                    }
+
+                    std::vector<EtherCATEntryIdentity> identities;
+                    identities.reserve(module->num_entries);
+                    for (unsigned int i = 0; i < module->num_entries; ++i) {
+                        const EntryDetails &details = module->entry_details[i];
+                        identities.push_back(
+                            {i, module->pdo_entries[i].index,
+                             module->pdo_entries[i].subindex,
+                             module->pdos[details.pdo_index].index});
+                    }
+
+                    const EtherCATEntryMatch match = resolveEtherCATEntry(
+                        identities, static_cast<uint16_t>(object_index),
+                        static_cast<uint8_t>(object_subindex), has_entry_pdo_index,
+                        static_cast<uint16_t>(object_pdo_index), entry_position);
+                    if (match != EtherCATEntryMatch::found) {
+                        snprintf(error_buf, error_buf_size,
+                                 "Machine %s EtherCAT entry 0x%04X:%02X%s%s on module %s",
+                                 m->getName().c_str(), static_cast<unsigned int>(object_index),
+                                 static_cast<unsigned int>(object_subindex),
+                                 match == EtherCATEntryMatch::ambiguous
+                                     ? " is ambiguous"
+                                     : " was not found",
+                                 has_entry_pdo_index ? " with the requested PDO" : "",
+                                 name.c_str());
+                        MessageLog::instance()->add(error_buf);
+                        std::cerr << error_buf << "\n";
+                        error_messages.push_back(error_buf);
+                        ++num_errors;
+                        continue;
+                    }
                 }
 
                 if (entry_position >= module->num_entries) {
