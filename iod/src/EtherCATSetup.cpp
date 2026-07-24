@@ -140,13 +140,29 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                 //if (params.kind == Value::t_list && params.listValue.size() > 1) {
                 std::string name;
                 unsigned int entry_position = 0;
+                size_t selector_index_param = 1;
                 if (m->_type == "COUNTERRATE") {
                     name = m->parameters[1].real_name;
                     entry_position = m->parameters[2].val.iValue;
+                    selector_index_param = 2;
                 }
                 else {
                     name = m->parameters[0].real_name;
                     entry_position = m->parameters[1].val.iValue;
+                }
+                int64_t positional_index = 0;
+                int64_t positional_subindex = 0;
+                int64_t positional_pdo_index = 0;
+                bool has_positional_selector =
+                    m->parameters.size() > selector_index_param + 1 &&
+                    m->parameters[selector_index_param].val.asInteger(positional_index) &&
+                    m->parameters[selector_index_param + 1].val.asInteger(positional_subindex);
+                bool has_positional_pdo = false;
+                if (has_positional_selector &&
+                    m->parameters.size() > selector_index_param + 2) {
+                    has_positional_pdo =
+                        m->parameters[selector_index_param + 2].val.asInteger(
+                            positional_pdo_index);
                 }
 
 #if 0
@@ -210,8 +226,24 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                 const bool has_entry_index = m->properties.exists("entry_index");
                 const bool has_entry_subindex = m->properties.exists("entry_subindex");
                 const bool has_entry_pdo_index = m->properties.exists("entry_pdo_index");
-                if (has_entry_index || has_entry_subindex || has_entry_pdo_index) {
+                if (has_positional_selector ||
+                    has_entry_index || has_entry_subindex || has_entry_pdo_index) {
+                    if (has_positional_selector &&
+                        (has_entry_index || has_entry_subindex || has_entry_pdo_index)) {
+                        snprintf(error_buf, error_buf_size,
+                                 "Machine %s mixes positional and property EtherCAT selectors",
+                                 m->getName().c_str());
+                        MessageLog::instance()->add(error_buf);
+                        std::cerr << error_buf << "\n";
+                        error_messages.push_back(error_buf);
+                        ++num_errors;
+                        continue;
+                    }
                     if (!has_entry_index || !has_entry_subindex) {
+                        if (has_positional_selector) {
+                            // Both values were validated while detecting the positional form.
+                        }
+                        else {
                         snprintf(error_buf, error_buf_size,
                                  "Machine %s must specify both entry_index and entry_subindex",
                                  m->getName().c_str());
@@ -220,21 +252,26 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                         error_messages.push_back(error_buf);
                         ++num_errors;
                         continue;
+                        }
                     }
 
-                    int64_t object_index = 0;
-                    int64_t object_subindex = 0;
-                    int64_t object_pdo_index = 0;
+                    int64_t object_index = positional_index;
+                    int64_t object_subindex = positional_subindex;
+                    int64_t object_pdo_index = positional_pdo_index;
                     const Value &index_value = m->properties.lookup("entry_index");
                     const Value &subindex_value = m->properties.lookup("entry_subindex");
                     const Value &pdo_index_value = m->properties.lookup("entry_pdo_index");
-                    if (!index_value.asInteger(object_index) || object_index < 0 ||
+                    if ((!has_positional_selector &&
+                         (!index_value.asInteger(object_index) ||
+                          !subindex_value.asInteger(object_subindex) ||
+                          (has_entry_pdo_index &&
+                           !pdo_index_value.asInteger(object_pdo_index)))) ||
+                        object_index < 0 ||
                         object_index > UINT16_MAX ||
-                        !subindex_value.asInteger(object_subindex) || object_subindex < 0 ||
+                        object_subindex < 0 ||
                         object_subindex > UINT8_MAX ||
-                        (has_entry_pdo_index &&
-                         (!pdo_index_value.asInteger(object_pdo_index) ||
-                          object_pdo_index < 0 || object_pdo_index > UINT16_MAX))) {
+                        ((has_entry_pdo_index || has_positional_pdo) &&
+                         (object_pdo_index < 0 || object_pdo_index > UINT16_MAX))) {
                         snprintf(error_buf, error_buf_size,
                                  "Machine %s has an invalid EtherCAT entry object selector",
                                  m->getName().c_str());
@@ -257,7 +294,8 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
 
                     const EtherCATEntryMatch match = resolveEtherCATEntry(
                         identities, static_cast<uint16_t>(object_index),
-                        static_cast<uint8_t>(object_subindex), has_entry_pdo_index,
+                        static_cast<uint8_t>(object_subindex),
+                        has_entry_pdo_index || has_positional_pdo,
                         static_cast<uint16_t>(object_pdo_index), entry_position);
                     if (match != EtherCATEntryMatch::found) {
                         snprintf(error_buf, error_buf_size,
@@ -267,7 +305,8 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                                  match == EtherCATEntryMatch::ambiguous
                                      ? " is ambiguous"
                                      : " was not found",
-                                 has_entry_pdo_index ? " with the requested PDO" : "",
+                                 (has_entry_pdo_index || has_positional_pdo)
+                                     ? " with the requested PDO" : "",
                                  name.c_str());
                         MessageLog::instance()->add(error_buf);
                         std::cerr << error_buf << "\n";

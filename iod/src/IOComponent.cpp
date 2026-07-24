@@ -768,7 +768,23 @@ static bool getFloatValue(MachineInstance *scope, const char *name, double &resu
 }
 
 void AnalogueInput::setupProperties(MachineInstance *m) {
-    MachineInstance *settings = m->lookup("filter_settings");
+    MachineInstance *settings = 0;
+    int64_t object_subindex = 0;
+    if (m->parameters.size() >= 4 &&
+        m->parameters[2].val.asInteger(object_subindex)) {
+        size_t settings_param = 3;
+        int64_t pdo_index = 0;
+        if (m->parameters.size() >= 5 &&
+            m->parameters[3].val.asInteger(pdo_index)) {
+            settings_param = 4;
+        }
+        if (m->parameters.size() > settings_param) {
+            settings = m->lookup(m->parameters[settings_param]);
+        }
+    }
+    else {
+        settings = m->lookup("filter_settings");
+    }
     if (settings) {
         double speed_scale = 1.0, accel_scale = 1.0;
         if (getFloatValue(settings, "velocity_scale", speed_scale)) {

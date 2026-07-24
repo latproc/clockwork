@@ -816,11 +816,18 @@ void semantic_analysis() {
             if (sm_name == "LIST") {
                 DBG_PARSER << "List has " << num_sm_params << " parameters\n";
             }
-            else if (((sm_name == "POINT" || sm_name == "INPUTBIT" || sm_name == "OUTPUTBIT" ||
-                       sm_name == "INPUTREGISTER" || sm_name == "OUTPUTREGISTER") &&
-                      num_sm_params >= 2 && num_sm_params <= 3) ||
+            else if (((sm_name == "POINT" || sm_name == "COUNTER" ||
+                       sm_name == "DIGITALVALUE" || sm_name == "ANALOGOUTPUT" ||
+                       sm_name == "STATUS_FLAG" || sm_name == "INPUTBIT" ||
+                       sm_name == "OUTPUTBIT" || sm_name == "INPUTREGISTER" ||
+                       sm_name == "OUTPUTREGISTER") &&
+                      mi->parameters.size() >= 2 && mi->parameters.size() <= 4) ||
+                     (sm_name == "ANALOGINPUT" &&
+                      mi->parameters.size() >= 2 && mi->parameters.size() <= 5) ||
                      (sm_name == "MQTTBROKER" && (num_sm_params == 2 || num_sm_params == 4)) ||
-                     (sm_name == "COUNTERRATE" && (num_sm_params == 3 || num_sm_params == 1))
+                     (sm_name == "COUNTERRATE" &&
+                      (mi->parameters.size() == 1 ||
+                       (mi->parameters.size() >= 3 && mi->parameters.size() <= 5)))
 #ifdef USE_SDO
                      || (sm_name == "SDOENTRY" && (num_sm_params == 4 || num_sm_params == 5))
 #endif //USE_SDO

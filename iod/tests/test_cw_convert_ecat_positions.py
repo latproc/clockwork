@@ -20,7 +20,7 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual([], errors)
         self.assertEqual(1, count)
         self.assertIn(
-            "(type:Output, entry_index:0x7000, entry_subindex:1) EL2838_24, 0;",
+            "(type:Output) EL2838_24, 0x7000, 1;",
             output,
         )
 
@@ -34,7 +34,7 @@ class ConverterTests(unittest.TestCase):
         output, _, errors = converter.convert_text(
             text, pathlib.Path("test.lpc"), modules, topology)
         self.assertEqual([], errors)
-        self.assertIn("entry_pdo_index:0x1601", output)
+        self.assertIn("EL2838_24, 0x7000, 1, 0x1601;", output)
 
     def test_missing_legacy_position_prevents_conversion(self):
         text = "O_Test POINT EL2838_24, 3;\n"
@@ -44,11 +44,19 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual(0, count)
         self.assertEqual(1, len(errors))
 
-    def test_existing_selector_is_not_rewritten(self):
-        text = (
-            "O_Test POINT (entry_index:0x7000, entry_subindex:1) "
-            "EL2838_24, 0;\n"
-        )
+    def test_preserves_analogue_settings_after_object_selector(self):
+        text = "I_Test ANALOGINPUT (type:Input) EL3124_18, 10, Settings;\n"
+        output, count, errors = converter.convert_text(
+            text, pathlib.Path("test.lpc"), {"EL3124_18": 18}, {18: [
+                {"position": 10, "index": 0x6000, "subindex": 17,
+                 "pdo_index": 0x1A00}
+            ]})
+        self.assertEqual([], errors)
+        self.assertEqual(1, count)
+        self.assertIn("EL3124_18, 0x6000, 17, Settings;", output)
+
+    def test_existing_positional_selector_is_not_rewritten(self):
+        text = "O_Test POINT EL2838_24, 0x7000, 1;\n"
         output, count, errors = converter.convert_text(
             text, pathlib.Path("test.lpc"), {}, {})
         self.assertEqual(text, output)

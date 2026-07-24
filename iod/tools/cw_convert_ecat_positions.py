@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Audit or convert Clockwork EtherCAT flattened entry positions.
 
-The legacy ordinal remains in each declaration.  Conversion adds explicit
-entry_index/entry_subindex properties and, only when required, entry_pdo_index.
+Conversion replaces the legacy ordinal with positional object identity:
+module,index,subindex and, only when required, a PDO index discriminator.
 No file is changed unless every candidate resolves and --write is supplied.
 """
 
@@ -30,6 +30,9 @@ DECL_RE = re.compile(
       r"(?P<position>0[xX][0-9a-fA-F]+|\d+)(?P<tail>\s*(?:,[^;]*)?;.*)$"
 )
 INDEX_RE = re.compile(r"0[xX]([0-9a-fA-F]+)")
+POSITIONAL_SELECTOR_TAIL_RE = re.compile(
+    r"^\s*,\s*(?:0[xX][0-9a-fA-F]+|\d+)(?:\s*,|;)"
+)
 
 
 def parse_number(value):
@@ -74,18 +77,15 @@ def load_topology(path):
     return result
 
 
-def selector_text(entry, entries):
+def selector_values(entry, entries):
     duplicates = [
         item for item in entries
         if item["index"] == entry["index"]
         and item["subindex"] == entry["subindex"]
     ]
-    fields = [
-        f"entry_index:0x{entry['index']:04X}",
-        f"entry_subindex:{entry['subindex']}",
-    ]
+    fields = [f"0x{entry['index']:04X}", str(entry["subindex"])]
     if len(duplicates) > 1:
-        fields.append(f"entry_pdo_index:0x{entry['pdo_index']:04X}")
+        fields.append(f"0x{entry['pdo_index']:04X}")
     return ", ".join(fields)
 
 
@@ -98,10 +98,10 @@ def convert_text(text, source, modules, topology):
         if not match:
             output.append(line)
             continue
-        options = match.group("options") or ""
-        if "entry_index" in options or "entry_subindex" in options or "entry_pdo_index" in options:
+        if POSITIONAL_SELECTOR_TAIL_RE.match(match.group("tail")):
             output.append(line)
             continue
+        options = match.group("options") or ""
         module_name = match.group("module")
         if module_name not in modules:
             errors.append(f"{source}:{line_no}: module {module_name} has no position mapping")
@@ -125,15 +125,10 @@ def convert_text(text, source, modules, topology):
             )
             output.append(line)
             continue
-        selector = selector_text(matches[0], entries)
-        if options:
-            stripped = options.rstrip()
-            new_options = stripped[:-1] + ", " + selector + ") "
-        else:
-            new_options = f"({selector}) "
+        selector = selector_values(matches[0], entries)
         newline = (
-            match.group("head") + new_options + module_name + ", "
-            + match.group("position") + match.group("tail")
+            match.group("head") + options + module_name + ", "
+            + selector + match.group("tail")
         )
         if line.endswith("\n"):
             newline += "\n"
