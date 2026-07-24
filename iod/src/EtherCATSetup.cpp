@@ -75,6 +75,33 @@ std::list<MachineInstance *> output_points;
 extern std::list<std::string> error_messages;
 extern int num_errors;
 
+#ifndef EC_SIMULATOR
+static bool getPDOIndex(const ECModule *module, const EntryDetails &details,
+                        uint16_t &pdo_index) {
+    if (module->pdos) {
+        pdo_index = module->pdos[details.pdo_index].index;
+        return true;
+    }
+    if (!module->syncs) {
+        return false;
+    }
+
+    unsigned int flattened_index = details.pdo_index;
+    for (unsigned int sync_index = 0; sync_index < module->sync_count; ++sync_index) {
+        const ec_sync_info_t &sync = module->syncs[sync_index];
+        if (flattened_index < sync.n_pdos) {
+            if (!sync.pdos) {
+                return false;
+            }
+            pdo_index = sync.pdos[flattened_index].index;
+            return true;
+        }
+        flattened_index -= sync.n_pdos;
+    }
+    return false;
+}
+#endif
+
 void initialiseOutputs() {
     std::list<MachineInstance *> default_outputs;
     std::list<MachineInstance *>::iterator iter = output_points.begin();
@@ -284,12 +311,26 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
 
                     std::vector<EtherCATEntryIdentity> identities;
                     identities.reserve(module->num_entries);
+                    bool valid_pdo_metadata = true;
                     for (unsigned int i = 0; i < module->num_entries; ++i) {
                         const EntryDetails &details = module->entry_details[i];
-                        identities.push_back(
-                            {i, module->pdo_entries[i].index,
-                             module->pdo_entries[i].subindex,
-                             module->pdos[details.pdo_index].index});
+                        uint16_t pdo_index = 0;
+                        if (!getPDOIndex(module, details, pdo_index)) {
+                            valid_pdo_metadata = false;
+                            break;
+                        }
+                        identities.push_back({i, module->pdo_entries[i].index,
+                                              module->pdo_entries[i].subindex, pdo_index});
+                    }
+                    if (!valid_pdo_metadata) {
+                        snprintf(error_buf, error_buf_size,
+                                 "Machine %s has inconsistent PDO metadata on module %s",
+                                 m->getName().c_str(), name.c_str());
+                        MessageLog::instance()->add(error_buf);
+                        std::cerr << error_buf << "\n";
+                        error_messages.push_back(error_buf);
+                        ++num_errors;
+                        continue;
                     }
 
                     const EtherCATEntryMatch match = resolveEtherCATEntry(
