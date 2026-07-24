@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Audit or convert Clockwork EtherCAT flattened entry positions.
 
-Conversion replaces the legacy ordinal with positional object identity:
+Conversion replaces the legacy configured ordinal with object identity:
 module,index,subindex and, only when required, a PDO index discriminator.
 No file is changed unless every candidate resolves and --write is supplied.
 """
@@ -22,6 +22,7 @@ IO_TYPES = (
 MODULE_RE = re.compile(
     r"^\s*([A-Za-z_][A-Za-z0-9_]*)\s*\([^;]*\bposition\s*:\s*(\d+)[^;]*\)\s*;"
 )
+CONFIG_FILE_RE = re.compile(r'\bconfig_file\s*:\s*"[^"]+"')
 DECL_RE = re.compile(
     r"^(?P<head>\s*[A-Za-z_][A-Za-z0-9_]*\s+(?:"
     + "|".join(IO_TYPES)
@@ -46,6 +47,7 @@ def parse_number(value):
 
 def load_modules(path):
     modules = {}
+    configured_positions = set()
     for line_no, line in enumerate(path.read_text().splitlines(), 1):
         match = MODULE_RE.match(line)
         if not match:
@@ -54,16 +56,28 @@ def load_modules(path):
         if name in modules:
             raise ValueError(f"{path}:{line_no}: duplicate module {name}")
         modules[name] = position
-    return modules
+        if CONFIG_FILE_RE.search(line):
+            configured_positions.add(position)
+    return modules, configured_positions
 
 
-def load_topology(path):
+def load_topology(path, configured_positions=None):
+    configured_positions = configured_positions or set()
     devices = json.loads(path.read_text())
     result = {}
     for device in devices:
         position = int(device["position"])
         entries = []
-        for sync in device.get("sync_managers", []):
+        syncs = device.get("configured_sync_managers")
+        if position in configured_positions and syncs is None:
+            raise ValueError(
+                f"{path}: module position {position} uses config_file but topology "
+                "does not contain configured_sync_managers; capture it with the "
+                "updated IOD before conversion"
+            )
+        if syncs is None:
+            syncs = device.get("sync_managers", [])
+        for sync in syncs:
             for pdo in sync.get("pdos", []):
                 pdo_index = parse_number(pdo["index"])
                 for entry in pdo.get("entries", []):
@@ -72,6 +86,7 @@ def load_topology(path):
                         "index": parse_number(entry["index"]),
                         "subindex": int(entry["subindex"]),
                         "pdo_index": pdo_index,
+                        "bit_length": int(entry["bit_length"]),
                     })
         result[position] = entries
     return result
@@ -125,6 +140,13 @@ def convert_text(text, source, modules, topology):
             )
             output.append(line)
             continue
+        if matches[0]["index"] == 0:
+            errors.append(
+                f"{source}:{line_no}: {module_name} legacy position {legacy_position} "
+                "selects a PDO alignment entry, not an EtherCAT object"
+            )
+            output.append(line)
+            continue
         selector = selector_values(matches[0], entries)
         newline = (
             match.group("head") + options + module_name + ", "
@@ -147,8 +169,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     try:
-        modules = load_modules(args.modules)
-        topology = load_topology(args.topology)
+        modules, configured_positions = load_modules(args.modules)
+        topology = load_topology(args.topology, configured_positions)
     except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

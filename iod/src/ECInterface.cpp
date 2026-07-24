@@ -2319,6 +2319,7 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "position", slave.position);
     cJSON_AddNumberToObject(root, "vendor_id", slave.vendor_id);
+    cJSON_AddNumberToObject(root, "product_code", slave.product_code);
     cJSON_AddNumberToObject(root, "revision_number", slave.revision_number);
     cJSON_AddNumberToObject(root, "alias", slave.alias);
     cJSON_AddNumberToObject(root, "drawn_current", slave.current_on_ebus);
@@ -2336,6 +2337,53 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
         if (name.substr(6) == "EL2535") {
             isEL2535 = true;
         }
+    }
+
+    /*
+     * Legacy Clockwork entry positions refer to the configured PDO entry
+     * array.  This is not necessarily identical to the master's discovery
+     * view: EtherLab may coalesce adjacent 0x0000:00 alignment entries.
+     * Export the configured view separately so conversion and audit tools do
+     * not mistake discovery ordinals for configured ordinals.
+     */
+    if (xml_module && xml_module->syncs && xml_module->pdo_entries) {
+        cJSON *json_configured_syncs = cJSON_CreateArray();
+        unsigned int configured_entry_pos = 0;
+        for (i = 0; i < xml_module->sync_count; ++i) {
+            const ec_sync_info_t &sync = xml_module->syncs[i];
+            cJSON *json_sync = cJSON_CreateObject();
+            cJSON_AddNumberToObject(json_sync, "index", sync.index);
+            cJSON_AddStringToObject(json_sync, "direction",
+                                    sync.dir == EC_DIR_OUTPUT ? "Output" : "Input");
+            cJSON *json_pdos = cJSON_CreateArray();
+            for (j = 0; j < sync.n_pdos; ++j) {
+                const ec_pdo_info_t &pdo = sync.pdos[j];
+                cJSON *json_pdo = cJSON_CreateObject();
+                cJSON_AddNumberToObject(json_pdo, "index", pdo.index);
+                cJSON_AddNumberToObject(json_pdo, "entry_count", pdo.n_entries);
+                cJSON *json_entries = cJSON_CreateArray();
+                for (k = 0; k < pdo.n_entries; ++k, ++configured_entry_pos) {
+                    const ec_pdo_entry_info_t &entry = pdo.entries[k];
+                    cJSON *json_entry = cJSON_CreateObject();
+                    cJSON_AddNumberToObject(json_entry, "pos", configured_entry_pos);
+                    cJSON_AddNumberToObject(json_entry, "index", entry.index);
+                    cJSON_AddNumberToObject(json_entry, "subindex", entry.subindex);
+                    cJSON_AddNumberToObject(json_entry, "bit_length", entry.bit_length);
+                    if (xml_module->entry_details &&
+                        configured_entry_pos < xml_module->num_entries) {
+                        cJSON_AddStringToObject(
+                            json_entry, "name",
+                            xml_module->entry_details[configured_entry_pos].name.c_str());
+                    }
+                    cJSON_AddItemToArray(json_entries, json_entry);
+                }
+                cJSON_AddItemToObject(json_pdo, "entries", json_entries);
+                cJSON_AddItemToArray(json_pdos, json_pdo);
+            }
+            cJSON_AddItemToObject(json_sync, "pdos", json_pdos);
+            cJSON_AddItemToArray(json_configured_syncs, json_sync);
+        }
+        cJSON_AddItemToObject(root, "configured_sync_managers", json_configured_syncs);
     }
 
     if (slave.sync_count) {
@@ -2414,7 +2462,12 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
                             DBG_ETHERCAT_CALLS << "ecrt_master_get_pdo_entry\n";
                             ecrt_master_get_pdo_entry(m, slave.position, i, j, k, &entry);
                             char entry_name[40];
-                            if (xml_module && entry_pos < xml_module->num_entries) {
+                            if (xml_module && xml_module->entry_details &&
+                                entry_pos < xml_module->num_entries &&
+                                xml_module->pdo_entries[entry_pos].index == entry.index &&
+                                xml_module->pdo_entries[entry_pos].subindex == entry.subindex &&
+                                xml_module->pdo_entries[entry_pos].bit_length ==
+                                    entry.bit_length) {
                                 snprintf(entry_name, 40, "%s",
                                          xml_module->entry_details[entry_pos].name.c_str());
                             }

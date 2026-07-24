@@ -63,6 +63,47 @@ class ConverterTests(unittest.TestCase):
         self.assertEqual(0, count)
         self.assertEqual([], errors)
 
+    def test_load_topology_prefers_configured_entry_positions(self):
+        topology_file = pathlib.Path(self.id().replace(".", "_") + ".json")
+        try:
+            topology_file.write_text("""[{
+              "position": 4,
+              "sync_managers": [{"pdos": [{"index": 5632, "entries": [
+                {"pos": 2, "index": 0, "subindex": 0, "bit_length": 5}
+              ]}]}],
+              "configured_sync_managers": [{"pdos": [{"index": 5632, "entries": [
+                {"pos": 2, "index": 28672, "subindex": 3, "bit_length": 1}
+              ]}]}]
+            }]""")
+            topology = converter.load_topology(topology_file, {4})
+        finally:
+            topology_file.unlink(missing_ok=True)
+        self.assertEqual(0x7000, topology[4][0]["index"])
+        self.assertEqual(3, topology[4][0]["subindex"])
+
+    def test_config_file_module_requires_configured_topology(self):
+        topology_file = pathlib.Path(self.id().replace(".", "_") + ".json")
+        try:
+            topology_file.write_text("""[{
+              "position": 4,
+              "sync_managers": []
+            }]""")
+            with self.assertRaisesRegex(ValueError, "configured_sync_managers"):
+                converter.load_topology(topology_file, {4})
+        finally:
+            topology_file.unlink(missing_ok=True)
+
+    def test_rejects_alignment_entry(self):
+        text = "O_Test POINT EL5152_04, 2;\n"
+        output, count, errors = converter.convert_text(
+            text, pathlib.Path("test.lpc"), {"EL5152_04": 4}, {4: [
+                {"position": 2, "index": 0, "subindex": 0,
+                 "pdo_index": 0x1600, "bit_length": 5}
+            ]})
+        self.assertEqual(text, output)
+        self.assertEqual(0, count)
+        self.assertIn("alignment entry", errors[0])
+
 
 if __name__ == "__main__":
     unittest.main()
