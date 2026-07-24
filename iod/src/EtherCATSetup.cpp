@@ -85,20 +85,15 @@ static bool getPDOIndex(const ECModule *module, const EntryDetails &details,
     if (!module->syncs) {
         return false;
     }
-
-    unsigned int flattened_index = details.pdo_index;
-    for (unsigned int sync_index = 0; sync_index < module->sync_count; ++sync_index) {
-        const ec_sync_info_t &sync = module->syncs[sync_index];
-        if (flattened_index < sync.n_pdos) {
-            if (!sync.pdos) {
-                return false;
-            }
-            pdo_index = sync.pdos[flattened_index].index;
-            return true;
-        }
-        flattened_index -= sync.n_pdos;
+    if (details.sm_index >= module->sync_count) {
+        return false;
     }
-    return false;
+    const ec_sync_info_t &sync = module->syncs[details.sm_index];
+    if (!sync.pdos || details.pdo_index >= sync.n_pdos) {
+        return false;
+    }
+    pdo_index = sync.pdos[details.pdo_index].index;
+    return true;
 }
 #endif
 
