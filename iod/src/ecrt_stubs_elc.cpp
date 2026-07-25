@@ -2,7 +2,7 @@
  * ecrt_stubs_elc.cpp -- Link stubs for iod-elc (USE_KERNEL_ETHERCAT builds only).
  *
  * iod-elc intentionally does not link against the EtherLab userspace library.
- * Phase 8 runtime uses KernelEthercatBus / libelcethercat for open, discovery,
+ *  runtime uses KernelEthercatBus / libelcethercat for open, discovery,
  * and SDO mailbox. Legacy ecrt symbols still appear in shared ECInterface.cpp
  * sources (cyclic, DC, PDO config, SDO request objects). These stubs satisfy
  * the linker with safe no-ops so the binary can run the kernel path without

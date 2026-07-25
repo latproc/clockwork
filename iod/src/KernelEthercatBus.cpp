@@ -6,8 +6,16 @@
 #include "DebugExtra.h"
 #include "MessageLog.h"
 #include <cassert>
-#include <cstring>
 #include <cerrno>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <dirent.h>
+#include <fcntl.h>
+#include <iostream>
+#include <sched.h>
+#include <unistd.h>
+#include <vector>
 
 KernelEthercatBus::KernelEthercatBus() = default;
 
@@ -57,6 +65,8 @@ void KernelEthercatBus::close() {
     apiNegotiated = false;
     domain_size_ = 0;
     config_generation_ = 0;
+    last_input_sequence_ = 0;
+    last_input_cycle_ = 0;
     DBG_ETHERCAT << "KernelEthercatBus closed\n";
 }
 
@@ -231,8 +241,92 @@ int KernelEthercatBus::cycleActivate(uint32_t period_ns, uint32_t flags,
     }
     if (ret == 0 && local.result == 0) {
         domain_size_ = local.domain_size;
+        // Module-load FIFO priority only applies at insmod. If the module was
+        // loaded soft-RT, elc_cycle is SCHED_OTHER and WC stays incomplete
+        // under load — promote immediately after the thread exists.
+        (void)ensureCycleThreadRealtime(/*cpu=*/1, /*fifo_priority=*/90);
     }
     return ret;
+}
+
+int KernelEthercatBus::ensureCycleThreadRealtime(int cpu, int fifo_priority) {
+    if (fifo_priority < 1) {
+        fifo_priority = 1;
+    }
+    if (fifo_priority > 99) {
+        fifo_priority = 99;
+    }
+
+    DIR *proc = opendir("/proc");
+    if (!proc) {
+        return -errno;
+    }
+
+    std::vector<pid_t> tids;
+    while (dirent *de = readdir(proc)) {
+        if (de->d_name[0] < '1' || de->d_name[0] > '9') {
+            continue;
+        }
+        char path[64];
+        snprintf(path, sizeof(path), "/proc/%s/comm", de->d_name);
+        int fd = ::open(path, O_RDONLY | O_CLOEXEC);
+        if (fd < 0) {
+            continue;
+        }
+        char comm[32] = {};
+        const ssize_t n = ::read(fd, comm, sizeof(comm) - 1);
+        ::close(fd);
+        if (n <= 0) {
+            continue;
+        }
+        // comm is "elc_cycle\n"
+        if (strncmp(comm, "elc_cycle", 9) == 0 &&
+            (comm[9] == '\0' || comm[9] == '\n')) {
+            tids.push_back(static_cast<pid_t>(atoi(de->d_name)));
+        }
+    }
+    closedir(proc);
+
+    if (tids.empty()) {
+        return -ESRCH;
+    }
+
+    struct sched_param sp = {};
+    sp.sched_priority = fifo_priority;
+    cpu_set_t set;
+    CPU_ZERO(&set);
+    if (cpu >= 0) {
+        CPU_SET(static_cast<unsigned>(cpu), &set);
+    }
+
+    int promoted = 0;
+    for (pid_t tid : tids) {
+        if (sched_setscheduler(tid, SCHED_FIFO, &sp) != 0) {
+            char buf[160];
+            snprintf(buf, sizeof(buf),
+                     "elc_cycle tid=%d sched_setscheduler(FIFO,%d) failed: %s",
+                     (int)tid, fifo_priority, strerror(errno));
+            MessageLog::instance()->add(buf);
+            std::cerr << buf << "\n";
+            continue;
+        }
+        if (cpu >= 0 && sched_setaffinity(tid, sizeof(set), &set) != 0) {
+            char buf[160];
+            snprintf(buf, sizeof(buf), "elc_cycle tid=%d sched_setaffinity(cpu %d) failed: %s",
+                     (int)tid, cpu, strerror(errno));
+            MessageLog::instance()->add(buf);
+            std::cerr << buf << "\n";
+            // Priority already raised; affinity is best-effort.
+        }
+        char buf[128];
+        snprintf(buf, sizeof(buf),
+                 "elc_cycle tid=%d promoted SCHED_FIFO prio=%d cpu=%d", (int)tid,
+                 fifo_priority, cpu);
+        MessageLog::instance()->add(buf);
+        std::cout << buf << "\n";
+        ++promoted;
+    }
+    return promoted > 0 ? 0 : -EPERM;
 }
 
 int KernelEthercatBus::cycleDeactivate(struct elc_cycle_deactivate *out) {
@@ -242,6 +336,27 @@ int KernelEthercatBus::cycleDeactivate(struct elc_cycle_deactivate *out) {
     struct elc_cycle_deactivate local = {};
     elc_init_api_header(&local, sizeof(local));
     int ret = elc_cycle_deactivate(handle, &local);
+    if (out) {
+        *out = local;
+    }
+    return ret;
+}
+
+int KernelEthercatBus::cycleSetPeriod(uint32_t period_ns, struct elc_cycle_period_update *out) {
+    if (!handle) {
+        return -EINVAL;
+    }
+    if (period_ns < ELC_CYCLE_PERIOD_MIN_NS) {
+        period_ns = ELC_CYCLE_PERIOD_MIN_NS;
+    }
+    if (period_ns > ELC_CYCLE_PERIOD_MAX_NS) {
+        period_ns = ELC_CYCLE_PERIOD_MAX_NS;
+    }
+    struct elc_cycle_period_update local = {};
+    elc_init_api_header(&local, sizeof(local));
+    local.config_generation = config_generation_;
+    local.cycle_period_ns = period_ns;
+    int ret = elc_cycle_set_period(handle, &local);
     if (out) {
         *out = local;
     }
@@ -262,14 +377,50 @@ int KernelEthercatBus::cycleStatus(struct elc_cycle_status *st) {
     return elc_cycle_status(handle, st);
 }
 
+int KernelEthercatBus::cycleInfo(struct elc_cycle_info *info) {
+    if (!handle || !info) {
+        return -EINVAL;
+    }
+    elc_init_api_header(info, sizeof(*info));
+    if (config_generation_) {
+        info->config_generation = config_generation_;
+    }
+    return elc_cycle_info(handle, info);
+}
+
+int KernelEthercatBus::cycleDcInfo(struct elc_cycle_dc_info *info) {
+    if (!handle || !info) {
+        return -EINVAL;
+    }
+    elc_init_api_header(info, sizeof(*info));
+    if (config_generation_) {
+        info->config_generation = config_generation_;
+    }
+    return elc_cycle_dc_info(handle, info);
+}
+
 int KernelEthercatBus::getInputSnapshot(void *buf, size_t len, struct elc_input_snapshot *snap) {
     if (!handle || !buf || !snap) {
         return -EINVAL;
     }
     elc_init_api_header(snap, sizeof(*snap));
+    // Bind to the generation we applied so the lib skips an extra IO-status
+    // round-trip and the kernel returns the current active double-buffer for
+    // that generation (always the latest published coherent image).
+    if (config_generation_) {
+        snap->config_generation = config_generation_;
+    }
     snap->data_ptr = reinterpret_cast<uint64_t>(buf);
     snap->data_capacity = static_cast<uint32_t>(len);
-    return elc_get_input_snapshot(handle, snap, buf, len);
+    int ret = elc_get_input_snapshot(handle, snap, buf, len);
+    if (ret == 0) {
+        if (snap->config_generation) {
+            config_generation_ = snap->config_generation;
+        }
+        last_input_sequence_ = snap->input_sequence;
+        last_input_cycle_ = snap->cycle_count;
+    }
+    return ret;
 }
 
 int KernelEthercatBus::publishOutput(const void *image, const void *mask, size_t len,
@@ -278,6 +429,11 @@ int KernelEthercatBus::publishOutput(const void *image, const void *mask, size_t
         return -EINVAL;
     }
     elc_init_api_header(pub, sizeof(*pub));
+    // Always publish against the generation we activated so arm() can use the
+    // returned output_sequence as the exact latest publication for that gen.
+    if (config_generation_) {
+        pub->config_generation = config_generation_;
+    }
     pub->data_ptr = reinterpret_cast<uint64_t>(image);
     pub->mask_ptr = reinterpret_cast<uint64_t>(mask);
     pub->data_size = static_cast<uint32_t>(len);
@@ -310,4 +466,24 @@ int KernelEthercatBus::getIoStatus(struct elc_io_status *st) {
     }
     elc_init_api_header(st, sizeof(*st));
     return elc_get_io_status(handle, st);
+}
+
+int KernelEthercatBus::getSlaveInfo(uint16_t position, struct elc_slave_info *info) {
+    if (!handle || !info) {
+        return -EINVAL;
+    }
+    elc_init_api_header(info, sizeof(*info));
+    info->position = position;
+    return elc_get_slave_info(handle, position, info);
+}
+
+int KernelEthercatBus::getConfigSlaveStatus(uint32_t config_id,
+                                            struct elc_config_slave_status *st) {
+    if (!handle || !st) {
+        return -EINVAL;
+    }
+    elc_init_api_header(st, sizeof(*st));
+    st->config_id = config_id;
+    st->config_generation = config_generation_;
+    return elc_get_config_slave_status(handle, st);
 }

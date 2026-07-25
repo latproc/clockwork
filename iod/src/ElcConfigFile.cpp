@@ -439,6 +439,7 @@ int elcPopulateModulesFromConfigFile(KernelEthercatBus *bus, const char *path) {
         m->product_code = s.product_code;
         m->alias = s.alias;
         m->revision_no = s.revision;
+        m->elc_config_id = s.config_id;
 
         // Count entries
         unsigned int total_entries = 0;
@@ -515,9 +516,11 @@ int elcPopulateModulesFromConfigFile(KernelEthercatBus *bus, const char *path) {
         m->syncs = c_syncs;
         m->sync_count = sync_count;
         m->pdos = nullptr; // owned via syncs[i].pdos
+        // Start in PREOP until cycle is active; STARTUP waits for PREOP then
+        // sends activate, then requires OP + slave_states==8.
         m->slave_config_state.online = 1;
-        m->slave_config_state.operational = 1;
-        m->slave_config_state.al_state = 8;
+        m->slave_config_state.operational = 0;
+        m->slave_config_state.al_state = 2; // PREOP
     }
     return 0;
 }

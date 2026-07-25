@@ -84,6 +84,8 @@ class ECModule {
     uint32_t vendor_id;
     uint32_t product_code;
     uint32_t revision_no;
+    /** ELC topology slave config_id (0 when not from kernel topology conf). */
+    uint32_t elc_config_id;
     unsigned int *offsets;
     unsigned int *bit_positions;
     unsigned int sync_count;
@@ -123,6 +125,8 @@ typedef struct ECPDOEntryReg {
 class ECInterface {
   public:
     static unsigned int FREQUENCY;
+    /** Kernel/legacy bus period locked at activate (µs). 0 = not yet activated. */
+    static unsigned long activated_cycle_period_us_;
     static ec_master_t *master;
     static uint64_t master_last_checked;  // time the master status was last checked
     static uint64_t master_state_changed; // time a last state change was detected in the master
@@ -145,11 +149,24 @@ class ECInterface {
     void check_domain1_state(void);
     void check_master_state(void);
     void check_slave_config_states(void);
-    void receiveState(); // get state from EtherCAT, use collectState() to process it
+    /**
+     * Receive EtherCAT state. On the kernel path, pull_process_image controls
+     * whether a full coherent snapshot is copied (expensive). Status/AL still
+     * refresh on their own rate limits. Call with true before collectState /
+     * POLLING_DELAY feed; false on pure bus timer ticks between CW pulls.
+     */
+    void receiveState(bool pull_process_image = true);
     void receivePendingDomainState(); // collect a response that arrived late in this cycle
     int collectState(); // returns non-zero if there are machines that are affected by the new state
     void sendUpdates();
     void updateDomain(uint32_t size, uint8_t *data, uint8_t *mask);
+#ifdef USE_KERNEL_ETHERCAT
+    /** Write a digital output bit into the kernel output shadow (turnOn/turnOff). */
+    void applyKernelOutputBit(unsigned int io_offset, unsigned int bitpos, bool on);
+    /** Write multi-bit/analogue value into the kernel output shadow. */
+    void applyKernelOutputValue(unsigned int io_offset, unsigned int bitpos, unsigned int bitlen,
+                                uint32_t value);
+#endif
 
     bool start();
     bool stop();
@@ -164,6 +181,16 @@ class ECInterface {
     std::vector<ec_slave_info_t> listSlaves();
     bool activate();   // attempt to activate the master
     bool deactivate(); // deactivate the master
+    /**
+     * SYSTEM.CYCLE_DELAY (microseconds) → EtherCAT clocking only.
+     * Before activate: sets FREQUENCY / get_cycle_time for activate().
+     * After activate: bus period is frozen (kernel set_period not used while
+     * live); FREQUENCY may track for the ecat userspace timer only.
+     * Clockwork poll rate is SYSTEM.POLLING_DELAY (ProcessingThread).
+     */
+    bool applyCyclePeriodUs(unsigned long period_us);
+    /** Bus period frozen at last successful activate (µs); 0 if not active. */
+    unsigned long activatedCyclePeriodUs() const;
     void configureModules();
     void registerModules();
     tl::expected<bool, std::string> addModule(ECModule *m, bool reset_io);
@@ -180,6 +207,14 @@ class ECInterface {
     void setReferenceTime(uint32_t now);
 #ifdef USE_DC
     uint64_t getApplicationTimeNs() const { return dc_application_time_ns; }
+    /** IOTIME resolution matches legacy ecrt path: application time in µs
+     *  (getApplicationTimeNs() / 1000). */
+    uint64_t getApplicationTimeUs() const { return dc_application_time_ns / 1000ULL; }
+#endif
+#ifdef USE_KERNEL_ETHERCAT
+    /** Refresh dc_application_time_ns from the kernel cycle DC contract so
+     *  updateClock() / IOTIME use the same µs scale as the legacy ecrt path. */
+    void refreshKernelApplicationTime();
 #endif
 
     void report_module_state_change(ECModule *m, int i);

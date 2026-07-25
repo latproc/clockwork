@@ -30,7 +30,9 @@
 #include <errno.h>
 #include <fstream>
 #include <iomanip>
+#include <algorithm>
 #include <iostream>
+#include <vector>
 #include <list>
 #include <limits>
 #include <signal.h>
@@ -47,6 +49,8 @@
 #ifdef USE_KERNEL_ETHERCAT
 #include "KernelEthercatBus.h"
 #include "ElcConfigFile.h"
+#include "options.h"
+#include "IOComponent.h"
 #endif
 #endif
 
@@ -59,6 +63,19 @@ extern Statistics *statistics;
 void signal_handler(int signum);
 
 unsigned int ECInterface::FREQUENCY = 2000;
+unsigned long ECInterface::activated_cycle_period_us_ = 0;
+
+#ifdef USE_KERNEL_ETHERCAT
+// Commanded process image for outputs. receiveState() overwrites domain1_pd with
+// the input snapshot; without this shadow, turnOn bits are wiped before publish.
+static std::vector<uint8_t> g_kernel_output_image;
+static std::vector<uint8_t> g_kernel_output_mask;
+// Publish only when the shadow changes (or until first successful arm).
+static bool g_kernel_output_dirty = true;
+static bool g_kernel_outputs_armed = false;
+static std::vector<uint8_t> g_kernel_pub_mask; // cached full-domain publish mask
+static bool g_kernel_pub_mask_valid = false;
+#endif
 ec_master_t *ECInterface::master = NULL;
 ec_master_state_t ECInterface::master_state = {};
 uint64_t ECInterface::master_state_changed = 0;
@@ -140,10 +157,11 @@ ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), num_entries(0), entry_
     slave_config = 0;
     memset(&slave_config_state, 0, sizeof(ec_slave_config_state_t));
     alias = 0;
-    ;
     position = 0;
     vendor_id = 0;
     product_code = 0;
+    revision_no = 0;
+    elc_config_id = 0;
     sync_count = 0;
 }
 
@@ -994,6 +1012,20 @@ void ECInterface::configureModules() {
             std::cerr << "Failed to populate modules from topology " << topo << " (" << ret
                       << ")\n";
         }
+        // Ready for STARTUP SEND activate: bus configured, report PREOP via kernel AL.
+        master_state.link_up = 1;
+        if (!ethercat_status) {
+            ethercat_status = MachineInstance::find("ETHERCAT");
+        }
+        if (ethercat_status) {
+            // Seed slave_states from current module AL aggregate (typically PREOP=2).
+            check_slave_config_states();
+            SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "CONNECTED");
+            SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(ethercat_status));
+            if (ssa) {
+                ethercat_status->enqueueAction(ssa);
+            }
+        }
         return;
     }
 #endif
@@ -1437,6 +1469,7 @@ bool ECInterface::deactivate() {
         kernelBus->disarmOutput();
         kernelBus->cycleDeactivate();
         active = false;
+        activated_cycle_period_us_ = 0;
         domain1 = nullptr;
         if (domain1_pd) {
             delete[] domain1_pd;
@@ -1500,16 +1533,66 @@ bool ECInterface::deactivate() {
     return true;
 }
 
+unsigned long ECInterface::activatedCyclePeriodUs() const { return activated_cycle_period_us_; }
+
+bool ECInterface::applyCyclePeriodUs(unsigned long period_us) {
+    if (period_us < 100) {
+        period_us = 100; // 0.1 ms floor (matches ELC min)
+    }
+    if (period_us > 1000000) {
+        period_us = 1000000;
+    }
+    set_cycle_time(period_us);
+
+    // Bus is fixed for the run after activate. Keep ecat userspace timer on the
+    // activated period so pull cadence stays matched to the wire.
+    if (active && activated_cycle_period_us_ != 0) {
+        if (period_us != activated_cycle_period_us_) {
+            static unsigned long last_ignored = 0;
+            if (period_us != last_ignored) {
+                std::cerr << "SYSTEM.CYCLE_DELAY=" << period_us
+                          << " us ignored for EtherCAT bus (locked at "
+                          << activated_cycle_period_us_
+                          << " us at activate). Use SYSTEM.POLLING_DELAY for "
+                             "Clockwork poll rate.\n";
+                last_ignored = period_us;
+            }
+        }
+        FREQUENCY = static_cast<unsigned int>(1000000UL / activated_cycle_period_us_);
+        return true;
+    }
+
+    const unsigned int new_freq =
+        period_us > 0 ? static_cast<unsigned int>(1000000UL / period_us) : 1;
+    if (new_freq == 0) {
+        return false;
+    }
+    FREQUENCY = new_freq;
+    DBG_ETHERCAT << "EtherCAT CYCLE_DELAY set to " << period_us << " us (freq=" << FREQUENCY
+                 << " Hz) — applied at next activate\n";
+    return true;
+}
+
 bool ECInterface::activate() {
 #ifdef USE_KERNEL_ETHERCAT
     if (kernelBus && kernelBus->isOpen()) {
-        uint32_t period_ns = 1000000000UL / FREQUENCY;
+        // Prefer SYSTEM.CYCLE_DELAY (µs) so startup can use 250/500 µs without
+        // waiting for a later set_period.
+        unsigned long period_us = get_cycle_time();
+        if (period_us < 100) {
+            period_us = 100;
+        }
+        uint32_t period_ns = static_cast<uint32_t>(period_us * 1000UL);
         if (period_ns < ELC_CYCLE_PERIOD_MIN_NS) {
             period_ns = ELC_CYCLE_PERIOD_MIN_NS;
+            period_us = period_ns / 1000UL;
         }
         if (period_ns > ELC_CYCLE_PERIOD_MAX_NS) {
             period_ns = ELC_CYCLE_PERIOD_MAX_NS;
+            period_us = period_ns / 1000UL;
         }
+        FREQUENCY = period_us > 0 ? static_cast<unsigned int>(1000000UL / period_us) : FREQUENCY;
+        set_cycle_time(period_us);
         struct elc_cycle_activate act = {};
         int ret = kernelBus->cycleActivate(period_ns, 0, &act);
         if (ret != 0 || act.result != 0) {
@@ -1517,6 +1600,7 @@ bool ECInterface::activate() {
                       << "\n";
             return false;
         }
+        activated_cycle_period_us_ = period_us;
         size_t dsz = act.domain_size ? act.domain_size : kernelBus->domainSize();
         if (dsz == 0) {
             dsz = 1;
@@ -1527,6 +1611,12 @@ bool ECInterface::activate() {
         }
         domain1_pd = new uint8_t[dsz];
         memset(domain1_pd, 0, dsz);
+        g_kernel_output_image.assign(dsz, 0);
+        g_kernel_output_mask.assign(dsz, 0);
+        g_kernel_pub_mask.clear();
+        g_kernel_pub_mask_valid = false;
+        g_kernel_output_dirty = true; // publish zeros once after activate
+        g_kernel_outputs_armed = false;
         // Non-null marker so existing domain checks pass (not an ecrt domain).
         domain1 = reinterpret_cast<ec_domain_t *>(domain1_pd);
         data.setDataSize(dsz);
@@ -1534,8 +1624,39 @@ bool ECInterface::activate() {
         active = true;
         initialised = true;
         all_ok = true;
-        DBG_ETHERCAT << "Kernel cycle active period_ns=" << period_ns
-                     << " domain_size=" << dsz << "\n";
+#ifdef USE_DC
+        // Same seed as the legacy ecrt activate path: monotonic ns aligned to
+        // cycle. refreshKernelApplicationTime() then tracks the kernel clock.
+        {
+            const uint64_t cycle_ns = static_cast<uint64_t>(period_ns);
+            dc_application_time_ns = monotonicTimeNs();
+            if (cycle_ns) {
+                dc_application_time_ns -= dc_application_time_ns % cycle_ns;
+            }
+            dc_cycle_adjustment_ns = 0;
+            dc_difference_total_ns = 0;
+            dc_delta_total_ns = 0;
+            dc_last_difference_ns = 0;
+            dc_filter_count = 0;
+            dc_reference_valid = false;
+        }
+        refreshKernelApplicationTime();
+#endif
+        // MODULE / slave_states come from kernel via check_slave_config_states().
+        check_slave_config_states();
+        if (!ethercat_status) {
+            ethercat_status = MachineInstance::find("ETHERCAT");
+        }
+        if (ethercat_status) {
+            SetStateActionTemplate ssat = SetStateActionTemplate("SELF", "ACTIVE");
+            SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(ethercat_status));
+            if (ssa) {
+                ethercat_status->enqueueAction(ssa);
+            }
+        }
+        std::cout << "Kernel cycle active period_us=" << period_us
+                  << " period_ns=" << period_ns << " freq=" << FREQUENCY
+                  << " domain_size=" << dsz << "\n";
         return true;
     }
 #endif
@@ -1591,6 +1712,14 @@ bool ECInterface::activate() {
         return false;
     }
     active = true;
+    {
+        unsigned long period_us = get_cycle_time();
+        if (period_us < 100) {
+            period_us = 100;
+        }
+        activated_cycle_period_us_ = period_us;
+        FREQUENCY = static_cast<unsigned int>(1000000UL / period_us);
+    }
     snprintf(buf, 200, "Activated master");
     MessageLog::instance()->add(buf);
     DBG_ETHERCAT << buf << "\n";
@@ -1670,18 +1799,25 @@ void ECInterface::init() {
     initialised = true;
     return;
 #elif defined(USE_KERNEL_ETHERCAT)
-    // Kernel transport (iod-elc): discovery + SDO only for 
     if (!kernelBus) {
         kernelBus.reset(new KernelEthercatBus());
     }
     int ret = kernelBus->open();
     if (ret != 0) {
-        DBG_MSG << "Failed to open kernel EtherCAT transport: " << ret << "\n";
+        std::cerr << "Failed to open kernel EtherCAT transport: " << ret
+                  << " (" << strerror(-ret) << ")\n";
         initialised = false;
         return;
     }
     initialised = true;
-    DBG_ETHERCAT << "KernelEthercatBus opened successfully for discovery and SDO ()\n";
+    all_ok = true;
+    master_state.link_up = 1;
+    master_state.al_states = 0x2; // PREOP until cycle activate
+    ethercat_status = MachineInstance::find("ETHERCAT");
+    if (ethercat_status) {
+        ethercat_status->setValue("slave_states", Value{static_cast<uint64_t>(2)});
+    }
+    DBG_ETHERCAT << "KernelEthercatBus opened on /dev/elc_ethercat0\n";
     return;
 #else
     DBG_ETHERCAT_CALLS << "ecrt_request_master\n";
@@ -1787,12 +1923,6 @@ ECInterface *ECInterface::instance() {
     if (!instance_) {
         instance_ = new ECInterface();
     }
-    if (!instance_->initialised) {
-        char buf[100];
-        snprintf(buf, 100, "EtherCAT interface failed to initialise");
-        MessageLog::instance()->add(buf);
-        DBG_ETHERCAT << buf << "\n";
-    }
     return instance_;
 }
 
@@ -1812,82 +1942,322 @@ static void display(uint8_t *p, size_t n) {
 }
 #endif
 
-void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
-    DBG_ETHERCAT_CALLS << "ecrt_domain_data\n";
-    uint8_t *domain1_pd = ecrt_domain_data(domain1);
-    uint8_t *pd = domain1_pd;
+#ifdef USE_KERNEL_ETHERCAT
+void ECInterface::applyKernelOutputBit(unsigned int io_offset, unsigned int bitpos, bool on) {
+    if (!active || !domain1_pd) {
+        return;
+    }
+    size_t dsz = kernelBus ? kernelBus->domainSize() : 0;
+    if (dsz == 0) {
+        dsz = data.getProcessDataSize();
+    }
+    if (dsz == 0) {
+        return;
+    }
+    if (g_kernel_output_image.size() < dsz) {
+        g_kernel_output_image.resize(dsz, 0);
+        g_kernel_output_mask.resize(dsz, 0);
+    }
+    unsigned int byte = io_offset + bitpos / 8;
+    unsigned int bit = bitpos % 8;
+    if (byte >= dsz) {
+        return;
+    }
+    const uint8_t m = static_cast<uint8_t>(1u << bit);
+    g_kernel_output_mask[byte] = static_cast<uint8_t>(g_kernel_output_mask[byte] | m);
+    if (on) {
+        g_kernel_output_image[byte] = static_cast<uint8_t>(g_kernel_output_image[byte] | m);
+        domain1_pd[byte] = static_cast<uint8_t>(domain1_pd[byte] | m);
+    }
+    else {
+        g_kernel_output_image[byte] = static_cast<uint8_t>(g_kernel_output_image[byte] & ~m);
+        domain1_pd[byte] = static_cast<uint8_t>(domain1_pd[byte] & ~m);
+    }
+    g_kernel_output_dirty = true;
+}
 
-    /*
-        std::cerr << "updating domain (size = " << size << ")\n";
-        std::cerr << "process: "; display(pd); std::cout << "\n";
-        std::cerr << "   mask: "; display(mask); std::cout << "\n";
-        std::cerr << "   data: "; display(data); std::cout << "\n";
-
-        if (!all_ok || master_state.al_states != 0x8) {
-            std::cerr << "refusing to update the domain since all is not ok\n";
+void ECInterface::applyKernelOutputValue(unsigned int io_offset, unsigned int bitpos,
+                                         unsigned int bitlen, uint32_t value) {
+    if (!active || !domain1_pd || bitlen == 0) {
+        return;
+    }
+    size_t dsz = kernelBus ? kernelBus->domainSize() : 0;
+    if (dsz == 0) {
+        dsz = data.getProcessDataSize();
+    }
+    if (g_kernel_output_image.size() < dsz) {
+        g_kernel_output_image.resize(dsz, 0);
+        g_kernel_output_mask.resize(dsz, 0);
+    }
+    // Little-endian multi-byte write starting at io_offset (bitpos for sub-byte).
+    if (bitlen == 1) {
+        applyKernelOutputBit(io_offset, bitpos, value != 0);
+        return;
+    }
+    unsigned int nbytes = (bitlen + 7) / 8;
+    if (io_offset + nbytes > dsz) {
+        return;
+    }
+    for (unsigned int i = 0; i < nbytes; ++i) {
+        uint8_t byte_mask = 0xff;
+        if (bitlen < 8 && i == 0) {
+            byte_mask = static_cast<uint8_t>((1u << bitlen) - 1u) << (bitpos % 8);
         }
-    */
+        g_kernel_output_mask[io_offset + i] =
+            static_cast<uint8_t>(g_kernel_output_mask[io_offset + i] | byte_mask);
+        uint8_t vb = static_cast<uint8_t>((value >> (8 * i)) & 0xff);
+        g_kernel_output_image[io_offset + i] = static_cast<uint8_t>(
+            (g_kernel_output_image[io_offset + i] & ~byte_mask) | (vb & byte_mask));
+        domain1_pd[io_offset + i] = static_cast<uint8_t>(
+            (domain1_pd[io_offset + i] & ~byte_mask) | (vb & byte_mask));
+    }
+    g_kernel_output_dirty = true;
+}
+#endif
+
+void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
+#ifdef USE_KERNEL_ETHERCAT
+    // domain1 is a non-ecrt marker; the real images are domain1_pd + g_kernel_output_*.
+    // ecrt_domain_data() is a stub — never use it here.
+    if (!domain1_pd || !data || !mask || size == 0) {
+        return;
+    }
+    if (g_kernel_output_image.size() < size) {
+        g_kernel_output_image.resize(size, 0);
+        g_kernel_output_mask.resize(size, 0);
+    }
+    uint8_t *pd = domain1_pd;
+    uint8_t *out = g_kernel_output_image.data();
+    uint8_t *omask = g_kernel_output_mask.data();
+#else
+    DBG_ETHERCAT_CALLS << "ecrt_domain_data\n";
+    uint8_t *pd = ecrt_domain_data(domain1);
+    if (!pd || !data || !mask) {
+        return;
+    }
+#endif
+
+#ifdef USE_KERNEL_ETHERCAT
+    bool changed = false;
+#endif
     for (unsigned int i = 0; i < size; ++i) {
-        if (*mask && *data != *pd) {
-            /*
-                        std::cout << "at " << i << " data ("
-                            << (unsigned int)(*data) << ") different to domain ("
-                            << (unsigned int)(*pd) << ")\n";
-            */
-            uint8_t bitmask = 0x01;
-            int count = 0;
-            while (bitmask) {
-                if (*mask & bitmask) { // we care about this bit
-                    uint8_t pdb = *pd & bitmask;
-                    uint8_t db = *data & bitmask;
-                    if (pdb != db) { // changed
-                        //std::cout << "bit " << i << ":" << count << " changed to ";
-                        if (db) {
-                            *pd |= bitmask;
-                            //std::cout << "on";
-                        }
-                        else {
-                            *pd &= (uint8_t)(0xff - bitmask);
-                            //std::cout << "off";
+        if (*mask) {
+#ifdef USE_KERNEL_ETHERCAT
+            // Always merge commanded bits into the output shadow (even if
+            // domain1_pd already matches — first write after a wiped snapshot).
+            if (*mask) {
+                const uint8_t prev = out[i];
+                omask[i] = static_cast<uint8_t>(omask[i] | *mask);
+                out[i] = static_cast<uint8_t>((out[i] & ~*mask) | (*data & *mask));
+                pd[i] = static_cast<uint8_t>((pd[i] & ~*mask) | (*data & *mask));
+                if (out[i] != prev) {
+                    changed = true;
+                }
+            }
+#else
+            if (*data != *pd) {
+                uint8_t bitmask = 0x01;
+                while (bitmask) {
+                    if (*mask & bitmask) {
+                        uint8_t pdb = *pd & bitmask;
+                        uint8_t db = *data & bitmask;
+                        if (pdb != db) {
+                            if (db) {
+                                *pd |= bitmask;
+                            }
+                            else {
+                                *pd &= static_cast<uint8_t>(0xff - bitmask);
+                            }
                         }
                     }
+                    bitmask = static_cast<uint8_t>(bitmask << 1);
                 }
-                bitmask = bitmask << 1;
-                ++count;
             }
+#endif
         }
         ++pd;
         ++mask;
         ++data;
+#ifdef USE_KERNEL_ETHERCAT
+        ++out;
+        ++omask;
+#endif
+    }
+#ifdef USE_KERNEL_ETHERCAT
+    if (changed) {
+        g_kernel_output_dirty = true;
+    }
+#endif
+}
+
+#ifdef USE_KERNEL_ETHERCAT
+// Merge commanded outputs into a full-domain snapshot. Kernel snapshots copy
+// the live domain layout with output bytes zeroed when disarmed; without this
+// merge, turnOn/VALUE commands vanish before collect/publish.
+static void mergeKernelOutputShadow(uint8_t *domain, size_t dsz) {
+    if (!domain || g_kernel_output_image.empty()) {
+        return;
+    }
+    size_t n = std::min(dsz, g_kernel_output_image.size());
+    for (size_t i = 0; i < n; ++i) {
+        const uint8_t m = g_kernel_output_mask[i];
+        if (m) {
+            domain[i] = static_cast<uint8_t>((domain[i] & ~m) | (g_kernel_output_image[i] & m));
+        }
     }
 }
 
-void ECInterface::receiveState() {
+// Pull the kernel's latest coherent process image into domain1_pd.
+// The kmod double-buffers: each successful RT cycle publishes into the
+// inactive buffer and swaps; GET_INPUT_SNAPSHOT always returns the current
+// active buffer (input_sequence advances per publish). Failed ioctl keeps the
+// previous domain1_pd (last known current), never zeros it.
+static int pullLatestKernelSnapshot(KernelEthercatBus *bus, uint8_t *domain1_pd, size_t dsz,
+                                    long &warned) {
+    if (!bus || !domain1_pd || dsz == 0) {
+        return -EINVAL;
+    }
+    struct elc_input_snapshot snap = {};
+    int ret = bus->getInputSnapshot(domain1_pd, dsz, &snap);
+    if (ret != 0) {
+        if (warned++ % 200 == 0) {
+            std::cerr << "elc_get_input_snapshot failed: " << ret
+                      << " (keeping previous domain image)\n";
+        }
+        return ret;
+    }
+    mergeKernelOutputShadow(domain1_pd, dsz);
+    return 0;
+}
+
+void ECInterface::refreshKernelApplicationTime() {
+#ifdef USE_DC
+    if (!kernelBus || !kernelBus->isOpen()) {
+        return;
+    }
+    // Prefer the kernel DC motion-clock contract (same field the legacy ecrt
+    // path exposes as dc_application_time_ns). Fall back to the cycle schedule
+    // time, then to a monotonic seed advanced by cycle index * period.
+    struct elc_cycle_dc_info dc = {};
+    if (kernelBus->cycleDcInfo(&dc) == 0) {
+        if (dc.application_time_ns != 0) {
+            dc_application_time_ns = dc.application_time_ns;
+            return;
+        }
+        if (dc.scheduled_time_ns != 0) {
+            dc_application_time_ns = dc.scheduled_time_ns;
+            return;
+        }
+        if (dc.cycle_period_ns != 0 && dc.cycle_index != 0) {
+            // Reconstruct a DC-like ns clock: seed once, then index * period.
+            static uint64_t kernel_app_seed_ns = 0;
+            static uint64_t kernel_app_seed_cycle = 0;
+            if (kernel_app_seed_ns == 0) {
+                kernel_app_seed_ns = monotonicTimeNs();
+                kernel_app_seed_ns -= kernel_app_seed_ns % dc.cycle_period_ns;
+                kernel_app_seed_cycle = dc.cycle_index;
+            }
+            const uint64_t delta_cycles =
+                (dc.cycle_index >= kernel_app_seed_cycle)
+                    ? (dc.cycle_index - kernel_app_seed_cycle)
+                    : 0;
+            dc_application_time_ns =
+                kernel_app_seed_ns + delta_cycles * dc.cycle_period_ns;
+            return;
+        }
+    }
+    struct elc_cycle_info info = {};
+    if (kernelBus->cycleInfo(&info) == 0) {
+        if (info.scheduled_time_ns != 0) {
+            dc_application_time_ns = info.scheduled_time_ns;
+            return;
+        }
+        if (info.cycle_period_ns != 0 && info.cycle_index != 0) {
+            static uint64_t kernel_info_seed_ns = 0;
+            static uint64_t kernel_info_seed_cycle = 0;
+            if (kernel_info_seed_ns == 0) {
+                kernel_info_seed_ns = monotonicTimeNs();
+                kernel_info_seed_ns -= kernel_info_seed_ns % info.cycle_period_ns;
+                kernel_info_seed_cycle = info.cycle_index;
+            }
+            const uint64_t delta_cycles =
+                (info.cycle_index >= kernel_info_seed_cycle)
+                    ? (info.cycle_index - kernel_info_seed_cycle)
+                    : 0;
+            dc_application_time_ns =
+                kernel_info_seed_ns + delta_cycles * info.cycle_period_ns;
+            return;
+        }
+    }
+    // Last resort: wall-adjacent monotonic ns (still /1000 → µs for IOTIME).
+    if (dc_application_time_ns == 0) {
+        dc_application_time_ns = monotonicTimeNs();
+    }
+#endif
+}
+#endif
+
+void ECInterface::receiveState(bool pull_process_image) {
     static long warned = 0;
 #ifdef USE_KERNEL_ETHERCAT
     if (kernelBus && kernelBus->isOpen()) {
         if (!initialised) {
             return;
         }
-        if (active && domain1_pd) {
+        if (active && domain1_pd && pull_process_image) {
             size_t dsz = kernelBus->domainSize();
             if (dsz == 0) {
                 dsz = data.getProcessDataSize();
             }
             if (dsz > 0) {
-                struct elc_input_snapshot snap = {};
-                int ret = kernelBus->getInputSnapshot(domain1_pd, dsz, &snap);
-                if (ret != 0 && warned++ % 200 == 0) {
-                    std::cerr << "elc_get_input_snapshot failed: " << ret << "\n";
+                // Latest coherent image from kernel double-buffer. Callers
+                // should only request this at POLLING_DELAY (or first run);
+                // intermediate bus ticks keep the previous domain1_pd.
+                if (pullLatestKernelSnapshot(kernelBus.get(), domain1_pd, dsz, warned) == 0) {
+                    // Keep IOTIME / getApplicationTimeNs() on the same µs scale
+                    // as the legacy ecrt DC application clock.
+                    refreshKernelApplicationTime();
                 }
             }
             last_receive = microsecs();
         }
-        struct elc_io_status st = {};
-        if (kernelBus->getIoStatus(&st) == 0) {
-            master_state.slaves_responding = st.slaves_responding;
-            master_state.link_up = st.link_up ? 1 : 0;
-            all_ok = st.bus_healthy != 0;
+        // IO status is not needed every bus tick once armed and healthy.
+        // Rate-limit: 10 ms when healthy+armed, 1 ms until first healthy arm.
+        {
+            static uint64_t last_io_status = 0;
+            const uint64_t io_period_us =
+                (g_kernel_outputs_armed && all_ok) ? 10000ULL : 1000ULL;
+            uint64_t t = microsecs();
+            if (last_io_status == 0 || t - last_io_status >= io_period_us) {
+                last_io_status = t;
+                struct elc_io_status st = {};
+                if (kernelBus->getIoStatus(&st) == 0) {
+                    master_state.slaves_responding = st.slaves_responding;
+                    master_state.link_up = st.link_up ? 1 : 0;
+                    all_ok = st.bus_healthy != 0 || (!active && st.link_up);
+                    if (!st.outputs_armed) {
+                        g_kernel_outputs_armed = false;
+                        // Lost arm (fault/disarm) — republish when healthy.
+                        if (st.bus_healthy) {
+                            g_kernel_output_dirty = true;
+                        }
+                    }
+                    else {
+                        g_kernel_outputs_armed = true;
+                    }
+                }
+            }
+        }
+        // AL/MODULE state: rate-limit (not every bus cycle). 34 slaves × ioctl
+        // at 500–2kHz is a large fraction of ecat CPU; 10 ms is enough for STARTUP.
+        {
+            static uint64_t last_al_check = 0;
+            const uint64_t al_period_us = 10000; // 10 ms
+            uint64_t t = microsecs();
+            if (last_al_check == 0 || t - last_al_check >= al_period_us) {
+                last_al_check = t;
+                check_slave_config_states();
+            }
         }
 #ifdef USE_SDO
         if (checkSDOInitialisation()) {
@@ -1943,6 +2313,26 @@ void ECInterface::receiveState() {
 }
 
 void ECInterface::receivePendingDomainState() {
+#ifdef USE_KERNEL_ETHERCAT
+    // Kernel RT task may publish a newer snapshot while we handled CW/output
+    // messages. Re-pull so sendUpdates and any late collect see the absolute
+    // latest coherent image (same double-buffer contract as receiveState).
+    if (kernelBus && kernelBus->isOpen()) {
+        if (!initialised || !active || !domain1_pd) {
+            return;
+        }
+        size_t dsz = kernelBus->domainSize();
+        if (dsz == 0) {
+            dsz = data.getProcessDataSize();
+        }
+        if (dsz > 0) {
+            static long late_warned = 0;
+            (void)pullLatestKernelSnapshot(kernelBus.get(), domain1_pd, dsz, late_warned);
+            last_receive = microsecs();
+        }
+        return;
+    }
+#endif
     if (!master || !initialised || !active || !domain1) {
         return;
     }
@@ -1987,6 +2377,9 @@ int ECInterface::collectState() {
         if (!pm) {
             return 0;
         }
+        // Same diff algorithm as the legacy ecrt path: mask bits that changed
+        // vs last image. update_data must be the full current domain (legacy
+        // memcpy at end); ProcessingThread reads multi-bit values from it.
         for (unsigned int i = 0; i < domain_size; ++i) {
             data.update_mask[i] = 0;
             if (!last_pd) {
@@ -2016,10 +2409,21 @@ int ECInterface::collectState() {
             ++q;
             ++pm;
         }
-        uint8_t *copy = new uint8_t[domain_size];
-        memcpy(copy, pd_src, domain_size);
-        instance()->data.setDataSize(domain_size);
-        instance()->data.setProcessData(copy, domain_size);
+        // Full image for CW (multi-bit values) — matches legacy ecrt path.
+        // Without this, only sparse bit updates sat in update_data (zero-filled
+        // reallocate) and multi-bit analogs/encoders were corrupted, causing
+        // thrashing processAll work on every poll.
+        memcpy(data.update_data, pd_src, domain_size);
+        // Keep last domain image for the next diff; reuse buffer when possible.
+        if (last_pd) {
+            memcpy(last_pd, pd_src, domain_size);
+        }
+        else {
+            uint8_t *copy = new uint8_t[domain_size];
+            memcpy(copy, pd_src, domain_size);
+            instance()->data.setDataSize(domain_size);
+            instance()->data.setProcessData(copy, domain_size);
+        }
         return affected_bits;
     }
 #endif
@@ -2191,31 +2595,117 @@ void ECInterface::sendUpdates() {
         if (dsz == 0) {
             return;
         }
-        uint8_t *mask = data.getUpdateMask();
-        uint8_t *img = data.getUpdateData();
-        if (!img) {
-            img = domain1_pd;
+        if (g_kernel_output_image.size() < dsz) {
+            g_kernel_output_image.resize(dsz, 0);
+            g_kernel_output_mask.resize(dsz, 0);
+            g_kernel_pub_mask_valid = false;
+            g_kernel_output_dirty = true;
         }
-        if (!mask) {
-            // full-image publish with zero mask (no bit changes)
-            static std::vector<uint8_t> zero_mask;
-            if (zero_mask.size() < dsz) {
-                zero_mask.assign(dsz, 0);
+
+        // Kernel RT task keeps applying the last published image while armed.
+        // Only publish when the commanded shadow changed, or until first arm.
+        if (!g_kernel_output_dirty && g_kernel_outputs_armed) {
+            last_update = now;
+            return;
+        }
+
+        // Cache full-domain publish mask (process I/O | written bits | 0xff).
+        if (!g_kernel_pub_mask_valid || g_kernel_pub_mask.size() != dsz) {
+            g_kernel_pub_mask.assign(dsz, 0);
+            uint8_t *proc_mask = IOComponent::getProcessMask();
+            size_t proc_len = 0;
+            if (proc_mask) {
+                int max_off = IOComponent::getMaxIOOffset();
+                if (max_off >= 0) {
+                    proc_len = static_cast<size_t>(max_off) + 1;
+                }
             }
-            mask = zero_mask.data();
+            for (size_t i = 0; i < dsz; ++i) {
+                uint8_t m = g_kernel_output_mask[i];
+                if (proc_mask && i < proc_len) {
+                    m = static_cast<uint8_t>(m | proc_mask[i]);
+                }
+                if (!m) {
+                    m = 0xff;
+                }
+                g_kernel_pub_mask[i] = m;
+            }
+            g_kernel_pub_mask_valid = true;
         }
+
         struct elc_output_publish pub = {};
-        int ret = kernelBus->publishOutput(img, mask, dsz, &pub);
+        int ret = kernelBus->publishOutput(g_kernel_output_image.data(), g_kernel_pub_mask.data(),
+                                           dsz, &pub);
         if (ret == 0) {
-            struct elc_output_arm arm = {};
-            elc_init_api_header(&arm, sizeof(arm));
-            arm.config_generation = pub.config_generation;
-            arm.output_sequence = pub.output_sequence;
-            kernelBus->armOutput(&arm);
+            g_kernel_output_dirty = false;
+            struct elc_io_status st = {};
+            const bool healthy =
+                (kernelBus->getIoStatus(&st) == 0) && st.bus_healthy && st.link_up;
+            if (healthy) {
+                // Arm exact generation + this publication sequence (latest).
+                // Skip if already armed and bus still healthy (kernel keeps
+                // applying the last published image).
+                if (!st.outputs_armed || !g_kernel_outputs_armed) {
+                    struct elc_output_arm arm = {};
+                    elc_init_api_header(&arm, sizeof(arm));
+                    arm.config_generation = pub.config_generation;
+                    arm.output_sequence = pub.output_sequence;
+                    int aret = kernelBus->armOutput(&arm);
+                    if (aret == 0) {
+                        g_kernel_outputs_armed = true;
+                    }
+                    else if (now - last_warning > 2000000) {
+                        last_warning = now;
+                        std::cerr << "elc_arm_output failed: " << aret
+                                  << " (faults=0x" << std::hex << st.current_faults << std::dec
+                                  << " latched=0x" << st.last_latched_faults
+                                  << " rearm=" << (int)st.rearm_required << ")\n";
+                    }
+                }
+                else {
+                    g_kernel_outputs_armed = true;
+                }
+            }
+            else {
+                g_kernel_outputs_armed = false;
+                g_kernel_output_dirty = true; // retry when healthy
+                if (now - last_warning > 2000000) {
+                    last_warning = now;
+                    std::cerr << "outputs published but not armed yet (bus_healthy="
+                              << (st.bus_healthy ? 1 : 0) << " link=" << (st.link_up ? 1 : 0)
+                              << " faults=0x" << std::hex << st.current_faults
+                              << " latched=0x" << st.last_latched_faults << std::dec
+                              << " op_slaves=" << st.configured_slaves_operational << "/"
+                              << st.configured_slave_count;
+                    if (st.current_faults & 0x20u) {
+                        std::cerr << " DOMAIN_INCOMPLETE";
+                    }
+                    if (st.current_faults & 0x10u) {
+                        std::cerr << " SLAVE_NOT_OP";
+                    }
+                    if (st.current_faults & 0x40u) {
+                        std::cerr << " CONTROLLER_STALE";
+                    }
+                    struct elc_cycle_status cst = {};
+                    if (kernelBus->cycleStatus(&cst) == 0) {
+                        std::cerr << " wc=" << cst.working_counter
+                                  << " wc_state=" << (unsigned)cst.working_counter_state
+                                  << " overruns=" << cst.cycle_overrun_count
+                                  << " cyc_err=" << cst.cycle_error_count
+                                  << " max_late_ns=" << cst.maximum_lateness_ns;
+                    }
+                    std::cerr << ")\n";
+                    if (st.current_faults & 0x20u) {
+                        std::cerr << "hint: DOMAIN_INCOMPLETE usually means the elc_cycle "
+                                     "kthread missed the bus window — load with "
+                                     "insmod … cycle_cpu=1 cycle_fifo_priority=90\n";
+                    }
+                }
+            }
         }
-        else if (now + 5000000 < last_warning) {
+        else if (now - last_warning > 2000000) {
             last_warning = now;
-            std::cerr << "elc_publish_output failed: " << ret << "\n";
+            std::cerr << "elc_publish_output failed: " << ret << " (dsz=" << dsz << ")\n";
         }
         last_update = now;
         return;
@@ -2464,14 +2954,93 @@ void ECInterface::check_master_state(void) {
 #ifndef EC_SIMULATOR
 void ECInterface::report_module_state_change(ECModule *m, int i) {
 #ifdef USE_KERNEL_ETHERCAT
-    //  kernel transport (iod-elc): no slave_config or emerg queue yet.
-    // Simple stub. State tracking enhanced in Phase 11 with full cyclic support.
-    if (m) {
-        m->slave_config_state.online = true;
-        m->slave_config_state.operational = true;
-        m->slave_config_state.al_state = 8; // OP
-        DBG_ETHERCAT << "Kernel transport " << m->getName() << " marked operational (stub)\n";
+    if (!m || !kernelBus || !kernelBus->isOpen()) {
+        return;
     }
+
+    const int BUFSIZE = 200;
+    char buf[BUFSIZE];
+    ec_slave_config_state_t s = {};
+    bool got = false;
+
+    // Prefer configured-slave status once topology is applied (live AL while cycling).
+    if (m->elc_config_id != 0) {
+        struct elc_config_slave_status st = {};
+        int ret = kernelBus->getConfigSlaveStatus(m->elc_config_id, &st);
+        if (ret == 0 && st.active && st.state_result == 0) {
+            s.online = st.online ? 1 : 0;
+            s.operational = st.operational ? 1 : 0;
+            s.al_state = st.al_state;
+            got = true;
+        }
+        else if (ret == 0 && st.active && st.state_result != 0) {
+            // Cycle active but slave state query failed → offline.
+            s.online = 0;
+            s.operational = 0;
+            s.al_state = 0;
+            got = true;
+        }
+        // ret==0 && !st.active → fall through to discovery AL (PREOP path for STARTUP).
+    }
+
+    // Before cycle activate (or no config_id): discovery AL from bus position.
+    if (!got) {
+        struct elc_slave_info info = {};
+        int ret = kernelBus->getSlaveInfo(m->position, &info);
+        if (ret == 0) {
+            // Discovery path has no separate online bit; treat non-zero AL as online
+            // so ControlSystemMachine does not map modules to ERROR.
+            s.al_state = info.al_state;
+            s.online = (info.al_state != 0 && !info.error_flag) ? 1 : 0;
+            s.operational = (info.al_state == 8) ? 1 : 0;
+            got = true;
+        }
+    }
+
+    if (!got) {
+        // Keep previous snapshot if the ioctl fails this cycle.
+        if (!m->slave_config_state.online) {
+            ++slaves_not_operational;
+            ++slaves_offline;
+        }
+        else if (!m->slave_config_state.operational) {
+            ++slaves_not_operational;
+        }
+        return;
+    }
+
+    if (!s.online) {
+        ++slaves_not_operational;
+        ++slaves_offline;
+    }
+    else if (!s.operational) {
+        ++slaves_not_operational;
+    }
+
+    if (s.al_state != m->slave_config_state.al_state) {
+        DBG_ETHERCAT << "kernel ecat: " << m->name << ": AL 0x" << std::hex
+                     << (unsigned)m->slave_config_state.al_state << " -> 0x"
+                     << (unsigned)s.al_state << std::dec << "\n";
+        snprintf(buf, BUFSIZE, "Slave %d (%s) AL 0x%x -> 0x%x (kernel)", i, m->name.c_str(),
+                 m->slave_config_state.al_state, s.al_state);
+        MessageLog::instance()->add(buf);
+        std::cout << buf << "\n";
+    }
+    if (s.online != m->slave_config_state.online) {
+        snprintf(buf, BUFSIZE, "Slave %d (%s) online %s -> %s (kernel)", i, m->name.c_str(),
+                 m->slave_config_state.online ? "yes" : "no", s.online ? "yes" : "no");
+        MessageLog::instance()->add(buf);
+        std::cout << buf << "\n";
+    }
+    if (s.operational != m->slave_config_state.operational) {
+        snprintf(buf, BUFSIZE, "Slave %d (%s) operational %s -> %s (kernel)", i,
+                 m->name.c_str(), m->slave_config_state.operational ? "yes" : "no",
+                 s.operational ? "yes" : "no");
+        MessageLog::instance()->add(buf);
+        std::cout << buf << "\n";
+    }
+
+    m->slave_config_state = s;
 #else
     ec_slave_config_state_t s;
     const int BUFSIZE = 200;
@@ -2530,6 +3099,12 @@ void ECInterface::check_slave_config_states(void) {
     std::vector<ECModule *>::iterator iter = modules.begin();
     int i = 0;
     slaves_not_operational = 0;
+    slaves_offline = 0;
+#ifdef USE_KERNEL_ETHERCAT
+    unsigned int al_or = 0;
+    unsigned int modules_seen = 0;
+    unsigned int modules_op = 0;
+#endif
     while (iter != modules.end()) {
         ECModule *m = *iter++;
         if (!m) {
@@ -2539,6 +3114,20 @@ void ECInterface::check_slave_config_states(void) {
             std::cout << buf << "\n";
             assert(m != 0);
         }
+#ifdef USE_KERNEL_ETHERCAT
+        // Kernel path has no ecrt slave_config; poll real AL from libelcethercat.
+        if (kernelBus && kernelBus->isOpen()) {
+            report_module_state_change(m, i);
+            al_or |= (m->slave_config_state.al_state & 0x0f);
+            ++modules_seen;
+            if (m->slave_config_state.operational ||
+                (m->slave_config_state.al_state & 0x0f) == 8) {
+                ++modules_op;
+            }
+            ++i;
+            continue;
+        }
+#endif
         if (!m->slave_config) {
             //std::cout << "module " << m->name << " not active yet..skipping\n";
             continue;
@@ -2546,6 +3135,26 @@ void ECInterface::check_slave_config_states(void) {
         report_module_state_change(m, i);
         ++i;
     }
+#ifdef USE_KERNEL_ETHERCAT
+    if (kernelBus && kernelBus->isOpen() && modules_seen > 0) {
+        // ecrt-compatible aggregate: OR of AL states across slaves.
+        // Clockwork STARTUP wants slave_states == 8 (all OP, no lower bits set).
+        master_state.al_states = al_or;
+        if (ethercat_status) {
+            ethercat_status->setValue("slave_states",
+                                      Value{static_cast<uint64_t>(master_state.al_states)});
+        }
+        static unsigned last_log_al = 0xffffffffu;
+        static unsigned last_log_op = 0xffffffffu;
+        if (al_or != last_log_al || modules_op != last_log_op) {
+            std::cout << "Kernel slave AL aggregate=0x" << std::hex << al_or << std::dec
+                      << " modules_op=" << modules_op << "/" << modules_seen
+                      << " offline=" << slaves_offline << "\n";
+            last_log_al = al_or;
+            last_log_op = modules_op;
+        }
+    }
+#endif
 #endif
 }
 

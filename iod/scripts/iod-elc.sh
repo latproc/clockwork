@@ -46,10 +46,84 @@ if [ ! -r "${RECIPE_IN}" ]; then
   echo "ERROR: missing ED3L recipe template: ${RECIPE_IN}" >&2
   exit 1
 fi
+# Kernel cyclic task must be SCHED_FIFO or domain WC flaps incomplete under
+# load (fault 0x20 DOMAIN_INCOMPLETE → bus_healthy=0 → outputs never arm).
+# Module is not installed via DKMS on this machine — load from the build tree
+# with insmod (operator-guide). Optional override: ELC_KO=/path/to/elc_ethercat.ko
+ELC_CYCLE_CPU="${ELC_CYCLE_CPU:-1}"
+ELC_CYCLE_FIFO_PRIORITY="${ELC_CYCLE_FIFO_PRIORITY:-90}"
+ELC_KO="${ELC_KO:-/opt/etherlab-cyclic-kmod/kernel/elc_ethercat.ko}"
+
+load_elc_module() {
+  # Prefer insmod of the built .ko with RT params; fall back to modprobe if
+  # the module was installed under /lib/modules.
+  echo "Loading elc_ethercat (cycle_cpu=${ELC_CYCLE_CPU} cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY})"
+  if [ -f "${ELC_KO}" ]; then
+    if insmod "${ELC_KO}" "cycle_cpu=${ELC_CYCLE_CPU}" \
+        "cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY}"; then
+      return 0
+    fi
+    echo "WARNING: insmod ${ELC_KO} failed" >&2
+  fi
+  if modprobe elc_ethercat "cycle_cpu=${ELC_CYCLE_CPU}" \
+      "cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY}" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+ensure_elc_module() {
+  if [ -c "${ELC_DEVICE}" ] && [ -d /sys/module/elc_ethercat ]; then
+    return 0
+  fi
+  load_elc_module || true
+  sleep 0.2
+}
+
+# If the module was loaded without RT params (cycle_fifo_priority=0), promote
+# any live elc_cycle kthread so this boot can still arm outputs.
+promote_elc_cycle_rt() {
+  local tid class prio
+  while read -r tid class prio; do
+    [ -n "${tid}" ] || continue
+    if [ "${class}" != "FF" ] || [ "${prio:-0}" -lt "${ELC_CYCLE_FIFO_PRIORITY}" ]; then
+      echo "Promoting elc_cycle tid=${tid} to SCHED_FIFO ${ELC_CYCLE_FIFO_PRIORITY} CPU ${ELC_CYCLE_CPU}"
+      chrt -f -p "${ELC_CYCLE_FIFO_PRIORITY}" "${tid}" 2>/dev/null || true
+      taskset -cp "${ELC_CYCLE_CPU}" "${tid}" 2>/dev/null || true
+    fi
+  done < <(ps -eLo tid,class,rtprio,comm 2>/dev/null | awk '$4=="elc_cycle"{print $1,$2,$3}')
+}
+
+ensure_elc_module
 if [ ! -c "${ELC_DEVICE}" ]; then
   echo "ERROR: kernel EtherCAT device missing: ${ELC_DEVICE}" >&2
-  echo "Load elc_ethercat and ensure master is free." >&2
+  echo "Load (this host uses out-of-tree .ko, not modprobe):" >&2
+  echo "  insmod ${ELC_KO} cycle_cpu=${ELC_CYCLE_CPU} cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY}" >&2
   exit 1
+fi
+# Params are immutable after load. Restarting iod alone does not reload the
+# module — if it was loaded soft-RT, try rmmod+insmod while master is free
+# (before iod/elc_sdo claim it). elc_cycle only exists after cycle activate;
+# iod-elc also promotes post-activate as a safety net.
+if [ -r /sys/module/elc_ethercat/parameters/cycle_fifo_priority ]; then
+  cur_prio=$(cat /sys/module/elc_ethercat/parameters/cycle_fifo_priority 2>/dev/null || echo 0)
+  if [ "${cur_prio}" = "0" ]; then
+    echo "WARNING: elc_ethercat loaded with cycle_fifo_priority=0 (normal scheduling)." >&2
+    echo "  Attempting reload with cycle_cpu=${ELC_CYCLE_CPU} cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY}..." >&2
+    if rmmod elc_ethercat 2>/dev/null; then
+      if load_elc_module; then
+        echo "  elc_ethercat reloaded with RT cyclic task params."
+      else
+        echo "ERROR: failed to reload elc_ethercat after rmmod" >&2
+        exit 1
+      fi
+    else
+      echo "  rmmod failed (device in use). iod-elc will promote elc_cycle after activate." >&2
+      promote_elc_cycle_rt
+    fi
+  else
+    echo "elc_ethercat cycle_fifo_priority=${cur_prio} cycle_cpu=$(cat /sys/module/elc_ethercat/parameters/cycle_cpu 2>/dev/null || echo '?')"
+  fi
 fi
 if [ ! -x "${IOD}" ]; then
   echo "ERROR: iod-elc binary not found: ${IOD}" >&2

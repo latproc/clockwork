@@ -106,11 +106,19 @@ static bool recv(zmq::socket_t &sock, zmq::message_t &msg) {
 }
 
 bool EtherCATThread::checkAndUpdateCycleDelay() {
+    // SYSTEM.CYCLE_DELAY = EtherCAT bus clock only (µs). Not Clockwork poll rate.
     // FIXME: potentially not thread safe
-    if (cycle_delay != get_cycle_time()) {
-        cycle_delay = get_cycle_time();
-        DBG_INITIALISATION << "setting cycle time to " << cycle_delay << "\n";
-        ECInterface::FREQUENCY = 1000000 / cycle_delay;
+    const Value *cycle_delay_v = ClockworkInterpreter::instance()
+                                     ? ClockworkInterpreter::instance()->cycle_delay
+                                     : nullptr;
+    unsigned long desired = get_cycle_time();
+    if (cycle_delay_v && cycle_delay_v->iValue >= 100) {
+        desired = static_cast<unsigned long>(cycle_delay_v->iValue);
+    }
+    if (cycle_delay != desired) {
+        cycle_delay = desired;
+        DBG_INITIALISATION << "EtherCAT CYCLE_DELAY -> " << cycle_delay << " us\n";
+        ECInterface::instance()->applyCyclePeriodUs(cycle_delay);
         return true;
     }
     return false;
@@ -647,6 +655,15 @@ int EtherCATThread::sendMultiPart(zmq::socket_t *sync_sock, uint64_t global_cloc
 
 uint64_t updateClock(uint64_t global_clock) {
 #ifdef USE_DC
+    // Legacy and kernel: IOTIME / process clock are DC application time in µs
+    // (nanoseconds / 1000). LPC PID code treats IOTIME as microseconds.
+#ifdef USE_KERNEL_ETHERCAT
+    // Ensure the kernel path has refreshed application_time before stamping.
+    // receiveState(pull) already does this; a zero clock means we fell behind.
+    if (ECInterface::instance()->getApplicationTimeNs() == 0) {
+        ECInterface::instance()->refreshKernelApplicationTime();
+    }
+#endif
     global_clock = ECInterface::instance()->getApplicationTimeNs() / 1000;
 #else
     //global_clock += period;
@@ -833,7 +850,13 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
             std::cout << "\n";
         }
 #endif
-        if (ec_ok && default_data) { // only update the domain if default data has been setup
+        // Kernel path: apply PROCESS_DATA even before defaults (defaults may be
+        // empty). Legacy path still requires default_data once.
+        if (ec_ok && (default_data
+#ifdef USE_KERNEL_ETHERCAT
+                      || true
+#endif
+                      )) {
             assert("updateDomain requires cw data and mask" && cw_data && cw_mask);
             ECInterface::instance()->updateDomain(len, cw_data, cw_mask);
 #if VERBOSE_DEBUG
@@ -969,18 +992,31 @@ void EtherCATThread::operator()() {
             }
         }
 
-        // keep polling ethercat if we are not online but do not
-        // exchange clockwork machine state
+        // Bus (CYCLE_DELAY): kernel RT cycles continuously. Userspace only
+        // needs a full input snapshot when Clockwork is due to be fed
+        // (POLLING_DELAY); intermediate bus frames are dropped for CW.
+        // Outputs: sendUpdates publishes only when the commanded shadow is dirty.
         next_ecat_receive = microsecs() + period / 2;
-        ECInterface::instance()->receiveState();
+
+        // POLLING_DELAY (µs) → how often process data is pushed to Clockwork.
+        unsigned long pull_us = get_polling_time();
+        if (pull_us < 100) {
+            pull_us = 100;
+        }
+#ifdef USE_KERNEL_ETHERCAT
+        static uint64_t last_cw_process_push = 0;
+        const bool pull_due =
+            first_run || (now - last_cw_process_push >= pull_us);
+        // Snapshot only when we will collect for CW (or first run). Status/AL
+        // still refresh inside receiveState on their own rate limits.
+        ECInterface::instance()->receiveState(pull_due && status == e_collect);
+#else
+        const bool pull_due = true;
+        ECInterface::instance()->receiveState(true);
+#endif
 
         if (machine_is_ready && ECInterface::instance()->data.getProcessMask()) {
             global_clock = updateClock(global_clock);
-            if (status == e_collect) {
-                DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state\n";
-                num_updates = ECInterface::instance()->collectState();
-                DBG_ETHERCAT_PACKETS << "Num updates from ecat_thread: " << num_updates << "\n";
-            }
 
             // send all process domain data once the domain is operational
             // check keep-alives on the clockwork communications channel
@@ -989,19 +1025,34 @@ void EtherCATThread::operator()() {
                 keep_alive > 0 && (last_ping + keep_alive - period < now) ? true : false;
 
             // if we have collected data from EtherCAT, send it to clockwork
-            if (status == e_collect && (first_run || num_updates || need_ping)) {
-                if (driver_state == s_driver_operational) {
-                    first_run = false;
-                }
-                need_ping = false;
-                int stage = sendMultiPart(sync_sock, global_clock);
-#if VERBOSE_DEBUG
-                if (stage == 5) {
-                    DBG_MSG << "send done\n";
-                }
+            if (status == e_collect && pull_due) {
+                DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state\n";
+                // domain1_pd is the latest snapshot from receiveState(true).
+                num_updates = ECInterface::instance()->collectState();
+                DBG_ETHERCAT_PACKETS << "Num updates from ecat_thread: " << num_updates << "\n";
+#ifdef USE_KERNEL_ETHERCAT
+                // Advance pull clock even if nothing changed (avoid re-collect
+                // every bus cycle until the next POLLING_DELAY window).
+                last_cw_process_push = now;
 #endif
-                assert(stage == 5);
-                status = e_update; // time to send process data to EtherCAT
+                // Push only when the domain changed, on first run, or keep-alive.
+                // Unchanged images no longer always-push: ANALOG/COUNTER IOTIME
+                // advances via sampleRegularPolls() reading the live application
+                // clock; POINT IOTIME updates only when a bit actually changes.
+                if (first_run || num_updates || need_ping) {
+                    if (driver_state == s_driver_operational) {
+                        first_run = false;
+                    }
+                    need_ping = false;
+                    int stage = sendMultiPart(sync_sock, global_clock);
+#if VERBOSE_DEBUG
+                    if (stage == 5) {
+                        DBG_MSG << "send done\n";
+                    }
+#endif
+                    assert(stage == 5);
+                    status = e_update; // wait for CW ack of process data
+                }
             }
             if (status == e_update &&
                 getEtherCatResponse(sync_sock, global_clock, keep_alive_stat)) {
@@ -1011,16 +1062,25 @@ void EtherCATThread::operator()() {
         //else
         //    DBG_ETHERCAT << "machine is not ready; no state collected\n";
 
+#ifndef USE_KERNEL_ETHERCAT
         // Catch a cyclic response that arrived after the receive at the start
         // of this cycle. This must happen before getClockworkMessage() applies
         // new output values, because domain processing restores the preceding
         // LRW image, including its output bytes.
+        // Kernel path: RT task owns receive; late re-snapshot is expensive and
+        // only needed after CW output traffic (handled below when a message arrives).
         ECInterface::instance()->receivePendingDomainState();
+#endif
 
         // check for communication from clockwork
         if (getClockworkMessage(out_sock, ec_ok) && microsecs() < next_ecat_receive - 300) {
             DBG_ETHERCAT_PACKETS << "ecat thread got clockwork message. next ecat: "
                                  << next_ecat_receive << "\n";
+#ifdef USE_KERNEL_ETHERCAT
+            // After CW wrote outputs into the shadow, one late snapshot is enough
+            // so domain1_pd reflects inputs before the next collect window.
+            ECInterface::instance()->receivePendingDomainState();
+#endif
         }
 
         ECInterface::instance()->sendUpdates();
