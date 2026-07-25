@@ -360,9 +360,6 @@ void SDOEntry::resolveSDOModules() {
 
 ECInterface::ECInterface()
     : initialised(0), reference_time(0),
-#ifdef USE_KERNEL_ETHERCAT
-      kernelBus(nullptr),
-#endif
 #ifdef USE_DC
       dc_application_time_ns(0), dc_cycle_adjustment_ns(0), dc_difference_total_ns(0),
       dc_delta_total_ns(0), dc_last_difference_ns(0), dc_filter_count(0),
@@ -376,6 +373,9 @@ ECInterface::ECInterface()
 #endif //USE_SDO
 #endif
       ethercat_status(0), failure_tolerance(0), failure_count(0)
+#ifdef USE_KERNEL_ETHERCAT
+      , kernelBus(nullptr)
+#endif
 {
 }
 
@@ -1386,6 +1386,74 @@ void collectEtherCatModules() {
 }
 
 
+
+bool ECInterface::deactivate() {
+#ifdef USE_KERNEL_ETHERCAT
+    // Phase 8 kernel transport: close bus; no legacy master/domain.
+    if (kernelBus && kernelBus->isOpen()) {
+        kernelBus->close();
+    }
+    active = false;
+    domain1 = 0;
+    domain1_pd = 0;
+    data.setDataSize(0);
+    data.setProcessData(nullptr, 0);
+    {
+        boost::recursive_mutex::scoped_lock lock(modules_mutex);
+        for (ECModule *m : modules) {
+            delete m;
+        }
+        modules.clear();
+    }
+    DBG_ETHERCAT << "Kernel transport deactivated (Phase 8)\n";
+    return true;
+#else
+    char buf[200];
+    snprintf(buf, 200, "EtherCAT interface: Deactivating the EtherCAT master");
+    MessageLog::instance()->add(buf);
+    DBG_ETHERCAT << buf << "\n";
+    active = false;
+    if (master) {
+        domain1 = 0;
+        DBG_ETHERCAT_CALLS << "ecrt_master_deactivate\n";
+        ecrt_master_deactivate(master);
+        snprintf(buf, 200, "EtherCAT interface: recreating domain");
+        MessageLog::instance()->add(buf);
+        DBG_ETHERCAT << buf << "\n";
+        DBG_ETHERCAT_CALLS << "ecrt_master_create_domain\n";
+        domain1 = ecrt_master_create_domain(master);
+        assert(domain1 != 0);
+    }
+
+    snprintf(buf, 200, "EtherCAT interface: cleaning up old io components,");
+    MessageLog::instance()->add(buf);
+    DBG_ETHERCAT << buf << "\n";
+
+    data.setDataSize(0);
+    data.setProcessData(nullptr, 0);
+    {
+        boost::recursive_mutex::scoped_lock lock(modules_mutex);
+        snprintf(buf, 200, "EtherCAT interface: removing ethercat modules instances");
+        MessageLog::instance()->add(buf);
+        DBG_ETHERCAT << buf << "\n";
+        std::vector<ECModule *>::iterator iter = modules.begin();
+        while (iter != modules.end()) {
+            ECModule *m = *iter++;
+            snprintf(buf, 200, "EtherCAT interface: deleting module %s", m->name.c_str());
+            MessageLog::instance()->add(buf);
+            DBG_ETHERCAT << buf << "\n";
+            delete m;
+        }
+        modules.clear();
+    }
+    domain1_pd = 0;
+    snprintf(buf, 200, "EtherCAT interface: deactivate complete");
+    MessageLog::instance()->add(buf);
+    DBG_ETHERCAT << buf << "\n";
+    return true;
+#endif // USE_KERNEL_ETHERCAT
+}
+
 bool ECInterface::activate() {
     int res;
     unsigned int pos = 0;
@@ -2312,6 +2380,7 @@ ec_pdo_info_t *c_pdos = 0;
 ec_sync_info_t *c_syncs = 0;
 EntryDetails *c_entry_details = 0;
 
+#ifndef USE_KERNEL_ETHERCAT
 cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave_info_t &slave,
                             bool reconfigure) {
     unsigned int i, j, k, pdo_pos = 0, entry_pos = 0;
@@ -2559,6 +2628,8 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
 
     return root;
 }
+#endif // !USE_KERNEL_ETHERCAT
+
 
 #ifdef USE_KERNEL_ETHERCAT
 char *collectSlaveConfig(bool reconfigure) {

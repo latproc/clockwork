@@ -569,6 +569,7 @@ if(BUILD_IOD_ELC)
     src/EtherCATEntrySelector.cpp 
     src/ethercat_xml_parser.cpp 
     src/KernelEthercatBus.cpp
+    src/ecrt_stubs_elc.cpp
     ${Clockwork_SRCS}
   )
   target_compile_definitions(iod-elc PRIVATE 
