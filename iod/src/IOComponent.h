@@ -111,6 +111,11 @@ class IOComponent : public Transmitter {
     static void processAll(const Update &update, std::set<IOComponent *> &updatedMachines);
     static void processAll(uint64_t clock, uint64_t data_size, const uint8_t *mask,
                            const uint8_t *data, std::set<IOComponent *> &updatedMachines);
+    /* Stamp owner IOTIME from the EtherCAT sample clock without VALUE/events.
+       Used so plugins and CW can prove sample freshness even when the filtered
+       value is unchanged. bitlen==1 (POINT) and multi-bit inputs both use this. */
+    void publishSampleTime(uint64_t sample_clock, bool publish_raw = false, int64_t raw = 0);
+    static void stampAllInputSampleTimes(uint64_t sample_clock);
     static void setupIOMap();
     static int getMinIOOffset();
     static int getMaxIOOffset();
@@ -126,6 +131,8 @@ class IOComponent : public Transmitter {
     static IOUpdate *getUpdates();
     static IOUpdate *getDefaults();
     static uint8_t *generateMask(std::list<MachineInstance *> &outputs);
+    /** Clear updatedComponentsOut / outputs_waiting (kernel path after apply). */
+    static void clearPendingOutputUpdates();
     static uint64_t getClock() { return global_clock; }
     static void remove_io_module(int pos);
     static void lock();   // block others from resetting io

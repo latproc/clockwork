@@ -496,6 +496,20 @@ void Channel::start() {
         // TODO: assert(false);
     }
 
+    if (!definition_) {
+        // Recover definition by type if create path did not bind it yet.
+        definition_ = ChannelDefinition::find(_type.c_str());
+    }
+    if (!definition_) {
+        char buf[160];
+        snprintf(buf, sizeof(buf),
+                 "Error: Channel %s start() with null definition (type %s)",
+                 channel_name.c_str(), _type.c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf << "\n";
+        return;
+    }
+
     if (isClient()) {
         startSubscriber();
     }

@@ -70,6 +70,10 @@ bool tracing();
 unsigned long get_cycle_time();
 void set_cycle_time(unsigned long ct);
 
+/** Clockwork process-data delivery period (µs). Independent of bus CYCLE_DELAY. */
+unsigned long get_polling_time();
+void set_polling_time(unsigned long pt);
+
 bool export_to_c();
 void set_export_to_c(bool c_export);
 

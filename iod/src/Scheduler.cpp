@@ -276,7 +276,10 @@ void Scheduler::add(ScheduledItem *item) {
     top = next();
     next_time = top->delivery_time;
     long delay = next_time - microsecs();
-    if (delay <= next_delay_time || next_delay_time <= 0) { // && delay>=0 && next_delay_time>=0) {
+    // Only interrupt the sleep if this item is meaningfully sooner than what
+    // we were waiting for. Interrupting on every near-equal TIMER add causes
+    // a scheduler interrupt storm under mass enable/stable-state evaluation.
+    if (delay + 200 < next_delay_time || next_delay_time <= 0) {
         next_delay_time = delay;
         if (internals->thread_ptr) {
             internals->thread_ptr->interrupt();
@@ -368,8 +371,18 @@ void Scheduler::idle() {
             watch_dog->stop();
             try {
                 long delay = next_delay_time;
-                if (delay > 10) {
+                // Never busy-spin for sub-10µs waits: with many TIMER predicates
+                // the next item often lands in 0–10µs and the old path spun the
+                // scheduler core (tens of % CPU) between interrupts.
+                if (delay > 100) {
                     boost::this_thread::sleep_for(boost::chrono::microseconds(delay));
+                }
+                else if (delay > 0) {
+                    boost::this_thread::sleep_for(boost::chrono::microseconds(100));
+                }
+                else {
+                    // delay <= 0 but ready() was false (clock skew / race): yield
+                    boost::this_thread::sleep_for(boost::chrono::microseconds(50));
                 }
             }
             catch (const boost::thread_interrupted &ex) {

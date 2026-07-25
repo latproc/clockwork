@@ -293,7 +293,10 @@ MachineClass *makeSettingsClass(const char *host_name) {
     result->setProperty("INFO", "Clockwork host");
     result->setProperty("HOST", host_name);
     result->setProperty("VERSION", "0.9");
-    result->setProperty("CYCLE_DELAY", 2000);
+    // CYCLE_DELAY  = EtherCAT bus period (µs), applied at activate and frozen for the run.
+    // POLLING_DELAY = Clockwork process-data pull period (µs); adjustable any time.
+    // Bus 500 µs (2 kHz); CW pull 2000 µs so process load stays near legacy.
+    result->setProperty("CYCLE_DELAY", 500);
     result->setProperty("POLLING_DELAY", 2000);
     return result;
 }
@@ -319,6 +322,8 @@ MachineClass *makePointMachineClass() {
     result->default_state = State("off");
     result->initial_state = State("off");
     result->disableAutomaticStateChanges();
+    // Sample timestamp from EtherCAT process-image reads (updated without VALUE events).
+    result->setProperty("IOTIME", Value(0));
     return result;
 }
 
@@ -332,6 +337,7 @@ MachineClass *makeStatusFlagMachineClass() {
     result->default_state = State("off");
     result->initial_state = State("off");
     result->disableAutomaticStateChanges();
+    result->setProperty("IOTIME", Value(0));
     return result;
 }
 

@@ -20,6 +20,7 @@
 
 #include "IOComponent.h"
 #include "DebugExtra.h"
+#include "ECInterface.h"
 #include "Logger.h"
 #include "MachineInstance.h"
 #include "MessagingInterface.h"
@@ -104,7 +105,7 @@ static uint64_t last_sample = 0; // retains a timestamp for the last sample
 
 // as long as there has been a sufficient delay, run the filter for each
 // of the nominated components.
-// This is called regularly from the processing thread
+// ProcessingThread rate-limits calls to POLLING_DELAY; min_period is a floor.
 void handle_io_sampling(uint64_t io_clock) {
     uint64_t now = microsecs();
     if (now - last_sample < 1000) {
@@ -115,7 +116,55 @@ void handle_io_sampling(uint64_t io_clock) {
     while (iter != regular_polls.end()) {
         IOComponent *ioc = *iter++;
         ioc->read_time = io_clock;
+        // regular_poll devices: handleChange mirrors wire value into address.value.
         ioc->filter(ioc->address.value);
+    }
+}
+
+void IOComponent::publishSampleTime(uint64_t sample_clock, bool publish_raw, int64_t raw) {
+    read_time = sample_clock;
+    std::list<MachineInstance *>::iterator owners_iter = owners.begin();
+    while (owners_iter != owners.end()) {
+        MachineInstance *o = *owners_iter++;
+        if (!o) {
+            continue;
+        }
+        // Skip SymbolTable churn when the stamp is already current.
+        const Value &cur_t = o->properties.lookup("IOTIME");
+        const bool time_same =
+            cur_t.kind == Value::t_integer &&
+            static_cast<uint64_t>(cur_t.iValue) == sample_clock;
+        if (!time_same) {
+            o->properties.add("IOTIME", static_cast<int64_t>(sample_clock),
+                              SymbolTable::ST_REPLACE);
+        }
+        if (publish_raw) {
+            const Value &cur_raw = o->properties.lookup("raw");
+            if (cur_raw.kind != Value::t_integer || cur_raw.iValue != raw) {
+                o->properties.add("raw", raw, SymbolTable::ST_REPLACE);
+            }
+        }
+    }
+}
+
+void IOComponent::stampAllInputSampleTimes(uint64_t sample_clock) {
+    // Not used on the hot path: full-queue POINT stamps every poll were a major
+    // processing CPU cost. ANALOG/COUNTER use handle_io_sampling; POINT IOTIME
+    // is published from handleChange when the bit changes. Kept for debug tools.
+    io_clock = sample_clock;
+    global_clock = sample_clock;
+    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    for (IOComponent *ioc : processing_queue) {
+        if (!ioc) {
+            continue;
+        }
+        if (ioc->direction() == DirOutput) {
+            continue;
+        }
+        if (regular_polls.count(ioc)) {
+            continue;
+        }
+        ioc->publishSampleTime(sample_clock);
     }
 }
 
@@ -288,10 +337,14 @@ IOComponent::IOComponent()
 void IOComponent::setInitialState() {}
 
 size_t IOComponent::updatesWaiting() {
-    // TODO: determine how this assertion can trigger
-    // assert(outputs_waiting == updatedComponentsOut.size());
-    //return updatedComponentsOut.size();
-    return outputs_waiting;
+    // Prefer set size; counter can desync if ++ was used on re-inserts.
+    return updatedComponentsOut.size();
+}
+
+void IOComponent::clearPendingOutputUpdates() {
+    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    updatedComponentsOut.clear();
+    outputs_waiting = 0;
 }
 
 void IOComponent::updatesSent(bool which) {
@@ -342,6 +395,7 @@ void IOComponent::processAll(const Update &update, std::set<IOComponent *> &upda
 void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *mask,
                              const uint8_t *data, std::set<IOComponent *> &updated_machines) {
     io_clock = clock;
+    global_clock = clock; // getIOClock() / plugins — same µs sample clock as IOTIME
     // receive process data updates and mask to yield updated components
     current_time = microsecs();
 
@@ -876,13 +930,19 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
 }
 
 int64_t AnalogueInput::filter(int64_t raw) {
+    /*  Plugins (and CW) need IOTIME/raw on every EtherCAT sample, even when the
+        filtered VALUE is unchanged. properties.add does not notify dependents. */
+    publishSampleTime(read_time, true, raw);
+
     if ((long)(read_time - config->last_time) <
         ((config->throttle) ? (*config->throttle * 1000L) : 10000L)) {
-        return raw;
+        return config->last_sent;
     }
     if (config->property_changed) {
         config->property_changed = false;
     }
+
+    const int64_t prev_sent = config->last_sent;
 
     // prepare config->last_sent by filtering the input value
     addSample(config->positions, (long)read_time, (double)raw);
@@ -909,7 +969,7 @@ int64_t AnalogueInput::filter(int64_t raw) {
 
     config->update(read_time);
 
-    /*  most machines reading sensor values will be prompted when teh
+    /*  most machines reading sensor values will be prompted when the
         sensor value changes, depending on whether this filter yields a
         changed value. Some systems such as plugins that operate on
         their own clock may wish to ignore the filtered value and
@@ -917,12 +977,15 @@ int64_t AnalogueInput::filter(int64_t raw) {
         values do not cause notifications when they change
     */
 
+    // Skip VALUE/velocity property churn when the filtered value is unchanged.
+    if (config->last_sent == prev_sent && raw == prev_sent) {
+        return config->last_sent;
+    }
+
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
-        o->properties.add("raw", raw, SymbolTable::ST_REPLACE);
         o->properties.add("VALUE", static_cast<int64_t>(config->last_sent), SymbolTable::ST_REPLACE);
         //double v = config->speeds.average(config->speeds.length());
         //if (fabs(v)<1.0) v = 0.0;
@@ -1023,19 +1086,24 @@ class CounterInternals {
 DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {}
 
 int64_t DigitalValue::filter(int64_t val) {
+    // Always stamp sample time; only setValue VALUE when it changes.
+    publishSampleTime(read_time);
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
         if (o) {
-            o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
             Value mask = o->properties.lookup("MASK");
+            int64_t new_val = val;
             if (mask.kind == Value::t_integer) {
-                auto masked = val & mask.iValue;
-                o->setValue("VALUE", Value{masked});
+                new_val = val & mask.iValue;
             }
-            else {
-                o->setValue("VALUE", Value{val});
+            // setValue is relatively expensive (authority/modbus/dependents).
+            // Only publish when the value actually changed.
+            const Value &cur = o->properties.lookup("VALUE");
+            if (cur.kind == Value::t_integer && cur.iValue == new_val) {
+                continue;
             }
+            o->setValue("VALUE", Value{new_val});
         }
     }
     return val;
@@ -1076,27 +1144,13 @@ void Counter::setupProperties(MachineInstance *m) {
 }
 
 int64_t Counter::filter(int64_t val) {
+    // Always stamp EtherCAT sample time; VALUE/Position only when they change.
+    publishSampleTime(read_time);
+
     double scaled_val = (double)val / (double)*internals->input_scale;
     addSample(internals->positions, (long)read_time, scaled_val);
 
-#if 0
-    if (internals->filter_type && *internals->filter_type == 0) {
-        internals->last_sent = val;
-    }
-    else if (internals->filter_type && *internals->filter_type == 1) {
-        int64_t mean = (internals->positions.average(internals->buffer_len) + 0.5f);
-        if (internals->tolerance) {
-            internals->noise_tolerance = *internals->tolerance;
-        }
-        if ((uint64_t)abs(mean - internals->last_sent) >= internals->noise_tolerance) {
-            internals->last_sent = mean;
-        }
-    }
-    else if (internals->filter_type && *internals->filter_type == 2) {
-        long res = (long)internals->filter();
-        internals->last_sent = (int64_t)(res / internals->filter_len * 2);
-    }
-#endif
+    const int64_t prev_sent = internals->last_sent;
     if (*internals->tolerance > 1) {
         int64_t mean =
             (bufferAverage(internals->positions, static_cast<size_t>(*internals->filter_len)) +
@@ -1111,19 +1165,16 @@ int64_t Counter::filter(int64_t val) {
     }
     internals->update(read_time);
 
-#if 1
-    /*  most machines reading sensor values will be prompted when the
-        sensor value changes, depending on whether this filter yields a
-        changed value. Some systems such as plugins that operate on
-        their own clock may wish to ignore the filtered value and
-        access the raw io value and read time but note that these
-        values do not cause notifications when they change
-    */
+    /*  Push owner VALUE/Position only when the filtered position changed.
+        Continuous encoder ticks were rewriting VALUE/Position/Velocity on
+        every sample and keeping the processing thread busy. */
+    if (internals->last_sent == prev_sent) {
+        return internals->last_sent;
+    }
 
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", read_time, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
                           SymbolTable::ST_REPLACE);
         o->properties.add("VALUE", static_cast<int64_t>(scaled_val), SymbolTable::ST_REPLACE);
@@ -1131,7 +1182,6 @@ int64_t Counter::filter(int64_t val) {
         o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
                           SymbolTable::ST_REPLACE);
     }
-#endif
     return internals->last_sent;
 }
 
@@ -1679,8 +1729,26 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
     if (address.bitlen == 1) {
         int64_t value = (*offset & (1 << bitpos)) ? 1 : 0;
 
+        // Outputs: until the process image reflects our command, do not clobber
+        // address.value with 0 from an unarmed/stale snapshot (SetStateAction /
+        // PWM would flap off immediately).
+        if (direction() == DirOutput &&
+            (last_event == e_on || last_event == e_off)) {
+            if ((last_event == e_on && value == 1) ||
+                (last_event == e_off && value == 0)) {
+                last_event = e_none;
+            }
+            else {
+                return;
+            }
+        }
+
         const char *evt;
         if (address.value != value) { // TBD is this test necessary?
+            // POINT/STATUS_FLAG: stamp IOTIME only on real bit changes (not every poll).
+            if (direction() != DirOutput) {
+                publishSampleTime(read_time ? read_time : io_clock);
+            }
             std::list<MachineInstance *>::iterator iter;
 #ifndef DISABLE_LEAVE_FUNCTIONS
             if (address.value) {
@@ -1783,64 +1851,111 @@ void IOComponent::turnOff() {}
 
 void Output::turnOn() {
     last = microsecs();
-    last_event = e_on;
+    // Commanded value is authoritative for SetStateAction completion.
+    address.value = 1;
+#ifdef USE_KERNEL_ETHERCAT
+    // Kernel path writes the output shadow immediately (no process-image echo).
+    // Do NOT leave this in updatedComponentsOut / outputs_waiting — nothing
+    // clears those without an input-domain change, so updatesWaiting() stayed
+    // true forever and forced the processing loop to ~1/POLLING_DELAY forever.
+    last_event = e_none;
+    ECInterface::instance()->applyKernelOutputBit(address.io_offset, address.io_bitpos, true);
+#else
     updatedComponentsOut.insert(this);
     updatesSent(false);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
+    last_event = e_on; // wait for process-image echo on legacy ecrt path
+#endif
 }
 
 void Output::turnOff() {
     last = microsecs();
-    last_event = e_off;
+    address.value = 0;
+#ifdef USE_KERNEL_ETHERCAT
+    last_event = e_none; // see turnOn — getStateString must become "off"
+    ECInterface::instance()->applyKernelOutputBit(address.io_offset, address.io_bitpos, false);
+#else
     updatedComponentsOut.insert(this);
     updatesSent(false);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
+    last_event = e_off;
+#endif
 }
 
 void IOComponent::setValue(uint32_t new_value) {
     assert(!address.is_signed);
     pending_value = new_value;
     last = microsecs();
+    address.value = new_value;
+#ifdef USE_KERNEL_ETHERCAT
+    last_event = e_none;
+    ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
+                                                    address.bitlen, new_value);
+#else
     last_event = e_change;
     updatesSent(false);
     updatedComponentsOut.insert(this);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
+#endif
 }
 
 void IOComponent::setValue(int32_t new_value) {
     assert(address.is_signed);
     pending_value = new_value;
     last = microsecs();
+    address.value = new_value;
+#ifdef USE_KERNEL_ETHERCAT
+    last_event = e_none;
+    ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
+                                                    address.bitlen, (uint32_t)new_value);
+#else
     last_event = e_change;
     updatesSent(false);
     updatedComponentsOut.insert(this);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
+#endif
 }
 
 void IOComponent::setValue(uint64_t new_value) {
     assert(!address.is_signed);
     pending_value = new_value;
     last = microsecs();
+    address.value = static_cast<int64_t>(new_value);
+#ifdef USE_KERNEL_ETHERCAT
+    last_event = e_none;
+    ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
+                                                    address.bitlen, (uint32_t)(new_value & 0xffffffffu));
+#else
     last_event = e_change;
     updatesSent(false);
     updatedComponentsOut.insert(this);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
+#endif
 }
 
 void IOComponent::setValue(int64_t new_value) {
     assert(address.is_signed);
     pending_value = new_value;
     last = microsecs();
+    address.value = new_value;
+#ifdef USE_KERNEL_ETHERCAT
+    last_event = e_none;
+    ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
+                                                    address.bitlen,
+                                                    (uint32_t)(static_cast<uint64_t>(new_value) &
+                                                               0xffffffffu));
+#else
     last_event = e_change;
     updatesSent(false);
     updatedComponentsOut.insert(this);
-    ++outputs_waiting;
+    outputs_waiting = updatedComponentsOut.size();
     markChange();
+#endif
 }
 
 bool IOComponent::isOn() { return last_event == e_none && address.value != 0; }

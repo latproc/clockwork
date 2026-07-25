@@ -41,7 +41,12 @@ static bool command_port_num_required = false;
 static bool keep_stats = false;
 static char *dev_name = strdup("CLOCKWORK");
 static bool is_tracing = false;
-static unsigned long cycle_time_ = 1000;
+// Default bus period in microseconds (0.5 ms = 2 kHz). Frozen at activate.
+// Overridden by SYSTEM.CYCLE_DELAY before activate (not live-retunable).
+static unsigned long cycle_time_ = 500;
+// Default CW process-data pull period (µs). Overridden by SYSTEM.POLLING_DELAY.
+// Independent of bus: pull less often than 2 kHz to keep processing load down.
+static unsigned long polling_time_ = 2000;
 static bool c_export = false;
 static bool fix_invalid_auto_transitions = false;
 static std::string ethercat_adapter_name;
@@ -121,6 +126,14 @@ bool tracing() { return is_tracing; }
 
 void set_cycle_time(unsigned long new_time) { cycle_time_ = new_time; }
 unsigned long get_cycle_time() { return cycle_time_; }
+
+void set_polling_time(unsigned long new_time) {
+    if (new_time < 100) {
+        new_time = 100;
+    }
+    polling_time_ = new_time;
+}
+unsigned long get_polling_time() { return polling_time_; }
 
 bool export_to_c() { return c_export; }
 void set_export_to_c(bool which) { c_export = which; }

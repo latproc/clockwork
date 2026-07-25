@@ -186,21 +186,45 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
         if (machine->io_interface) {
             std::string txt(machine->io_interface->getStateString());
             if (txt == value.getName()) {
-                result_str = "OK";
-                status = Complete;
-                cleanupTrigger();
-                owner->stop(this);
+                // Hardware already matches; still update the Clockwork POINT state
+                // (getStateString can match from address.value without STATE changing).
+                status = machine->setState(value, authority, false);
+                if (status == Complete || status == Failed) {
+                    result_str = (status == Complete) ? "OK" : "Failed";
+                    cleanupTrigger();
+                    owner->stop(this);
+                }
                 return status;
             }
 
             if (value == "on") {
                 machine->io_interface->turnOn();
+                // If IO already reports the target (kernel: after optimistic
+                // turnOn), finish now so we do not sit in Running forever.
+                if (value.getName() == machine->io_interface->getStateString()) {
+                    status = machine->setState(value, authority, false);
+                    if (status == Complete || status == Failed) {
+                        result_str = (status == Complete) ? "OK" : "Failed";
+                        cleanupTrigger();
+                        owner->stop(this);
+                    }
+                    return status;
+                }
                 status = Running;
                 setTrigger(owner->setupTrigger(machine->getName(), value.getName(), ""));
                 return status;
             }
             else if (value == "off") {
                 machine->io_interface->turnOff();
+                if (value.getName() == machine->io_interface->getStateString()) {
+                    status = machine->setState(value, authority, false);
+                    if (status == Complete || status == Failed) {
+                        result_str = (status == Complete) ? "OK" : "Failed";
+                        cleanupTrigger();
+                        owner->stop(this);
+                    }
+                    return status;
+                }
                 status = Running;
                 setTrigger(owner->setupTrigger(machine->getName(), value.getName(), ""));
                 return status;
@@ -388,7 +412,12 @@ Action::Status SetStateAction::checkComplete() {
         if (machine->io_interface) {
             IOComponent *pt = machine->io_interface;
             if (value.getName() == pt->getStateString()) {
-                status = Complete;
+                // Hardware matches; update POINT machine STATE (was completing
+                // without setState, so DESCRIBE always showed off while PWM ran).
+                status = machine->setState(value, authority, false);
+                if (status != Complete && status != Failed) {
+                    return status;
+                }
                 if (trigger) {
                     if (trigger->enabled() && !trigger->fired()) {
                         trigger->fire();

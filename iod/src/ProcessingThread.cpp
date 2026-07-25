@@ -49,6 +49,7 @@
 
 #include "Channel.h"
 #include "ControlSystemMachine.h"
+#include "ECInterface.h"
 #include "ProcessingThread.h"
 #include "watchdog.h"
 #include <pthread.h>
@@ -58,6 +59,7 @@
 #include "Trigger.h"
 #include <sstream>
 
+#include <chrono>
 #include <iostream>
 #include <malloc.h>
 
@@ -152,14 +154,26 @@ CommandSocketInfo *ProcessingThread::addCommandChannel(Channel *chn) {
 }
 
 bool ProcessingThread::checkAndUpdateCycleDelay() {
-    const Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
-    long delay = 100;
-    if (cycle_delay_v && cycle_delay_v->iValue >= 100) {
-        delay = cycle_delay_v->iValue;
+    // SYSTEM.POLLING_DELAY = Clockwork processing poll period (µs).
+    // SYSTEM.CYCLE_DELAY is EtherCAT-only (handled by ecat thread / activate).
+    long delay = 1000;
+    const Value *poll_v = MachineInstance::polling_delay;
+    if (poll_v && poll_v->iValue >= 100) {
+        delay = poll_v->iValue;
+    }
+    else {
+        Value *def = ClockworkInterpreter::instance()
+                         ? ClockworkInterpreter::instance()->default_poll_delay
+                         : nullptr;
+        if (def && def->iValue >= 100) {
+            delay = def->iValue;
+        }
     }
     if (delay != internals->cycle_delay) {
-        set_cycle_time(delay);
         internals->cycle_delay = delay;
+        set_polling_time(static_cast<unsigned long>(delay));
+        DBG_INITIALISATION << "Clockwork POLLING_DELAY -> " << delay << " us ("
+                           << (1000000 / delay) << " Hz process-data pull)\n";
         return true;
     }
     return false;
@@ -206,10 +220,13 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                                    zmq::socket_t &ecat_sync, zmq::socket_t &resource_mgr,
                                    zmq::socket_t &scheduler, zmq::socket_t &ecat_out) {
     int res = 0;
+    // Timeout is milliseconds; never pass 0 (busy spin). Events still wake early.
+    const long timeout_ms = (poll_wait < 1) ? 1L : static_cast<long>(poll_wait);
     while (!program_done) {
         try {
             long len = 0;
-            res = zmq::poll(&items[0], num_items, poll_wait);
+            res = zmq::poll(&items[0], static_cast<size_t>(num_items),
+                            std::chrono::milliseconds(timeout_ms));
             if (!res) {
                 return res;
             }
@@ -345,18 +362,30 @@ ProcessingThread *ProcessingThread::instance() { return instance_; }
 void ProcessingThread::setProcessingThreadInstance(ProcessingThread *pti) { instance_ = pti; }
 
 void ProcessingThread::activate(MachineInstance *m) {
-    boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
-    instance()->runnable.insert(m);
+    ProcessingThread *pt = instance();
+    if (!pt || !m) {
+        return;
+    }
+    boost::recursive_mutex::scoped_lock scoped_lock(pt->runnable_mutex);
+    pt->runnable.insert(m);
 }
 
 void ProcessingThread::suspend(MachineInstance *m) {
-    boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
-    instance()->runnable.erase(m);
+    ProcessingThread *pt = instance();
+    if (!pt || !m) {
+        return;
+    }
+    boost::recursive_mutex::scoped_lock scoped_lock(pt->runnable_mutex);
+    pt->runnable.erase(m);
 }
 
 bool ProcessingThread::is_pending(MachineInstance *m) {
-    boost::recursive_mutex::scoped_lock scoped_lock(instance()->runnable_mutex);
-    return instance()->runnable.count(m);
+    ProcessingThread *pt = instance();
+    if (!pt || !m) {
+        return false;
+    }
+    boost::recursive_mutex::scoped_lock scoped_lock(pt->runnable_mutex);
+    return pt->runnable.count(m) != 0;
 }
 
 void ProcessingThread::handle_package(Package *p) {
@@ -483,8 +512,41 @@ void ProcessingThread::handle_package(Package *p) {
 }
 }
 
+void ProcessingThread::sampleRegularPolls(uint64_t curr_t) {
+    static uint64_t last_sample_poll = 0;
+    unsigned long sample_us = get_polling_time();
+    if (sample_us < 1000) {
+        sample_us = 1000;
+    }
+    if (curr_t - last_sample_poll < sample_us) {
+        return;
+    }
+    last_sample_poll = curr_t;
+    if (!machine_is_ready) {
+        return;
+    }
+    // Prefer the live DC application clock (µs) so ANALOG/COUNTER IOTIME keeps
+    // advancing even when the ecat thread skips a zero-change domain push.
+    uint64_t sample_clock = global_clock;
+#ifdef USE_DC
+    const uint64_t app_us = ECInterface::instance()->getApplicationTimeUs();
+    if (app_us != 0) {
+        sample_clock = app_us;
+        global_clock = app_us;
+    }
+#endif
+    if (sample_clock == 0) {
+        return;
+    }
+    // Caller must hold IOComponent::lock() (unique_lock is not re-entrant even
+    // though the underlying mutex is recursive — double lock aborts).
+    // regular_poll only (ANALOGINPUT/COUNTER): filter publishes IOTIME/raw.
+    // POINTs stamp IOTIME only when processAll/handleChange sees a bit change.
+    handle_io_sampling(sample_clock);
+}
+
 void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_work_queue,
-                                                  uint64_t curr_t, uint64_t last_sample_poll,
+                                                  uint64_t curr_t,
                                                   AutoStatStorage &avg_io_time) {
     IOLockHelper io_lock;
 #ifdef KEEPSTATS
@@ -513,10 +575,8 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
             std::cout << "Processing received EtherCAT data but machine is not ready\n";
         }
     }
-    if (curr_t - last_sample_poll >= 10000) {
-        last_sample_poll = curr_t;
-        handle_io_sampling(global_clock); // devices that need a regular poll
-    }
+    // Analog/counter sampling (same lock as processAll — do not re-lock).
+    sampleRegularPolls(curr_t);
 }
 
 ProcessingThread::ProcessingState ProcessingThread::poll_machines() {
@@ -750,11 +810,19 @@ void ProcessingThread::operator()() {
         memset((void *)items, 0, max_poll_sockets * sizeof(zmq::pollitem_t));
         int dynamic_poll_start_idx = 5;
 
-        int poll_wait = static_cast<int>(internals->cycle_delay / 1000); // millisecs
-        machine_check_delay = internals->cycle_delay / 5;
+        // cycle_delay is SYSTEM.POLLING_DELAY (µs). Machine evaluation should
+        // not run many times faster than process-data arrives — /5 made the
+        // processing thread spin at 5× the poll rate when runnable was non-empty.
+        // zmq_poll timeout is milliseconds. Floor at 1 ms so we never busy-spin.
+        int poll_wait_ms = static_cast<int>(internals->cycle_delay / 1000);
+        if (poll_wait_ms < 1) {
+            poll_wait_ms = 1;
+        }
+        int poll_wait = poll_wait_ms;
+        machine_check_delay = static_cast<uint64_t>(
+            internals->cycle_delay > 500 ? internals->cycle_delay : 500);
         long systems_waiting = 0;
         uint64_t curr_t = 0;
-        uint64_t last_sample_poll = 0;
         bool machines_have_work = false;
         unsigned int num_channels = 0;
         {
@@ -863,28 +931,76 @@ void ProcessingThread::operator()() {
                     idx - dynamic_poll_start_idx; // the number channels we are actually monitoring
             }
 
-            //machines_have_work = MachineInstance::workToDo();
+            // Real work = actions/mail/events or IO. A non-empty runnable set of
+            // idle machines (stable-check leftovers) is NOT urgent — treating it
+            // as such forced ~500 Hz busy polls with nothing to do.
+            bool urgent_work = !MachineInstance::pendingEvents().empty() ||
+                               IOComponent::updatesWaiting() || !io_work_queue.empty();
+            bool stable_pending = false;
             {
                 static size_t last_runnable_count = 0;
                 boost::recursive_mutex::scoped_lock lock(runnable_mutex);
-                machines_have_work = !runnable.empty() || !MachineInstance::pendingEvents().empty();
                 size_t runnable_count = runnable.size();
+                // Drop inert runnable entries (no exec/mail/events/stable queue).
+                // They otherwise accumulate (PROCSNAP runnable=5 with empty exec)
+                // and confuse diagnostics without doing work.
+                for (auto it = runnable.begin(); it != runnable.end();) {
+                    MachineInstance *mi = *it;
+                    if (mi->executingCommand() || mi->hasMail() ||
+                        !mi->pendingEvents().empty()) {
+                        urgent_work = true;
+                        ++it;
+                        continue;
+                    }
+                    if (mi->queuedForStableStateTest()) {
+                        stable_pending = true;
+                        ++it;
+                        continue;
+                    }
+                    it = runnable.erase(it);
+                }
+                runnable_count = runnable.size();
+                // Drive machine eval when there is real work or a stable queue.
+                machines_have_work = urgent_work || stable_pending;
                 if (runnable_count != last_runnable_count) {
-                    //DBG_PROCESSING << "runnable: " << runnable_count << " (was " << last_runnable_count << ")\n";
                     last_runnable_count = runnable_count;
                 }
             }
-            if (machines_have_work || IOComponent::updatesWaiting() || !io_work_queue.empty()) {
-                poll_wait = 1;
-            }
-            else {
-                poll_wait = 100;
+            // Refresh time immediately before deciding sleep length.
+            curr_t = microsecs();
+            // Sleep until the next machine-check window (or ZMQ event).
+            {
+                int wait_ms = 20; // quiet idle
+                if (urgent_work) {
+                    wait_ms = poll_wait_ms < 1 ? 1 : poll_wait_ms;
+                }
+                else if (machines_have_work) {
+                    if (curr_t >= last_checked_machines + machine_check_delay) {
+                        wait_ms = poll_wait_ms < 1 ? 1 : poll_wait_ms;
+                    }
+                    else {
+                        const uint64_t remain_us =
+                            last_checked_machines + machine_check_delay - curr_t;
+                        wait_ms = static_cast<int>(remain_us / 1000);
+                        if (wait_ms < 1) {
+                            wait_ms = 1;
+                        }
+                        if (wait_ms > 50) {
+                            wait_ms = 50;
+                        }
+                    }
+                }
+                if (wait_ms < 1) {
+                    wait_ms = 1;
+                }
+                poll_wait = wait_ms;
             }
 
             //if (Watchdog::anyTriggered(curr_t))
             //  Watchdog::showTriggered(curr_t, true, std::cerr);
             systems_waiting = pollZMQItems(poll_wait, items, 5 + num_channels, ecat_sync,
                                            resource_mgr, sched_sync, ecat_out);
+            curr_t = microsecs();
 
             if (systems_waiting > 0 ||
                 (machines_have_work && curr_t - last_checked_machines >= machine_check_delay)) {
@@ -945,8 +1061,15 @@ void ProcessingThread::operator()() {
             some time anyway.
         */
         if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
-            HandleIncomingEtherCatData(io_work_queue, curr_t, last_sample_poll, avg_io_time);
+            HandleIncomingEtherCatData(io_work_queue, curr_t, avg_io_time);
             safeSend(ecat_sync, "go", 2);
+            items[internals->ECAT_ITEM].revents = 0;
+        }
+        else {
+            // No domain message this cycle (unchanged image / no push). Still
+            // advance ANALOG/COUNTER IOTIME from the live application clock.
+            IOLockHelper io_lock;
+            sampleRegularPolls(curr_t);
         }
 
         if (program_done) {
@@ -968,7 +1091,13 @@ void ProcessingThread::operator()() {
             break;
         }
         if (!MachineInstance::pluginMachines().empty()) {
-            if (processing_state == eIdle && curr_t - last_checked_plugins >= 1000) {
+            // Match POLLING_DELAY (was fixed 1 ms → up to 1 kHz plugin CPU).
+            uint64_t plugin_period_us = static_cast<uint64_t>(internals->cycle_delay);
+            if (plugin_period_us < 1000) {
+                plugin_period_us = 1000;
+            }
+            if (processing_state == eIdle &&
+                curr_t - last_checked_plugins >= plugin_period_us) {
 #ifdef KEEPSTATS
                 AutoStat stats(avg_plugin_time);
 #endif
@@ -1012,131 +1141,95 @@ void ProcessingThread::operator()() {
         }
 
         if (status == e_waiting && systems_waiting > 0) {
-            // check the command interface and any command channels for activity
-            bool have_command = false;
-            if (items[internals->CMD_SYNC_ITEM].revents & ZMQ_POLLIN) {
-                have_command = true;
-            }
-            else {
-                for (unsigned int i = dynamic_poll_start_idx;
-                     i < dynamic_poll_start_idx + num_channels; ++i) {
-                    if (items[i].revents & ZMQ_POLLIN) {
-                        have_command = true;
+            // Drain only POLLIN sockets using pure ZMQ_DONTWAIT (no safeRecv/poll).
+#ifdef KEEPSTATS
+            AutoStat stats(avg_cmd_processing);
+#endif
+            std::list<CommandSocketInfo *>::iterator csi_iter =
+                internals->channel_sockets.begin();
+            const unsigned int last_i = CommandSocketInfo::lastIndex();
+            for (unsigned int i = internals->CMD_SYNC_ITEM; i <= last_i; ++i) {
+                zmq::socket_t *sock = nullptr;
+                if (i == internals->CMD_SYNC_ITEM) {
+                    sock = &command_sync;
+                }
+                else {
+                    if (csi_iter == internals->channel_sockets.end()) {
                         break;
                     }
+                    sock = (*csi_iter++)->sock;
                 }
-            }
-            if (have_command) {
-                uint64_t start_time = microsecs();
-                uint64_t now = start_time;
-#ifdef KEEPSTATS
-                AutoStat stats(avg_cmd_processing);
-#endif
-                [[maybe_unused]] int count = 0;
-                while (have_command && (long)(now - start_time) < internals->cycle_delay / 2) {
-                    have_command = false;
-                    std::list<CommandSocketInfo *>::iterator csi_iter =
-                        internals->channel_sockets.begin();
-                    unsigned int i = internals->CMD_SYNC_ITEM;
-                    while (i <= CommandSocketInfo::lastIndex() &&
-                           (long)(now - start_time) < internals->cycle_delay / 2) {
-                        zmq::socket_t *sock = 0;
-                        CommandSocketInfo *info = 0;
-                        if (i == internals->CMD_SYNC_ITEM) {
-                            sock = &command_sync;
+                if (i >= static_cast<unsigned int>(max_poll_sockets) ||
+                    !(items[i].revents & ZMQ_POLLIN)) {
+                    continue;
+                }
+                for (int nmsg = 0; nmsg < 32; ++nmsg) {
+                    MessageHeader mh;
+                    const uint32_t default_id = mh.getId();
+                    char *buf = nullptr;
+                    size_t len = 0;
+                    try {
+                        zmq::message_t message;
+                        // Optional header frame then body (same layout as safeRecv).
+                        if (!sock->recv(&message, ZMQ_DONTWAIT)) {
+                            break;
                         }
-                        else {
-                            if (csi_iter == internals->channel_sockets.end()) {
+                        if (message.more() && message.size() == sizeof(MessageHeader)) {
+                            memcpy(&mh, message.data(), sizeof(MessageHeader));
+                            if (!sock->recv(&message, ZMQ_DONTWAIT)) {
                                 break;
                             }
-                            info = *csi_iter++;
-                            sock = info->sock;
                         }
-                        { int rc = zmq::poll(&items[i], 1, 0); }
-                        if (!(items[i].revents & ZMQ_POLLIN)) {
-                            ++i;
-                            continue;
-                        }
-                        have_command = true;
-
-                        zmq::message_t msg;
-                        char *buf = nullptr;
-                        size_t len = 0;
-                        MessageHeader mh;
-                        uint32_t default_id = mh.getId(); // save the msgid to following check
-                        if (safeRecv(*sock, &buf, &len, false, 0, mh)) {
-                            ++count;
-                            if (false && len > 10) {
-                                FileLogger fl(program_name);
-                                fl.f() << "Processing thread received command ";
-                                if (buf) {
-                                    fl.f() << buf << " ";
-                                }
-                                else {
-                                    fl.f() << "NULL";
-                                }
-                                fl.f() << "\n";
-                            }
-                            if (!buf) {
-                                continue;
-                            }
-                            IODCommand *command = parseCommandString(buf);
-                            if (command) {
-                                bool ok = false;
-                                try {
-                                    ok = (*command)();
-                                }
-                                catch (const std::exception &e) {
-                                    FileLogger fl(program_name);
-                                    fl.f() << "command execution threw an exception " << e.what()
-                                           << "\n";
-                                }
-                                delete[] buf;
-
-                                if (mh.needsReply() || mh.getId() == default_id) {
-                                    char *response =
-                                        strdup((ok) ? command->result() : command->error());
-                                    MessageHeader rh(mh);
-                                    rh.source = mh.dest;
-                                    rh.dest = mh.source;
-                                    rh.start_time = microsecs();
-                                    safeSend(*sock, response, strlen(response), rh);
-                                    free(response);
-                                }
-                                else {
-                                    //char *response = strdup(command->result());
-                                    //safeSend(*sock, response, strlen(response));
-                                    //free(response);
-                                }
-                            }
-                            else {
-                                if (mh.needsReply() || mh.getId() == default_id) {
-                                    char *response = new char[len + 40];
-                                    snprintf(response, len + 40, "Unrecognised command: %s", buf);
-                                    MessageHeader rh(mh);
-                                    rh.source = mh.dest;
-                                    rh.dest = mh.source;
-                                    rh.start_time = microsecs();
-                                    safeSend(*sock, response, strlen(response), rh);
-                                    delete[] response;
-                                }
-                                else {
-                                    /*
-                                        char *response = new char[len+40];
-                                        snprintf(response, len+40, "Unrecognised command: %s", buf);
-                                        safeSend(*sock, response, strlen(response));
-                                        delete[] response;
-                                    */
-                                }
-                                delete[] buf;
-                            }
-                            delete command;
-                        }
-                        ++i;
+                        len = message.size();
+                        buf = new char[len + 1];
+                        memcpy(buf, message.data(), len);
+                        buf[len] = 0;
                     }
-                    usleep(0);
-                    now = microsecs();
+                    catch (const zmq::error_t &) {
+                        break;
+                    }
+                    if (!buf) {
+                        break;
+                    }
+                    IODCommand *command = parseCommandString(buf);
+                    if (command) {
+                        bool ok = false;
+                        try {
+                            ok = (*command)();
+                        }
+                        catch (const std::exception &e) {
+                            FileLogger fl(program_name);
+                            fl.f() << "command execution threw an exception " << e.what()
+                                   << "\n";
+                        }
+                        delete[] buf;
+                        if (mh.needsReply() || mh.getId() == default_id) {
+                            char *response =
+                                strdup((ok) ? command->result() : command->error());
+                            MessageHeader rh(mh);
+                            rh.source = mh.dest;
+                            rh.dest = mh.source;
+                            rh.start_time = microsecs();
+                            safeSend(*sock, response, strlen(response), rh);
+                            free(response);
+                        }
+                        delete command;
+                    }
+                    else {
+                        if (mh.needsReply() || mh.getId() == default_id) {
+                            char *response = new char[len + 40];
+                            snprintf(response, len + 40, "Unrecognised command: %s", buf);
+                            MessageHeader rh(mh);
+                            rh.source = mh.dest;
+                            rh.dest = mh.source;
+                            rh.start_time = microsecs();
+                            safeSend(*sock, response, strlen(response), rh);
+                            delete[] response;
+                        }
+                        delete[] buf;
+                    }
                 }
+                items[i].revents = 0;
             }
         }
 
@@ -1147,7 +1240,14 @@ void ProcessingThread::operator()() {
             }
 #endif
             if (status == e_waiting && processing_state == eIdle) {
-                size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
+                // DONTWAIT only — safeRecv(...,0) was poll(0) per call.
+                size_t len = 0;
+                try {
+                    len = sched_sync.recv(buf, 10, ZMQ_DONTWAIT);
+                }
+                catch (const zmq::error_t &) {
+                    len = 0;
+                }
                 if (len) {
                     status = e_handling_sched;
 #ifdef KEEPSTATS
@@ -1155,25 +1255,21 @@ void ProcessingThread::operator()() {
                     avg_scheduler_time.start();
 #endif
                 }
-                else {
-                    char buf[100];
-                    snprintf(buf, 100, "WARNING: scheduler sync returned zero length message");
-                    MessageLog::instance()->add(buf);
-                }
             }
             else if (status == e_waiting_sched) {
-                size_t len = safeRecv(sched_sync, buf, 10, false, len, 0);
+                size_t len = 0;
+                try {
+                    len = sched_sync.recv(buf, 10, ZMQ_DONTWAIT);
+                }
+                catch (const zmq::error_t &) {
+                    len = 0;
+                }
                 if (len) {
                     safeSend(sched_sync, "bye", 3);
                     status = e_waiting;
 #ifdef KEEPSTATS
                     avg_scheduler_time.update();
 #endif
-                }
-                else {
-                    char buf[100];
-                    snprintf(buf, 100, "WARNING: scheduler sync returned zero length message");
-                    MessageLog::instance()->add(buf);
                 }
             }
         }
@@ -1297,10 +1393,27 @@ void ProcessingThread::operator()() {
                     upd = IOComponent::getDefaults();
                     if (!upd) {
 #ifdef USE_KERNEL_ETHERCAT
-                        IOComponent::setHardwareState(IOComponent::s_operational);
-                        DBG_INITIALISATION
-                            << "No process defaults available; marking hardware operational\n";
-                        continue;
+                        // Seed empty defaults so PROCESS_DATA path can apply
+                        // turnOn/turnOff bits into the domain (ecat_thread gates
+                        // on default_data for legacy; kernel allows apply anyway).
+                        size_t psz = IOComponent::getMaxIOOffset() + 1;
+                        if (psz > 0 && psz < 100000) {
+                            uint8_t *zdata = new uint8_t[psz];
+                            uint8_t *zmask = new uint8_t[psz];
+                            memset(zdata, 0, psz);
+                            memset(zmask, 0, psz);
+                            IOComponent::setDefaultData(zdata);
+                            IOComponent::setDefaultMask(zmask);
+                            delete[] zdata;
+                            delete[] zmask;
+                            upd = IOComponent::getDefaults();
+                        }
+                        if (!upd) {
+                            IOComponent::setHardwareState(IOComponent::s_operational);
+                            DBG_INITIALISATION
+                                << "No process defaults; hardware operational (kernel)\n";
+                            continue;
+                        }
 #else
                         assert(upd);
 #endif
@@ -1380,6 +1493,11 @@ void ProcessingThread::operator()() {
                     delete upd;
                     update_state = s_update_sent;
                     IOComponent::updatesSent(true);
+#ifdef USE_KERNEL_ETHERCAT
+                    // Kernel outputs are applied via the shadow immediately;
+                    // drop any leftover pending-out so updatesWaiting() clears.
+                    IOComponent::clearPendingOutputUpdates();
+#endif
                 }
             }
         }
@@ -1426,6 +1544,111 @@ void ProcessingThread::operator()() {
 
         machine.idle(); // in case any of the above triggered a change to the machine state
         last_machine_change = machine.lastUpdated();
+
+        // Cap outer-loop rate. When there is no urgent work, allow a longer
+        // quiet period so we are not locked at ~1/POLLING_DELAY busy loops;
+        // sampleRegularPolls still advances ANALOG IOTIME on its own timer when
+        // EC messages or quiet polls wake us.
+        {
+            static uint64_t last_iter_us = 0;
+            static uint64_t iter_count = 0;
+            static uint64_t last_report_us = 0;
+            const uint64_t now_us = microsecs();
+            uint64_t min_period_us = static_cast<uint64_t>(internals->cycle_delay);
+            if (min_period_us < 1000) {
+                min_period_us = 1000;
+            }
+            // Quiet plant: stretch loop toward 5 ms to cut baseline CPU.
+            // sampleRegularPolls still runs each wake; EC ZMQ wakes sooner.
+            const bool quiet =
+                !machines_have_work && io_work_queue.empty() &&
+                !IOComponent::updatesWaiting() &&
+                MachineInstance::pendingEvents().empty();
+            if (quiet && min_period_us < 5000) {
+                min_period_us = 5000;
+            }
+            if (last_iter_us != 0 && now_us - last_iter_us < min_period_us) {
+                usleep(static_cast<useconds_t>(min_period_us - (now_us - last_iter_us)));
+            }
+            last_iter_us = microsecs();
+            ++iter_count;
+            if (last_report_us == 0) {
+                last_report_us = last_iter_us;
+            }
+            else if (last_iter_us - last_report_us >= 1000000) {
+                size_t n_runnable = 0;
+                size_t n_stable = 0;
+                size_t n_exec = 0;
+                size_t n_mail = 0;
+                size_t n_events = 0;
+                // Sample a few names so we can see what never leaves runnable.
+                std::string sample_exec;
+                std::string sample_mail;
+                std::string sample_stable;
+                {
+                    boost::recursive_mutex::scoped_lock lock(runnable_mutex);
+                    n_runnable = runnable.size();
+                    for (MachineInstance *mi : runnable) {
+                        const bool st = mi->queuedForStableStateTest();
+                        const bool ex = mi->executingCommand() != nullptr;
+                        const bool ml = mi->hasMail();
+                        if (st) {
+                            ++n_stable;
+                            if (sample_stable.size() < 140) {
+                                if (!sample_stable.empty()) {
+                                    sample_stable += ',';
+                                }
+                                sample_stable += mi->getName();
+                            }
+                        }
+                        if (ex) {
+                            ++n_exec;
+                            if (sample_exec.size() < 200) {
+                                if (!sample_exec.empty()) {
+                                    sample_exec += ',';
+                                }
+                                sample_exec += mi->getName();
+                                Action *a = mi->executingCommand();
+                                if (a) {
+                                    char abuf[80];
+                                    a->toString(abuf, sizeof(abuf));
+                                    sample_exec += '{';
+                                    sample_exec += abuf;
+                                    sample_exec += '}';
+                                }
+                            }
+                        }
+                        if (ml) {
+                            ++n_mail;
+                            if (sample_mail.size() < 140) {
+                                if (!sample_mail.empty()) {
+                                    sample_mail += ',';
+                                }
+                                sample_mail += mi->getName();
+                            }
+                        }
+                        if (!mi->pendingEvents().empty()) {
+                            ++n_events;
+                        }
+                    }
+                }
+                std::cerr << "PROCSNAP loops/s=" << iter_count
+                          << " cycle_delay_us=" << internals->cycle_delay
+                          << " runnable=" << n_runnable
+                          << " stableQ=" << n_stable
+                          << " exec=" << n_exec
+                          << " mail=" << n_mail
+                          << " ev=" << n_events
+                          << " pendEv=" << MachineInstance::pendingEvents().size()
+                          << "\n"
+                          << "  exec: " << sample_exec << "\n"
+                          << "  mail: " << sample_mail << "\n"
+                          << "  stable: " << sample_stable << "\n";
+                iter_count = 0;
+                last_report_us = last_iter_us;
+            }
+        }
+
         if (program_done) {
             break;
         }
