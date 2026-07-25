@@ -1,12 +1,10 @@
 #!/bin/bash
-# iod-elc boot: Phase 8 kernel transport (libelcethercat / elc_ethercat).
+# iod-elc boot: libelcethercat / elc_ethercat master path.
 #
-# SDO commissioning uses the kernel ordered setup path (elc_sdo recipe),
-# not legacy ethercat download / sdo.sh zero-mapping writes (0x06040041).
-# See /opt/etherlab-cyclic-kmod/docs/ed3l-pdo-configuration-test.md
-#
-# Exclusivity: elc_sdo and iod-elc each open /dev/elc_ethercat0 in turn.
-# Do not run ethercat-based tools that hold master 0 while either is open.
+# Servo commissioning uses elc_sdo ordered setup recipes (not legacy ethercat
+# download / sdo.sh zero-mapping writes). elc_sdo and iod-elc open
+# /dev/elc_ethercat0 in turn — do not hold master 0 with ethercat tools while
+# either is running.
 
 set -euo pipefail
 
@@ -142,7 +140,7 @@ ls -1t core.* 2>/dev/null | tail -n +5 | xargs -r -d '\n' rm -- || true
 
 # Do not use process-substitution logger with exec: it hides aborts and can
 # tear down condition variables while worker threads are still running.
-echo "Starting ${IOD} (kernel transport Phase 8: discovery + SDO mailbox; no cyclic outputs yet)"
+echo "Starting ${IOD} (kernel EtherCAT transport)"
 if [ "${log}" = "/dev/null" ]; then
   exec "${IOD}" \
     --name 1G2C \

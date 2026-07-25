@@ -1302,7 +1302,6 @@ uint8_t *generateProcessMask(uint8_t *res, size_t len) {
         offset += bitpos / 8;
         bitpos = bitpos % 8;
 #ifdef USE_KERNEL_ETHERCAT
-        // Phase 8: skip unregistered domain offsets
         if (offset > max) {
             continue;
         }
@@ -1482,12 +1481,18 @@ IOUpdate *IOComponent::getDefaults() {
     if (min_offset > max_offset) {
         return 0;
     }
+    if (!io_process_data || !process_data_size || !default_data || !default_mask) {
+#ifdef USE_KERNEL_ETHERCAT
+        return 0;
+#else
+        assert(io_process_data);
+        assert(process_data_size);
+        assert(default_data);
+        assert(default_mask);
+#endif
+    }
     IOUpdate *res = new IOUpdate;
     res->setSize(max_offset - min_offset + 1);
-    assert(io_process_data);
-    assert(process_data_size);
-    assert(default_data);
-    assert(default_mask);
     copyMaskedBits(io_process_data, default_data, default_mask, process_data_size);
     res->setData(getProcessData());
     res->setMask(default_mask);
@@ -1536,12 +1541,11 @@ void IOComponent::setupIOMap() {
 #endif
     }
 #ifdef USE_KERNEL_ETHERCAT
-    // Phase 8: domain offsets are not registered yet. Keep a minimal empty map
-    // so Clockwork can start; cyclic IO needs Phase 11.
+    // If entries are not mapped yet, keep a minimal process map so startup can proceed.
     if (max_offset >= 10000 || processing_queue.empty()) {
         if (max_offset >= 10000) {
-            std::cerr << "setupIOMap: kernel transport Phase 8 — no valid domain offsets yet "
-                         "(max would be " << max_offset << "); using empty process map\n";
+            std::cerr << "setupIOMap: unregistered domain offsets (max would be " << max_offset
+                      << "); using empty process map until entries are mapped\n";
         }
         max_offset = 0;
         min_offset = 0;
@@ -1577,7 +1581,6 @@ void IOComponent::setupIOMap() {
         unsigned int bitpos = ioc->address.io_bitpos;
         offset += bitpos / 8;
 #ifdef USE_KERNEL_ETHERCAT
-        // Phase 8 empty process map: skip invalid/unregistered domain offsets.
         if (offset > max_offset || offset * 8 + bitpos >= indexed_components->size()) {
             continue;
         }

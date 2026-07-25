@@ -98,7 +98,7 @@ bool ECInterface::initialiseKernelTransport() {
         return false;
     }
     initialised = true;
-    DBG_ETHERCAT << "KernelEthercatBus opened successfully for discovery and SDO (Phase 8)\n";
+    DBG_ETHERCAT << "KernelEthercatBus opened successfully for discovery and SDO ()\n";
     return true;
 }
 #endif
@@ -920,8 +920,52 @@ ECModule *ECInterface::findModule(unsigned int pos) {
 void ECInterface::registerModules() {
 #ifdef USE_KERNEL_ETHERCAT
     if (kernelBus && kernelBus->isOpen()) {
-        // Phase 8: no domain/PDO registration yet (needs elc_config + cyclic).
-        DBG_ETHERCAT << "registerModules: skipped for kernel transport (Phase 8)\n";
+        boost::recursive_mutex::scoped_lock lock(modules_mutex);
+        for (unsigned int mi = 0; mi < modules.size(); ++mi) {
+            ECModule *m = findModule(mi);
+            if (!m || m->sync_count == 0) {
+                continue;
+            }
+            uint32_t slave_id = static_cast<uint32_t>(m->position) + 1;
+            unsigned int entry_idx = 0;
+            for (unsigned int i = 0; i < m->sync_count; ++i) {
+                for (unsigned int j = 0; j < m->syncs[i].n_pdos; ++j) {
+                    for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
+                        if (entry_idx >= 64) {
+                            break;
+                        }
+                        const ec_pdo_entry_info_t &e = m->syncs[i].pdos[j].entries[k];
+                        if (e.index == 0) {
+                            // padding / alignment entry
+                            m->offsets[entry_idx] = 0;
+                            m->bit_positions[entry_idx] = 0;
+                            ++entry_idx;
+                            continue;
+                        }
+                        struct elc_entry_offset io = {};
+                        elc_init_api_header(&io, sizeof(io));
+                        io.entry_id = elc_make_entry_id(slave_id, static_cast<uint16_t>(entry_idx));
+                        int ret = kernelBus->getEntryOffset(&io);
+                        if (ret != 0) {
+                            DBG_ETHERCAT << "getEntryOffset failed for " << m->name << " entry "
+                                         << entry_idx << " id 0x" << std::hex << io.entry_id
+                                         << std::dec << " ret " << ret << "\n";
+                            m->offsets[entry_idx] = 0;
+                            m->bit_positions[entry_idx] = 0;
+                        }
+                        else {
+                            m->offsets[entry_idx] = io.global_offset;
+                            m->bit_positions[entry_idx] = io.bit_position;
+                            DBG_ETHERCAT << "Mapped " << m->name << " entry " << entry_idx
+                                         << " 0x" << std::hex << e.index << ":" << (int)e.subindex
+                                         << std::dec << " -> offset " << m->offsets[entry_idx]
+                                         << " bit " << m->bit_positions[entry_idx] << "\n";
+                        }
+                        ++entry_idx;
+                    }
+                }
+            }
+        }
         return;
     }
 #endif
@@ -980,8 +1024,140 @@ void ECInterface::registerModules() {
 void ECInterface::configureModules() {
 #ifdef USE_KERNEL_ETHERCAT
     if (kernelBus && kernelBus->isOpen()) {
-        // Phase 8: discovery + SDO only; PDO/sync config is Phase 9+ (elc_config_*).
-        DBG_ETHERCAT << "configureModules: skipped for kernel transport (Phase 8)\n";
+        boost::recursive_mutex::scoped_lock lock(modules_mutex);
+        int ret = kernelBus->configBegin();
+        if (ret != 0) {
+            std::cerr << "elc_config_begin failed: " << ret << "\n";
+            return;
+        }
+        uint32_t next_sync_id = 10000;
+        uint32_t next_pdo_id = 20000;
+        uint32_t next_entry_cfg_id = 30000;
+        unsigned int modules_with_pdos = 0;
+
+        for (unsigned int mi = 0; mi < modules.size(); ++mi) {
+            ECModule *m = findModule(mi);
+            if (!m) {
+                continue;
+            }
+            uint32_t slave_id = static_cast<uint32_t>(m->position) + 1;
+            struct elc_config_slave slave = {};
+            // revision 0 is the required wildcard (see captured topology confs).
+            elc_fill_config_slave(&slave, slave_id, m->position, m->alias, m->vendor_id,
+                                 m->product_code, 0 /* revision wildcard */, 0);
+            ret = kernelBus->configAddSlave(&slave);
+            if (ret != 0) {
+                std::cerr << "configAddSlave pos " << m->position << " id " << slave_id
+                          << " vendor 0x" << std::hex << m->vendor_id << " product 0x"
+                          << m->product_code << std::dec << " failed: " << ret << " ("
+                          << strerror(-ret) << ")\n";
+                return;
+            }
+            if (!m->syncs || m->sync_count == 0) {
+                continue;
+            }
+            ++modules_with_pdos;
+            unsigned int entry_local = 0;
+            for (unsigned int i = 0; i < m->sync_count; ++i) {
+                const ec_sync_info_t &sm = m->syncs[i];
+                if (sm.index == 0xff) {
+                    break;
+                }
+                struct elc_config_sync sync = {};
+                elc_init_api_header(&sync, sizeof(sync));
+                sync.config_id = next_sync_id++;
+                sync.slave_config_id = slave_id;
+                sync.sync_index = sm.index;
+                if (sm.dir == EC_DIR_INPUT) {
+                    sync.direction = ELC_DIR_INPUT;
+                }
+                else {
+                    sync.direction = ELC_DIR_OUTPUT;
+                }
+                if (sm.watchdog_mode == EC_WD_ENABLE) {
+                    sync.watchdog_mode = ELC_WD_ENABLE;
+                }
+                else if (sm.watchdog_mode == EC_WD_DISABLE) {
+                    sync.watchdog_mode = ELC_WD_DISABLE;
+                }
+                else {
+                    sync.watchdog_mode = ELC_WD_DEFAULT;
+                }
+                ret = kernelBus->configAddSync(&sync);
+                if (ret != 0) {
+                    std::cerr << "configAddSync " << m->name << " SM" << (int)sm.index
+                              << " failed: " << ret << "\n";
+                    return;
+                }
+                for (unsigned int j = 0; j < sm.n_pdos; ++j) {
+                    const ec_pdo_info_t &pdo = sm.pdos[j];
+                    struct elc_config_pdo pdo_rec = {};
+                    elc_init_api_header(&pdo_rec, sizeof(pdo_rec));
+                    pdo_rec.config_id = next_pdo_id++;
+                    pdo_rec.sync_config_id = sync.config_id;
+                    pdo_rec.pdo_index = pdo.index;
+                    ret = kernelBus->configAddPdo(&pdo_rec);
+                    if (ret != 0) {
+                        std::cerr << "configAddPdo 0x" << std::hex << pdo.index << std::dec
+                                  << " failed: " << ret << "\n";
+                        return;
+                    }
+                    for (unsigned int k = 0; k < pdo.n_entries; ++k) {
+                        const ec_pdo_entry_info_t &e = pdo.entries[k];
+                        struct elc_config_entry ent = {};
+                        elc_init_api_header(&ent, sizeof(ent));
+                        ent.config_id = next_entry_cfg_id++;
+                        ent.pdo_config_id = pdo_rec.config_id;
+                        ent.index = e.index;
+                        ent.subindex = e.subindex;
+                        ent.bit_length = e.bit_length;
+                        // Application entries need nonzero entry_id; padding uses 0.
+                        if (e.index != 0) {
+                            ent.entry_id =
+                                elc_make_entry_id(slave_id, static_cast<uint16_t>(entry_local));
+                        }
+                        else {
+                            ent.entry_id = 0;
+                        }
+                        ret = kernelBus->configAddEntry(&ent);
+                        if (ret != 0) {
+                            std::cerr << "configAddEntry 0x" << std::hex << e.index << ":"
+                                      << (int)e.subindex << std::dec << " failed: " << ret << "\n";
+                            return;
+                        }
+                        ++entry_local;
+                    }
+                }
+            }
+        }
+
+        struct elc_config_validate val = {};
+        elc_init_api_header(&val, sizeof(val));
+        ret = kernelBus->configValidate(&val);
+        if (ret != 0 || val.result != 0) {
+            std::cerr << "elc_config_validate failed ret=" << ret << " result=" << val.result
+                      << "\n";
+            return;
+        }
+        struct elc_config_apply apply = {};
+        elc_init_api_header(&apply, sizeof(apply));
+        ret = kernelBus->configApply(&apply);
+        if (ret != 0 || apply.result != 0) {
+            std::cerr << "elc_config_apply failed ret=" << ret << " result=" << apply.result
+                      << " failed_id=" << apply.failed_config_id << "\n";
+            return;
+        }
+        struct elc_domain_create dom = {};
+        elc_init_api_header(&dom, sizeof(dom));
+        ret = kernelBus->domainCreate(&dom);
+        if (ret != 0 || dom.result != 0) {
+            std::cerr << "elc_domain_create failed ret=" << ret << " result=" << dom.result
+                      << "\n";
+            return;
+        }
+        DBG_ETHERCAT << "Kernel config applied: " << modules_with_pdos
+                     << " modules with PDOs, domain entries=" << dom.entry_count
+                     << " domain_size=" << kernelBus->domainSize() << "\n";
         return;
     }
 #endif
@@ -1379,7 +1555,7 @@ void collectEtherCatModules() {
     }
     std::stringstream ss;
 #ifdef USE_KERNEL_ETHERCAT
-    // Phase 8: seed ECModule slots in bus order so XML can replace by position.
+    // seed ECModule slots in bus order so XML can replace by position.
     // Full PDO discovery via ecrt is deferred; identity comes from elc_list_slaves.
     if (ECInterface::instance()->getKernelBus() &&
         ECInterface::instance()->getKernelBus()->isOpen()) {
@@ -1421,25 +1597,28 @@ void collectEtherCatModules() {
 
 bool ECInterface::deactivate() {
 #ifdef USE_KERNEL_ETHERCAT
-    // Phase 8 kernel transport: close bus; no legacy master/domain.
     if (kernelBus && kernelBus->isOpen()) {
-        kernelBus->close();
-    }
-    active = false;
-    domain1 = 0;
-    domain1_pd = 0;
-    data.setDataSize(0);
-    data.setProcessData(nullptr, 0);
-    {
-        boost::recursive_mutex::scoped_lock lock(modules_mutex);
-        for (ECModule *m : modules) {
-            delete m;
+        kernelBus->disarmOutput();
+        kernelBus->cycleDeactivate();
+        active = false;
+        domain1 = nullptr;
+        if (domain1_pd) {
+            delete[] domain1_pd;
+            domain1_pd = nullptr;
         }
-        modules.clear();
+        data.setDataSize(0);
+        data.setProcessData(nullptr, 0);
+        {
+            boost::recursive_mutex::scoped_lock lock(modules_mutex);
+            for (ECModule *m : modules) {
+                delete m;
+            }
+            modules.clear();
+        }
+        DBG_ETHERCAT << "Kernel transport deactivated\n";
+        return true;
     }
-    DBG_ETHERCAT << "Kernel transport deactivated (Phase 8)\n";
-    return true;
-#else
+#endif
     char buf[200];
     snprintf(buf, 200, "EtherCAT interface: Deactivating the EtherCAT master");
     MessageLog::instance()->add(buf);
@@ -1483,17 +1662,44 @@ bool ECInterface::deactivate() {
     MessageLog::instance()->add(buf);
     DBG_ETHERCAT << buf << "\n";
     return true;
-#endif // USE_KERNEL_ETHERCAT
 }
 
 bool ECInterface::activate() {
 #ifdef USE_KERNEL_ETHERCAT
     if (kernelBus && kernelBus->isOpen()) {
-        // Phase 8: no cyclic domain. Mark active so the rest of iod can start;
-        // process-data exchange remains disabled until Phase 11.
+        uint32_t period_ns = 1000000000UL / FREQUENCY;
+        if (period_ns < ELC_CYCLE_PERIOD_MIN_NS) {
+            period_ns = ELC_CYCLE_PERIOD_MIN_NS;
+        }
+        if (period_ns > ELC_CYCLE_PERIOD_MAX_NS) {
+            period_ns = ELC_CYCLE_PERIOD_MAX_NS;
+        }
+        struct elc_cycle_activate act = {};
+        int ret = kernelBus->cycleActivate(period_ns, 0, &act);
+        if (ret != 0 || act.result != 0) {
+            std::cerr << "elc_cycle_activate failed ret=" << ret << " result=" << act.result
+                      << "\n";
+            return false;
+        }
+        size_t dsz = act.domain_size ? act.domain_size : kernelBus->domainSize();
+        if (dsz == 0) {
+            dsz = 1;
+        }
+        if (domain1_pd) {
+            delete[] domain1_pd;
+            domain1_pd = nullptr;
+        }
+        domain1_pd = new uint8_t[dsz];
+        memset(domain1_pd, 0, dsz);
+        // Non-null marker so existing domain checks pass (not an ecrt domain).
+        domain1 = reinterpret_cast<ec_domain_t *>(domain1_pd);
+        data.setDataSize(dsz);
+        // process_data is owned separately by ProcessData; do not alias domain1_pd.
         active = true;
         initialised = true;
-        DBG_ETHERCAT << "activate: kernel transport Phase 8 (no cyclic domain)\n";
+        all_ok = true;
+        DBG_ETHERCAT << "Kernel cycle active period_ns=" << period_ns
+                     << " domain_size=" << dsz << "\n";
         return true;
     }
 #endif
@@ -1628,7 +1834,7 @@ void ECInterface::init() {
     initialised = true;
     return;
 #elif defined(USE_KERNEL_ETHERCAT)
-    // Kernel transport (iod-elc): discovery + SDO only for Phase 8
+    // Kernel transport (iod-elc): discovery + SDO only for 
     if (!kernelBus) {
         kernelBus.reset(new KernelEthercatBus());
     }
@@ -1639,7 +1845,7 @@ void ECInterface::init() {
         return;
     }
     initialised = true;
-    DBG_ETHERCAT << "KernelEthercatBus opened successfully for discovery and SDO (Phase 8)\n";
+    DBG_ETHERCAT << "KernelEthercatBus opened successfully for discovery and SDO ()\n";
     return;
 #else
     DBG_ETHERCAT_CALLS << "ecrt_request_master\n";
@@ -1823,9 +2029,35 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 void ECInterface::receiveState() {
     static long warned = 0;
 #ifdef USE_KERNEL_ETHERCAT
-    // Phase 8: kernel transport has no ecrt cyclic master/domain yet.
-    // Quietly skip cyclic receive; discovery/SDO use KernelEthercatBus.
     if (kernelBus && kernelBus->isOpen()) {
+        if (!initialised) {
+            return;
+        }
+        if (active && domain1_pd) {
+            size_t dsz = kernelBus->domainSize();
+            if (dsz == 0) {
+                dsz = data.getProcessDataSize();
+            }
+            if (dsz > 0) {
+                struct elc_input_snapshot snap = {};
+                int ret = kernelBus->getInputSnapshot(domain1_pd, dsz, &snap);
+                if (ret != 0 && warned++ % 200 == 0) {
+                    std::cerr << "elc_get_input_snapshot failed: " << ret << "\n";
+                }
+            }
+            last_receive = microsecs();
+        }
+        struct elc_io_status st = {};
+        if (kernelBus->getIoStatus(&st) == 0) {
+            master_state.slaves_responding = st.slaves_responding;
+            master_state.link_up = st.link_up ? 1 : 0;
+            all_ok = st.bus_healthy != 0;
+        }
+#ifdef USE_SDO
+        if (checkSDOInitialisation()) {
+            checkSDOUpdates();
+        }
+#endif
         return;
     }
 #endif
@@ -1892,6 +2124,69 @@ void ECInterface::receivePendingDomainState() {
 }
 
 int ECInterface::collectState() {
+#ifdef USE_KERNEL_ETHERCAT
+    if (kernelBus && kernelBus->isOpen()) {
+        if (!initialised || !active || !domain1_pd) {
+            return 0;
+        }
+        size_t domain_size = kernelBus->domainSize();
+        if (domain_size == 0) {
+            domain_size = data.getProcessDataSize();
+        }
+        if (domain_size == 0) {
+            return 0;
+        }
+        uint8_t *pd_src = domain1_pd;
+        unsigned int max = data.max_io_index;
+        unsigned int min = data.min_io_index;
+        if (domain_size < (size_t)max - min + 1 && max >= min) {
+            return 0;
+        }
+        data.reallocate_update_data_and_mask(domain_size);
+        int affected_bits = 0;
+        uint8_t *last_pd = instance()->data.getProcessData();
+        uint8_t *pm = data.getProcessMask();
+        uint8_t *q = data.update_data;
+        uint8_t *pd = pd_src;
+        if (!pm) {
+            return 0;
+        }
+        for (unsigned int i = 0; i < domain_size; ++i) {
+            data.update_mask[i] = 0;
+            if (!last_pd) {
+                data.update_data[i] = pd_src[i];
+                data.update_mask[i] = *pm;
+                ++affected_bits;
+            }
+            else if (last_pd[i] != pd_src[i]) {
+                uint8_t bitmask = 0x01;
+                while (bitmask) {
+                    if (*pm & bitmask) {
+                        if (((*pd) & bitmask) != ((last_pd[i]) & bitmask)) {
+                            if ((*pd) & bitmask) {
+                                *q |= bitmask;
+                            }
+                            else {
+                                *q &= static_cast<uint8_t>(0xff - bitmask);
+                            }
+                            data.update_mask[i] |= bitmask;
+                            ++affected_bits;
+                        }
+                    }
+                    bitmask = static_cast<uint8_t>(bitmask << 1);
+                }
+            }
+            ++pd;
+            ++q;
+            ++pm;
+        }
+        uint8_t *copy = new uint8_t[domain_size];
+        memcpy(copy, pd_src, domain_size);
+        instance()->data.setDataSize(domain_size);
+        instance()->data.setProcessData(copy, domain_size);
+        return affected_bits;
+    }
+#endif
     if (!master || !initialised || !active || !domain1) {
         std::cerr << "master not ready to collect state ";
         if (!master) {
@@ -2048,6 +2343,48 @@ int ECInterface::collectState() {
 void ECInterface::sendUpdates() {
     static uint64_t last_warning = 0;
     uint64_t now = microsecs();
+#ifdef USE_KERNEL_ETHERCAT
+    if (kernelBus && kernelBus->isOpen()) {
+        if (!initialised || !active || !domain1_pd) {
+            return;
+        }
+        size_t dsz = kernelBus->domainSize();
+        if (dsz == 0) {
+            dsz = data.getProcessDataSize();
+        }
+        if (dsz == 0) {
+            return;
+        }
+        uint8_t *mask = data.getUpdateMask();
+        uint8_t *img = data.getUpdateData();
+        if (!img) {
+            img = domain1_pd;
+        }
+        if (!mask) {
+            // full-image publish with zero mask (no bit changes)
+            static std::vector<uint8_t> zero_mask;
+            if (zero_mask.size() < dsz) {
+                zero_mask.assign(dsz, 0);
+            }
+            mask = zero_mask.data();
+        }
+        struct elc_output_publish pub = {};
+        int ret = kernelBus->publishOutput(img, mask, dsz, &pub);
+        if (ret == 0) {
+            struct elc_output_arm arm = {};
+            elc_init_api_header(&arm, sizeof(arm));
+            arm.config_generation = pub.config_generation;
+            arm.output_sequence = pub.output_sequence;
+            kernelBus->armOutput(&arm);
+        }
+        else if (now + 5000000 < last_warning) {
+            last_warning = now;
+            std::cerr << "elc_publish_output failed: " << ret << "\n";
+        }
+        last_update = now;
+        return;
+    }
+#endif
     if (!master || !initialised || !active || !all_ok || !domain1) {
         if (now + 5000000 < last_warning) {
             std::cerr << "master not ready to send updates\n" << std::flush;
@@ -2291,13 +2628,13 @@ void ECInterface::check_master_state(void) {
 #ifndef EC_SIMULATOR
 void ECInterface::report_module_state_change(ECModule *m, int i) {
 #ifdef USE_KERNEL_ETHERCAT
-    // Phase 8 kernel transport (iod-elc): no slave_config or emerg queue yet.
+    //  kernel transport (iod-elc): no slave_config or emerg queue yet.
     // Simple stub. State tracking enhanced in Phase 11 with full cyclic support.
     if (m) {
         m->slave_config_state.online = true;
         m->slave_config_state.operational = true;
         m->slave_config_state.al_state = 8; // OP
-        DBG_ETHERCAT << "Kernel transport Phase 8: " << m->getName() << " marked operational (stub)\n";
+        DBG_ETHERCAT << "Kernel transport " << m->getName() << " marked operational (stub)\n";
     }
 #else
     ec_slave_config_state_t s;
@@ -2682,11 +3019,11 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
 
 #ifdef USE_KERNEL_ETHERCAT
 char *collectSlaveConfig(bool reconfigure) {
-    // Kernel transport (Phase 8): simple stub. Full slave config/PDO mapping in Phase 9.
+    // Kernel transport (): simple stub. Full slave config/PDO mapping in Phase 9.
     // This allows iod.sh and IODCommandGetSlaveConfig to work without ecrt calls.
     cJSON *root = cJSON_CreateArray();
     cJSON *entry = cJSON_CreateObject();
-    cJSON_AddStringToObject(entry, "status", "kernel-transport-phase8");
+    cJSON_AddStringToObject(entry, "status", "kernel-transport");
     cJSON_AddStringToObject(entry, "note", "discovery + SDO mailbox only (outputs in Phase 11)");
     cJSON_AddItemToArray(root, entry);
     char *json = cJSON_Print(root);

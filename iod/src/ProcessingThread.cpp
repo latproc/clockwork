@@ -1295,12 +1295,23 @@ void ProcessingThread::operator()() {
                 if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
                     DBG_INITIALISATION << "Sending defaults to EtherCAT\n";
                     upd = IOComponent::getDefaults();
-                    assert(upd);
+                    if (!upd) {
+#ifdef USE_KERNEL_ETHERCAT
+                        IOComponent::setHardwareState(IOComponent::s_operational);
+                        DBG_INITIALISATION
+                            << "No process defaults available; marking hardware operational\n";
+                        continue;
+#else
+                        assert(upd);
+#endif
+                    }
 #if VERBOSE_DEBUG
-                    display(std::cout, upd->data());
-                    std::cout << ":";
-                    display(std::cout, upd->mask());
-                    std::cout << "\n";
+                    if (upd) {
+                        display(std::cout, upd->data());
+                        std::cout << ":";
+                        display(std::cout, upd->mask());
+                        std::cout << "\n";
+                    }
 #endif
                 }
                 else {
