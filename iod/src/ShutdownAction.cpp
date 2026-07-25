@@ -32,6 +32,7 @@ std::ostream &ShutdownAction::operator<<(std::ostream &out) const {
 
 Action::Status ShutdownAction::run() {
     owner->start(this);
+    std::cerr << "SHUTDOWN requested by machine " << owner->getName() << "\n";
     program_done = true;
     status = Complete;
     result_str = "OK";

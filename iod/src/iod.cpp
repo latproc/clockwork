@@ -139,9 +139,13 @@ class ClockworkDeviceConfigurator : public DeviceConfigurator {
 };
 
 bool setupEtherCatThread() {
+    // Ensure the master is opened before module/config work (state-machine
+    // ENTER may not have run yet when the processing thread activates hardware).
     if (!ECInterface::instance()->initialised) {
-        DBG_INITIALISATION
-            << "Cannect setup the EtherCAT thread until the interface is initialised\n";
+        ECInterface::instance()->init();
+    }
+    if (!ECInterface::instance()->initialised) {
+        std::cerr << "Cannot setup EtherCAT: master open failed\n";
         return false;
     }
 #ifndef EC_SIMULATOR
@@ -330,8 +334,7 @@ class IODHardwareActivation : public HardwareActivation {
             return true;
         }
         else {
-            DBG_MSG << "Warning: ECInterface failed to setup the EtherCAT thread\n";
-            assert(false);
+            std::cerr << "Warning: ECInterface failed to setup the EtherCAT thread\n";
             return false;
         }
     }
@@ -466,12 +469,13 @@ int main(int argc, char const *argv[]) {
         return load_result;
     }
 
+    // SYSTEM.CYCLE_DELAY = EtherCAT period (µs). POLLING_DELAY is Clockwork-only.
     const Value *cycle_delay_v = ClockworkInterpreter::instance()->cycle_delay;
-    long delay = 1000;
-    if (cycle_delay_v) {
+    long delay = 500;
+    if (cycle_delay_v && cycle_delay_v->iValue >= 100) {
         delay = cycle_delay_v->iValue;
     }
-    ECInterface::FREQUENCY = 1000000 / delay;
+    ECInterface::instance()->applyCyclePeriodUs(static_cast<unsigned long>(delay));
 
     MachineInstance *ethercat_status = MachineInstance::find("ETHERCAT");
     if (!ethercat_status) {
@@ -537,16 +541,18 @@ int main(int argc, char const *argv[]) {
     try {
         process.join();
         stateMonitor->stop();
-        MessagingInterface::abort();
         MQTTInterface::instance()->stop();
         Dispatcher::instance()->stop();
         processMonitor.stop();
         ethercat.stop();
         usleep(200);
-        return 0;
+        // Avoid tearing down condition variables while worker threads may still
+        // hold them (MessagingInterface::abort() can throw ZMQ EFSM here).
+        _exit(0);
     }
-    catch (const zmq::error_t &ex) { // expected error when we remove the zmq context
+    catch (const zmq::error_t &ex) {
         std::cerr << "Error on exit: " << ex.what() << "\n";
+        _exit(0);
     }
-    return 0;
+    _exit(0);
 }

@@ -87,7 +87,9 @@ class ProcessingThread : public ClockworkProcessManager {
     ProcessingThread &operator=(const ProcessingThread &other);
 
     void HandleIncomingEtherCatData(std::set<IOComponent *> &io_work_queue, uint64_t curr_t,
-                                    uint64_t last_sample_poll, AutoStatStorage &avg_io_time);
+                                    AutoStatStorage &avg_io_time);
+    /** POLLING_DELAY: regular_poll ANALOG/COUNTER IOTIME without a domain push. */
+    void sampleRegularPolls(uint64_t curr_t);
 
     HardwareActivation &activate_hardware;
     IODCommandThread &command_interface;

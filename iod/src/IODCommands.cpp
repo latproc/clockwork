@@ -131,6 +131,13 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
         else if (state_name == "off") {
             device->turnOff();
         }
+        // Also update the owning Clockwork POINT machine state (lookup_device is
+        // the IOComponent; DESCRIBE reports MachineInstance STATE separately).
+        MachineInstance *mi = MachineInstance::find(ds.c_str());
+        if (mi && mi->getStateMachine() &&
+            mi->getStateMachine()->findState(state_name.c_str())) {
+            mi->setState(state_name.c_str(), auth, false);
+        }
         result_str = device->getStateString();
         return true;
     }
@@ -1431,11 +1438,19 @@ bool IODCommandChannel::run(std::vector<Value> &params) {
                         std::cout << "instantiating a channel on port " << port << "\n";
                         chn = defn->instantiate(static_cast<unsigned int>(port));
                         assert(chn);
+                        if (!chn->definition()) {
+                            chn->setDefinition(defn);
+                        }
                         if (ch_name == "PERSISTENCE_CHANNEL") {
                             chn->setValue("PersistentStore",
                                           Value(persistent_store(), Value::t_string));
                         }
                         chn->start();
+                        if (!chn->started()) {
+                            error_str = MessageEncoding::encodeError(
+                                "channel start failed (missing definition)");
+                            return false;
+                        }
                         chn->enable();
                         break;
                     }

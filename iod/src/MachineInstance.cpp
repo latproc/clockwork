@@ -174,7 +174,16 @@ void MachineInstance::setNeedsCheck() {
     if (!is_enabled) {
         return;
     }
-    bool already_pending = ProcessingThread::is_pending(this);
+    // Already queued for a check: bump the counter only. TIMER predicates that
+    // are slightly overdue (t >= -2000) used to call setNeedsCheck every
+    // evaluation and re-activate thousands of machines → scheduler/processing
+    // storm after mass enable.
+    if (needs_check > 0 &&
+        (ProcessingThread::is_pending(this) || queuedForStableStateTest() ||
+         !active_actions.empty() || !mail_queue.empty())) {
+        ++needs_check;
+        return;
+    }
     if (!needs_check) {
         DBG_AUTOSTATES << _name << " needs check\n";
         ++total_machines_needing_check;
@@ -1056,6 +1065,13 @@ void MachineInstance::idle() {
         return;
     }
     if (!is_enabled) {
+        // Disabled machines never run actions/mail (see below). Unfinished
+        // SetStateAction/mail would otherwise stay New forever: processAll
+        // keeps re-activating them and burns processing CPU (PROCSNAP exec/mail).
+        if (executingCommand() || !mail_queue.empty() || has_work) {
+            clearAllActions();
+            SharedWorkSet::instance()->remove(this);
+        }
         return;
     }
     if (!is_active) {
@@ -1239,12 +1255,20 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
                 if (!mi->has_work && !action) {
                     SharedWorkSet::instance()->remove(mi);
                     busy_it = to_process.erase(busy_it);
-                    if (mi->is_active) {
+                    // Only re-queue for stable-state eval when something actually
+                    // marked needs_check and the class allows auto states.
+                    // Blind re-activate of every is_active machine kept runnable
+                    // non-empty and spun the processing loop at POLLING_DELAY.
+                    if (mi->is_active && mi->needsCheck() && mi->getStateMachine() &&
+                        mi->getStateMachine()->allow_auto_states) {
                         {
-                        std::lock_guard<std::mutex> lock(pending_state_change_mutex);
-                        pending_state_change.insert(mi);
+                            std::lock_guard<std::mutex> lock(pending_state_change_mutex);
+                            pending_state_change.insert(mi);
                         }
                         ProcessingThread::activate(mi);
+                    }
+                    else if (mi->needsCheck()) {
+                        mi->resetNeedsCheck();
                     }
                 }
                 else {
@@ -2282,11 +2306,29 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
             //}
 #ifndef EC_SIMULATOR
             if (state_machine && state_machine->name == "ETHERCAT_BUS") {
-                if (short_name == "activate" && (current_state.getName() == "CONFIG" ||
-                                                 current_state.getName() == "CONNECTED")) {
-                    ProcessingThread::instance()->machine.requestActivation(true);
+                const std::string &ec_state = current_state.getName();
+                if (short_name == "activate") {
+                    // Legacy ecrt path only accepts CONFIG/CONNECTED. Kernel transport
+                    // may still be INIT/DISCONNECTED when STARTUP SEND activate fires;
+                    // allow those too so elc_cycle_activate can run.
+                    const bool ok =
+                        (ec_state == "CONFIG" || ec_state == "CONNECTED" ||
+                         ec_state == "ACTIVE"
+#ifdef USE_KERNEL_ETHERCAT
+                         || ec_state == "INIT" || ec_state == "DISCONNECTED"
+#endif
+                        );
+                    if (ok) {
+                        std::cout << "ETHERCAT activate requested (state=" << ec_state << ")\n";
+                        ProcessingThread::instance()->machine.requestActivation(true);
+                    }
+                    else {
+                        std::cerr << "ETHERCAT activate ignored in state " << ec_state << "\n";
+                    }
                 }
-                else if (short_name == "deactivate" && current_state.getName() == "ACTIVE") {
+                else if (short_name == "deactivate" &&
+                         (ec_state == "ACTIVE" || ec_state == "CONNECTED" ||
+                          ec_state == "CONFIG")) {
                     ProcessingThread::instance()->machine.requestDeactivation(true);
                 }
                 return NULL;
@@ -3141,6 +3183,14 @@ void MachineInstance::disable() {
     if (isShadow()) {
         setInitialState();
     }
+    // Drop in-flight SetState/mail before marking disabled. enable()/resume()
+    // already clear; without this, actions queued just before DISABLE stay
+    // New forever (idle() refuses to run them while disabled) and keep the
+    // machine on the runnable/SharedWorkSet spin path.
+    clearAllActions();
+    SharedWorkSet::instance()->remove(this);
+    ProcessingThread::suspend(this); // no-op if PT not initialised yet
+    resetNeedsCheck();
     is_enabled = false;
 
     const Value &val = properties.lookup("default");
@@ -4368,6 +4418,19 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             }
             if (state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
                 *MachineInstance::polling_delay = new_delay;
+                set_polling_time(static_cast<unsigned long>(new_delay > 0 ? new_delay : 100));
+                was_changed = true;
+            }
+        }
+        else if (property_val.token_id == ClockworkToken::CYCLE_DELAY) {
+            // SYSTEM.CYCLE_DELAY = EtherCAT bus period (µs). Processing uses POLLING_DELAY.
+            int64_t new_delay = 0;
+            if (new_value.asInteger(new_delay) &&
+                state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
+#ifndef EC_SIMULATOR
+                ECInterface::instance()->applyCyclePeriodUs(
+                    static_cast<unsigned long>(new_delay > 0 ? new_delay : 100));
+#endif
                 was_changed = true;
             }
         }
