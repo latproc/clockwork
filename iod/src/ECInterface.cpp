@@ -84,7 +84,7 @@ static boost::recursive_mutex modules_mutex;
 std::vector<ECModule *> ECInterface::modules;
 
 #ifdef USE_KERNEL_ETHERCAT
-std::unique_ptr<KernelEthercatBus> ECInterface::kernelBus;
+
 
 KernelEthercatBus* ECInterface::getKernelBus() { return kernelBus.get(); }
 
@@ -360,6 +360,9 @@ void SDOEntry::resolveSDOModules() {
 
 ECInterface::ECInterface()
     : initialised(0), reference_time(0),
+#ifdef USE_KERNEL_ETHERCAT
+      kernelBus(nullptr),
+#endif
 #ifdef USE_DC
       dc_application_time_ns(0), dc_cycle_adjustment_ns(0), dc_difference_total_ns(0),
       dc_delta_total_ns(0), dc_last_difference_ns(0), dc_filter_count(0),
@@ -371,9 +374,6 @@ ECInterface::ECInterface()
       current_init_entry(initialisation_entries.begin()),
       current_update_entry(sdo_update_entries.begin()), sdo_entry_state(e_None), sdo_not_before(0),
 #endif //USE_SDO
-#ifdef USE_KERNEL_ETHERCAT
-      kernelBus(nullptr),
-#endif
 #endif
       ethercat_status(0), failure_tolerance(0), failure_count(0)
 {
@@ -1385,68 +1385,6 @@ void collectEtherCatModules() {
     DBG_ETHERCAT << ss.str() << "\n";
 }
 
-bool ECInterface::deactivate() {
-    char buf[200];
-    snprintf(buf, 200, "EtherCAT interface: Deactivating the EtherCAT master");
-    MessageLog::instance()->add(buf);
-    DBG_ETHERCAT << buf << "\n";
-    active = false;
-    if (master) {
-        domain1 = 0;
-        DBG_ETHERCAT_CALLS << "ecrt_master_deactivate\n";
-        ecrt_master_deactivate(master);
-        snprintf(buf, 200, "EtherCAT interface: recreating domain");
-        MessageLog::instance()->add(buf);
-        DBG_ETHERCAT << buf << "\n";
-        DBG_ETHERCAT_CALLS << "ecrt_master_create_domain\n";
-        domain1 = ecrt_master_create_domain(master);
-        assert(domain1 != 0);
-    }
-
-    snprintf(buf, 200, "EtherCAT interface: cleaning up old io components,");
-    MessageLog::instance()->add(buf);
-    DBG_ETHERCAT << buf << "\n";
-
-    data.setDataSize(0);
-    data.setProcessData(nullptr, 0);
-    {
-        boost::recursive_mutex::scoped_lock lock(modules_mutex);
-        snprintf(buf, 200, "EtherCAT interface: removing ethercat modules instances");
-        MessageLog::instance()->add(buf);
-        DBG_ETHERCAT << buf << "\n";
-        std::vector<ECModule *>::iterator iter = modules.begin();
-        while (iter != modules.end()) {
-            ECModule *m = *iter++;
-            snprintf(buf, 200, "EtherCAT interface: deleting module %s", m->name.c_str());
-            MessageLog::instance()->add(buf);
-            DBG_ETHERCAT << buf << "\n";
-            delete m;
-        }
-        modules.clear();
-    }
-    domain1_pd = 0;
-
-    // recreate the domain that was removed by the above.
-    if (!domain1) {
-        snprintf(buf, 200, "EtherCAT interface: failed to create domain\n");
-        MessageLog::instance()->add(buf);
-        DBG_ETHERCAT << buf << "\n";
-        initialised = false;
-        return false;
-    }
-    else {
-        DBG_ETHERCAT_CALLS << "ecrt_domain_size\n";
-        snprintf(buf, 200, "EtherCAT interface: domain1 successfully created with size %ld",
-                 ecrt_domain_size(domain1));
-        MessageLog::instance()->add(buf);
-        DBG_ETHERCAT << buf << "\n";
-    }
-
-    all_ok = true; // ok to try to start processing
-    failure_count = 0;
-
-    return true;
-}
 
 bool ECInterface::activate() {
     int res;
@@ -2235,6 +2173,16 @@ void ECInterface::check_master_state(void) {
 
 #ifndef EC_SIMULATOR
 void ECInterface::report_module_state_change(ECModule *m, int i) {
+#ifdef USE_KERNEL_ETHERCAT
+    // Phase 8 kernel transport (iod-elc): no slave_config or emerg queue yet.
+    // Simple stub. State tracking enhanced in Phase 11 with full cyclic support.
+    if (m) {
+        m->slave_config_state.online = true;
+        m->slave_config_state.operational = true;
+        m->slave_config_state.al_state = 8; // OP
+        DBG_ETHERCAT << "Kernel transport Phase 8: " << m->getName() << " marked operational (stub)\n";
+    }
+#else
     ec_slave_config_state_t s;
     const int BUFSIZE = 200;
     char buf[BUFSIZE];
@@ -2282,6 +2230,7 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
     }
 
     m->slave_config_state = s;
+#endif
 }
 #endif
 
@@ -2611,6 +2560,20 @@ cJSON *generateSlaveCStruct(ec_master_t *m, ECModule *xml_module, const ec_slave
     return root;
 }
 
+#ifdef USE_KERNEL_ETHERCAT
+char *collectSlaveConfig(bool reconfigure) {
+    // Kernel transport (Phase 8): simple stub. Full slave config/PDO mapping in Phase 9.
+    // This allows iod.sh and IODCommandGetSlaveConfig to work without ecrt calls.
+    cJSON *root = cJSON_CreateArray();
+    cJSON *entry = cJSON_CreateObject();
+    cJSON_AddStringToObject(entry, "status", "kernel-transport-phase8");
+    cJSON_AddStringToObject(entry, "note", "discovery + SDO mailbox only (outputs in Phase 11)");
+    cJSON_AddItemToArray(root, entry);
+    char *json = cJSON_Print(root);
+    cJSON_Delete(root);
+    return json;
+}
+#else
 char *collectSlaveConfig(bool reconfigure) {
 #if 1
     cJSON *root = cJSON_CreateArray();
@@ -2670,6 +2633,7 @@ char *collectSlaveConfig(bool reconfigure) {
 
     return json;
 }
+#endif // USE_KERNEL_ETHERCAT
 
 bool IODCommandGetSlaveConfig::run(std::vector<Value> &params) {
     char *res = collectSlaveConfig(false);

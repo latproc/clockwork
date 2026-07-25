@@ -578,6 +578,7 @@ if(BUILD_IOD_ELC)
     USE_KERNEL_ETHERCAT 
     USE_SDO=1
   )
+  target_link_directories_compat(iod-elc "/opt/elc/lib")
   target_link_libraries(iod-elc 
     cw_client 
     ${ELC_LIBRARIES} 

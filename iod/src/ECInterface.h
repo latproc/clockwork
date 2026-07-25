@@ -241,6 +241,10 @@ class ECInterface {
     static long default_tolerance;
     const long *failure_tolerance;
     int failure_count;
+
+#ifdef USE_KERNEL_ETHERCAT
+    std::unique_ptr<KernelEthercatBus> kernelBus;
+#endif
 };
 
 #ifndef EC_SIMULATOR
