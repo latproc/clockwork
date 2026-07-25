@@ -437,6 +437,10 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
     const uint8_t *m = mask;
     uint8_t *q = io_process_data;
     IOComponent *just_added = 0;
+    // ANALOG/COUNTER on regular_polls: refresh address.value for sampleRegularPolls
+    // but do NOT enqueue for handleChange/CW. Queuing them every domain frame
+    // forced ~1 kHz full processing loops with empty stableQ/exec.
+    std::set<IOComponent *> regular_poll_dirty;
     for (unsigned int i = 0; i < process_data_size; ++i) {
         if (!last_process_data) {
             if (*m) {
@@ -472,9 +476,17 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                         if ((*p & bitmask) != (*q & bitmask)) {
                             // remotely source change on this io
                             if (ioc) {
-                                //std::cout << " adding " << ioc->io_name << " due to bit change\n";
-                                boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-                                updatedComponentsIn.insert(ioc);
+                                // Only ANALOGINPUT/COUNTER join regular_polls (bitlen>1).
+                                // POINT / STATUS_FLAG / DIGITALVALUE / 1-bit Input must
+                                // stay on the event path (on_enter/off_enter / setValue).
+                                if (regular_polls.count(ioc) && ioc->address.bitlen > 1) {
+                                    regular_poll_dirty.insert(ioc);
+                                }
+                                else {
+                                    //std::cout << " adding " << ioc->io_name << " due to bit change\n";
+                                    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+                                    updatedComponentsIn.insert(ioc);
+                                }
                             }
 
                             if (*p & bitmask) {
@@ -510,6 +522,17 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
         ++p;
         ++q;
         ++m;
+    }
+
+    // Mirror wire value into address.value for polled analogs/counters without
+    // generating CW work (filter/IOTIME run from sampleRegularPolls).
+    if (!regular_poll_dirty.empty()) {
+        std::list<Package *> no_machine_events;
+        for (IOComponent *ioc : regular_poll_dirty) {
+            if (ioc) {
+                ioc->handleChange(no_machine_events);
+            }
+        }
     }
 
     if (hardware_state == s_operational) {
