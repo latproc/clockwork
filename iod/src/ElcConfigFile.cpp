@@ -270,8 +270,12 @@ const char *elcDefaultTopologyConfigPath() {
     if (env && env[0]) {
         return env;
     }
+    // Prefer plant topology under iod/configs. ELC_TOPOLOGY_CONFIG overrides.
+    // all34_captured_topology.conf is a legacy name (symlink on this plant).
     static const char *candidates[] = {
+        "/opt/latproc/iod/configs/elc_topology.conf",
         "/opt/latproc/iod/configs/all34_captured_topology.conf",
+        "/opt/etherlab-cyclic-kmod/tools/configs/elc_topology.conf",
         "/opt/etherlab-cyclic-kmod/tools/configs/all34_captured_topology.conf",
         nullptr};
     for (int i = 0; candidates[i]; ++i) {
@@ -401,7 +405,27 @@ int elcApplyConfigFile(KernelEthercatBus *bus, const char *path) {
         return ret ? ret : -EINVAL;
     }
     std::cout << "ELC topology loaded from " << path << ": " << file.slaves.size()
-              << " slaves, domain_size=" << bus->domainSize() << "\n";
+              << " slaves, domain_size=" << bus->domainSize();
+    if (file.domains.empty()) {
+        std::cout << " (implicit single domain — no domain records)\n";
+    }
+    else {
+        std::cout << ", explicit_domains=" << file.domains.size()
+                  << " assignments=" << file.domain_assigns.size() << "\n";
+        for (const auto &d : file.domains) {
+            unsigned n_asgn = 0;
+            for (const auto &da : file.domain_assigns) {
+                if (da.domain_config_id == d.config_id) {
+                    ++n_asgn;
+                }
+            }
+            std::cout << "  domain " << d.config_id << ": " << n_asgn << " slave(s)\n";
+        }
+        // Roles are plant-defined; iod treats domain id 1 as primary for
+        // ETHERCAT.slave_states / ETHERCAT_WC / all_ok (see topology header).
+        std::cout << "  convention: domain 1=primary (startup/all_ok); "
+                     "other domains=isolatable groups\n";
+    }
     return 0;
 }
 
@@ -440,6 +464,14 @@ int elcPopulateModulesFromConfigFile(KernelEthercatBus *bus, const char *path) {
         m->alias = s.alias;
         m->revision_no = s.revision;
         m->elc_config_id = s.config_id;
+        // Map slave_config_id → domain_config_id from domain_slave lines.
+        m->elc_domain_id = 0;
+        for (const auto &da : file.domain_assigns) {
+            if (da.slave_config_id == s.config_id) {
+                m->elc_domain_id = da.domain_config_id;
+                break;
+            }
+        }
 
         // Count entries
         unsigned int total_entries = 0;

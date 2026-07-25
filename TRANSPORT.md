@@ -89,3 +89,14 @@ iod-elc userspace:
 Failed snapshot ioctl keeps the previous `domain1_pd` (last known current), never zeros it. Commanded outputs live in `g_kernel_output_*` and are merged into the snapshot for collect/processAll.
 
 Future: optional `CAP_INPUT_HISTORY` for short pulses between CW pulls.
+
+## Open work (task list pointer)
+
+Portable backlog (multi-domain stages, plant prove-out, **slave identity /
+EL5152 product+revision auto-match + override**, **fail-closed startup** if
+any module mapping errors without an explicit override):
+
+  `code/llm-rules/cw_issues/IOD_ELC_OPEN_WORK_20260726.md`
+
+Do not start `iod-elc` / reload the module while kernel-module work is
+in progress without coordinating with the operator.

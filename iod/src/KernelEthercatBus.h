@@ -81,16 +81,23 @@ class KernelEthercatBus {
      * Only valid after config apply; live AL fields require active cycle.
      */
     int getConfigSlaveStatus(uint32_t config_id, struct elc_config_slave_status *st);
+    /** Per-domain WC/validity/arm (API 0.12+). domain_config_id must match config. */
+    int getDomainStatus(uint32_t domain_config_id, struct elc_domain_status *st);
 
     uint32_t domainSize() const { return domain_size_; }
     uint64_t configGeneration() const { return config_generation_; }
     /** Monotonic sequence of the last successful getInputSnapshot (0 if none). */
     uint64_t lastInputSequence() const { return last_input_sequence_; }
     uint64_t lastInputCycle() const { return last_input_cycle_; }
+    /** True when module reports ELC_CAP_DOMAIN_OUTPUT_AUTHORITY (API 0.17+). */
+    bool hasDomainOutputAuthority() const { return domain_output_authority_; }
+    uint64_t capabilities() const { return capabilities_; }
 
   private:
     elc_handle *handle = nullptr;
     bool apiNegotiated = false;
+    bool domain_output_authority_ = false;
+    uint64_t capabilities_ = 0;
     uint32_t domain_size_ = 0;
     uint64_t config_generation_ = 0;
     uint64_t last_input_sequence_ = 0;

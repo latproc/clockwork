@@ -86,6 +86,12 @@ class ECModule {
     uint32_t revision_no;
     /** ELC topology slave config_id (0 when not from kernel topology conf). */
     uint32_t elc_config_id;
+    /**
+     * ELC domain_config_id this slave is assigned to (0 = unknown / single
+     * domain). Roles are plant-defined in topology (e.g. primary vs secondary
+     * machine group, or IO vs drives) — not fixed in code.
+     */
+    uint32_t elc_domain_id;
     unsigned int *offsets;
     unsigned int *bit_positions;
     unsigned int sync_count;

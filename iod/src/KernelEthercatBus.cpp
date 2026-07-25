@@ -48,7 +48,23 @@ int KernelEthercatBus::open(const char *device_path) {
         return ret;
     }
 
+    domain_output_authority_ = false;
+    capabilities_ = 0;
+    struct elc_capabilities caps = {};
+    elc_init_api_header(&caps, sizeof(caps));
+    if (elc_get_capabilities(handle, &caps) == 0) {
+        capabilities_ = caps.capabilities;
+#ifdef ELC_CAP_DOMAIN_OUTPUT_AUTHORITY
+        domain_output_authority_ =
+            (caps.capabilities & ELC_CAP_DOMAIN_OUTPUT_AUTHORITY) != 0;
+#endif
+    }
+
     apiNegotiated = true;
+    std::cerr << "KernelEthercatBus opened (" << device_path
+              << ") caps=0x" << std::hex << capabilities_ << std::dec
+              << " domain_output_authority=" << (domain_output_authority_ ? 1 : 0)
+              << "\n";
     DBG_ETHERCAT << "KernelEthercatBus opened (" << device_path << ")\n";
     return 0;
 }
@@ -63,6 +79,8 @@ void KernelEthercatBus::close() {
     elc_close(handle);
     handle = nullptr;
     apiNegotiated = false;
+    domain_output_authority_ = false;
+    capabilities_ = 0;
     domain_size_ = 0;
     config_generation_ = 0;
     last_input_sequence_ = 0;
@@ -434,6 +452,10 @@ int KernelEthercatBus::publishOutput(const void *image, const void *mask, size_t
     if (config_generation_) {
         pub->config_generation = config_generation_;
     }
+    // domain_config_id 0 = full global image (fans out to every domain authority
+    // under API 0.17). Callers may override before invoke if segment publish is
+    // needed; default remains global so IO + drives stay in one shadow.
+    pub->domain_config_id = 0;
     pub->data_ptr = reinterpret_cast<uint64_t>(image);
     pub->mask_ptr = reinterpret_cast<uint64_t>(mask);
     pub->data_size = static_cast<uint32_t>(len);
@@ -486,4 +508,16 @@ int KernelEthercatBus::getConfigSlaveStatus(uint32_t config_id,
     st->config_id = config_id;
     st->config_generation = config_generation_;
     return elc_get_config_slave_status(handle, st);
+}
+
+int KernelEthercatBus::getDomainStatus(uint32_t domain_config_id, struct elc_domain_status *st) {
+    if (!handle || !st) {
+        return -EINVAL;
+    }
+    elc_init_api_header(st, sizeof(*st));
+    st->domain_config_id = domain_config_id;
+    if (config_generation_) {
+        st->config_generation = config_generation_;
+    }
+    return elc_get_domain_status(handle, st);
 }
