@@ -100,4 +100,35 @@ TEST(JsonOwnership, AssignTakeRootReplacementConsumesOwnedPayload) {
     cJSON_Delete(updated);
 }
 
+TEST(JsonOwnership, AssignTakeEmptyPayloadIsNoOp) {
+    cJSON *doc = cJSON_Parse(R"JSON({"a":1})JSON");
+    ASSERT_NE(nullptr, doc);
+    const long live_before = cJSON_LiveNodeCount();
+
+    cJSON *updated = assign_take("$.a", doc, OwnedJson{});
+    EXPECT_EQ(doc, updated);
+    EXPECT_EQ(std::string(R"JSON({"a":1})JSON"), jsonToString(doc));
+    EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
+
+    cJSON_Delete(doc);
+}
+
+TEST(JsonOwnership, AssignValueClonesBoolEmptyAndJsonKinds) {
+    cJSON *doc = cJSON_Parse(R"JSON({"a":1,"b":2,"c":3})JSON");
+    ASSERT_NE(nullptr, doc);
+    const long live_before = cJSON_LiveNodeCount();
+
+    EXPECT_EQ(doc, assign("$.a", doc, Value(true)));
+    EXPECT_EQ(doc, assign("$.b", doc, Value()));
+    {
+        Value nested(cJSON_Parse(R"JSON({"x":9})JSON"));
+        EXPECT_EQ(doc, assign("$.c", doc, nested));
+        EXPECT_EQ(nested.kind, Value::t_json);
+    }
+
+    EXPECT_EQ(std::string(R"JSON({"a":true,"b":null,"c":{"x":9}})JSON"), jsonToString(doc));
+    cJSON_Delete(doc);
+    EXPECT_LE(cJSON_LiveNodeCount(), live_before);
+}
+
 } // namespace

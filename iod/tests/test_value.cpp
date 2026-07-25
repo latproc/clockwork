@@ -190,6 +190,111 @@ TEST(Value, CanGetFalseFromJSONObject) {
     EXPECT_EQ(result, false);
 }
 
+TEST(Value, SelfAssignmentPreservesScalarAndString) {
+    Value integer_value(42);
+    integer_value = integer_value;
+    EXPECT_EQ(integer_value, Value(42));
+
+    Value string_value("hello", Value::t_string);
+    string_value = string_value;
+    EXPECT_EQ(string_value.kind, Value::t_string);
+    EXPECT_EQ(string_value.asString(), std::string("hello"));
+
+    Value symbol_value("STATUS", Value::t_symbol);
+    symbol_value = symbol_value;
+    EXPECT_EQ(symbol_value.kind, Value::t_symbol);
+    EXPECT_EQ(symbol_value.asString(), std::string("STATUS"));
+}
+
+TEST(Value, SelfAssignmentPreservesDynamicValue) {
+    int destructions = 0;
+    {
+        auto *tracked = new TrackedDynamicValue(destructions);
+        Value value(tracked);
+        EXPECT_EQ(tracked->references(), 1);
+        value = value;
+        EXPECT_EQ(value.dynamicValue(), tracked);
+        EXPECT_EQ(tracked->references(), 1);
+        EXPECT_EQ(value.kind, Value::t_dynamic);
+    }
+    EXPECT_EQ(destructions, 1);
+}
+
+TEST(Value, CloneJsonIsDeepAndIndependent) {
+    const long live_start = cJSON_LiveNodeCount();
+    cJSON *original = cJSON_Parse(R"JSON({"a":[1,{"b":2}],"c":"x"})JSON");
+    ASSERT_NE(original, nullptr);
+
+    cJSON *copy = clone_json(original);
+    ASSERT_NE(copy, nullptr);
+    ASSERT_NE(copy, original);
+
+    cJSON_ReplaceItemInObject(copy, "c", cJSON_CreateString("y"));
+    cJSON *orig_c = cJSON_GetObjectItem(original, "c");
+    ASSERT_NE(orig_c, nullptr);
+    EXPECT_STREQ(orig_c->valuestring, "x");
+
+    cJSON_ReplaceItemInArray(cJSON_GetObjectItem(copy, "a"), 0, cJSON_CreateNumber(99));
+    cJSON *orig_a0 = cJSON_GetArrayItem(cJSON_GetObjectItem(original, "a"), 0);
+    ASSERT_NE(orig_a0, nullptr);
+    EXPECT_EQ(orig_a0->valueint, 1);
+
+    cJSON_Delete(copy);
+    cJSON_Delete(original);
+    EXPECT_EQ(cJSON_LiveNodeCount(), live_start);
+}
+
+TEST(Value, CloneJsonNullAndEmptyStringInputs) {
+    EXPECT_EQ(clone_json(nullptr), nullptr);
+
+    Value empty_string(cJSON_CreateString(""));
+    EXPECT_EQ(empty_string.kind, Value::t_string);
+    EXPECT_EQ(empty_string.asString(), std::string(""));
+}
+
+TEST(Value, AsJSONReturnsOwnedClone) {
+    Value v(cJSON_Parse(R"JSON({"a":1})JSON"));
+    ASSERT_EQ(v.kind, Value::t_json);
+    const long live_before = cJSON_LiveNodeCount();
+
+    cJSON *cloned = v.asJSON();
+    ASSERT_NE(cloned, nullptr);
+    ASSERT_NE(cloned, v.json);
+    EXPECT_GT(cJSON_LiveNodeCount(), live_before);
+
+    cJSON_ReplaceItemInObject(cloned, "a", cJSON_CreateNumber(2));
+    cJSON *orig_a = cJSON_GetObjectItem(v.json, "a");
+    ASSERT_NE(orig_a, nullptr);
+    EXPECT_EQ(orig_a->valueint, 1);
+
+    cJSON_Delete(cloned);
+    EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
+}
+
+TEST(Value, GetFromJSONHelperClonesNestedValues) {
+    Value v(cJSON_Parse(R"JSON({"nested":{"x":7},"arr":[1,2]})JSON"));
+    ASSERT_EQ(v.kind, Value::t_json);
+
+    cJSON *nested_src = getFromJSON(v.json, "nested");
+    ASSERT_NE(nested_src, nullptr);
+    cJSON *nested_clone = clone_json(nested_src);
+    ASSERT_NE(nested_clone, nullptr);
+    ASSERT_NE(nested_clone, nested_src);
+
+    cJSON_AddItemToObject(nested_clone, "y", cJSON_CreateNumber(8));
+    EXPECT_EQ(getFromJSON(nested_src, "y"), nullptr);
+    EXPECT_NE(getFromJSON(nested_clone, "y"), nullptr);
+
+    EXPECT_EQ(getFromJSON(nullptr, "x"), nullptr);
+    EXPECT_EQ(getFromJSON(v.json, "missing"), nullptr);
+
+    Value nested_value = get_value(clone_json(nested_src));
+    EXPECT_EQ(nested_value.kind, Value::t_json);
+    EXPECT_EQ(get_value(getFromJSON(nested_value.json, "x")), Value(7));
+
+    cJSON_Delete(nested_clone);
+}
+
 TEST_F(ValueTest, Integer) {
     EXPECT_EQ(Value::t_integer, x.kind) << "Value has an integer kind when assigned an integer";
     EXPECT_EQ(X_VALUE, x.iValue) << "Integer value is correctly assigned";

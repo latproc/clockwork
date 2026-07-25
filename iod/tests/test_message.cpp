@@ -130,6 +130,47 @@ TEST(MessageTest, MoveAssignmentTransfersFields) {
     EXPECT_EQ(dst.getText(), std::string("move_me"));
 }
 
+TEST(MessageTest, CopyAssignmentReplacesParamsWithoutLeak) {
+    auto *params_a = Message::makeParams(Value(1), Value(2));
+    auto *params_b = Message::makeParams(Value(3), Value("four", Value::t_string));
+    Message a("cmd_a", Message::SIMPLEMSG, params_a);
+    Message b("cmd_b", Message::SIMPLEMSG, params_b);
+
+    a = b;
+    ASSERT_NE(a.getParams(), nullptr);
+    ASSERT_NE(b.getParams(), nullptr);
+    EXPECT_NE(a.getParams(), b.getParams());
+    EXPECT_EQ(a.getText(), std::string("cmd_b"));
+    EXPECT_EQ(a.getParams()->size(), 2u);
+    EXPECT_EQ(a.getParams()->front(), Value(3));
+    EXPECT_EQ(a.getParams()->back().asString(), std::string("four"));
+
+    a = a;
+    ASSERT_NE(a.getParams(), nullptr);
+    EXPECT_EQ(a.getParams()->size(), 2u);
+    EXPECT_EQ(a.getParams()->front(), Value(3));
+}
+
+TEST(MessageTest, MoveAssignmentTransfersParams) {
+    auto *params = Message::makeParams(Value(9), Value(8));
+    Message src("src", Message::SIMPLEMSG, params);
+    Message dst("dst", Message::SIMPLEMSG, Message::makeParams(Value(1)));
+
+    dst = std::move(src);
+    ASSERT_NE(dst.getParams(), nullptr);
+    EXPECT_EQ(dst.getParams()->size(), 2u);
+    EXPECT_EQ(dst.getParams()->front(), Value(9));
+    EXPECT_EQ(src.getParams(), nullptr);
+}
+
+TEST(MessageTest, PackageSelfAssignmentIsSafe) {
+    Message msg("ping");
+    Package package(nullptr, nullptr, msg);
+    package = package;
+    ASSERT_NE(package.message, nullptr);
+    EXPECT_EQ(package.message->getText(), std::string("ping"));
+}
+
 // The following aren't particularly useful tests, just practice TDD.
 TEST(MessageTest, default_message_type_is_simple) {
     Message m;

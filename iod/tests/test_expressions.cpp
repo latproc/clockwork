@@ -130,6 +130,63 @@ TEST_F(EvaluatorTest, convert_integer_to_float) {
     delete scope;
 }
 
+TEST_F(EvaluatorTest, convert_value_to_symbol) {
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    Predicate pred(0, opSymbol, new Predicate(Value(42)));
+    Value res = eval.evaluate(&pred, scope);
+    EXPECT_EQ(res.kind, Value::t_symbol);
+    EXPECT_EQ(res.asString(), std::string("42"));
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, convert_string_property_to_symbol_looks_up_name) {
+    MachineClass *flag_class = new MachineClass("FLAG");
+    ASSERT_GT(MachineClass::machine_classes.size(), 0u);
+    MachineInstance *scope = MachineInstanceFactory::create("test_sym_prop", "FLAG");
+    scope->setStateMachine(flag_class);
+    scope->setValue("label", Value("target", Value::t_string));
+    scope->setValue("target", Value("armed", Value::t_string));
+    Evaluator eval;
+    // Evaluating property `label` yields string "target"; AS SYMBOL then looks up that name.
+    Predicate pred(0, opSymbol, new Predicate("label"));
+    Value res = eval.evaluate(&pred, scope);
+    EXPECT_EQ(res.kind, Value::t_symbol);
+    EXPECT_EQ(res.asString(), std::string("armed"));
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, convert_literal_string_to_symbol_via_lookup) {
+    MachineClass *flag_class = new MachineClass("FLAG");
+    ASSERT_GT(MachineClass::machine_classes.size(), 0u);
+    MachineInstance *scope = MachineInstanceFactory::create("test_sym", "FLAG");
+    scope->setStateMachine(flag_class);
+    scope->setValue("target", Value("armed", Value::t_string));
+    Evaluator eval;
+    Predicate pred(0, opSymbol, new Predicate(Value("target", Value::t_string)));
+    Value res = eval.evaluate(&pred, scope);
+    EXPECT_EQ(res.kind, Value::t_symbol);
+    EXPECT_EQ(res.asString(), std::string("armed"));
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, predicate_self_assignment_is_safe) {
+    Predicate pred(new Predicate(1), opPlus, new Predicate(2));
+    pred = pred;
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    Evaluator eval;
+    EXPECT_EQ(eval.evaluate(&pred, scope), Value(3));
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, condition_self_assignment_is_safe) {
+    Condition cond(new Predicate(new Predicate(2), opEQ, new Predicate(2)));
+    cond = cond;
+    MachineInstance *scope = MachineInstanceFactory::create("test", "FLAG");
+    EXPECT_TRUE(cond(scope));
+    delete scope;
+}
+
 TEST_F(EvaluatorTest, convert_string_to_json) {
     MachineClass *flag_class = new MachineClass("FLAG");
     assert(MachineClass::machine_classes.size() > 0);
