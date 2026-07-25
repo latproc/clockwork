@@ -9,13 +9,24 @@ if(CCACHE_FOUND)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
 endif()
 
+# This branch defaults to the kernel elc_ethercat controller (iod-elc) plus cw
+# and support tools. Legacy EtherLab iod/iod_sdo are opt-in only.
+option(BUILD_IOD_ELC "Build iod-elc (libelcethercat kernel transport)" ON)
+option(BUILD_LEGACY_IOD "Build legacy EtherLab iod and iod_sdo" OFF)
+
 if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
   set(USE_ETHERCAT true)
-	set(USE_ETHERCAT_SOURCE true)
+  set(USE_ETHERCAT_SOURCE true)
   # By default support EtherLab builds with EoE enabled
   # this can be overridden in the LocalCMakeLists.txt file
   set (SUPPORT_EOE true)
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEC_EOE")
+endif()
+
+# iod-elc does not need the EtherLab source tree, but much of the controller
+# code is still gated on USE_ETHERCAT.
+if(BUILD_IOD_ELC)
+  set(USE_ETHERCAT true)
 endif()
 
 find_program(CCACHE_FOUND ccache)
@@ -443,9 +454,10 @@ target_link_directories_compat(cw_ecat "${CW_ETHERCAT_DIR}")
 target_link_libraries(cw_ecat cw_interpreter cw_client dl ${CW_ETHERCAT_LIB} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 endif()
 
-if(USE_ETHERCAT_SOURCE)
+# EtherLab tool library only needed for legacy iod linked against source tree.
+if(USE_ETHERCAT_SOURCE AND BUILD_LEGACY_IOD)
 if (NOT EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
-	message("Cannot find EtherLab source")
+	message(FATAL_ERROR "BUILD_LEGACY_IOD=ON but cannot find EtherLab source at ${PROJECT_SOURCE_DIR}/../ethercat/")
 endif()
 set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
 set (ectool_extras "")
@@ -521,11 +533,12 @@ INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/tool)
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/include)
 INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/master)
 LINK_DIRECTORIES(${ETHERCAT_DIR}/lib/.libs)
-endif()
+endif() # USE_ETHERCAT_SOURCE AND BUILD_LEGACY_IOD
 
 INCLUDE_DIRECTORIES(${LIBXML2_INCLUDE_DIR})
 LINK_DIRECTORIES("LIBXML2_LIBRARIES")
 
+if(BUILD_LEGACY_IOD)
 add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 	src/EtherCATEntrySelector.cpp src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
 )
@@ -543,7 +556,6 @@ install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
 	src/EtherCATEntrySelector.cpp src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
 )
-#set_target_properties (iod_sdo PROPERTIES EXCLUDE_FROM_ALL TRUE)
 target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 USE_DC=1 )
 if(USE_ETHERCAT_SOURCE)
 target_link_libraries(iod_sdo cw_client ec_tool ethercat dl
@@ -553,11 +565,18 @@ target_link_libraries(iod_sdo cw_client ethercat dl
         ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl)
 endif()
 install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+message(STATUS "Building legacy EtherLab iod and iod_sdo (BUILD_LEGACY_IOD=ON)")
+endif() # BUILD_LEGACY_IOD
 
-# New dedicated binary for kernel transport (Phase 8: discovery + SDO mailbox only).
-# This allows building iod-elc without affecting legacy iod/iod_sdo.
+# Kernel transport controller (default on this branch).
 if(BUILD_IOD_ELC)
-  # Use pkg-config (PKG_CONFIG_PATH includes /opt/elc/lib/pkgconfig) or manual paths
+  # Prefer /opt/elc when callers did not set CMAKE_PREFIX_PATH / PKG_CONFIG_PATH.
+  list(APPEND CMAKE_PREFIX_PATH "/opt/elc")
+  if(DEFINED ENV{PKG_CONFIG_PATH} AND NOT "$ENV{PKG_CONFIG_PATH}" STREQUAL "")
+    set(ENV{PKG_CONFIG_PATH} "/opt/elc/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+  else()
+    set(ENV{PKG_CONFIG_PATH} "/opt/elc/lib/pkgconfig")
+  endif()
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(ELC REQUIRED elcethercat)
   include_directories(${ELC_INCLUDE_DIRS})
@@ -587,10 +606,12 @@ if(BUILD_IOD_ELC)
     dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl
   )
   install(TARGETS iod-elc RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
-  message(STATUS "Building iod-elc with libelcethercat kernel transport (Phase 8)")
+  message(STATUS "Building iod-elc with libelcethercat kernel transport (BUILD_IOD_ELC=ON)")
+elseif(NOT BUILD_LEGACY_IOD)
+  message(WARNING "Neither BUILD_IOD_ELC nor BUILD_LEGACY_IOD is enabled; no iod binary will be built")
 endif()
 
-endif()
+endif() # USE_ETHERCAT
 
 set(iosh_lex_output ${CMAKE_BINARY_DIR}/cmdline.yy.cpp)
 set(iosh_yacc_output ${CMAKE_BINARY_DIR}/cmdline.tab.cpp)

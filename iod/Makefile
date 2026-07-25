@@ -4,32 +4,37 @@ ifndef JOBS
     JOBS:=-j6
 endif
 
+# This branch: iod-elc (kernel elc) + cw + support tools. Legacy iod/iod_sdo off.
+# Override: make release CMAKE_EXTRA='-DBUILD_LEGACY_IOD=ON'
+CMAKE_ELC_FLAGS ?= -DBUILD_IOD_ELC=ON -DBUILD_LEGACY_IOD=OFF -DCMAKE_PREFIX_PATH=/opt/elc
+export PKG_CONFIG_PATH := /opt/elc/lib/pkgconfig:$(PKG_CONFIG_PATH)
+
 all:
 	[ -d "build" ] || mkdir build
-	cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && make $(JOBS) && make install
+	cd build && cmake -DCMAKE_BUILD_TYPE=Debug $(CMAKE_ELC_FLAGS) $(CMAKE_EXTRA) .. && make $(JOBS) && make install
 
 release:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make $(JOBS)
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release $(CMAKE_ELC_FLAGS) $(CMAKE_EXTRA) ../.. && make $(JOBS)
 
 release-install:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && make $(JOBS) install
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release $(CMAKE_ELC_FLAGS) $(CMAKE_EXTRA) ../.. && make $(JOBS) install
 
 client:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. -DRUN_TESTS=OFF && cmake --build . --target cw_client -- $(JOBS)
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release $(CMAKE_ELC_FLAGS) $(CMAKE_EXTRA) ../.. -DRUN_TESTS=OFF && cmake --build . --target cw_client -- $(JOBS)
 
 client-install:	client
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release ../.. && cmake --build . --target install_client -- $(JOBS)
+	cd build/Release && cmake --build . --target install_client -- $(JOBS)
 
 debug:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Debug" ] || mkdir build/Debug
-	cd build/Debug && cmake -DCMAKE_BUILD_TYPE=Debug ../.. && make $(JOBS)
+	cd build/Debug && cmake -DCMAKE_BUILD_TYPE=Debug $(CMAKE_ELC_FLAGS) $(CMAKE_EXTRA) ../.. && make $(JOBS)
 
 debug-install:	debug
 	cd build/Debug && make install
@@ -40,7 +45,7 @@ xcode:
 
 test:
 	[ -d "build" ] || mkdir build
-	cd build && cmake -DCMAKE_BUILD_TYPE=Debug -DRUN_TESTS=ON .. && make $(JOBS) install && make test
+	cd build && cmake -DCMAKE_BUILD_TYPE=Debug $(CMAKE_ELC_FLAGS) $(CMAKE_EXTRA) -DRUN_TESTS=ON .. && make $(JOBS) install && make test
 
 style:
 ifdef ASTYLE
