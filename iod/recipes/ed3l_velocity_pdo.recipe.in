@@ -1,0 +1,25 @@
+# ED3L velocity PDO commissioning (kernel elc_setup ordered batch).
+# Matches sdo.sh intent without zeroing mapping entries (avoids 0x06040041).
+# Format: sequence position type index subindex value
+# POS is substituted per slave by iod-elc.sh
+1  POS u8  0x1c12 0 0
+2  POS u8  0x1c13 0 0
+3  POS u8  0x1600 0 0
+4  POS u8  0x1a00 0 0
+5  POS u32 0x1600 1 0x60400010
+6  POS u32 0x1600 2 0x60ff0020
+7  POS u32 0x1600 3 0x60830020
+8  POS u32 0x1600 4 0x60840020
+9  POS u32 0x1600 5 0x60e00010
+10 POS u32 0x1600 6 0x60e10010
+11 POS u32 0x1a00 1 0x60410010
+12 POS u32 0x1a00 2 0x606c0020
+13 POS u32 0x1a00 3 0x60770010
+14 POS u32 0x1a00 4 0x603f0010
+15 POS u8  0x1600 0 6
+16 POS u8  0x1a00 0 4
+17 POS u16 0x1c12 1 0x1600
+18 POS u16 0x1c13 1 0x1a00
+19 POS u8  0x1c12 0 1
+20 POS u8  0x1c13 0 1
+21 POS u8  0x6060 0 3

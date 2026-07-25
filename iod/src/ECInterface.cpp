@@ -1780,6 +1780,13 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
 
 void ECInterface::receiveState() {
     static long warned = 0;
+#ifdef USE_KERNEL_ETHERCAT
+    // Phase 8: kernel transport has no ecrt cyclic master/domain yet.
+    // Quietly skip cyclic receive; discovery/SDO use KernelEthercatBus.
+    if (kernelBus && kernelBus->isOpen()) {
+        return;
+    }
+#endif
     if (!master || !initialised) {
         if (warned++ % 100 == 0)
             std::cerr << "master not ready to receive state "
