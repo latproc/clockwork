@@ -918,7 +918,13 @@ ECModule *ECInterface::findModule(unsigned int pos) {
 }
 
 void ECInterface::registerModules() {
-
+#ifdef USE_KERNEL_ETHERCAT
+    if (kernelBus && kernelBus->isOpen()) {
+        // Phase 8: no domain/PDO registration yet (needs elc_config + cyclic).
+        DBG_ETHERCAT << "registerModules: skipped for kernel transport (Phase 8)\n";
+        return;
+    }
+#endif
     boost::recursive_mutex::scoped_lock lock(modules_mutex);
     for (unsigned int mi = 0; mi < modules.size(); ++mi) {
         ECModule *m = findModule(mi);
@@ -972,7 +978,13 @@ void ECInterface::registerModules() {
 }
 
 void ECInterface::configureModules() {
-
+#ifdef USE_KERNEL_ETHERCAT
+    if (kernelBus && kernelBus->isOpen()) {
+        // Phase 8: discovery + SDO only; PDO/sync config is Phase 9+ (elc_config_*).
+        DBG_ETHERCAT << "configureModules: skipped for kernel transport (Phase 8)\n";
+        return;
+    }
+#endif
     boost::recursive_mutex::scoped_lock lock(modules_mutex);
     for (unsigned int mi = 0; mi < modules.size(); ++mi) {
         ECModule *m = findModule(mi);
@@ -1360,29 +1372,49 @@ void addEtherCatSlave(ec_master_t *m, const ec_slave_info_t &slave) {
 };
 
 void collectEtherCatModules() {
-    unsigned int pos = 0;
-    int res = 0;
     auto slaves = ECInterface::instance()->listSlaves();
     if (slaves.empty()) {
         DBG_ETHERCAT << "No slaves found on bus\n";
         return;
     }
     std::stringstream ss;
+#ifdef USE_KERNEL_ETHERCAT
+    // Phase 8: seed ECModule slots in bus order so XML can replace by position.
+    // Full PDO discovery via ecrt is deferred; identity comes from elc_list_slaves.
+    if (ECInterface::instance()->getKernelBus() &&
+        ECInterface::instance()->getKernelBus()->isOpen()) {
+        for (const ec_slave_info_t &slave : slaves) {
+            ss << "Seeding kernel slave " << slave.name << " pos " << slave.position
+               << " product 0x" << std::hex << slave.product_code << std::dec << "\n";
+            ECModule *module = new ECModule();
+            module->name = slave.name;
+            module->alias = slave.alias;
+            module->position = slave.position;
+            module->vendor_id = slave.vendor_id;
+            module->product_code = slave.product_code;
+            module->revision_no = slave.revision_number;
+            module->sync_count = 0;
+            module->num_entries = 0;
+            auto res = ECInterface::instance()->addModule(module, true);
+            if (!res) {
+                std::cerr << "Failed to seed module " << slave.name << " " << res.error() << "\n";
+                delete module;
+            }
+        }
+        DBG_ETHERCAT << ss.str() << "\n";
+        return;
+    }
+    DBG_ETHERCAT << "collectEtherCatModules: kernel bus not open; no modules seeded\n";
+    return;
+#else
     for (const ec_slave_info_t &slave : slaves) {
         ss << "Adding slave " << std::hex << std::setw(8) << slave.product_code << " "
-           << std::setw(8) << slave.revision_number << " at position " << std::dec << pos << "\n";
-#ifdef USE_KERNEL_ETHERCAT
-        if (ECInterface::instance()->getKernelBus()) {
-            // Kernel path does not use ecrt master for addEtherCatSlave in Phase 8
-            // (ECModule population happens via XML in setupEtherCatThread)
-            // placeholder to avoid compile error; update in Phase 9
-            continue;
-        }
-#endif
+           << std::setw(8) << slave.revision_number << " at position " << std::dec
+           << slave.position << "\n";
         addEtherCatSlave(ECInterface::master, slave);
-        ++pos;
     }
     DBG_ETHERCAT << ss.str() << "\n";
+#endif
 }
 
 
@@ -1455,6 +1487,16 @@ bool ECInterface::deactivate() {
 }
 
 bool ECInterface::activate() {
+#ifdef USE_KERNEL_ETHERCAT
+    if (kernelBus && kernelBus->isOpen()) {
+        // Phase 8: no cyclic domain. Mark active so the rest of iod can start;
+        // process-data exchange remains disabled until Phase 11.
+        active = true;
+        initialised = true;
+        DBG_ETHERCAT << "activate: kernel transport Phase 8 (no cyclic domain)\n";
+        return true;
+    }
+#endif
     int res;
     unsigned int pos = 0;
     ec_master_info_t master_info;

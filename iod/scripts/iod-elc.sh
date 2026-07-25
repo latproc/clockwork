@@ -140,15 +140,30 @@ touch /tmp/iod.lock
 [ -r core ] && mv core "core.$(date +%y%m%d.%H%M%S)"
 ls -1t core.* 2>/dev/null | tail -n +5 | xargs -r -d '\n' rm -- || true
 
+# Do not use process-substitution logger with exec: it hides aborts and can
+# tear down condition variables while worker threads are still running.
 echo "Starting ${IOD} (kernel transport Phase 8: discovery + SDO mailbox; no cyclic outputs yet)"
-exec "${IOD}" \
-  --name 1G2C \
-  -i "${BASEDIR}/code/config/persist.dat" \
-  -m "${BASEDIR}/code/config/modbus_mappings.txt" \
-  -c "${BASEDIR}/etc/iod.conf" \
-  --config "${BASEDIR}/code/config/cpu_affinity.conf" \
-  --stats \
-  "${BASEDIR}/code/lib" \
-  "${BASEDIR}/code/config" \
-  "${BASEDIR}/code/machine" \
-  > >(logger -p user.info) 2> >(logger -p user.warn)
+if [ "${log}" = "/dev/null" ]; then
+  exec "${IOD}" \
+    --name 1G2C \
+    -i "${BASEDIR}/code/config/persist.dat" \
+    -m "${BASEDIR}/code/config/modbus_mappings.txt" \
+    -c "${BASEDIR}/etc/iod.conf" \
+    --config "${BASEDIR}/code/config/cpu_affinity.conf" \
+    --stats \
+    "${BASEDIR}/code/lib" \
+    "${BASEDIR}/code/config" \
+    "${BASEDIR}/code/machine"
+else
+  exec "${IOD}" \
+    --name 1G2C \
+    -i "${BASEDIR}/code/config/persist.dat" \
+    -m "${BASEDIR}/code/config/modbus_mappings.txt" \
+    -c "${BASEDIR}/etc/iod.conf" \
+    --config "${BASEDIR}/code/config/cpu_affinity.conf" \
+    --stats \
+    "${BASEDIR}/code/lib" \
+    "${BASEDIR}/code/config" \
+    "${BASEDIR}/code/machine" \
+    >>"${log}" 2>&1
+fi

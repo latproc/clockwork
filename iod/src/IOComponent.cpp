@@ -1301,9 +1301,18 @@ uint8_t *generateProcessMask(uint8_t *res, size_t len) {
         unsigned int bitpos = ioc->address.io_bitpos;
         offset += bitpos / 8;
         bitpos = bitpos % 8;
+#ifdef USE_KERNEL_ETHERCAT
+        // Phase 8: skip unregistered domain offsets
+        if (offset > max) {
+            continue;
+        }
+#endif
         uint8_t mask = 0x01 << bitpos;
         // set  a bit in the mask for each bit of this value
         for (unsigned int i = 0; i < ioc->address.bitlen; ++i) {
+            if (offset > max) {
+                break;
+            }
             res[offset] |= mask;
             mask = mask << 1;
             if (!mask) {
@@ -1522,8 +1531,22 @@ void IOComponent::setupIOMap() {
         if (offset > max_offset) {
             max_offset = offset;
         }
+#ifndef USE_KERNEL_ETHERCAT
         assert(max_offset < 10000);
+#endif
     }
+#ifdef USE_KERNEL_ETHERCAT
+    // Phase 8: domain offsets are not registered yet. Keep a minimal empty map
+    // so Clockwork can start; cyclic IO needs Phase 11.
+    if (max_offset >= 10000 || processing_queue.empty()) {
+        if (max_offset >= 10000) {
+            std::cerr << "setupIOMap: kernel transport Phase 8 — no valid domain offsets yet "
+                         "(max would be " << max_offset << "); using empty process map\n";
+        }
+        max_offset = 0;
+        min_offset = 0;
+    }
+#endif
     if (min_offset > max_offset) {
         min_offset = max_offset;
     }
@@ -1553,11 +1576,24 @@ void IOComponent::setupIOMap() {
         unsigned int offset = ioc->address.io_offset;
         unsigned int bitpos = ioc->address.io_bitpos;
         offset += bitpos / 8;
+#ifdef USE_KERNEL_ETHERCAT
+        // Phase 8 empty process map: skip invalid/unregistered domain offsets.
+        if (offset > max_offset || offset * 8 + bitpos >= indexed_components->size()) {
+            continue;
+        }
+#endif
         int bytes = 1;
         for (unsigned int i = 0; i < ioc->address.bitlen; ++i) {
-            (*indexed_components)[offset * 8 + bitpos + i] = ioc;
+            size_t idx = offset * 8 + bitpos + i;
+            if (idx >= indexed_components->size()) {
+                break;
+            }
+            (*indexed_components)[idx] = ioc;
         }
         for (int i = 0; i < bytes; ++i) {
+            if (offset + i > max_offset) {
+                break;
+            }
             std::list<IOComponent *> *cl = io_map[offset + i];
             if (!cl) {
                 cl = new std::list<IOComponent *>();
