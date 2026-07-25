@@ -37,6 +37,11 @@
 #include <string>
 #include <time.h>
 #include <vector>
+#include <memory>  // for std::unique_ptr
+
+#ifdef USE_KERNEL_ETHERCAT
+class KernelEthercatBus;
+#endif
 
 class MachineInstance;
 
@@ -166,6 +171,11 @@ class ECInterface {
     bool operational();
     static ECModule *findModule(unsigned int position);
 
+#ifdef USE_KERNEL_ETHERCAT
+    bool initialiseKernelTransport();  // open kernel bus for discovery + SDO
+    KernelEthercatBus* getKernelBus();
+#endif
+
     uint32_t getReferenceTime();
     void setReferenceTime(uint32_t now);
 #ifdef USE_DC
@@ -239,6 +249,8 @@ void collectEtherCatModules();
 char *collectSlaveConfig(bool reconfigure);
 #endif
 #endif
+
+
 
 struct IODCommandMasterInfo : public IODCommand {
     bool run(std::vector<Value> &params);

@@ -553,6 +553,40 @@ target_link_libraries(iod_sdo cw_client ethercat dl
         ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl)
 endif()
 install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+
+# New dedicated binary for kernel transport (Phase 8: discovery + SDO mailbox only).
+# This allows building iod-elc without affecting legacy iod/iod_sdo.
+if(BUILD_IOD_ELC)
+  # Use pkg-config (PKG_CONFIG_PATH includes /opt/elc/lib/pkgconfig) or manual paths
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(ELC REQUIRED elcethercat)
+  include_directories(${ELC_INCLUDE_DIRS})
+
+  add_executable(iod-elc 
+    src/iod.cpp 
+    src/ecat_thread.cpp 
+    src/EtherCATSetup.cpp 
+    src/EtherCATEntrySelector.cpp 
+    src/ethercat_xml_parser.cpp 
+    src/KernelEthercatBus.cpp
+    ${Clockwork_SRCS}
+  )
+  target_compile_definitions(iod-elc PRIVATE 
+    USE_ETHERCAT=1 
+    KEEP_STATS 
+    USE_DC 
+    USE_KERNEL_ETHERCAT 
+    USE_SDO=1
+  )
+  target_link_libraries(iod-elc 
+    cw_client 
+    ${ELC_LIBRARIES} 
+    dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl
+  )
+  install(TARGETS iod-elc RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+  message(STATUS "Building iod-elc with libelcethercat kernel transport (Phase 8)")
+endif()
+
 endif()
 
 set(iosh_lex_output ${CMAKE_BINARY_DIR}/cmdline.yy.cpp)

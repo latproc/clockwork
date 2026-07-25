@@ -44,6 +44,9 @@
 #include "symboltable.h"
 #include <ecrt.h>
 #include "process_data.h"
+#ifdef USE_KERNEL_ETHERCAT
+#include "KernelEthercatBus.h"
+#endif
 #endif
 
 #define VERBOSE_DEBUG 0
@@ -79,6 +82,26 @@ long ECInterface::default_tolerance = 1;
 
 static boost::recursive_mutex modules_mutex;
 std::vector<ECModule *> ECInterface::modules;
+
+#ifdef USE_KERNEL_ETHERCAT
+std::unique_ptr<KernelEthercatBus> ECInterface::kernelBus;
+
+KernelEthercatBus* ECInterface::getKernelBus() { return kernelBus.get(); }
+
+bool ECInterface::initialiseKernelTransport() {
+    if (!kernelBus) {
+        kernelBus.reset(new KernelEthercatBus());
+    }
+    int ret = kernelBus->open();
+    if (ret != 0) {
+        DBG_MSG << "Failed to open kernel EtherCAT transport: " << ret << "\n";
+        return false;
+    }
+    initialised = true;
+    DBG_ETHERCAT << "KernelEthercatBus opened successfully for discovery and SDO (Phase 8)\n";
+    return true;
+}
+#endif
 
 static int slaves_not_operational = 1; // initialise to nonzero until we know for sure
 static int slaves_offline = 1;
@@ -348,6 +371,9 @@ ECInterface::ECInterface()
       current_init_entry(initialisation_entries.begin()),
       current_update_entry(sdo_update_entries.begin()), sdo_entry_state(e_None), sdo_not_before(0),
 #endif //USE_SDO
+#ifdef USE_KERNEL_ETHERCAT
+      kernelBus(nullptr),
+#endif
 #endif
       ethercat_status(0), failure_tolerance(0), failure_count(0)
 {
@@ -1179,6 +1205,11 @@ tl::expected<bool, std::string> ECInterface::addModule(ECModule *module, bool re
 }
 
 std::vector<ec_slave_info_t> ECInterface::listSlaves() {
+#ifdef USE_KERNEL_ETHERCAT
+    if (kernelBus && kernelBus->isOpen()) {
+        return kernelBus->listSlaves();
+    }
+#endif
     if (!master) {
         return {};
     }
@@ -1332,11 +1363,22 @@ void collectEtherCatModules() {
     unsigned int pos = 0;
     int res = 0;
     auto slaves = ECInterface::instance()->listSlaves();
-    assert(slaves.size() > 0);
+    if (slaves.empty()) {
+        DBG_ETHERCAT << "No slaves found on bus\n";
+        return;
+    }
     std::stringstream ss;
     for (const ec_slave_info_t &slave : slaves) {
         ss << "Adding slave " << std::hex << std::setw(8) << slave.product_code << " "
            << std::setw(8) << slave.revision_number << " at position " << std::dec << pos << "\n";
+#ifdef USE_KERNEL_ETHERCAT
+        if (ECInterface::instance()->getKernelBus()) {
+            // Kernel path does not use ecrt master for addEtherCatSlave in Phase 8
+            // (ECModule population happens via XML in setupEtherCatThread)
+            // placeholder to avoid compile error; update in Phase 9
+            continue;
+        }
+#endif
         addEtherCatSlave(ECInterface::master, slave);
         ++pos;
     }
@@ -1536,6 +1578,20 @@ void ECInterface::init() {
 #ifdef EC_SIMULATOR
     master = new ec_master_t;
     initialised = true;
+    return;
+#elif defined(USE_KERNEL_ETHERCAT)
+    // Kernel transport (iod-elc): discovery + SDO only for Phase 8
+    if (!kernelBus) {
+        kernelBus.reset(new KernelEthercatBus());
+    }
+    int ret = kernelBus->open();
+    if (ret != 0) {
+        DBG_MSG << "Failed to open kernel EtherCAT transport: " << ret << "\n";
+        initialised = false;
+        return;
+    }
+    initialised = true;
+    DBG_ETHERCAT << "KernelEthercatBus opened successfully for discovery and SDO (Phase 8)\n";
     return;
 #else
     DBG_ETHERCAT_CALLS << "ecrt_request_master\n";
