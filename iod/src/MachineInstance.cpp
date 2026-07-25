@@ -189,6 +189,16 @@ void MachineInstance::setNeedsCheck() {
         ++total_machines_needing_check;
     }
     ++needs_check;
+    next_poll = 0;
+
+    // Quiet LIST (propagate_member_checks:false): member state/property noise
+    // should not queue the LIST or its dependents. Enable/disable of members
+    // still wakes dependents via enable()/disable() → propagateNeedsCheckToDependents.
+    // empty/nonempty still updates via setState in add/removeParameter.
+    if (state_machine->token_id == ClockworkToken::LIST && !listPropagatesMemberChecks()) {
+        return;
+    }
+
     if (!active_actions.empty() || !mail_queue.empty()) {
         DBG_M_MESSAGING << _name << " queued for action processing\n";
         SharedWorkSet::instance()->add(this);
@@ -207,24 +217,12 @@ void MachineInstance::setNeedsCheck() {
         SharedWorkSet::instance()->add(this);
         ProcessingThread::activate(this);
     }
-    next_poll = 0;
     if (state_machine->token_id == ClockworkToken::LIST) {
-        std::set<MachineInstance *>::iterator dep_iter = depends.begin();
-        while (dep_iter != depends.end()) {
-            MachineInstance *dep = *dep_iter++;
-            if (dep->is_enabled && dep->needs_check < 2) { // <2 is an anti-recursion check
-                dep->setNeedsCheck();
-            }
-        }
+        // Full cascade (default): wake LIST dependents for ALL/ANY state rules.
+        propagateNeedsCheckToDependents();
     }
     else if (state_machine->token_id == ClockworkToken::REFERENCE) {
-        std::set<MachineInstance *>::iterator dep_iter = depends.begin();
-        while (dep_iter != depends.end()) {
-            MachineInstance *dep = *dep_iter++;
-            if (dep->is_enabled && dep->needs_check < 2) { // <2 is an anti-recursion check
-                dep->setNeedsCheck();
-            }
-        }
+        propagateNeedsCheckToDependents();
     }
 }
 
@@ -1052,6 +1050,43 @@ bool MachineInstance::dependsOn(Transmitter *m) {
 bool MachineInstance::needsCheck() { return needs_check != 0; }
 
 void MachineInstance::resetNeedsCheck() { needs_check = 0; }
+
+bool MachineInstance::listPropagatesMemberChecks() const {
+    // Non-LIST: treat as "propagate" (caller should not use this for cascade).
+    if (!state_machine || state_machine->token_id != ClockworkToken::LIST) {
+        return true;
+    }
+    const Value &v = properties.lookup("propagate_member_checks");
+    if (v == SymbolTable::Null) {
+        return true; // default: full cascade (existing behaviour)
+    }
+    if (v.kind == Value::t_bool) {
+        return v.bValue;
+    }
+    if (v.kind == Value::t_integer) {
+        return v.iValue != 0;
+    }
+    if (v.kind == Value::t_string || v.kind == Value::t_symbol) {
+        const std::string &s = v.sValue;
+        if (s == "false" || s == "0" || s == "enable" || s == "enable_only") {
+            return false;
+        }
+        if (s == "true" || s == "1" || s == "all") {
+            return true;
+        }
+    }
+    return true;
+}
+
+void MachineInstance::propagateNeedsCheckToDependents() {
+    std::set<MachineInstance *>::iterator dep_iter = depends.begin();
+    while (dep_iter != depends.end()) {
+        MachineInstance *dep = *dep_iter++;
+        if (dep->is_enabled && dep->needs_check < 2) {
+            dep->setNeedsCheck();
+        }
+    }
+}
 
 bool MachineInstance::queuedForStableStateTest() {
     std::lock_guard<std::mutex> lock(pending_state_change_mutex);
@@ -3156,7 +3191,14 @@ void MachineInstance::enable() {
     while (d_iter != depends.end()) {
         MachineInstance *dep = *d_iter++;
         if (dep->enabled()) {
-            dep->setNeedsCheck(); // make sure dependant machines update when a property changes
+            dep->setNeedsCheck();
+            // Quiet LISTs suppress ordinary cascade; enable of a member must
+            // still wake LIST dependents (LISTALLENABLED, etc.).
+            if (dep->getStateMachine() &&
+                dep->getStateMachine()->token_id == ClockworkToken::LIST &&
+                !dep->listPropagatesMemberChecks()) {
+                dep->propagateNeedsCheckToDependents();
+            }
         }
     }
 }
@@ -3225,8 +3267,12 @@ void MachineInstance::disable() {
         MachineInstance *dep = *d_iter++;
         if (dep->enabled()) {
             dep->setNeedsCheck();
+            if (dep->getStateMachine() &&
+                dep->getStateMachine()->token_id == ClockworkToken::LIST &&
+                !dep->listPropagatesMemberChecks()) {
+                dep->propagateNeedsCheckToDependents();
+            }
         }
-        // make sure dependant machines update when a property changes
     }
 }
 

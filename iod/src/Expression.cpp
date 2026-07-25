@@ -431,21 +431,59 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             DBG_MSG << "Error: clause " << *this << " does not yield an integer comparison\n";
         }
     }
+    else if (op == opAND && left_p && right_p) {
+        // For A AND B: only schedule TIMER events that can still make the whole
+        // predicate true. If a non-timer conjunct is already false (e.g.
+        // SELF IS startup when the machine is already in op), TIMER clauses on
+        // the other side cannot fire this rule — skip them so machines like
+        // M_Startup stop re-queuing forever after leaving startup/preop.
+        Value timer_scratch;
+        Evaluator and_eval;
+        const bool left_has_timer = left_p->usesTimer(timer_scratch);
+        const bool right_has_timer = right_p->usesTimer(timer_scratch);
+        if (!left_has_timer) {
+            Value lv = and_eval.evaluate(left_p, target);
+            if (lv.kind == Value::t_bool && lv.bValue == false) {
+                return earliest;
+            }
+        }
+        if (!right_has_timer) {
+            Value rv = and_eval.evaluate(right_p, target);
+            if (rv.kind == Value::t_bool && rv.bValue == false) {
+                return earliest;
+            }
+        }
+        PredicateTimerDetails *prev = earliest;
+        earliest = left_p->scheduleTimerEvents(earliest, target);
+        if (prev && earliest != prev) {
+            delete prev;
+        }
+        prev = earliest;
+        earliest = right_p->scheduleTimerEvents(earliest, target);
+        if (prev && earliest != prev) {
+            delete prev;
+        }
+    }
     else if (left_p) {
         PredicateTimerDetails *prev = earliest;
         earliest = left_p->scheduleTimerEvents(earliest, target);
         if (prev && earliest != prev) {
             delete prev;
         }
+        if (right_p) {
+            prev = earliest;
+            earliest = right_p->scheduleTimerEvents(earliest, target);
+            if (prev && earliest != prev) {
+                delete prev;
+            }
+        }
     }
-    if (right_p) {
+    else if (right_p) {
         PredicateTimerDetails *prev = earliest;
         earliest = right_p->scheduleTimerEvents(earliest, target);
         if (prev && earliest != prev) {
             delete prev;
         }
-    }
-    else {
     }
     //TBD there is an issue with testing current_time <= scheduled_time because there may have been some
     // processing delays and current time may already be a little > scheduled time. This is especially

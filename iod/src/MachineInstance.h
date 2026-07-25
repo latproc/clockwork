@@ -214,6 +214,11 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     bool needsCheck();
     void resetNeedsCheck();
+    /** LIST only: default true. When false (property propagate_member_checks),
+     *  member state/property noise does not cascade setNeedsCheck to LIST
+     *  dependents; enable/disable of members still does. */
+    bool listPropagatesMemberChecks() const;
+    void propagateNeedsCheckToDependents();
     void resetTemporaryStringStream();
 
     static bool processAll(std::set<MachineInstance *> &to_process, uint32_t max_time,
