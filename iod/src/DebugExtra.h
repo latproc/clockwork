@@ -45,6 +45,10 @@ class DebugExtra {
     int DEBUG_ETHERCAT_CALLS = 0;
     int DEBUG_ETHERCAT_SDO = 0;
     int DEBUG_ETHERCAT_PACKETS = 0;
+    /** Periodic processing-thread loop snapshot (PROCSNAP lines). Default off. */
+    int DEBUG_PROCSNAP = 0;
+    /** Periodic allocator / queue memory snapshot (MEMSNAPSHOT lines). Default off. */
+    int DEBUG_MEMSNAPSHOT = 0;
 
   private:
     DebugExtra();
@@ -70,6 +74,8 @@ class DebugExtra {
 #define DBG_ETHERCAT_CALLS MSG(DebugExtra::instance()->DEBUG_ETHERCAT_CALLS)
 #define DBG_ETHERCAT_SDO MSG(DebugExtra::instance()->DEBUG_ETHERCAT_SDO)
 #define DBG_ETHERCAT_PACKETS MSG(DebugExtra::instance()->DEBUG_ETHERCAT_PACKETS)
+#define DBG_PROCSNAP MSG(DebugExtra::instance()->DEBUG_PROCSNAP)
+#define DBG_MEMSNAPSHOT MSG(DebugExtra::instance()->DEBUG_MEMSNAPSHOT)
 
 #define DBG_M_PARSER M_MSG(DebugExtra::instance()->DEBUG_PARSER, this)
 #define DBG_M_PREDICATES M_MSG(DebugExtra::instance()->DEBUG_PREDICATES, this)

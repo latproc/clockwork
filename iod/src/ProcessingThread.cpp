@@ -863,8 +863,10 @@ void ProcessingThread::operator()() {
             }
             curr_t = nowMicrosecs();
             internals->process_manager.SetTime(curr_t);
+            // MEMSNAPSHOT: opt-in via DEBUG DEBUG_MEMSNAPSHOT on|off (default off).
             static uint64_t last_memory_snapshot = 0;
-            if (curr_t - program_start >= 300000000 &&
+            if (LOGS(DebugExtra::instance()->DEBUG_MEMSNAPSHOT) &&
+                curr_t - program_start >= 300000000 &&
                 curr_t - last_memory_snapshot >= 60000000) {
                 size_t mail_items = 0;
                 size_t active_actions = 0;
@@ -969,8 +971,35 @@ void ProcessingThread::operator()() {
             // Refresh time immediately before deciding sleep length.
             curr_t = microsecs();
             // Sleep until the next machine-check window (or ZMQ event).
+            // Rate-limit only with interruptible zmq_poll — never post-loop usleep
+            // (that delays EtherCAT / timers / commands / channels).
+            const bool plant_quiet = !urgent_work && !machines_have_work;
+
+            // When truly idle, ask the ecat thread to push process data less often.
+            // Immediate "go" on every quiet empty frame was ~500 domain services/s
+            // and ~15%+ CPU. Busy path restores POLLING_DELAY so digital latency
+            // returns to normal on the next frame after work appears.
             {
-                int wait_ms = 20; // quiet idle
+                static bool slow_ec_pull = false;
+                const unsigned long busy_pull =
+                    static_cast<unsigned long>(internals->cycle_delay > 100
+                                                   ? internals->cycle_delay
+                                                   : 100);
+                // Match the previous good quiet baseline (~5 ms / ~200 Hz EC).
+                const unsigned long quiet_pull =
+                    busy_pull > 5000UL ? busy_pull : 5000UL;
+                if (plant_quiet && !slow_ec_pull) {
+                    set_polling_time(quiet_pull);
+                    slow_ec_pull = true;
+                }
+                else if (!plant_quiet && slow_ec_pull) {
+                    set_polling_time(busy_pull);
+                    slow_ec_pull = false;
+                }
+            }
+
+            {
+                int wait_ms = 20; // quiet idle (ms)
                 if (urgent_work) {
                     wait_ms = poll_wait_ms < 1 ? 1 : poll_wait_ms;
                 }
@@ -996,11 +1025,49 @@ void ProcessingThread::operator()() {
                 poll_wait = wait_ms;
             }
 
+            // Plugins while quiet: service in-wait (below), not every 10 ms full
+            // outer iteration. Busy: POLLING_DELAY (min 1 ms).
+            uint64_t plugin_due_us = static_cast<uint64_t>(internals->cycle_delay);
+            if (plugin_due_us < 1000) {
+                plugin_due_us = 1000;
+            }
+            if (plant_quiet && plugin_due_us < 10000) {
+                plugin_due_us = 10000; // 10 ms while idle
+            }
+
             //if (Watchdog::anyTriggered(curr_t))
             //  Watchdog::showTriggered(curr_t, true, std::cerr);
             systems_waiting = pollZMQItems(poll_wait, items, 5 + num_channels, ecat_sync,
                                            resource_mgr, sched_sync, ecat_out);
             curr_t = microsecs();
+
+            // Empty EC: process domain + sampleRegularPolls + ack in-wait.
+            // Real digital IO / events break out. Timers/cmd/channels break too.
+            if (plant_quiet &&
+                (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN)) {
+                bool other_zmq = false;
+                const int n_poll = 5 + static_cast<int>(num_channels);
+                for (int i = 0; i < n_poll; ++i) {
+                    if (i == internals->ECAT_ITEM) {
+                        continue;
+                    }
+                    if (items[i].revents & (ZMQ_POLLIN | ZMQ_POLLERR)) {
+                        other_zmq = true;
+                        break;
+                    }
+                }
+                if (!other_zmq) {
+                    HandleIncomingEtherCatData(io_work_queue, curr_t, avg_io_time);
+                    safeSend(ecat_sync, "go", 2);
+                    items[internals->ECAT_ITEM].revents = 0;
+                    systems_waiting = 0;
+                    if (!io_work_queue.empty() || IOComponent::updatesWaiting() ||
+                        !MachineInstance::pendingEvents().empty()) {
+                        break; // real IO — full processing
+                    }
+                    // Empty frame: stay in wait.
+                }
+            }
 
             if (systems_waiting > 0 ||
                 (machines_have_work && curr_t - last_checked_machines >= machine_check_delay)) {
@@ -1009,9 +1076,21 @@ void ProcessingThread::operator()() {
             if (IOComponent::updatesWaiting() || !io_work_queue.empty()) {
                 break;
             }
-            if (!MachineInstance::pluginMachines().empty() &&
-                curr_t - last_checked_plugins >= 1000) {
-                break;
+            // Quiet: run plugins here so we do not exit wait every plugin_due_us
+            // (~100 full outer loops/s with no CW work).
+            if (plant_quiet && !MachineInstance::pluginMachines().empty() &&
+                curr_t - last_checked_plugins >= plugin_due_us) {
+#ifdef KEEPSTATS
+                AutoStat stats(avg_plugin_time);
+#endif
+                if (processing_state == eIdle) {
+                    MachineInstance::checkPluginStates();
+                }
+                last_checked_plugins = curr_t;
+            }
+            else if (!plant_quiet && !MachineInstance::pluginMachines().empty() &&
+                     curr_t - last_checked_plugins >= plugin_due_us) {
+                break; // busy: plugins with the full processing pass
             }
             if (curr_t - last_machine_change > 10000) {
                 last_machine_change = curr_t;
@@ -1022,7 +1101,6 @@ void ProcessingThread::operator()() {
             }
 #ifdef KEEPSTATS
             avg_poll_time.update();
-            usleep(1);
             avg_poll_time.start();
 #endif
         }
@@ -1040,7 +1118,10 @@ void ProcessingThread::operator()() {
                         << ((IOComponent::updatesWaiting()) ? " io components" : "")
                         << ((!io_work_queue.empty()) ? " io work" : "")
                         << ((machines_have_work) ? " machines" : "")
-                        << ((!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >= 1000) ? " plugins" : "")
+                        << ((!MachineInstance::pluginMachines().empty() && curr_t - last_checked_plugins >=
+                             static_cast<uint64_t>(internals->cycle_delay > 1000 ? internals->cycle_delay : 1000))
+                                ? " plugins"
+                                : "")
                         << "\n";
             }
             if (IOComponent::updatesWaiting()) {
@@ -1543,31 +1624,13 @@ void ProcessingThread::operator()() {
         machine.idle(); // in case any of the above triggered a change to the machine state
         last_machine_change = machine.lastUpdated();
 
-        // Cap outer-loop rate. When there is no urgent work, allow a longer
-        // quiet period so we are not locked at ~1/POLLING_DELAY busy loops;
-        // sampleRegularPolls still advances ANALOG IOTIME on its own timer when
-        // EC messages or quiet polls wake us.
-        {
+        // PROCSNAP: opt-in via DEBUG DEBUG_PROCSNAP on|off (default off).
+        // Do NOT usleep here to rate-limit — that delays EtherCAT/timer/cmd.
+        // Idle rate uses interruptible zmq_poll + quiet EC pull in the wait loop.
+        if (LOGS(DebugExtra::instance()->DEBUG_PROCSNAP)) {
             static uint64_t last_iter_us = 0;
             static uint64_t iter_count = 0;
             static uint64_t last_report_us = 0;
-            const uint64_t now_us = microsecs();
-            uint64_t min_period_us = static_cast<uint64_t>(internals->cycle_delay);
-            if (min_period_us < 1000) {
-                min_period_us = 1000;
-            }
-            // Quiet plant: stretch loop toward 5 ms to cut baseline CPU.
-            // sampleRegularPolls still runs each wake; EC ZMQ wakes sooner.
-            const bool quiet =
-                !machines_have_work && io_work_queue.empty() &&
-                !IOComponent::updatesWaiting() &&
-                MachineInstance::pendingEvents().empty();
-            if (quiet && min_period_us < 5000) {
-                min_period_us = 5000;
-            }
-            if (last_iter_us != 0 && now_us - last_iter_us < min_period_us) {
-                usleep(static_cast<useconds_t>(min_period_us - (now_us - last_iter_us)));
-            }
             last_iter_us = microsecs();
             ++iter_count;
             if (last_report_us == 0) {

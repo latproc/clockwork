@@ -43,6 +43,8 @@ DebugExtra::DebugExtra() {
     DEBUG_ETHERCAT_CALLS = logstate->define("DEBUG_ETHERCAT_CALLS");
     DEBUG_ETHERCAT_SDO = logstate->define("DEBUG_ETHERCAT_SDO");
     DEBUG_ETHERCAT_PACKETS = logstate->define("DEBUG_ETHERCAT_PACKETS");
+    DEBUG_PROCSNAP = logstate->define("DEBUG_PROCSNAP");
+    DEBUG_MEMSNAPSHOT = logstate->define("DEBUG_MEMSNAPSHOT");
 }
 
 DebugExtra *DebugExtra::instance() {
