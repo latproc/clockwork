@@ -164,6 +164,21 @@ int KernelEthercatBus::configAddEntry(const struct elc_config_entry *entry) {
     return elc_config_add_entry(handle, entry);
 }
 
+int KernelEthercatBus::configAddDomain(const struct elc_config_domain *domain) {
+    if (!handle || !domain) {
+        return -EINVAL;
+    }
+    return elc_config_add_domain(handle, domain);
+}
+
+int KernelEthercatBus::configAddDomainAssignment(
+    const struct elc_config_domain_assignment *asgn) {
+    if (!handle || !asgn) {
+        return -EINVAL;
+    }
+    return elc_config_add_domain_assignment(handle, asgn);
+}
+
 int KernelEthercatBus::configValidate(struct elc_config_validate *result) {
     if (!handle || !result) {
         return -EINVAL;

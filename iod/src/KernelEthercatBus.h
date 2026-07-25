@@ -35,10 +35,13 @@ class KernelEthercatBus {
     int configAddSync(const struct elc_config_sync *sync);
     int configAddPdo(const struct elc_config_pdo *pdo);
     int configAddEntry(const struct elc_config_entry *entry);
+    int configAddDomain(const struct elc_config_domain *domain);
+    int configAddDomainAssignment(const struct elc_config_domain_assignment *asgn);
     int configValidate(struct elc_config_validate *result);
     int configApply(struct elc_config_apply *result);
     int domainCreate(struct elc_domain_create *result);
     int getEntryOffset(struct elc_entry_offset *io);
+    elc_handle *rawHandle() { return handle; }
 
     int cycleActivate(uint32_t period_ns, uint32_t flags, struct elc_cycle_activate *out);
     int cycleDeactivate(struct elc_cycle_deactivate *out = nullptr);

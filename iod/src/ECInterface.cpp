@@ -46,6 +46,7 @@
 #include "process_data.h"
 #ifdef USE_KERNEL_ETHERCAT
 #include "KernelEthercatBus.h"
+#include "ElcConfigFile.h"
 #endif
 #endif
 
@@ -920,52 +921,8 @@ ECModule *ECInterface::findModule(unsigned int pos) {
 void ECInterface::registerModules() {
 #ifdef USE_KERNEL_ETHERCAT
     if (kernelBus && kernelBus->isOpen()) {
-        boost::recursive_mutex::scoped_lock lock(modules_mutex);
-        for (unsigned int mi = 0; mi < modules.size(); ++mi) {
-            ECModule *m = findModule(mi);
-            if (!m || m->sync_count == 0) {
-                continue;
-            }
-            uint32_t slave_id = static_cast<uint32_t>(m->position) + 1;
-            unsigned int entry_idx = 0;
-            for (unsigned int i = 0; i < m->sync_count; ++i) {
-                for (unsigned int j = 0; j < m->syncs[i].n_pdos; ++j) {
-                    for (unsigned int k = 0; k < m->syncs[i].pdos[j].n_entries; ++k) {
-                        if (entry_idx >= 64) {
-                            break;
-                        }
-                        const ec_pdo_entry_info_t &e = m->syncs[i].pdos[j].entries[k];
-                        if (e.index == 0) {
-                            // padding / alignment entry
-                            m->offsets[entry_idx] = 0;
-                            m->bit_positions[entry_idx] = 0;
-                            ++entry_idx;
-                            continue;
-                        }
-                        struct elc_entry_offset io = {};
-                        elc_init_api_header(&io, sizeof(io));
-                        io.entry_id = elc_make_entry_id(slave_id, static_cast<uint16_t>(entry_idx));
-                        int ret = kernelBus->getEntryOffset(&io);
-                        if (ret != 0) {
-                            DBG_ETHERCAT << "getEntryOffset failed for " << m->name << " entry "
-                                         << entry_idx << " id 0x" << std::hex << io.entry_id
-                                         << std::dec << " ret " << ret << "\n";
-                            m->offsets[entry_idx] = 0;
-                            m->bit_positions[entry_idx] = 0;
-                        }
-                        else {
-                            m->offsets[entry_idx] = io.global_offset;
-                            m->bit_positions[entry_idx] = io.bit_position;
-                            DBG_ETHERCAT << "Mapped " << m->name << " entry " << entry_idx
-                                         << " 0x" << std::hex << e.index << ":" << (int)e.subindex
-                                         << std::dec << " -> offset " << m->offsets[entry_idx]
-                                         << " bit " << m->bit_positions[entry_idx] << "\n";
-                        }
-                        ++entry_idx;
-                    }
-                }
-            }
-        }
+        // Offsets already resolved while populating modules from topology conf.
+        DBG_ETHERCAT << "registerModules: kernel transport offsets already set from topology\n";
         return;
     }
 #endif
@@ -1024,140 +981,19 @@ void ECInterface::registerModules() {
 void ECInterface::configureModules() {
 #ifdef USE_KERNEL_ETHERCAT
     if (kernelBus && kernelBus->isOpen()) {
-        boost::recursive_mutex::scoped_lock lock(modules_mutex);
-        int ret = kernelBus->configBegin();
+        // Most Clockwork MODULE entries have no ESI XML; legacy iod filled PDOs via
+        // ecrt bus scan. Use the captured full-bus topology conf instead.
+        const char *topo = elcDefaultTopologyConfigPath();
+        int ret = elcApplyConfigFile(kernelBus.get(), topo);
         if (ret != 0) {
-            std::cerr << "elc_config_begin failed: " << ret << "\n";
+            std::cerr << "Failed to apply ELC topology config " << topo << " (" << ret << ")\n";
             return;
         }
-        uint32_t next_sync_id = 10000;
-        uint32_t next_pdo_id = 20000;
-        uint32_t next_entry_cfg_id = 30000;
-        unsigned int modules_with_pdos = 0;
-
-        for (unsigned int mi = 0; mi < modules.size(); ++mi) {
-            ECModule *m = findModule(mi);
-            if (!m) {
-                continue;
-            }
-            uint32_t slave_id = static_cast<uint32_t>(m->position) + 1;
-            struct elc_config_slave slave = {};
-            // revision 0 is the required wildcard (see captured topology confs).
-            elc_fill_config_slave(&slave, slave_id, m->position, m->alias, m->vendor_id,
-                                 m->product_code, 0 /* revision wildcard */, 0);
-            ret = kernelBus->configAddSlave(&slave);
-            if (ret != 0) {
-                std::cerr << "configAddSlave pos " << m->position << " id " << slave_id
-                          << " vendor 0x" << std::hex << m->vendor_id << " product 0x"
-                          << m->product_code << std::dec << " failed: " << ret << " ("
-                          << strerror(-ret) << ")\n";
-                return;
-            }
-            if (!m->syncs || m->sync_count == 0) {
-                continue;
-            }
-            ++modules_with_pdos;
-            unsigned int entry_local = 0;
-            for (unsigned int i = 0; i < m->sync_count; ++i) {
-                const ec_sync_info_t &sm = m->syncs[i];
-                if (sm.index == 0xff) {
-                    break;
-                }
-                struct elc_config_sync sync = {};
-                elc_init_api_header(&sync, sizeof(sync));
-                sync.config_id = next_sync_id++;
-                sync.slave_config_id = slave_id;
-                sync.sync_index = sm.index;
-                if (sm.dir == EC_DIR_INPUT) {
-                    sync.direction = ELC_DIR_INPUT;
-                }
-                else {
-                    sync.direction = ELC_DIR_OUTPUT;
-                }
-                if (sm.watchdog_mode == EC_WD_ENABLE) {
-                    sync.watchdog_mode = ELC_WD_ENABLE;
-                }
-                else if (sm.watchdog_mode == EC_WD_DISABLE) {
-                    sync.watchdog_mode = ELC_WD_DISABLE;
-                }
-                else {
-                    sync.watchdog_mode = ELC_WD_DEFAULT;
-                }
-                ret = kernelBus->configAddSync(&sync);
-                if (ret != 0) {
-                    std::cerr << "configAddSync " << m->name << " SM" << (int)sm.index
-                              << " failed: " << ret << "\n";
-                    return;
-                }
-                for (unsigned int j = 0; j < sm.n_pdos; ++j) {
-                    const ec_pdo_info_t &pdo = sm.pdos[j];
-                    struct elc_config_pdo pdo_rec = {};
-                    elc_init_api_header(&pdo_rec, sizeof(pdo_rec));
-                    pdo_rec.config_id = next_pdo_id++;
-                    pdo_rec.sync_config_id = sync.config_id;
-                    pdo_rec.pdo_index = pdo.index;
-                    ret = kernelBus->configAddPdo(&pdo_rec);
-                    if (ret != 0) {
-                        std::cerr << "configAddPdo 0x" << std::hex << pdo.index << std::dec
-                                  << " failed: " << ret << "\n";
-                        return;
-                    }
-                    for (unsigned int k = 0; k < pdo.n_entries; ++k) {
-                        const ec_pdo_entry_info_t &e = pdo.entries[k];
-                        struct elc_config_entry ent = {};
-                        elc_init_api_header(&ent, sizeof(ent));
-                        ent.config_id = next_entry_cfg_id++;
-                        ent.pdo_config_id = pdo_rec.config_id;
-                        ent.index = e.index;
-                        ent.subindex = e.subindex;
-                        ent.bit_length = e.bit_length;
-                        // Application entries need nonzero entry_id; padding uses 0.
-                        if (e.index != 0) {
-                            ent.entry_id =
-                                elc_make_entry_id(slave_id, static_cast<uint16_t>(entry_local));
-                        }
-                        else {
-                            ent.entry_id = 0;
-                        }
-                        ret = kernelBus->configAddEntry(&ent);
-                        if (ret != 0) {
-                            std::cerr << "configAddEntry 0x" << std::hex << e.index << ":"
-                                      << (int)e.subindex << std::dec << " failed: " << ret << "\n";
-                            return;
-                        }
-                        ++entry_local;
-                    }
-                }
-            }
+        ret = elcPopulateModulesFromConfigFile(kernelBus.get(), topo);
+        if (ret != 0) {
+            std::cerr << "Failed to populate modules from topology " << topo << " (" << ret
+                      << ")\n";
         }
-
-        struct elc_config_validate val = {};
-        elc_init_api_header(&val, sizeof(val));
-        ret = kernelBus->configValidate(&val);
-        if (ret != 0 || val.result != 0) {
-            std::cerr << "elc_config_validate failed ret=" << ret << " result=" << val.result
-                      << "\n";
-            return;
-        }
-        struct elc_config_apply apply = {};
-        elc_init_api_header(&apply, sizeof(apply));
-        ret = kernelBus->configApply(&apply);
-        if (ret != 0 || apply.result != 0) {
-            std::cerr << "elc_config_apply failed ret=" << ret << " result=" << apply.result
-                      << " failed_id=" << apply.failed_config_id << "\n";
-            return;
-        }
-        struct elc_domain_create dom = {};
-        elc_init_api_header(&dom, sizeof(dom));
-        ret = kernelBus->domainCreate(&dom);
-        if (ret != 0 || dom.result != 0) {
-            std::cerr << "elc_domain_create failed ret=" << ret << " result=" << dom.result
-                      << "\n";
-            return;
-        }
-        DBG_ETHERCAT << "Kernel config applied: " << modules_with_pdos
-                     << " modules with PDOs, domain entries=" << dom.entry_count
-                     << " domain_size=" << kernelBus->domainSize() << "\n";
         return;
     }
 #endif
