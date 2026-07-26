@@ -77,8 +77,10 @@ const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
 static bool machine_was_ready = false;
 uint64_t next_ecat_receive = 0;
 
+// keep_alive is in µs. Must be ≫ bus period so idle keep-alive pings are rare.
+// Old default 4000 with period≈2000 forced need_ping every ~2 ms (~500 Hz CW wake).
 EtherCATThread::EtherCATThread()
-    : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(4000), last_ping(0) {}
+    : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(50000), last_ping(0) {}
 
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
 
@@ -1026,11 +1028,14 @@ void EtherCATThread::operator()() {
         if (machine_is_ready && ECInterface::instance()->data.getProcessMask()) {
             global_clock = updateClock(global_clock);
 
-            // send all process domain data once the domain is operational
-            // check keep-alives on the clockwork communications channel
-            //   four periods: 4 * period / 1000 = period/250
-            bool need_ping =
-                keep_alive > 0 && (last_ping + keep_alive - period < now) ? true : false;
+            // Keep-alive: full interval since last CW ack (not keep_alive-period).
+            // Floor at 50 ms so idle never pings every bus cycle.
+            uint64_t ka_us = keep_alive;
+            if (ka_us < 50000) {
+                ka_us = 50000;
+            }
+            const bool need_ping =
+                keep_alive > 0 && last_ping != 0 && (now >= last_ping + ka_us);
 
             // if we have collected data from EtherCAT, send it to clockwork
             if (status == e_collect && pull_due) {
@@ -1051,7 +1056,6 @@ void EtherCATThread::operator()() {
                     if (driver_state == s_driver_operational) {
                         first_run = false;
                     }
-                    need_ping = false;
                     int stage = sendMultiPart(sync_sock, global_clock);
 #if VERBOSE_DEBUG
                     if (stage == 5) {
