@@ -1066,8 +1066,11 @@ void ProcessingThread::operator()() {
             const bool paced_only =
                 !urgent_work && (stable_pending || exec_only_waiting);
             // Stable-state / waiting-exec recheck interval (µs).
-            // 2 ms ≈ 2× POINTSSTARTUP cycle (1 ms); far below old 10 ms soft lag.
-            const uint64_t stable_check_us = 2000;
+            // 2× SYSTEM.CYCLE_DELAY (bus period; live via get_cycle_time()).
+            // POINTSSTARTUP: 1000 µs on → 2 ms; 2000 µs off → 4 ms. Not fixed 2 ms.
+            const unsigned long bus_us =
+                get_cycle_time() >= 100UL ? get_cycle_time() : 1000UL;
+            const uint64_t stable_check_us = static_cast<uint64_t>(bus_us) * 2UL;
 
             {
                 // Analog-only pace for ecat pull_due (LIST/PID/plugins). Digital

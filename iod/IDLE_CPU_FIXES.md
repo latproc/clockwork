@@ -127,8 +127,11 @@ Commits are intentionally small; this section maps theme → behaviour.
 
 ### 4.2 Scheduler wake floor (`Scheduler.cpp`)
 
-- Before signalling CW that scheduled work is ready, enforce **≥ 2 ms** since
-  the last signal (aligned with POINTSSTARTUP 1 kHz cycle; was 10 ms).
+- Before signalling CW that scheduled work is ready, enforce **≥ 2×
+  `SYSTEM.CYCLE_DELAY`** since the last signal (`get_cycle_time()`, live —
+  not a hard-coded 2 ms; was 10 ms). POINTSSTARTUP sets bus to 1000 µs (on)
+  / 2000 µs (off) so the floor is 2 ms / 4 ms respectively.
+- Stable/exec recheck in `ProcessingThread` uses the same **2× CYCLE_DELAY**.
 - When the batch runs, all ready TIMER items still drain in `e_running`.
 - Digital IO does **not** use this path.
 
@@ -136,9 +139,15 @@ Commits are intentionally small; this section maps theme → behaviour.
 
 `POINTSSTARTUP` ENABLE of large LISTs (inputs/guards/panel/outputs) causes a
 **machine** storm (runnable/mail/stable), not an analog free-run. That path is
-still rate-limited by stable/exec pacing (~2 ms) and absorb of empty EC frames.
+still rate-limited by stable/exec pacing (2× CYCLE_DELAY) and absorb of empty EC frames.
 Digital floods still event immediately (correct for end-stops). ENABLE storms
 should **not** reintroduce free-running idle thrash from analog dither.
+
+Plant checks (2GRAB, dig-ASAP binary): boot OP+INIT peaked ~1400 runnable /
+~1400 mail+events but **drained in ~1–2 s** (not free-run). Staged ENABLE of
+outputs/panel/auto was smaller (~400–500). Sustained thrash after Auto ENABLE
+was `M_GrabBaleClamp` HomingSafe Start↔Wait (plant LPC, separate fix), not list
+size.
 
 ### 4.3 No poll-loop `usleep` (`wait_for_work.cpp`)
 
@@ -278,7 +287,7 @@ Deploy note: stop service before replacing the binary to avoid `ETXTBSY`.
 | File | Role |
 |------|------|
 | `iod/src/ecat_thread.cpp` | Keep-alive; pull_due; push only on change/keepalive |
-| `iod/src/Scheduler.cpp` | 10 ms inter-signal floor |
+| `iod/src/Scheduler.cpp` | 2× SYSTEM.CYCLE_DELAY inter-signal floor |
 | `iod/src/wait_for_work.cpp` | Remove KEEPSTATS `usleep` |
 | `iod/src/IOComponent.cpp` | Pending-out clear; `pending_value` on turnOn/Off |
 | `iod/src/ProcessingThread.cpp` | Urgency tiers; in-wait absorb; quiet pull; PROCSNAP |

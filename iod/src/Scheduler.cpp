@@ -25,6 +25,7 @@
 #include "MessageLog.h"
 #include "MessagingInterface.h"
 #include "ProcessingThread.h"
+#include "options.h"
 #include "watchdog.h"
 #include <assert.h>
 #include <boost/chrono.hpp>
@@ -441,14 +442,17 @@ void Scheduler::idle() {
 
         if (state == e_waiting && is_ready) {
             // Batch CW wakeups: TIMER storms used to poke processing at hundreds
-            // of Hz. Floor inter-signal gap at 2 ms (matches POINTSSTARTUP 1 kHz
-            // cycle without 10 ms soft timers). TIMER items still drain in
-            // e_running as soon as the batch runs.
+            // of Hz. Floor inter-signal gap at 2× SYSTEM.CYCLE_DELAY (bus period;
+            // POINTSSTARTUP sets 1000 µs on / 2000 µs off). Follows live
+            // get_cycle_time() — not a hard-coded 2 ms. TIMER items still drain
+            // in e_running as soon as the batch runs.
             // Scheduler::add() interrupts sleep for sooner items — wait to an
             // absolute deadline in short chunks so interrupts cannot defeat the
             // floor. Digital IO does not use this path.
             static uint64_t last_sched_signal_us = 0;
-            const uint64_t min_signal_us = 2000;
+            const unsigned long bus_us =
+                get_cycle_time() >= 100UL ? get_cycle_time() : 1000UL;
+            const uint64_t min_signal_us = static_cast<uint64_t>(bus_us) * 2UL;
             if (last_sched_signal_us != 0) {
                 const uint64_t deadline = last_sched_signal_us + min_signal_us;
                 while (state != e_aborted && microsecs() < deadline) {
