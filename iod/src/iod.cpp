@@ -475,7 +475,13 @@ int main(int argc, char const *argv[]) {
     if (cycle_delay_v && cycle_delay_v->iValue >= 100) {
         delay = cycle_delay_v->iValue;
     }
+#ifdef USE_KERNEL_ETHERCAT
     ECInterface::instance()->applyCyclePeriodUs(static_cast<unsigned long>(delay));
+#else
+    // Legacy ecrt iod / iod_sdo: FREQUENCY + cycle_time (ecat_thread polls get_cycle_time).
+    set_cycle_time(static_cast<unsigned long>(delay));
+    ECInterface::FREQUENCY = static_cast<unsigned int>(1000000 / delay);
+#endif
 
     MachineInstance *ethercat_status = MachineInstance::find("ETHERCAT");
     if (!ethercat_status) {

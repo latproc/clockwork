@@ -374,11 +374,26 @@ void Scheduler::operator()() {
 }
 
 void Scheduler::stop() {
-    state = e_aborted;                          // tell idle() to exit its main loop
+    // Signal the worker to leave idle(); interrupt any sleep. Do not delete the
+    // singleton here — that races with other threads and with instance()
+    // recreation. Use shutdown() once during process teardown.
+    state = e_aborted;
+    if (internals && internals->thread_ptr) {
+        try {
+            internals->thread_ptr->interrupt();
+        }
+        catch (...) {
+        }
+    }
+}
+
+void Scheduler::shutdown() {
+    if (!instance_) {
+        return;
+    }
+    instance_->stop();
+    // Destructor joins the worker (when setThreadRef was used) and clears instance_.
     delete instance_;
-    //zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
-    //update_notify.connect("inproc://sch_items");
-    //safeSend(update_notify,"poke",4);
 }
 
 void Scheduler::idle() {

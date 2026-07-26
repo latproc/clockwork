@@ -759,26 +759,35 @@ MachineInstance::~MachineInstance() {
 }
 
 void MachineInstance::remove_pending() {
-    if (to_remove.is_empty()) { return; }
+    if (to_remove.is_empty()) {
+        return;
+    }
 
-    // make a local copy of the machines/channels that are to be removed
-    // and use that list to remove the machines from other lists
+    // Drain to_remove so each entry is processed once. Snapshot-via-for_each
+    // without a pop left the list growing and re-processed every cycle.
     // TODO: examine parameters and locals of remaining machines and
     // remove/flag affected references
-    std::vector<MachineInstance*> copy_of_to_remove;
-    copy_of_to_remove.reserve(8);
-    to_remove.for_each([&copy_of_to_remove](MachineInstance *m){
-        copy_of_to_remove.push_back(m);
-    });
-    while (!copy_of_to_remove.empty()) {
-        MachineInstance *m = copy_of_to_remove.back();
-        copy_of_to_remove.pop_back();
+    MachineInstance *m = nullptr;
+    while (to_remove.try_pop_front(m)) {
+        if (!m) {
+            continue;
+        }
         {
             std::unique_lock<std::mutex> lock(global_lists_mutex);
             all_machines.remove(m);
             automatic_machines.remove(m);
             active_machines.remove(m);
-            ::machines.erase(m->getName());
+            // Erase by pointer identity — do not call m->getName(). Channels
+            // queue prepare_to_remove(this) from their destructor, so the
+            // object may already be destroyed when we run.
+            for (auto it = ::machines.begin(); it != ::machines.end();) {
+                if (it->second == m) {
+                    it = ::machines.erase(it);
+                }
+                else {
+                    ++it;
+                }
+            }
             SharedWorkSet::instance()->remove(m);
         }
         {
@@ -4486,8 +4495,16 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             if (new_value.asInteger(new_delay) &&
                 state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
 #ifndef EC_SIMULATOR
-                ECInterface::instance()->applyCyclePeriodUs(
-                    static_cast<unsigned long>(new_delay > 0 ? new_delay : 100));
+                const unsigned long period_us =
+                    static_cast<unsigned long>(new_delay > 0 ? new_delay : 100);
+#ifdef USE_KERNEL_ETHERCAT
+                ECInterface::instance()->applyCyclePeriodUs(period_us);
+#else
+                // Legacy ecrt iod / iod_sdo (applyCyclePeriodUs is kernel-transport only).
+                set_cycle_time(period_us);
+                ECInterface::FREQUENCY =
+                    static_cast<unsigned int>(1000000UL / (period_us ? period_us : 1));
+#endif
 #endif
                 was_changed = true;
             }

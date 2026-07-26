@@ -35,7 +35,9 @@ class Logger::Internals {
     std::stringstream dummy_output;
     std::ostream *log_stream = nullptr;
 
-    Internals() : log_level(None), dummy_output(0), log_stream(&std::cout) {}
+    // dummy_output is a value (not a pointer). Do not pass 0 here: that selects a
+    // null-c-string constructor and throws under libstdc++ ("construction from null").
+    Internals() : log_level(None), dummy_output(), log_stream(&std::cout) {}
 };
 
 // Mutex ordering constraint:
@@ -108,7 +110,7 @@ void LogState::erase(std::string name){
     std::lock_guard<std::mutex> lock(logstate_mutex);
     NameMapIterator iter = name_map.find(name);
     if (iter != name_map.end()) {
-        state_flags.insert((*iter).second);
+        state_flags.erase((*iter).second);
     }
 }
 bool LogState::includes(std::string name) {

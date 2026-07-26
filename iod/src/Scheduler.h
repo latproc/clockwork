@@ -100,7 +100,10 @@ class Scheduler {
     std::string getStatus();
 
     void operator()();
+    /** Abort the scheduler loop and wake the worker. Does not destroy the singleton. */
     void stop();
+    /** stop() then delete the singleton once (joins worker via destructor). */
+    static void shutdown();
     int64_t getNextDelay();
     int64_t getNextDelay(uint64_t start);
     void setThreadRef(boost::thread &ref);

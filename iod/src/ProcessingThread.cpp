@@ -529,9 +529,11 @@ void ProcessingThread::sampleRegularPolls(uint64_t curr_t) {
     }
     // Prefer the live DC application clock (µs) so ANALOG/COUNTER IOTIME keeps
     // advancing even when the ecat thread skips a zero-change domain push.
+    // Legacy iod/iod_sdo: use getApplicationTimeNs()/1000 (getApplicationTimeUs
+    // is kernel-transport only).
     uint64_t sample_clock = global_clock;
 #ifdef USE_DC
-    const uint64_t app_us = ECInterface::instance()->getApplicationTimeUs();
+    const uint64_t app_us = ECInterface::instance()->getApplicationTimeNs() / 1000ULL;
     if (app_us != 0) {
         sample_clock = app_us;
         global_clock = app_us;
