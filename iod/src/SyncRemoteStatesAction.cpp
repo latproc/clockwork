@@ -153,9 +153,12 @@ Action::Status SyncRemoteStatesAction::execute() {
                 chn->enqueueAction(ssa);
             }
             else {
-
-                SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"DOWNLOADING"});
-                chn->enqueueAction(ssat.factory(chn));
+                // Only advance UPLOADING→DOWNLOADING. A late-finishing sync after
+                // retries must not pull an ACTIVE channel back into DOWNLOADING.
+                if (chn->getCurrent() == ChannelImplementation::UPLOADING) {
+                    SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"DOWNLOADING"});
+                    chn->enqueueAction(ssat.factory(chn));
+                }
             }
             return status;
         }
