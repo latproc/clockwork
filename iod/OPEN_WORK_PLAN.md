@@ -107,42 +107,68 @@ thrash 0, quiet loops/s single-digit to ~30.
 
 ## Track C — Analog / COUNTER change emit (like POINT / DIGITALVALUE)
 
+### Intent (end state)
+
+We want analogs and counters to behave like digital IO at the architecture
+level: the controller IO path is responsible for sampling, scaling, and
+publishing value/IOTIME under rate and guard policy. Clockwork should not
+maintain CLOCKING / CLOCKINGWITHENABLE lists that periodically SEND update to
+eng wrappers only to re-derive what iod already knows. Eng factors may live on
+the IO object or a thin consumer, but work is driven by iod emit + selective
+RECEIVE, not by plant soft-clocks. CLOCKINGWITHENABLE and L_ClockedAnalogInputs
+are transitional; the end state is no CW sampling clocks for AI/COUNTER.
+
+In short: **IO publishes engineered analog/counter values at the right rate;
+Clockwork stops running soft clocks that re-sample IO.**
+
 **Today:**
 
 - POINT / DIGITALVALUE: bit change → event / `io_work` path.
 - ANALOG / COUNTER: `regular_polls` + `sampleRegularPolls` / filter; plant often uses
-  **CLOCKEDANALOGINPUT** LPC machines to push scaled values on IOTIME.
+  **CLOCKEDANALOGINPUT** LPC machines + `CLOCKINGWITHENABLE` lists to push scaled
+  values (transitional soft-clock).
 
 **Target:**
 
-1. Internal CW/IO: when filtered value **changes** (existing tolerance), emit work
-   like digital (activate owner / notify), not only property rewrite.
-2. ANALOGINPUT / COUNTER publish VALUE on change like DIGITALVALUE.
-3. IOTIME may still advance on sample schedule without full machine storms.
-4. Idle CPU: no CW wake for unchanging analogs (keep domain-push throttle).
+1. iod owns sample / scale (`factor`/`base`/`window`) / throttle / guard emit policy.
+2. ANALOGINPUT / COUNTER publish VALUE (and eng) on change like DIGITALVALUE, with
+   tolerance so LSB noise does not storm CW.
+3. IOTIME advances on the IO sample path without full machine storms.
+4. Selective fan-out only: **SEND update** to machines that **RECEIVE update** —
+   not full `notifyDependents`.
+5. Retire plant soft-clocks: no `CLOCKING` / `CLOCKINGWITHENABLE` /
+   `L_ClockedAnalogInputs` as the sampling engine for AI/COUNTER.
 
-**Steps:** map paths → spec on-change + tolerance → implement → unit/pilot → plant.
+**Steps:** map paths → iod emit + scale → selective RECEIVE → pilot → remove CW
+clock lists (Track D).
 
-**Risk:** Medium–high if LSB noise storms CW — tolerance mandatory.
+**Risk:** Medium–high if LSB noise storms CW — tolerance / window mandatory.
 
-**Status:** Load-safe delivery (channel-style interest set):
+**Status (plant soft-clock retired for this plant):**
 
 | Layer | Role |
 |-------|------|
-| **IA / COUNTER** | Filter; publish owner `VALUE`/`raw`/`ENG` (int VALUE). Then `notifyClockedUpdateConsumers()`: **SEND update only** to dependants that declare **RECEIVE update** (CLOCKED*). No full `notifyDependents`. |
-| **Plant list** | `L_ClockedAnalogInputs` + `M_ClockedAnalogInputs` (rate + `G_CoreE24`) still `SEND update` to the same A_* interest set (rate/guard poke). |
+| **IA / COUNTER** | `factor`/`base`/`window` on the map; filter; int `VALUE` + always `ENG`; emit on change/window/safety; `notifyClockedUpdateConsumers()` → **SEND update** only to **RECEIVE update** (A_*). |
+| **Plant soft-clock** | **Removed** `L_ClockedAnalogInputs` / `M_ClockedAnalogInputs` / `CLOCKINGWITHENABLE` sampling list. |
+| **A_*** | Thin `CLOCKEDANALOGINPUT` / `CLOCKEDCOUTER16BIT`: `VALUE := IA.ENG` (or signed torque) on RECEIVE only. |
 | **Plugins** | Live int pointers on IA — no message needed. |
 
-A_ eng math unchanged: `VALUE = IA.VALUE * factor + base` inside `RECEIVE update`.
+Do **not** reintroduce soft-clock lists for AI/COUNTER or status words. Packed
+multi-bit IO stays DIGITALVALUE at iod; CW consumes `VALUE`.
+
+**Live verify:** restart iod; `DESCRIBE IA_CoreOilTemp` (VALUE, ENG, IOTIME);
+`DESCRIBE A_CoreOilTemp` follows via RECEIVE; no `M_ClockedAnalogInputs`.
 
 ---
 
 ## Track D — Plant LPC cleanup
 
-After C is proven: inventory `CLOCKEDANALOGINPUT` in plant config; migrate where
-hardware analogs emit on change; keep wrappers only where extra clocking needed.
+Soft-clock list removed for Core/Grab interest set. Remaining: drop unused
+`CLOCKING*` helpers if nothing else needs them; confirm `INPUTONPRESSURE` SetPoint
+against site; any other plants still on list clocks migrate the same way
+(scale on IA, thin A_, no list timer).
 
-**Status:** Blocked on C.
+**Status:** In progress (this plant sampling clocks removed).
 
 ---
 

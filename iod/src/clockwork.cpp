@@ -375,6 +375,9 @@ MachineClass *makeDigitalValueMachineClass() {
     result->disableAutomaticStateChanges();
     result->setProperty("IOTIME", Value(0));
     result->setProperty("VALUE", Value(0));
+    // Optional MASK: non-zero selects bits from the packed PDO word into VALUE.
+    // Named status flags are Clockwork concerns, not iod.
+    result->setProperty("MASK", Value(0));
     return result;
 }
 

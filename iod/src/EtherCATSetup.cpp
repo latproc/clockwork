@@ -411,6 +411,9 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                         ed->name.c_str(), module_position, module->offsets[offset_idx],
                         module->bit_positions[offset_idx], offset_idx, bitlen));
 
+                    // bitlen 1 → digital Input (on/off). Multi-bit POINT/STATUS_FLAG
+                    // must not fall through to AnalogueInput (leaves CW state
+                    // "undefined" and publishes bogus ENG). Use DigitalValue.
                     if (bitlen == 1) {
                         Input *in = new Input(addr);
                         IOComponent::devices[m->getName().c_str()] = in;
@@ -419,53 +422,57 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                         in->addDependent(m);
                         in->addOwner(m);
                     }
+                    else if (m->_type == "POINT" || m->_type == "STATUS_FLAG" ||
+                             m->_type == "DIGITALVALUE") {
+                        auto dv = new DigitalValue(addr);
+                        char *nm = strdup(m->getName().c_str());
+                        IOComponent::devices[nm] = dv;
+                        free(nm);
+                        dv->setName(m->getName().c_str());
+                        m->io_interface = dv;
+                        dv->addDependent(m);
+                        dv->addOwner(m);
+                        if (m->_type == "POINT" || m->_type == "STATUS_FLAG") {
+                            std::cerr << "Warning: " << m->getName() << " is " << m->_type
+                                      << " but EtherCAT entry bitlen is " << bitlen
+                                      << " — using DigitalValue (VALUE), not on/off Input\n";
+                        }
+                    }
+                    else if (m->_type == "COUNTERRATE") {
+                        CounterRate *in = new CounterRate(addr);
+                        char *nm = strdup(m->getName().c_str());
+                        IOComponent::devices[nm] = in;
+                        free(nm);
+                        in->setName(m->getName().c_str());
+                        m->io_interface = in;
+                        in->addDependent(m);
+                        in->addOwner(m);
+                        m->setNeedsThrottle(true);
+                        in->setupProperties(m);
+                    }
+                    else if (m->_type == "COUNTER") {
+                        Counter *in = new Counter(addr);
+                        char *nm = strdup(m->getName().c_str());
+                        IOComponent::devices[nm] = in;
+                        free(nm);
+                        in->setName(m->getName().c_str());
+                        m->io_interface = in;
+                        in->addDependent(m);
+                        in->addOwner(m);
+                        in->setupProperties(m);
+                        m->setNeedsThrottle(true);
+                    }
                     else {
-                        if (m->_type == "COUNTERRATE") {
-                            CounterRate *in = new CounterRate(addr);
-                            char *nm = strdup(m->getName().c_str());
-                            IOComponent::devices[nm] = in;
-                            free(nm);
-                            in->setName(m->getName().c_str());
-                            m->io_interface = in;
-                            in->addDependent(m);
-                            in->addOwner(m);
-                            m->setNeedsThrottle(true);
-                            in->setupProperties(m);
-                        }
-                        else if (m->_type == "COUNTER") {
-                            Counter *in = new Counter(addr);
-                            char *nm = strdup(m->getName().c_str());
-                            IOComponent::devices[nm] = in;
-                            free(nm);
-                            in->setName(m->getName().c_str());
-                            m->io_interface = in;
-                            in->addDependent(m);
-                            in->addOwner(m);
-                            in->setupProperties(m);
-                            m->setNeedsThrottle(true);
-                        }
-                        else if (m->_type == "DIGITALVALUE") {
-                            auto dv = new DigitalValue(addr);
-                            char *nm = strdup(m->getName().c_str());
-                            IOComponent::devices[nm] = dv;
-                            free(nm);
-                            dv->setName(m->getName().c_str());
-                            m->io_interface = dv;
-                            dv->addDependent(m);
-                            dv->addOwner(m);
-                        }
-                        else {
-                            AnalogueInput *in = new AnalogueInput(addr);
-                            char *nm = strdup(m->getName().c_str());
-                            IOComponent::devices[nm] = in;
-                            free(nm);
-                            in->setName(m->getName().c_str());
-                            m->io_interface = in;
-                            in->addDependent(m);
-                            in->addOwner(m);
-                            in->setupProperties(m);
-                            m->setNeedsThrottle(true);
-                        }
+                        AnalogueInput *in = new AnalogueInput(addr);
+                        char *nm = strdup(m->getName().c_str());
+                        IOComponent::devices[nm] = in;
+                        free(nm);
+                        in->setName(m->getName().c_str());
+                        m->io_interface = in;
+                        in->addDependent(m);
+                        in->addOwner(m);
+                        in->setupProperties(m);
+                        m->setNeedsThrottle(true);
                     }
                 }
 #endif

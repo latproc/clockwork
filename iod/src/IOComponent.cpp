@@ -1249,9 +1249,9 @@ int64_t AnalogueInput::filter(int64_t raw) {
             first = false;
         }
         o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
-        if (factor != 1.0 || base != 0.0) {
-            o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
-        }
+        // Always publish ENG so CW consumers can use eng units without a soft-clock.
+        // VALUE stays integer raw for plugins.
+        o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
         if (*config->calc_stddev) {
             o->properties.add("stddev", bufferStddev(config->positions, 5),
@@ -1366,25 +1366,26 @@ class CounterInternals {
 DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {}
 
 int64_t DigitalValue::filter(int64_t val) {
-    // Always stamp sample time; only setValue VALUE when it changes.
+    // IO only: stamp sample time and publish masked VALUE. Bit decode / flags
+    // belong in Clockwork, not here.
     publishSampleTime(read_time);
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
-        if (o) {
-            Value mask = o->properties.lookup("MASK");
-            int64_t new_val = val;
-            if (mask.kind == Value::t_integer) {
-                new_val = val & mask.iValue;
-            }
-            // setValue is relatively expensive (authority/modbus/dependents).
-            // Only publish when the value actually changed.
-            const Value &cur = o->properties.lookup("VALUE");
-            if (cur.kind == Value::t_integer && cur.iValue == new_val) {
-                continue;
-            }
-            o->setValue("VALUE", Value{new_val});
+        if (!o) {
+            continue;
         }
+        Value mask = o->properties.lookup("MASK");
+        int64_t new_val = val;
+        if (mask.kind == Value::t_integer && mask.iValue != 0) {
+            new_val = val & mask.iValue;
+        }
+        // setValue is relatively expensive (authority/modbus/dependents).
+        const Value &cur = o->properties.lookup("VALUE");
+        if (cur.kind == Value::t_integer && cur.iValue == new_val) {
+            continue;
+        }
+        o->setValue("VALUE", Value{new_val});
     }
     return val;
 }
@@ -1539,9 +1540,8 @@ int64_t Counter::filter(int64_t val) {
         }
         o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
         o->properties.add("Position", raw_val, SymbolTable::ST_REPLACE);
-        if (factor != 1.0 || base != 0.0) {
-            o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
-        }
+        // Always publish ENG (scale on COUNTER); VALUE/Position stay integer raw.
+        o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
                           SymbolTable::ST_REPLACE);
         o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
