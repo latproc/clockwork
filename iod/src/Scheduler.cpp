@@ -440,6 +440,35 @@ void Scheduler::idle() {
         }
 
         if (state == e_waiting && is_ready) {
+            // Batch CW wakeups: TIMER storms used to poke processing at hundreds
+            // of Hz. Floor inter-signal gap at 10 ms (~100 Hz). TIMER items still
+            // drain in e_running as soon as the batch runs.
+            // Scheduler::add() interrupts sleep for sooner items — wait to an
+            // absolute deadline in short chunks so interrupts cannot defeat the
+            // floor. Digital IO does not use this path.
+            static uint64_t last_sched_signal_us = 0;
+            const uint64_t min_signal_us = 10000;
+            if (last_sched_signal_us != 0) {
+                const uint64_t deadline = last_sched_signal_us + min_signal_us;
+                while (state != e_aborted && microsecs() < deadline) {
+                    uint64_t rem = deadline - microsecs();
+                    if (rem > 500) {
+                        rem = 500; // chunk so we re-check deadline often
+                    }
+                    try {
+                        boost::this_thread::sleep_for(
+                            boost::chrono::microseconds(rem));
+                    }
+                    catch (const boost::thread_interrupted &) {
+                        // keep waiting until deadline
+                    }
+                }
+                last_poll = microsecs();
+                if (!ready(last_poll)) {
+                    continue;
+                }
+            }
+            last_sched_signal_us = microsecs();
             DBG_SCHEDULER << "scheduler signaling driver for time\n";
             safeSend(sync, "sched", 5); // tell clockwork we have something to do
             state = e_waiting_cw;
