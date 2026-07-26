@@ -99,7 +99,8 @@ void ProcessingThread:: wait_for_work(
             if (machine->activationRequested()) { break; }
 #ifdef KEEPSTATS
             avg_poll_time.update();
-            usleep(1);
+            // No usleep here — rate-limit only via interruptible zmq_poll so
+            // EtherCAT / timer / command events are never delayed.
             avg_poll_time.start();
 #endif
         }
