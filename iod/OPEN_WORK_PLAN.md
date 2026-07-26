@@ -73,15 +73,18 @@ lists that re-derive eng. Work = iod emit + selective RECEIVE.
 
 ## Track D — Plant LPC cleanup
 
-**Status:** Mostly done on 1G2C-122 WC; SVN commit still open (auth failed).
+**Status:** Done for 1G2C-122 plant LPC path (SVN committed by site). Residual = oil wiring + optional other plants.
 
-| Remaining | Notes |
-|-----------|--------|
-| **SVN commit** plant WC | `Beckhoff/core_io.lpc`, `grab_io.lpc`, `Common/globals.lpc`, `Core/globals.lpc`, `Grab/globals.lpc`, GenericLib `generic_analog_input.lpc`, Grab `update_LIST.sh` |
-| **Oil wiring** | Flags/software OK; oil not open (raw ~k counts). Tubes (unwired) show UR+Error. Physical loop. |
-| **INPUTONPRESSURE** | Restored from GenericLib SVN; smoke eject at-pressure on site |
-| **Other plants** | Migrate any remaining CLOCKINGWITHENABLE AI lists the same way |
-| **CLOCKING* helpers** | Left in GenericLib as legacy; do not use for AI/COUNTER sampling |
+| Item | Status |
+|------|--------|
+| Soft-clock list removed; A_* thin RECEIVE | Done |
+| EL3124 status POINT/DV map + `update_LIST.sh` | Done |
+| GenericLib `CLOCKEDANALOGINPUT` → `IA.ENG` | Done (SVN) |
+| **SVN plant WC** | Done (site committed most) |
+| **INPUTONPRESSURE smoke** | Loaded OK: `I_CoreEjectUp` / `IR_CoreEjectDown` with `onValue` 2800/3000, `Over` on `IA_CoreVB2Pressure` (factor 0.173822). Currently **off** because eject outputs DISABLED (expected idle). Full at-pressure check needs eject enable on site. |
+| **Oil wiring** | Tomorrow — software OK; not open-loop like tubes |
+| **Other plants** | Optional — only if they still use CLOCKINGWITHENABLE for AI |
+| **CLOCKING* helpers** | Legacy in GenericLib; do not use for AI/COUNTER sampling |
 
 **EL3124 status map (reference):**
 
@@ -131,12 +134,13 @@ without process restart. **No panel channel pre-start** — data port comes from
 ## Suggested next sequence
 
 ```
-1  SVN commit plant WC when credentials available
-2  Oil physical loop (wiring)
-3  Redeploy humid with channel client fix; leave monitors as safety net
-4  Track D leftovers (INPUTONPRESSURE smoke; other plants)
-5  Optional: server bind/exit(1) + port clash
-6  Optional: quiet-load re-measure (SHOW HEALTH) after HMI stable
+1  SVN plant WC          — done (site)
+2  Oil physical loop     — tomorrow
+3  Humid with client fix — done (deployed, looks good)
+4  Track D leftovers     — done for this plant (INPUTONPRESSURE structure OK;
+                           full eject-at-pressure when outputs enabled)
+5  Optional: server bind/exit(1) + port 7902 clash
+6  Optional: quiet-load re-measure after HMI stable
 ```
 
 ---
