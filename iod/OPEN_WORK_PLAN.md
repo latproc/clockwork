@@ -15,6 +15,7 @@ emit work does not get lost.
 | Multi-domain isolation + Martin safety fixes | elc `7fe6f81f` |
 | `SHOW CYCLING` / `SHOW HEALTH` / peak `PROCSNAP`, iosh status line | elc `50900dc8` |
 | `IDLE_CPU_FIXES.md` (measurement guide from mqtt-fix plant) | elc (also on mqtt-fix `f3c01bca`) |
+| Urgency tiers + in-wait absorb (Track B remainder from d6312cc2) | elc (hand-merge) |
 
 ---
 
@@ -62,7 +63,7 @@ emit work does not get lost.
 
 **Risk:** Medium on elc. Details: `iod/IDLE_CPU_FIXES.md`.
 
-**Status:** Partial on elc — cherry-picked usleep, scheduler 10 ms floor, pending-out clear, keep-alive 50 ms. Full ProcessingThread urgency/absorb (d6312cc2) deferred (conflicts with elc quiet path; needs hand-merge).
+**Status:** Done on elc (hand-merge of d6312cc2 urgency tiers + in-wait absorb + PROCSNAP absorb/brk counters). Earlier: usleep, scheduler 10 ms, pending-out clear, keep-alive 50 ms. Plant smoke: dual domain op/COMPLETE, thrash 0, quiet loops/s single-digit.
 
 ---
 

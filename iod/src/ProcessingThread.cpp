@@ -777,6 +777,13 @@ void ProcessingThread::operator()() {
     uint64_t last_checked_cycle_time = 0;
     uint64_t last_checked_plugins = 0;
     uint64_t last_checked_machines = 0;
+    // PROCSNAP wait-loop diagnostics (per-second counters, reset on report)
+    uint64_t snap_absorb = 0;
+    uint64_t snap_brk_dig = 0;
+    uint64_t snap_brk_out = 0;
+    uint64_t snap_brk_oth = 0;
+    uint64_t snap_brk_exec = 0;
+    uint64_t snap_oth_idx[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 #ifdef KEEP_STATS
     unsigned long total_cmd_time = 0;
@@ -980,11 +987,17 @@ void ProcessingThread::operator()() {
                     idx - dynamic_poll_start_idx; // the number channels we are actually monitoring
             }
 
-            // Real work = actions/mail/events or IO. A non-empty runnable set of
-            // idle machines (stable-check leftovers) is NOT urgent — treating it
-            // as such forced ~500 Hz busy polls with nothing to do.
-            bool urgent_work = !MachineInstance::pendingEvents().empty() ||
-                               IOComponent::updatesWaiting() || !io_work_queue.empty();
+            // Urgency tiers (from mqtt-fix d6312cc2):
+            //  - io_urgent: digital/domain events that must not wait
+            //  - machine_urgent: mail / machine pending events
+            //  - exec_only_waiting: SetStateAction etc. with no mail/events
+            //  - stable_pending: TIMER re-queues only
+            // updatesWaiting is paced separately (not full-urgent).
+            // Waiting SetState alone must not pin busy EC pull forever.
+            bool io_urgent =
+                !MachineInstance::pendingEvents().empty() || !io_work_queue.empty();
+            bool machine_urgent = false;
+            bool exec_only_waiting = false;
             bool stable_pending = false;
             {
                 static size_t last_runnable_count = 0;
@@ -1010,13 +1023,15 @@ void ProcessingThread::operator()() {
                 noteRunnablePeaks(runnable_count, n_stable, n_exec, n_mail, n_events,
                                   MachineInstance::pendingEvents().size());
                 // Drop inert runnable entries (no exec/mail/events/stable queue).
-                // They otherwise accumulate (PROCSNAP runnable=5 with empty exec)
-                // and confuse diagnostics without doing work.
                 for (auto it = runnable.begin(); it != runnable.end();) {
                     MachineInstance *mi = *it;
-                    if (mi->executingCommand() || mi->hasMail() ||
-                        !mi->pendingEvents().empty()) {
-                        urgent_work = true;
+                    if (mi->hasMail() || !mi->pendingEvents().empty()) {
+                        machine_urgent = true;
+                        ++it;
+                        continue;
+                    }
+                    if (mi->executingCommand()) {
+                        exec_only_waiting = true;
                         ++it;
                         continue;
                     }
@@ -1028,9 +1043,10 @@ void ProcessingThread::operator()() {
                     it = runnable.erase(it);
                 }
                 runnable_count = runnable.size();
-                // Drive machine eval when there is real work or a stable queue.
-                machines_have_work = urgent_work || stable_pending;
-                if (machines_have_work || urgent_work) {
+                const bool urgent_work = io_urgent || machine_urgent;
+                machines_have_work =
+                    urgent_work || exec_only_waiting || stable_pending;
+                if (machines_have_work) {
                     boost::mutex::scoped_lock plock(proc_snap_mutex_);
                     ++loops_with_work_;
                 }
@@ -1038,54 +1054,58 @@ void ProcessingThread::operator()() {
                     last_runnable_count = runnable_count;
                 }
             }
-            // Refresh time immediately before deciding sleep length.
+            const bool urgent_work = io_urgent || machine_urgent;
             curr_t = microsecs();
-            // Sleep until the next machine-check window (or ZMQ event).
-            // Rate-limit only with interruptible zmq_poll — never post-loop usleep
-            // (that delays EtherCAT / timers / commands / channels).
-            const bool plant_quiet = !urgent_work && !machines_have_work;
+            // Quiet = no urgent work. Stable/exec-only are "semi-quiet" (paced).
+            const bool plant_quiet =
+                !urgent_work && !stable_pending && !exec_only_waiting;
+            const bool paced_only =
+                !urgent_work && (stable_pending || exec_only_waiting);
+            // Stable-state / waiting-exec recheck interval (µs).
+            const uint64_t stable_check_us = 10000; // 10 ms
 
-            // When truly idle, ask the ecat thread to push process data less often.
-            // Immediate "go" on every quiet empty frame was ~500 domain services/s
-            // and ~15%+ CPU. Busy path restores POLLING_DELAY so digital latency
-            // returns to normal on the next frame after work appears.
+            // Busy EC pull only for digital/IO urgency. Waiting SetState must
+            // not pin POLLING_DELAY at CYCLE_DELAY forever. No IO urgency:
+            // 10 ms pull. POINT edges set io_urgent and restore busy_pull on
+            // the next pass (max lag ≈ 10 ms).
             {
                 static bool slow_ec_pull = false;
                 const unsigned long busy_pull =
                     static_cast<unsigned long>(internals->cycle_delay > 100
                                                    ? internals->cycle_delay
                                                    : 100);
-                // Match the previous good quiet baseline (~5 ms / ~200 Hz EC).
                 const unsigned long quiet_pull =
-                    busy_pull > 5000UL ? busy_pull : 5000UL;
-                if (plant_quiet && !slow_ec_pull) {
+                    busy_pull > 10000UL ? busy_pull : 10000UL;
+                if (!io_urgent && !slow_ec_pull) {
                     set_polling_time(quiet_pull);
                     slow_ec_pull = true;
                 }
-                else if (!plant_quiet && slow_ec_pull) {
+                else if (io_urgent && slow_ec_pull) {
                     set_polling_time(busy_pull);
                     slow_ec_pull = false;
                 }
             }
 
             {
-                int wait_ms = 20; // quiet idle (ms)
+                int wait_ms = 20; // fully idle
                 if (urgent_work) {
                     wait_ms = poll_wait_ms < 1 ? 1 : poll_wait_ms;
                 }
-                else if (machines_have_work) {
-                    if (curr_t >= last_checked_machines + machine_check_delay) {
-                        wait_ms = poll_wait_ms < 1 ? 1 : poll_wait_ms;
+                else if (paced_only) {
+                    // Pace stable/TIMER and waiting SetState; digital still
+                    // wakes early via EC ZMQ.
+                    if (curr_t >= last_checked_machines + stable_check_us) {
+                        wait_ms = 1;
                     }
                     else {
                         const uint64_t remain_us =
-                            last_checked_machines + machine_check_delay - curr_t;
+                            last_checked_machines + stable_check_us - curr_t;
                         wait_ms = static_cast<int>(remain_us / 1000);
                         if (wait_ms < 1) {
                             wait_ms = 1;
                         }
-                        if (wait_ms > 50) {
-                            wait_ms = 50;
+                        if (wait_ms > 20) {
+                            wait_ms = 20;
                         }
                     }
                 }
@@ -1111,43 +1131,250 @@ void ProcessingThread::operator()() {
                                            resource_mgr, sched_sync, ecat_out);
             curr_t = microsecs();
 
-            // Empty EC: process domain + sampleRegularPolls + ack in-wait.
-            // Real digital IO / events break out. Timers/cmd/channels break too.
-            if (plant_quiet &&
-                (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN)) {
-                bool other_zmq = false;
-                const int n_poll = 5 + static_cast<int>(num_channels);
-                for (int i = 0; i < n_poll; ++i) {
-                    if (i == internals->ECAT_ITEM) {
-                        continue;
-                    }
-                    if (items[i].revents & (ZMQ_POLLIN | ZMQ_POLLERR)) {
-                        other_zmq = true;
-                        break;
-                    }
+            // ---- In-wait EC + scheduler service (event-safe, no usleep) ----
+            // Drain EC first so digital edges are never delayed by a TIMER poke.
+            // Service one full scheduler handshake in-wait so TIMER fires without
+            // a full outer loop when no machines need work afterward.
+            const int n_poll = 5 + static_cast<int>(num_channels);
+            bool other_non_sched = false;
+            bool sched_awake = false;
+            for (int i = 0; i < n_poll; ++i) {
+                if (i == internals->ECAT_ITEM) {
+                    continue;
                 }
-                if (!other_zmq) {
-                    HandleIncomingEtherCatData(io_work_queue, curr_t, avg_io_time);
-                    safeSend(ecat_sync, "go", 2);
-                    items[internals->ECAT_ITEM].revents = 0;
-                    systems_waiting = 0;
-                    if (!io_work_queue.empty() || IOComponent::updatesWaiting() ||
-                        !MachineInstance::pendingEvents().empty()) {
-                        break; // real IO — full processing
+                if (items[i].revents & (ZMQ_POLLIN | ZMQ_POLLERR)) {
+                    if (i < 8) {
+                        ++snap_oth_idx[i];
                     }
-                    // Empty frame: stay in wait.
+                    if (i == internals->SCHEDULER_ITEM) {
+                        sched_awake = true;
+                    }
+                    else if (i == internals->CMD_ITEM) {
+                        // resource_mgr: client time-sync noise. Drain and ignore
+                        // (outer path only logged a warning). Do not force a full
+                        // outer loop at hundreds of Hz.
+                        char junk[64];
+                        try {
+                            while (resource_mgr.recv(junk, sizeof(junk), ZMQ_DONTWAIT) > 0) {
+                            }
+                        }
+                        catch (const zmq::error_t &) {
+                        }
+                        items[i].revents = 0;
+                    }
+                    else if (i == internals->ECAT_OUT_ITEM) {
+                        // Reply pending on ecat_out REQ — outer path handles
+                        // multi-step update state. Only break if mid-update.
+                        if (update_state != s_update_idle) {
+                            other_non_sched = true;
+                        }
+                        else {
+                            items[i].revents = 0;
+                        }
+                    }
+                    else {
+                        // command_sync + channel sockets: real client traffic
+                        other_non_sched = true;
+                    }
                 }
             }
 
-            if (systems_waiting > 0 ||
-                (machines_have_work && curr_t - last_checked_machines >= machine_check_delay)) {
+            auto has_immediate_machine_work = [&]() -> bool {
+                if (!MachineInstance::pendingEvents().empty()) {
+                    return true;
+                }
+                boost::recursive_mutex::scoped_lock lock(runnable_mutex);
+                for (MachineInstance *mi : runnable) {
+                    if (mi->hasMail() || !mi->pendingEvents().empty()) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+            auto has_paced_machine_work = [&]() -> bool {
+                if (exec_only_waiting || stable_pending) {
+                    return true;
+                }
+                boost::recursive_mutex::scoped_lock lock(runnable_mutex);
+                for (MachineInstance *mi : runnable) {
+                    if (mi->executingCommand() || mi->queuedForStableStateTest()) {
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            // One complete scheduler handshake (sched → continue → done → bye).
+            auto service_scheduler_in_wait = [&]() -> bool {
+                if (!(items[internals->SCHEDULER_ITEM].revents & ZMQ_POLLIN)) {
+                    return false;
+                }
+                if (status != e_waiting || processing_state != eIdle) {
+                    return false;
+                }
+                char sbuf[16];
+                size_t len = 0;
+                try {
+                    len = sched_sync.recv(sbuf, sizeof(sbuf), ZMQ_DONTWAIT);
+                }
+                catch (const zmq::error_t &) {
+                    len = 0;
+                }
+                if (!len) {
+                    items[internals->SCHEDULER_ITEM].revents = 0;
+                    return false;
+                }
+                safeSend(sched_sync, "continue", 8);
+                zmq::pollitem_t spoll = {(void *)sched_sync, 0, ZMQ_POLLIN, 0};
+                bool got_done = false;
+                for (int n = 0; n < 50; ++n) { // up to ~50 ms
+                    try {
+                        if (zmq::poll(&spoll, 1, std::chrono::milliseconds(1)) > 0 &&
+                            (spoll.revents & ZMQ_POLLIN)) {
+                            len = 0;
+                            try {
+                                len = sched_sync.recv(sbuf, sizeof(sbuf), ZMQ_DONTWAIT);
+                            }
+                            catch (const zmq::error_t &) {
+                                len = 0;
+                            }
+                            if (len) {
+                                safeSend(sched_sync, "bye", 3);
+                                got_done = true;
+                                break;
+                            }
+                        }
+                    }
+                    catch (const zmq::error_t &) {
+                        break;
+                    }
+                }
+                items[internals->SCHEDULER_ITEM].revents = 0;
+                ++snap_brk_oth;
+                return got_done;
+            };
+
+            if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
+                HandleIncomingEtherCatData(io_work_queue, curr_t, avg_io_time);
+                safeSend(ecat_sync, "go", 2);
+                items[internals->ECAT_ITEM].revents = 0;
+
+                if (!io_work_queue.empty() ||
+                    !MachineInstance::pendingEvents().empty()) {
+                    ++snap_brk_dig;
+                    systems_waiting = 1;
+                    break;
+                }
+                if (has_immediate_machine_work()) {
+                    ++snap_brk_exec;
+                    systems_waiting = 1;
+                    break;
+                }
+                if (has_paced_machine_work() &&
+                    curr_t - last_checked_machines >= stable_check_us) {
+                    ++snap_brk_exec;
+                    systems_waiting = 1;
+                    break;
+                }
+                if (other_non_sched) {
+                    systems_waiting = 1;
+                    break;
+                }
+                if (sched_awake) {
+                    service_scheduler_in_wait();
+                    if (has_immediate_machine_work() || !io_work_queue.empty() ||
+                        !MachineInstance::pendingEvents().empty()) {
+                        ++snap_brk_exec;
+                        systems_waiting = 1;
+                        break;
+                    }
+                    if (has_paced_machine_work() &&
+                        curr_t - last_checked_machines >= stable_check_us) {
+                        ++snap_brk_exec;
+                        systems_waiting = 1;
+                        break;
+                    }
+                }
+                // Outputs: quiet pace only (not every empty EC frame).
+                if (IOComponent::updatesWaiting() ||
+                    IOComponent::getHardwareState() != IOComponent::s_operational) {
+                    static uint64_t last_out_service_us = 0;
+                    unsigned long out_us = get_polling_time();
+                    if (out_us < 1000) {
+                        out_us = 1000;
+                    }
+                    if (out_us < 5000) {
+                        out_us = 5000;
+                    }
+                    if (last_out_service_us == 0 ||
+                        curr_t - last_out_service_us >= out_us) {
+                        last_out_service_us = curr_t;
+                        ++snap_brk_out;
+                        systems_waiting = 1;
+                        break;
+                    }
+                }
+                ++snap_absorb;
+                systems_waiting = 0;
+#ifdef KEEPSTATS
+                avg_poll_time.update();
+                avg_poll_time.start();
+#endif
+                continue;
+            }
+
+            // Pure scheduler wake (no EC this poll): handshake in-wait.
+            if (sched_awake && !other_non_sched) {
+                service_scheduler_in_wait();
+                if (has_immediate_machine_work() || !io_work_queue.empty() ||
+                    !MachineInstance::pendingEvents().empty()) {
+                    ++snap_brk_exec;
+                    systems_waiting = 1;
+                    break;
+                }
+                if (has_paced_machine_work() &&
+                    curr_t - last_checked_machines >= stable_check_us) {
+                    ++snap_brk_exec;
+                    systems_waiting = 1;
+                    break;
+                }
+                systems_waiting = 0;
+#ifdef KEEPSTATS
+                avg_poll_time.update();
+                avg_poll_time.start();
+#endif
+                continue;
+            }
+
+            // Urgent ZMQ (cmd/channel) still exits wait immediately.
+            if (other_non_sched) {
                 break;
             }
-            if (IOComponent::updatesWaiting() || !io_work_queue.empty()) {
+            // Paced-only (stable/exec-wait): leave wait at stable_check_us.
+            if (paced_only &&
+                curr_t - last_checked_machines >= stable_check_us) {
                 break;
             }
-            // Quiet: run plugins here so we do not exit wait every plugin_due_us
-            // (~100 full outer loops/s with no CW work).
+            // Immediate machine/IO work.
+            if (urgent_work &&
+                curr_t - last_checked_machines >= machine_check_delay) {
+                break;
+            }
+            // Outputs: quiet pace only (same as EC absorb path).
+            if (IOComponent::updatesWaiting() ||
+                IOComponent::getHardwareState() != IOComponent::s_operational) {
+                static uint64_t last_out_wait_us = 0;
+                unsigned long out_us = get_polling_time();
+                if (out_us < 5000) {
+                    out_us = 5000;
+                }
+                if (last_out_wait_us == 0 || curr_t - last_out_wait_us >= out_us) {
+                    last_out_wait_us = curr_t;
+                    ++snap_brk_out;
+                    break;
+                }
+            }
+            // Quiet: run plugins here so we do not exit wait every plugin_due_us.
             if (plant_quiet && !MachineInstance::pluginMachines().empty() &&
                 curr_t - last_checked_plugins >= plugin_due_us) {
 #ifdef KEEPSTATS
@@ -1799,7 +2026,12 @@ void ProcessingThread::operator()() {
                 if (want_detail) {
                     std::cerr << "PROCSNAP loops/s=" << snap.loops_per_sec
                               << " work_loops=" << snap.loops_with_work
-                              << " cycle_delay_us=" << snap.cycle_delay_us << "\n"
+                              << " cycle_delay_us=" << snap.cycle_delay_us
+                              << " absorb=" << snap_absorb
+                              << " brk_dig=" << snap_brk_dig
+                              << " brk_out=" << snap_brk_out
+                              << " brk_exec=" << snap_brk_exec
+                              << " brk_oth=" << snap_brk_oth << "\n"
                               << "  peak: runnable=" << snap.runnable
                               << " stableQ=" << snap.stable
                               << " exec=" << snap.exec
@@ -1816,6 +2048,10 @@ void ProcessingThread::operator()() {
                               << "  exec: " << sample_exec << "\n"
                               << "  mail: " << sample_mail << "\n"
                               << "  stable: " << sample_stable << "\n";
+                }
+                snap_absorb = snap_brk_dig = snap_brk_out = snap_brk_exec = snap_brk_oth = 0;
+                for (int i = 0; i < 8; ++i) {
+                    snap_oth_idx[i] = 0;
                 }
                 iter_count = 0;
                 last_report_us = last_iter_us;
