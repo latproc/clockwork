@@ -582,7 +582,7 @@ bool IODCommandFind::run(std::vector<Value> &params) {
 bool IODCommandCycling::run(std::vector<Value> &params) {
     uint64_t short_hold_us = 50000;
     if (params.size() >= 3) {
-        long ms = 0;
+        int64_t ms = 0;
         if (params[2].asInteger(ms) && ms > 0) {
             short_hold_us = static_cast<uint64_t>(ms) * 1000ULL;
         }
