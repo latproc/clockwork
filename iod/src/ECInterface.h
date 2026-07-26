@@ -143,6 +143,10 @@ class ECInterface {
     void receiveState(); // get state from EtherCAT, use collectState() to process it
     void receivePendingDomainState(); // collect a response that arrived late in this cycle
     int collectState(); // returns non-zero if there are machines that are affected by the new state
+    /** After receiveState: true if any digital/POINT bit changed vs prev_domain. */
+    bool domainHasDigitalChange(const uint8_t *prev_domain, size_t prev_len) const;
+    /** Copy current domain image into dst (for dig shadow). Returns bytes copied. */
+    size_t copyDomainData(uint8_t *dst, size_t dst_len) const;
     void sendUpdates();
     void updateDomain(uint32_t size, uint8_t *data, uint8_t *mask);
 

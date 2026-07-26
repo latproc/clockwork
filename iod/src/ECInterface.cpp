@@ -19,6 +19,7 @@
 
 #include "ECInterface.h"
 #include "DebugExtra.h"
+#include "IOComponent.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "Statistic.h"
@@ -1777,6 +1778,48 @@ void ECInterface::receivePendingDomainState() {
     DBG_ETHERCAT_CALLS << "ecrt_domain_process (late)\n";
     ecrt_domain_process(domain1);
     check_domain1_state();
+#endif
+}
+
+bool ECInterface::domainHasDigitalChange(const uint8_t *prev_domain, size_t prev_len) const {
+#ifndef EC_SIMULATOR
+    if (!master || !initialised || !active || !domain1) {
+        return false;
+    }
+    size_t domain_size = ecrt_domain_size(domain1);
+    uint8_t *pd = ecrt_domain_data(domain1);
+    if (!pd || domain_size == 0) {
+        return false;
+    }
+    return IOComponent::domainHasDigitalChange(pd, prev_domain,
+                                               prev_domain ? prev_len : 0);
+#else
+    (void)prev_domain;
+    (void)prev_len;
+    return false;
+#endif
+}
+
+size_t ECInterface::copyDomainData(uint8_t *dst, size_t dst_len) const {
+#ifndef EC_SIMULATOR
+    if (!master || !initialised || !active || !domain1) {
+        return 0;
+    }
+    size_t domain_size = ecrt_domain_size(domain1);
+    uint8_t *pd = ecrt_domain_data(domain1);
+    if (!pd || domain_size == 0) {
+        return 0;
+    }
+    if (!dst) {
+        return domain_size; // size query
+    }
+    size_t n = domain_size < dst_len ? domain_size : dst_len;
+    memcpy(dst, pd, n);
+    return n;
+#else
+    (void)dst;
+    (void)dst_len;
+    return 0;
 #endif
 }
 
