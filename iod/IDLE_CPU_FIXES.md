@@ -112,23 +112,33 @@ Commits are intentionally small; this section maps theme → behaviour.
 ### 4.1 EtherCAT → Clockwork feed (`ecat_thread.cpp`)
 
 - Default **keep-alive 50 ms** (was 4 ms); floor keep-alive interval at 50 ms.
-- **Pull gate:** only `collectState` / consider push when `pull_due` based on
-  `get_polling_time()` (POLLING_DELAY / quiet stretch from processing).
-- Intermediate bus frames still run for master health; **latest sample wins** on
-  the next CW pull.
-- Push when `first_run || num_updates || need_ping` (domain change, startup, or
-  keep-alive). Unchanged images no longer always wake CW.
+- Bus period follows `SYSTEM.CYCLE_DELAY` (**1000 µs when POINTSSTARTUP is on**).
+- **Digital ASAP:** each cycle peeks the domain vs a dig shadow
+  (`domainHasDigitalChange`). POINT / 1-bit (non-`regular_poll`) edges
+  **collect+push immediately** (~1 bus period while powered).
+- **Analog paced:** ANALOG/COUNTER on `regular_polls` do **not** force a push.
+  They use `pull_due` from `get_polling_time()` (quiet ~5 ms) so LIST/PID/plugins
+  are not free-run at 1 kHz on dither. dig_shadow advances only on push so the
+  next collect still sees the full analog delta (latest wins).
+- Keep-alive still forces a rare full push.
 
-**Digital:** bit changes set `num_updates` and push on the next `pull_due`
-window; busy pull restores short `pull_us` when IO is urgent.
+**Digital:** no longer waits for the quiet pull window.  
+**Analog:** still paced; continuous analog noise does **not** exit “analog quiet.”
 
 ### 4.2 Scheduler wake floor (`Scheduler.cpp`)
 
-- Before signalling CW that scheduled work is ready, enforce **≥ 10 ms** since
-  the last signal (absolute deadline, chunked sleep so `Scheduler::add`
-  interrupts cannot defeat the floor).
+- Before signalling CW that scheduled work is ready, enforce **≥ 2 ms** since
+  the last signal (aligned with POINTSSTARTUP 1 kHz cycle; was 10 ms).
 - When the batch runs, all ready TIMER items still drain in `e_running`.
 - Digital IO does **not** use this path.
+
+### 4.2b Startup ENABLE storms
+
+`POINTSSTARTUP` ENABLE of large LISTs (inputs/guards/panel/outputs) causes a
+**machine** storm (runnable/mail/stable), not an analog free-run. That path is
+still rate-limited by stable/exec pacing (~2 ms) and absorb of empty EC frames.
+Digital floods still event immediately (correct for end-stops). ENABLE storms
+should **not** reintroduce free-running idle thrash from analog dither.
 
 ### 4.3 No poll-loop `usleep` (`wait_for_work.cpp`)
 

@@ -2627,6 +2627,78 @@ void ECInterface::receivePendingDomainState() {
 #endif
 }
 
+bool ECInterface::domainHasDigitalChange(const uint8_t *prev_domain, size_t prev_len) {
+#ifdef USE_KERNEL_ETHERCAT
+    if (!kernelBus || !kernelBus->isOpen() || !initialised || !active || !domain1_pd) {
+        return false;
+    }
+    size_t domain_size = kernelBus->domainSize();
+    if (domain_size == 0) {
+        domain_size = data.getProcessDataSize();
+    }
+    if (domain_size == 0) {
+        return false;
+    }
+    (void)prev_len; // dig_shadow_size; walk domain_size so first frame works
+    return IOComponent::domainHasDigitalChange(domain1_pd, prev_domain, domain_size);
+#elif !defined(EC_SIMULATOR)
+    if (!master || !initialised || !active || !domain1) {
+        return false;
+    }
+    size_t domain_size = ecrt_domain_size(domain1);
+    uint8_t *pd = ecrt_domain_data(domain1);
+    if (!pd || domain_size == 0) {
+        return false;
+    }
+    (void)prev_len;
+    return IOComponent::domainHasDigitalChange(pd, prev_domain, domain_size);
+#else
+    (void)prev_domain;
+    (void)prev_len;
+    return false;
+#endif
+}
+
+size_t ECInterface::copyDomainData(uint8_t *dst, size_t dst_len) {
+#ifdef USE_KERNEL_ETHERCAT
+    if (!kernelBus || !kernelBus->isOpen() || !initialised || !active || !domain1_pd) {
+        return 0;
+    }
+    size_t domain_size = kernelBus->domainSize();
+    if (domain_size == 0) {
+        domain_size = data.getProcessDataSize();
+    }
+    if (domain_size == 0) {
+        return 0;
+    }
+    if (!dst) {
+        return domain_size; // size query
+    }
+    size_t n = domain_size < dst_len ? domain_size : dst_len;
+    memcpy(dst, domain1_pd, n);
+    return n;
+#elif !defined(EC_SIMULATOR)
+    if (!master || !initialised || !active || !domain1) {
+        return 0;
+    }
+    size_t domain_size = ecrt_domain_size(domain1);
+    uint8_t *pd = ecrt_domain_data(domain1);
+    if (!pd || domain_size == 0) {
+        return 0;
+    }
+    if (!dst) {
+        return domain_size;
+    }
+    size_t n = domain_size < dst_len ? domain_size : dst_len;
+    memcpy(dst, pd, n);
+    return n;
+#else
+    (void)dst;
+    (void)dst_len;
+    return 0;
+#endif
+}
+
 int ECInterface::collectState() {
 #ifdef USE_KERNEL_ETHERCAT
     if (kernelBus && kernelBus->isOpen()) {

@@ -67,6 +67,44 @@ emit work does not get lost.
 
 ---
 
+## Track B2 — Digital ASAP vs analog pace (mqtt-fix refresh 2026-07-26)
+
+**Source (mqtt-fix tip after `0ec8593c` / dig-ASAP series):**
+
+| Commit | Theme |
+|--------|--------|
+| `4e2ce9dd` | `IOComponent::domainHasDigitalChange` |
+| `b2cfaf36` | `ECInterface` dig peek + `copyDomainData` |
+| `53fd85dd` | ecat: dig push every cycle; analog `pull_due` only |
+| `fd2a1f97` | scheduler floor **2 ms** (was 10 ms) |
+| `989240af` | stable pace **2 ms**; quiet pull **5 ms**; sched handshake cap **10 ms** |
+| docs | `IDLE_CPU_FIXES.md` digital ASAP / ENABLE storm notes |
+
+**Why:** POINTSSTARTUP sets `CYCLE_DELAY=1000`. Quiet-only pull made digitals lag
+~quiet window. Dig edges must push every bus period; analog dither must **not**
+force 1 kHz CW free-run.
+
+**On elc (kernel multi-domain):**
+
+1. Port `domainHasDigitalChange` (shared; uses `regular_polls` + bitlen).
+2. Kernel-path peek via `domain1_pd` after `receiveState` snapshot (not ecrt
+   `ecrt_domain_data`).
+3. ecat_thread: always snapshot when collecting; `want_cw = dig_edge || pull_due
+   || need_ping || first_run`; dig_shadow advances only on push.
+4. Scheduler floor 2 ms; ProcessingThread stable 2 ms, quiet pull 5 ms,
+   in-wait sched handshake ≤10 ms.
+5. Plant: digital edge latency, thrash 0, dual domain COMPLETE, quiet loops/s.
+
+**Risk:** Medium — more snapshots per bus period (CPU). Dig floods still event
+ASAP (correct for end-stops); ENABLE storms stay machine-paced.
+
+**Status:** Done on elc this session. Copied mqtt `IDLE_CPU_FIXES.md`. Ported dig
+ASAP + analog pace (kernel `domain1_pd` peek), scheduler 2 ms, stable 2 ms,
+quiet pull 5 ms, sched handshake ≤10 ms. Plant: dual domain op/COMPLETE,
+thrash 0, quiet loops/s single-digit to ~30.
+
+---
+
 ## Track C — Analog / COUNTER change emit (like POINT / DIGITALVALUE)
 
 **Today:**

@@ -208,6 +208,13 @@ class IOComponent : public Transmitter {
     void setIndex(int idx) { io_index = idx; }
 
     static size_t updatesWaiting();
+    /**
+     * True if curr differs from prev on any non-analog IO bit (POINT / 1-bit /
+     * non-regular_poll). Used by the ecat thread so digital edges push to CW
+     * every bus cycle while analog/COUNTER noise can stay on a paced pull.
+     */
+    static bool domainHasDigitalChange(const uint8_t *curr, const uint8_t *prev,
+                                       size_t len);
     Direction direction() { return direction_; }
 
     enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };

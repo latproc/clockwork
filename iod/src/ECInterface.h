@@ -168,6 +168,10 @@ class ECInterface {
     void receiveState(bool pull_process_image = true);
     void receivePendingDomainState(); // collect a response that arrived late in this cycle
     int collectState(); // returns non-zero if there are machines that are affected by the new state
+    /** After receiveState snapshot: true if any digital/POINT bit changed vs prev. */
+    bool domainHasDigitalChange(const uint8_t *prev_domain, size_t prev_len);
+    /** Copy current domain image into dst (for dig shadow). Returns bytes copied. */
+    size_t copyDomainData(uint8_t *dst, size_t dst_len);
     void sendUpdates();
     void updateDomain(uint32_t size, uint8_t *data, uint8_t *mask);
 #ifdef USE_KERNEL_ETHERCAT

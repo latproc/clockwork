@@ -341,6 +341,48 @@ size_t IOComponent::updatesWaiting() {
     return updatedComponentsOut.size();
 }
 
+bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *prev,
+                                         size_t len) {
+    if (!curr || len == 0) {
+        return false;
+    }
+    // No previous sample: treat as digital so the first frame is pushed.
+    if (!prev || !indexed_components || indexed_components->empty()) {
+        return true;
+    }
+    const uint8_t *pm = io_process_mask;
+    size_t n = len;
+    if (process_data_size && n > process_data_size) {
+        n = process_data_size;
+    }
+    for (size_t i = 0; i < n; ++i) {
+        uint8_t care = pm ? pm[i] : 0xff;
+        uint8_t diff = static_cast<uint8_t>((curr[i] ^ prev[i]) & care);
+        if (!diff) {
+            continue;
+        }
+        for (unsigned b = 0; b < 8; ++b) {
+            if (!(diff & static_cast<uint8_t>(1u << b))) {
+                continue;
+            }
+            const size_t idx = i * 8 + b;
+            if (idx >= indexed_components->size()) {
+                continue;
+            }
+            IOComponent *ioc = (*indexed_components)[idx];
+            if (!ioc) {
+                continue;
+            }
+            // ANALOGINPUT / COUNTER on regular_polls: not a digital edge.
+            if (regular_polls.count(ioc) && ioc->address.bitlen > 1) {
+                continue;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
 void IOComponent::clearPendingOutputUpdates() {
     boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
     updatedComponentsOut.clear();
