@@ -125,13 +125,27 @@ thrash 0, quiet loops/s single-digit to ~30.
 
 **Risk:** Medium–high if LSB noise storms CW — tolerance mandatory.
 
-**Status:** Partial → advancing —
-- ANALOGINPUT: properties always on filtered change; CW wake (owner activate +
-  `notifyDependents`) rate-limited to `20 × SYSTEM.POLLING_DELAY` (clamp 20–200 ms).
-- COUNTER: properties only (encoders too hot for activate even rate-limited).
-- `setValue(VALUE)` skips process-image write for DirInput.
-- Scheduler floor / stable pace / quiet pull base track SYSTEM.POLLING_DELAY (×2).
-- Track D still blocked until plant CLOCKEDANALOGINPUT inventory.
+**Status:** Advancing — IO-level emit replaces CLOCKING list for non-critical IO:
+
+**ANALOGINPUT / COUNTER emit policy**
+1. **Startup** — one emit when first sample is ready  
+2. **Change** — filter tick (`throttle`/`rate` ms, default 100) + tolerance; eng
+   `VALUE = raw * factor + base`; change only if `|Δeng| > window` (or raw change
+   if window=0)  
+3. **Safety** — re-emit at least every `safety_emit` ms (default 1000) even if
+   unchanged  
+4. **Guard/flag** — `emit` 0/1 on settings, or machine `guard`/`emit_guard` in
+   state `off`/`false` freezes emit (same idea as `G_CoreE24` on
+   `M_ClockedAnalogInputs`)
+
+Scale OPTIONs on ANALOGINPUT/COUNTER: `factor`, `base`, `window` (same as A_*
+CLOCKED wrappers). Settings: `throttle`/`rate`, `safety_emit`, `emit`.
+
+Plant can retire `L_ClockedAnalogInputs` / `M_ClockedAnalogInputs` once A_*
+wrappers are simplified or scale is on the IA_* machines.
+
+**Track D:** inventory done (8 CLOCKEDANALOGINPUT + 5 CLOCKEDCOUTER16BIT);
+migration optional after plant validation.
 
 ---
 

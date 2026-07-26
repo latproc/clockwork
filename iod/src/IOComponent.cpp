@@ -30,6 +30,7 @@
 #include <iostream>
 #include <netinet/in.h>
 #include <string.h>
+#include <strings.h>
 #include <string>
 #ifndef EC_SIMULATOR
 #include <ecrt.h>
@@ -708,24 +709,85 @@ unsigned char mem[1000];
 int64_t IOComponent::filter(int64_t val) { return val; }
 
 namespace {
-// Min gap between CW wakes from continuous analog IO (µs). Tied to
-// SYSTEM.POLLING_DELAY (×20): POINTS on (1 ms) → 20 ms, idle 2 ms → 40 ms.
-// Clamped [20 ms, 200 ms]. Properties still update every filtered change;
-// activate/notifyDependents share this floor so fan-out cannot free-run.
-uint64_t dependentNotifyMinUs() {
-    uint64_t us = 40000;
-    if (MachineInstance::polling_delay &&
-        MachineInstance::polling_delay->kind == Value::t_integer &&
-        MachineInstance::polling_delay->iValue >= 100) {
-        us = static_cast<uint64_t>(MachineInstance::polling_delay->iValue) * 20;
+// Period (µs) from a settings integer in ms. Defaults and clamps as given.
+uint64_t periodUsFromMs(const int64_t *ms_prop, int64_t default_ms, int64_t min_ms,
+                        int64_t max_ms) {
+    int64_t ms = default_ms;
+    if (ms_prop && *ms_prop > 0) {
+        ms = *ms_prop;
     }
-    if (us < 20000) {
-        us = 20000;
+    if (ms < min_ms) {
+        ms = min_ms;
     }
-    if (us > 200000) {
-        us = 200000;
+    if (ms > max_ms) {
+        ms = max_ms;
     }
-    return us;
+    return static_cast<uint64_t>(ms) * 1000ULL;
+}
+
+// Filter / change-detect tick (throttle or rate). Default 100 ms (CLOCKING rate:100).
+uint64_t filterPeriodUs(const int64_t *throttle_ms) {
+    return periodUsFromMs(throttle_ms, 100, 1, 5000);
+}
+
+// Safety keepalive emit even when VALUE is unchanged. Default 1000 ms.
+uint64_t safetyEmitPeriodUs(const int64_t *safety_ms) {
+    return periodUsFromMs(safety_ms, 1000, 50, 60000);
+}
+
+// Guard / flag like M_ClockedAnalogInputs + G_CoreE24:
+//   - null guard + no flag → emit allowed
+//   - integer flag 0 → off; non-zero → on
+//   - guard DISABLED or state "off"/"false" → off
+//   - otherwise on
+bool emitAllowed(MachineInstance *guard, const int64_t *emit_flag) {
+    if (emit_flag && *emit_flag == 0) {
+        return false;
+    }
+    if (!guard) {
+        return true;
+    }
+    if (!guard->enabled()) {
+        return false;
+    }
+    const char *st = guard->getCurrentStateString();
+    if (!st) {
+        return true;
+    }
+    if (strcasecmp(st, "off") == 0 || strcasecmp(st, "false") == 0) {
+        return false;
+    }
+    return true;
+}
+
+// Engineering scale from machine OPTION (same as CLOCKEDANALOGINPUT A_*):
+//   VALUE = raw_filtered * factor + base
+//   window = eng-unit hysteresis before change-emit
+void readScaleOptions(MachineInstance *m, double &factor, double &base, double &window) {
+    factor = 1.0;
+    base = 0.0;
+    window = 0.0;
+    if (!m) {
+        return;
+    }
+    auto as_float = [](const Value &v, double &out) -> bool {
+        if (v.kind == Value::t_float) {
+            out = v.fValue;
+            return true;
+        }
+        if (v.kind == Value::t_integer) {
+            out = static_cast<double>(v.iValue);
+            return true;
+        }
+        return v.asFloat(out);
+    };
+    as_float(m->properties.lookup("factor"), factor);
+    as_float(m->properties.lookup("base"), base);
+    as_float(m->properties.lookup("window"), window);
+}
+
+double engFromRaw(int64_t raw, double factor, double base) {
+    return static_cast<double>(raw) * factor + base;
 }
 } // namespace
 
@@ -735,8 +797,11 @@ class InputFilterSettings {
     CircularBuffer *positions;
     double last_sent;    // this is the value to send unless the read value moves away from the mean
     double prev_sent;    // this is previous value of last_sent
-    uint64_t last_time;  // the last time we calculated speed;_
-    uint64_t last_dep_notify_us; // rate-limit notifyDependents
+    uint64_t last_time;    // last filter/sample tick (monotonic sample clock)
+    uint64_t last_emit_us; // last CW emit (change or safety)
+    int64_t last_emitted_raw; // last raw filtered value emitted
+    double last_emitted_eng;  // last engineering VALUE emitted (factor/base)
+    bool startup_emitted; // true after first emit
     uint16_t buffer_len; // the maximum length of the circular buffer
     const int64_t
         *tolerance; // some filters use a tolerance settable by the user in the "tolerance" property
@@ -768,17 +833,21 @@ class InputFilterSettings {
     ButterworthFilter *input_bwf;
     ButterworthFilter *vel_bwf;
     ButterworthFilter *accel_bwf;
-    const int64_t *throttle;
+    const int64_t *throttle;     // ms filter/change period (alias: rate)
+    const int64_t *safety_emit;  // ms safety keepalive emit (default 1000)
+    const int64_t *emit_flag;    // optional 0/1 flag (emit / enable)
+    MachineInstance *emit_guard; // optional on/off|true/false machine (e.g. G_CoreE24)
 
     InputFilterSettings()
         : property_changed(true), positions(0), last_sent(0.0), prev_sent(0.0), last_time(0),
-          last_dep_notify_us(0), buffer_len(200), tolerance(&default_tolerance), filter_c_coeff(0),
-          filter_d_coeff(0), filter_len(&default_filter_len), filter_type(0),
-          calc_dt(&default_calc_dt), calc_d2t(&default_calc_d2t),
-          calc_stddev(&default_calc_stddev), position_history(&default_position_history),
-          speed_tolerance(&default_speed_tolerance), speed(0.0), speed_scale(1.0), accel(0.0),
-          accel_scale(1.0), speeds(4), rate_len(4), input_bwf(0), vel_bwf(0), accel_bwf(0),
-          throttle(0) {
+          last_emit_us(0), last_emitted_raw(0), last_emitted_eng(0.0), startup_emitted(false),
+          buffer_len(200), tolerance(&default_tolerance), filter_c_coeff(0), filter_d_coeff(0),
+          filter_len(&default_filter_len), filter_type(0), calc_dt(&default_calc_dt),
+          calc_d2t(&default_calc_d2t), calc_stddev(&default_calc_stddev),
+          position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
+          speed(0.0), speed_scale(1.0), accel(0.0), accel_scale(1.0), speeds(4), rate_len(4),
+          input_bwf(0), vel_bwf(0), accel_bwf(0), throttle(0), safety_emit(0), emit_flag(0),
+          emit_guard(0) {
 
         //double bw_c[] = { 0.000003756838020,0.000011270514059,0.000011270514059,0.000003756838020 };
         //double bw_d[] = { 1.000000000000,-2.937170728450,2.876299723479,-0.939098940325 };
@@ -942,10 +1011,47 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
             config->accel_scale = accel_scale;
             std::cout << m->getName() << " set accel scale to: " << config->accel_scale << "\n";
         }
+        // throttle or rate (ms): filter/change tick — plant CLOCKING rate:100 → 100
         const Value &throttle_v = settings->getValue("throttle");
         if (throttle_v.kind == Value::t_integer) {
             config->throttle = &throttle_v.iValue;
-            std::cout << m->getName() << " set throtle rate to: " << *config->throttle << "ms\n";
+            std::cout << m->getName() << " set throttle/rate to: " << *config->throttle << "ms\n";
+        }
+        else {
+            const Value &rate_v = settings->getValue("rate");
+            if (rate_v.kind == Value::t_integer) {
+                config->throttle = &rate_v.iValue;
+                std::cout << m->getName() << " set rate (throttle) to: " << *config->throttle
+                          << "ms\n";
+            }
+        }
+        // safety_emit (ms): always re-emit at least this often (default 1000)
+        const Value &safety_v = settings->getValue("safety_emit");
+        if (safety_v.kind == Value::t_integer) {
+            config->safety_emit = &safety_v.iValue;
+        }
+        // emit flag 0/1 (or enable) — same role as CLOCKINGWITHENABLE off
+        const Value &emit_v = settings->getValue("emit");
+        if (emit_v.kind == Value::t_integer) {
+            config->emit_flag = &emit_v.iValue;
+        }
+        else {
+            const Value &en_v = settings->getValue("enable");
+            if (en_v.kind == Value::t_integer) {
+                config->emit_flag = &en_v.iValue;
+            }
+        }
+        // guard machine: on/off or true/false (e.g. G_CoreE24)
+        MachineInstance *guard = settings->lookup("guard");
+        if (!guard) {
+            guard = settings->lookup("emit_guard");
+        }
+        if (!guard) {
+            guard = m->lookup("emit_guard");
+        }
+        if (guard) {
+            config->emit_guard = guard;
+            std::cout << m->getName() << " emit_guard=" << guard->getName() << "\n";
         }
         const Value &conf_dt = settings->getValue("enable_velocity");
         if (conf_dt.kind == Value::t_integer) {
@@ -1027,84 +1133,122 @@ int64_t AnalogueInput::filter(int64_t raw) {
         filtered VALUE is unchanged. properties.add does not notify dependents. */
     publishSampleTime(read_time, true, raw);
 
-    if ((long)(read_time - config->last_time) <
-        ((config->throttle) ? (*config->throttle * 1000L) : 10000L)) {
-        return config->last_sent;
-    }
-    if (config->property_changed) {
-        config->property_changed = false;
+    // Period gates use wall clock (microsecs). Do not mix with EC sample
+    // read_time / application clock — different epochs make filter always-due.
+    const uint64_t filter_us = filterPeriodUs(config->throttle);
+    const uint64_t safety_us = safetyEmitPeriodUs(config->safety_emit);
+    const uint64_t now_us = microsecs();
+    const bool filter_due =
+        (config->last_time == 0) || (now_us - config->last_time >= filter_us);
+
+    bool value_changed = false;
+    if (filter_due) {
+        if (config->property_changed) {
+            config->property_changed = false;
+        }
+        const int64_t prev_sent = static_cast<int64_t>(config->last_sent);
+
+        // Filter + tolerance (setup standard). Only advance last_sent past tol.
+        addSample(config->positions, (long)read_time, (double)raw);
+        int64_t candidate = static_cast<int64_t>(config->last_sent);
+        if (config->filter_type && *config->filter_type == 0) { // raw
+            candidate = raw;
+        }
+        else if (!config->filter_type || (config->filter_type && *config->filter_type == 1)) {
+            candidate = static_cast<int64_t>(
+                bufferAverage(config->positions, static_cast<size_t>(*config->filter_len)) + 0.5f);
+        }
+        else if (config->filter_type && *config->filter_type == 2) {
+            if (config->input_bwf) {
+                candidate = static_cast<int64_t>(config->input_bwf->filter((float)raw) + 0.5);
+            }
+            else {
+                assert(false);
+            }
+        }
+        {
+            const int64_t tol =
+                (config->tolerance && *config->tolerance > 0) ? *config->tolerance : 1;
+            int64_t delta = candidate - static_cast<int64_t>(config->last_sent);
+            if (delta < 0) {
+                delta = -delta;
+            }
+            if (delta >= tol) {
+                config->last_sent = candidate;
+            }
+        }
+        config->update(read_time);
+        config->last_time = now_us;
+        value_changed = (static_cast<int64_t>(config->last_sent) != prev_sent);
     }
 
-    const int64_t prev_sent = config->last_sent;
+    // CW emit policy (replaces plant CLOCKING list for non-critical analogs):
+    //  1) once at startup
+    //  2) filtered raw change + engineering window (factor/base/window)
+    //  3) safety keepalive at safety_emit even if unchanged
+    // Gated by emit flag / guard (on|off|true|false).
+    const int64_t raw_val = static_cast<int64_t>(config->last_sent);
+    const bool allowed = emitAllowed(config->emit_guard, config->emit_flag);
 
-    // prepare config->last_sent by filtering the input value.
-    // All filter modes apply tolerance before accepting a new last_sent so
-    // on-change setValue does not storm CW (LSB noise / butterworth float).
-    addSample(config->positions, (long)read_time, (double)raw);
-    int64_t candidate = config->last_sent;
-    if (config->filter_type && *config->filter_type == 0) { // raw
-        candidate = raw;
+    // Per-owner scale (A_* used factor/base/window; same OPTIONs on ANALOGINPUT).
+    bool any_change = false;
+    for (MachineInstance *o : owners) {
+        if (!o) {
+            continue;
+        }
+        double factor = 1.0, base = 0.0, window = 0.0;
+        readScaleOptions(o, factor, base, window);
+        const double eng = engFromRaw(raw_val, factor, base);
+        double deng = eng - config->last_emitted_eng;
+        if (deng < 0) {
+            deng = -deng;
+        }
+        const bool past_window =
+            (window <= 0.0)
+                ? (raw_val != config->last_emitted_raw)
+                : (deng > window);
+        if (past_window) {
+            any_change = true;
+            break;
+        }
     }
-    else if (!config->filter_type || (config->filter_type && *config->filter_type == 1)) {
-        candidate =
-            (bufferAverage(config->positions, static_cast<size_t>(*config->filter_len)) + 0.5f);
+    if (owners.empty() && value_changed) {
+        any_change = (raw_val != config->last_emitted_raw);
     }
-    else if (config->filter_type && *config->filter_type == 2) {
-        if (config->input_bwf) {
-            candidate = static_cast<int64_t>(config->input_bwf->filter((float)raw) + 0.5);
+
+    const bool need_startup = allowed && !config->startup_emitted;
+    const bool need_change = allowed && any_change;
+    const bool need_safety =
+        allowed && config->startup_emitted &&
+        (config->last_emit_us == 0 || now_us - config->last_emit_us >= safety_us);
+    if (!need_startup && !need_change && !need_safety) {
+        return raw_val;
+    }
+
+    double first_eng = static_cast<double>(raw_val);
+    bool first = true;
+    for (MachineInstance *o : owners) {
+        if (!o) {
+            continue;
+        }
+        double factor = 1.0, base = 0.0, window = 0.0;
+        readScaleOptions(o, factor, base, window);
+        const double eng = engFromRaw(raw_val, factor, base);
+        if (first) {
+            first_eng = eng;
+            first = false;
+        }
+        // Scaled → float VALUE (CLOCKEDANALOGINPUT export semantics).
+        if (factor != 1.0 || base != 0.0) {
+            o->properties.add("VALUE", eng, SymbolTable::ST_REPLACE);
         }
         else {
-            assert(false);
+            o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
         }
-    }
-    {
-        const int64_t tol = (config->tolerance && *config->tolerance > 0) ? *config->tolerance : 1;
-        int64_t delta = candidate - config->last_sent;
-        if (delta < 0) {
-            delta = -delta;
-        }
-        if (delta >= tol) {
-            config->last_sent = candidate;
-        }
-    }
-
-    config->update(read_time);
-
-    /*  most machines reading sensor values will be prompted when the
-        sensor value changes, depending on whether this filter yields a
-        changed value. Some systems such as plugins that operate on
-        their own clock may wish to ignore the filtered value and
-        access the raw io value and read time but note that these
-        values do not cause notifications when they change
-    */
-
-    // Only update owner properties when filtered VALUE moved.
-    if (config->last_sent == prev_sent) {
-        return config->last_sent;
-    }
-
-    // Properties always track filtered VALUE. CW wake (owner + dependents)
-    // is rate-limited from SYSTEM.POLLING_DELAY so many analogs cannot pin
-    // the outer loop; latest VALUE is already on the machine for any poller.
-    const uint64_t now_us = microsecs();
-    const bool wake_cw =
-        (config->last_dep_notify_us == 0 ||
-         now_us - config->last_dep_notify_us >= dependentNotifyMinUs());
-    if (wake_cw) {
-        config->last_dep_notify_us = now_us;
-    }
-
-    std::list<MachineInstance *>::iterator owners_iter = owners.begin();
-    while (owners_iter != owners.end()) {
-        MachineInstance *o = *owners_iter++;
         o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
-        o->properties.add("VALUE", static_cast<int64_t>(config->last_sent),
-                          SymbolTable::ST_REPLACE);
-        if (wake_cw) {
-            o->setNeedsCheck();
-            ProcessingThread::activate(o);
-            o->notifyDependents();
-        }
+        o->setNeedsCheck();
+        ProcessingThread::activate(o);
+        o->notifyDependents();
         if (*config->calc_stddev) {
             o->properties.add("stddev", bufferStddev(config->positions, 5),
                               SymbolTable::ST_REPLACE);
@@ -1118,7 +1262,11 @@ int64_t AnalogueInput::filter(int64_t raw) {
                               SymbolTable::ST_REPLACE);
         }
     }
-    return config->last_sent;
+    config->last_emitted_raw = raw_val;
+    config->last_emitted_eng = first_eng;
+    config->last_emit_us = now_us;
+    config->startup_emitted = true;
+    return raw_val;
 }
 
 void AnalogueInput::update() { config->property_changed = false; }
@@ -1134,10 +1282,17 @@ class CounterInternals {
         *position_history;          // the amount of position history to use in determining movement
     const int64_t *speed_tolerance; // the tolerance used in determining movement
     const int64_t *input_scale;     // input readings are divided by this amount
-    int64_t last_sent;  // this is the value to send unless the read value moves away from the mean
-    int64_t prev_sent;  // this is the value to send unless the read value moves away from the mean
-    uint64_t last_time; // the last time we calculated speed;_
-    uint64_t last_dep_notify_us; // rate-limit owner activate + notifyDependents
+    const int64_t *throttle;        // ms filter/change period
+    const int64_t *safety_emit;     // ms safety keepalive
+    const int64_t *emit_flag;       // 0/1 enable
+    MachineInstance *emit_guard;    // on/off|true/false guard
+    int64_t last_sent;  // filtered position (raw counts / scaled input)
+    int64_t prev_sent;
+    int64_t last_emitted_raw;
+    double last_emitted_eng;
+    uint64_t last_time;    // last filter tick
+    uint64_t last_emit_us; // last CW emit
+    bool startup_emitted;
     static int64_t default_tolerance;
     static int64_t default_filter_len;
     static int64_t default_position_history;
@@ -1151,8 +1306,10 @@ class CounterInternals {
     CounterInternals()
         : positions(0), tolerance(&default_tolerance), filter_len(&default_filter_len),
           position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
-          input_scale(&default_input_scale), last_sent(0), prev_sent(0), last_time(0),
-          last_dep_notify_us(0), speed(0), buffer_len(200), speeds(4), rate_len(4) {
+          input_scale(&default_input_scale), throttle(0), safety_emit(0), emit_flag(0),
+          emit_guard(0), last_sent(0), prev_sent(0), last_emitted_raw(0), last_emitted_eng(0.0),
+          last_time(0), last_emit_us(0), startup_emitted(false), speed(0), buffer_len(200),
+          speeds(4), rate_len(4) {
         positions = createBuffer(buffer_len);
     }
 
@@ -1258,53 +1415,140 @@ void Counter::setupProperties(MachineInstance *m) {
     if (v6.kind == Value::t_integer) {
         internals->input_scale = &v6.iValue;
     }
+    const Value &th = m->getValue("throttle");
+    if (th.kind == Value::t_integer) {
+        internals->throttle = &th.iValue;
+    }
+    else {
+        const Value &rate = m->getValue("rate");
+        if (rate.kind == Value::t_integer) {
+            internals->throttle = &rate.iValue;
+        }
+    }
+    const Value &safety = m->getValue("safety_emit");
+    if (safety.kind == Value::t_integer) {
+        internals->safety_emit = &safety.iValue;
+    }
+    const Value &emit_v = m->getValue("emit");
+    if (emit_v.kind == Value::t_integer) {
+        internals->emit_flag = &emit_v.iValue;
+    }
+    else {
+        const Value &en = m->getValue("enable");
+        if (en.kind == Value::t_integer) {
+            internals->emit_flag = &en.iValue;
+        }
+    }
+    MachineInstance *guard = m->lookup("emit_guard");
+    if (!guard) {
+        guard = m->lookup("guard");
+    }
+    if (guard) {
+        internals->emit_guard = guard;
+    }
 }
 
 int64_t Counter::filter(int64_t val) {
-    // Always stamp EtherCAT sample time; VALUE/Position only when they change.
     publishSampleTime(read_time);
 
-    double scaled_val = (double)val / (double)*internals->input_scale;
-    addSample(internals->positions, (long)read_time, scaled_val);
+    // Wall-clock periods only (see AnalogueInput::filter).
+    const uint64_t filter_us = filterPeriodUs(internals->throttle);
+    const uint64_t safety_us = safetyEmitPeriodUs(internals->safety_emit);
+    const uint64_t now_us = microsecs();
+    const bool filter_due =
+        (internals->last_time == 0) || (now_us - internals->last_time >= filter_us);
 
-    const int64_t prev_sent = internals->last_sent;
-    if (*internals->tolerance > 1) {
-        int64_t mean =
-            (bufferAverage(internals->positions, static_cast<size_t>(*internals->filter_len)) +
-             0.5f);
-        long delta = (uint64_t)abs(mean - internals->last_sent);
-        if (delta >= *internals->tolerance) {
-            internals->last_sent = mean;
+    bool value_changed = false;
+    if (filter_due) {
+        double scaled_val = (double)val / (double)*internals->input_scale;
+        addSample(internals->positions, (long)read_time, scaled_val);
+        const int64_t prev_sent = internals->last_sent;
+        if (*internals->tolerance > 1) {
+            int64_t mean = static_cast<int64_t>(
+                bufferAverage(internals->positions, static_cast<size_t>(*internals->filter_len)) +
+                0.5f);
+            long delta = static_cast<long>(abs(mean - internals->last_sent));
+            if (delta >= *internals->tolerance) {
+                internals->last_sent = mean;
+            }
+        }
+        else {
+            internals->last_sent =
+                (*internals->input_scale == 1) ? val : static_cast<int64_t>(scaled_val + 0.5);
+        }
+        internals->update(read_time);
+        internals->last_time = now_us;
+        value_changed = (internals->last_sent != prev_sent);
+    }
+
+    const int64_t raw_val = internals->last_sent;
+    const bool allowed = emitAllowed(internals->emit_guard, internals->emit_flag);
+
+    bool any_change = false;
+    for (MachineInstance *o : owners) {
+        if (!o) {
+            continue;
+        }
+        double factor = 1.0, base = 0.0, window = 0.0;
+        readScaleOptions(o, factor, base, window);
+        const double eng = engFromRaw(raw_val, factor, base);
+        double deng = eng - internals->last_emitted_eng;
+        if (deng < 0) {
+            deng = -deng;
+        }
+        const bool past_window =
+            (window <= 0.0) ? (raw_val != internals->last_emitted_raw) : (deng > window);
+        if (past_window) {
+            any_change = true;
+            break;
         }
     }
-    else {
-        internals->last_sent = (*internals->input_scale == 1) ? val : (uint64_t)(scaled_val + 0.5);
-    }
-    internals->update(read_time);
-
-    /*  Push owner VALUE/Position only when the filtered position changed.
-        Continuous encoder ticks were rewriting VALUE/Position/Velocity on
-        every sample and keeping the processing thread busy. */
-    if (internals->last_sent == prev_sent) {
-        return internals->last_sent;
+    if (owners.empty() && value_changed) {
+        any_change = (raw_val != internals->last_emitted_raw);
     }
 
-    // Always update properties. Continuous encoders change every sample;
-    // even rate-limited activate across many COUNTERs re-pins ~100 loops/s.
-    // RATEESTIMATOR / CLOCKED wrappers poll Position on their own schedule.
-    // (last_dep_notify_us reserved if a plant opts into wake later.)
-    (void)internals->last_dep_notify_us;
-    std::list<MachineInstance *>::iterator owners_iter = owners.begin();
-    while (owners_iter != owners.end()) {
-        MachineInstance *o = *owners_iter++;
+    const bool need_startup = allowed && !internals->startup_emitted;
+    const bool need_change = allowed && any_change;
+    const bool need_safety =
+        allowed && internals->startup_emitted &&
+        (internals->last_emit_us == 0 || now_us - internals->last_emit_us >= safety_us);
+    if (!need_startup && !need_change && !need_safety) {
+        return raw_val;
+    }
+
+    double first_eng = static_cast<double>(raw_val);
+    bool first = true;
+    for (MachineInstance *o : owners) {
+        if (!o) {
+            continue;
+        }
+        double factor = 1.0, base = 0.0, window = 0.0;
+        readScaleOptions(o, factor, base, window);
+        const double eng = engFromRaw(raw_val, factor, base);
+        if (first) {
+            first_eng = eng;
+            first = false;
+        }
+        if (factor != 1.0 || base != 0.0) {
+            o->properties.add("VALUE", eng, SymbolTable::ST_REPLACE);
+        }
+        else {
+            o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
+        }
+        o->properties.add("Position", raw_val, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
                           SymbolTable::ST_REPLACE);
-        o->properties.add("VALUE", static_cast<int64_t>(scaled_val), SymbolTable::ST_REPLACE);
-        o->properties.add("Position", internals->last_sent, SymbolTable::ST_REPLACE);
         o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
                           SymbolTable::ST_REPLACE);
+        o->setNeedsCheck();
+        ProcessingThread::activate(o);
+        o->notifyDependents();
     }
-    return internals->last_sent;
+    internals->last_emitted_raw = raw_val;
+    internals->last_emitted_eng = first_eng;
+    internals->last_emit_us = now_us;
+    internals->startup_emitted = true;
+    return raw_val;
 }
 
 CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(0) {
