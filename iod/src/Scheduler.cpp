@@ -374,11 +374,26 @@ void Scheduler::operator()() {
 }
 
 void Scheduler::stop() {
-    state = e_aborted;                          // tell idle() to exit its main loop
-    delete instance_;
-    //zmq::socket_t update_notify(*MessagingInterface::getContext(), ZMQ_PUSH);
-    //update_notify.connect("inproc://sch_items");
-    //safeSend(update_notify,"poke",4);
+    state = e_aborted; // tell idle() to exit its main loop
+    if (internals && internals->thread_ptr) {
+        try {
+            internals->thread_ptr->interrupt();
+        }
+        catch (...) {
+        }
+    }
+}
+
+void Scheduler::shutdown() {
+    Scheduler *to_delete = instance_;
+    if (!to_delete) {
+        return;
+    }
+    to_delete->stop();
+    // Drop the singleton pointer before delete so re-entrant instance()
+    // cannot observe a half-destroyed object; ~Scheduler also nulls instance_.
+    instance_ = nullptr;
+    delete to_delete;
 }
 
 void Scheduler::idle() {

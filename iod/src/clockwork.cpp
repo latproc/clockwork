@@ -581,6 +581,29 @@ MachineClass *makeEtherCatLinkStatusMachineClass() {
     return result;
 }
 
+/**
+ * One machine per elc domain_config_id (ECDomain_<id>).
+ * States track WC/validity for that domain only. N domains → N machines
+ * on L_ECDomains; plant LPC pulls a REFERENCE by domain_id (see DOMAINREF).
+ */
+MachineClass *makeEtherCatDomainMachineClass() {
+    MachineClass *result = new MachineClass("ETHERCAT_DOMAIN");
+    result->addState("INVALID");
+    result->addState("INCOMPLETE");
+    result->addState("COMPLETE");
+    result->initial_state = State("INVALID");
+    result->disableAutomaticStateChanges();
+    result->setProperty("domain_id", Value(0));
+    result->setProperty("valid", Value(0));
+    result->setProperty("armed", Value(0));
+    result->setProperty("wc", Value(0));
+    result->setProperty("wc_state", Value(0));
+    result->setProperty("slave_states", Value(0));
+    result->setProperty("base_offset", Value(0));
+    result->setProperty("domain_size", Value(0));
+    return result;
+}
+
 MachineClass *makeEtherCatBusMachineClass() {
     MachineClass *result = new MachineClass("ETHERCAT_BUS");
     {
@@ -659,6 +682,8 @@ void predefine_special_machines() {
     auto mcwc = makeEtherCatWorkingCounterMachineClass();
     auto mcls = makeEtherCatLinkStatusMachineClass();
     auto mcec = makeEtherCatBusMachineClass();
+    auto mced = makeEtherCatDomainMachineClass();
+    (void)mced; // registered via all_machine_classes / factory by type name
 
     MachineInstance *miwc =
         MachineInstanceFactory::create("ETHERCAT_WC", "ETHERCAT_WORKINGCOUNTER");
@@ -680,6 +705,14 @@ void predefine_special_machines() {
     miec->addLocal("link", mils);
     miec->setDefinitionLocation("Internal", 0);
     machines["ETHERCAT"] = miec;
+
+    // Populated after topology load with one ETHERCAT_DOMAIN per domain_config_id.
+    MachineInstance *domains =
+        MachineInstanceFactory::create("L_ECDomains", "LIST");
+    domains->setProperties(list_class->getProperties());
+    domains->setStateMachine(list_class);
+    domains->setDefinitionLocation("Internal", 0);
+    machines["L_ECDomains"] = domains;
 
 #ifdef USE_SDO
     auto mc_sdo = makeSdoEntryMachineClass();

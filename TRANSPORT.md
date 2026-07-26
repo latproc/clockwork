@@ -90,6 +90,42 @@ Failed snapshot ioctl keeps the previous `domain1_pd` (last known current), neve
 
 Future: optional `CAP_INPUT_HISTORY` for short pulses between CW pulls.
 
+## Service boot and optional verbose log
+
+Service run script (daemontools):
+
+  `/etc/service/iod/run` → `code/config/scripts/iod-elc.sh`
+
+Default is **quiet**: iod stdout/stderr go to `/dev/null` so ECDOMAIN /
+PROCSNAP / similar noise does not fill the disk.
+
+### Opt-in verbose log (auto-off)
+
+| Action | How |
+|--------|-----|
+| Enable (≤1 h default TTL) | `touch /tmp/iod-verbose` then `svc -t /etc/service/iod` |
+| Custom TTL (seconds) | `echo 1800 > /tmp/iod-verbose` then `svc -t …` |
+| Disable | `rm -f /tmp/iod-verbose` then `svc -t /etc/service/iod` |
+| One-shot CLI | run `iod-elc.sh -v` (not under svc) |
+
+Log file (when on): `/tmp/iod.log` (override with `IOD_LOG_FILE` or `IOD_LOG=`).
+
+Guards against filling the system:
+
+1. **Default off** — no switch → no file logging.
+2. **TTL** — if the switch file is older than its TTL (file content = seconds,
+   or `IOD_LOG_TTL_SEC`, default **3600**), the switch is **removed** and the
+   boot stays quiet.
+3. **Size cap** — if the log is ≥ **50 MiB** (`IOD_LOG_MAX_BYTES`), it is
+   rotated to `iod.log.1` before append.
+
+Env overrides: `IOD_VERBOSE_SWITCH`, `IOD_LOG_FILE`, `IOD_LOG`,
+`IOD_LOG_MAX_BYTES`, `IOD_LOG_TTL_SEC`.
+
+Binary preference in the script: `/opt/latproc/iod/iod-elc`, else
+`iod/build-elc/iod-elc`. Topology: `iod/configs/elc_topology.conf` (or
+`ELC_TOPOLOGY_CONFIG`).
+
 ## Open work (task list pointer)
 
 Portable backlog (multi-domain stages, plant prove-out, **slave identity /

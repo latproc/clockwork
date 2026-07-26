@@ -41,6 +41,10 @@
 
 #ifdef USE_KERNEL_ETHERCAT
 class KernelEthercatBus;
+#include <cstdint>
+#include <vector>
+/** Register elc domain_config_ids from topology (creates ECDomain_<id> + L_ECDomains). */
+void elcRegisterClockworkDomains(const std::vector<uint32_t> &domain_ids);
 #endif
 
 class MachineInstance;

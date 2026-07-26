@@ -19,8 +19,10 @@
 
 #include "ECInterface.h"
 #include "DebugExtra.h"
+#include "MachineClass.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
+#include "SetStateAction.h"
 #include "Statistic.h"
 #include "Statistics.h"
 #include "cJSON.h"
@@ -76,45 +78,122 @@ static bool g_kernel_outputs_armed = false;
 static std::vector<uint8_t> g_kernel_pub_mask; // cached full-domain publish mask
 static bool g_kernel_pub_mask_valid = false;
 // Multi-domain isolation (API 0.12/0.17): each domain_config_id is a WC /
-// validity / arm boundary for a *group* of slaves. Roles are plant-defined in
-// the topology conf — not hardcoded. Examples:
-//   - domain 1 = Beckhoff IO, domain 2 = ED3L pumps (this 1G2C plant)
-//   - domain 1 = machine A, domain 2 = machine B (one controller, two lines)
-//
-// Convention used by ETHERCAT machines when multi-domain is active:
-//   - domain config id 1 = "primary" → ETHERCAT_WC, all_ok, slave_states for M_Startup
-//   - other domains = isolatable groups → domain_N_* properties only
-// Topology authors put "must stay up for process life / startup" slaves in
-// domain 1, and groups that may drop without killing the controller in 2+.
-static const uint32_t kElcPrimaryDomainId = 1u;
-static const uint32_t kElcSecondaryDomainId = 2u; // second group when present
-static const unsigned kElcDomainSlots = 2;
-static bool g_domain_valid[kElcDomainSlots] = {false, false};
-static bool g_domain_armed[kElcDomainSlots] = {false, false};
-static bool g_domain_status_ok = false; // true once primary domain status works
-static uint32_t g_domain_wc[kElcDomainSlots] = {0, 0};
-static uint8_t g_domain_wc_state[kElcDomainSlots] = {0, 0};
-static uint32_t g_domain_ids[kElcDomainSlots] = {kElcPrimaryDomainId,
-                                                kElcSecondaryDomainId};
+// validity / arm boundary. N domains → N ECDomain_<id> machines on L_ECDomains.
+// First domain declared in topology is *primary* (ETHERCAT_WC / all_ok /
+// slave_states). Plant LPC pulls a REFERENCE by domain_id (DOMAINREF).
+struct ElcDomainSlot {
+    uint32_t id = 0;
+    bool valid = false;
+    bool armed = false;
+    uint32_t wc = 0;
+    uint8_t wc_state = 0;
+    uint32_t slave_states = 0;
+    uint32_t base_offset = 0;
+    uint32_t domain_size = 0;
+    MachineInstance *machine = nullptr;
+};
+static std::vector<ElcDomainSlot> g_domains;
+static bool g_domain_status_ok = false; // primary domain status available
+static uint32_t g_primary_domain_id = 0;
 
-// Push domain / WC status into ETHERCAT and ETHERCAT_WC (rate-limited callers).
+static MachineInstance *ensureECDomainMachine(uint32_t domain_id) {
+    const std::string name = "ECDomain_" + std::to_string(domain_id);
+    MachineInstance *mi = MachineInstance::find(name.c_str());
+    if (mi) {
+        return mi;
+    }
+    mi = MachineInstanceFactory::create(name.c_str(), "ETHERCAT_DOMAIN");
+    if (!mi) {
+        std::cerr << "Failed to create " << name << "\n";
+        return nullptr;
+    }
+    MachineClass *cls = MachineClass::find("ETHERCAT_DOMAIN");
+    if (cls) {
+        mi->setProperties(cls->getProperties());
+        mi->setStateMachine(cls);
+    }
+    mi->setDefinitionLocation("Internal", 0);
+    mi->setValue("domain_id", Value{static_cast<long>(domain_id)});
+    machines[name] = mi;
+    MachineInstance *list = MachineInstance::find("L_ECDomains");
+    if (list) {
+        list->addParameter(Value(name.c_str(), Value::t_symbol), mi);
+        if (!list->enabled()) {
+            list->enable();
+        }
+        if (!mi->enabled()) {
+            mi->enable();
+        }
+    }
+    std::cerr << "Registered " << name << " on L_ECDomains\n";
+    return mi;
+}
+
+void elcRegisterClockworkDomains(const std::vector<uint32_t> &domain_ids) {
+    g_domains.clear();
+    g_domain_status_ok = false;
+    g_primary_domain_id = domain_ids.empty() ? 0 : domain_ids.front();
+    for (uint32_t id : domain_ids) {
+        ElcDomainSlot slot;
+        slot.id = id;
+        slot.machine = ensureECDomainMachine(id);
+        g_domains.push_back(slot);
+    }
+    MachineInstance *ec = MachineInstance::find("ETHERCAT");
+    if (ec) {
+        ec->setValue("primary_domain_id", Value{static_cast<long>(g_primary_domain_id)});
+        ec->setValue("domain_count", Value{static_cast<long>(g_domains.size())});
+    }
+}
+
+static void setMachineStateIfChanged(MachineInstance *m, const char *state) {
+    if (!m) {
+        return;
+    }
+    if (!m->enabled()) {
+        m->enable();
+    }
+    if (m->getCurrent().getName() == state) {
+        return;
+    }
+    SetStateActionTemplate ssat = SetStateActionTemplate("SELF", Value{state});
+    SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(m));
+    if (ssa) {
+        m->enqueueAction(ssa);
+    }
+}
+
+// Push status into each ECDomain_<id>, ETHERCAT (bus), ETHERCAT_WC (primary).
 static void publishKernelEthercatClockworkMachines() {
     MachineInstance *ec = MachineInstance::find("ETHERCAT");
     MachineInstance *wc = MachineInstance::find("ETHERCAT_WC");
 
-    if (ec) {
-        // Generic per-domain fields (domain_1_*, domain_2_*). Plant role is
-        // only in topology comments — not in property names.
-        for (unsigned i = 0; i < kElcDomainSlots; ++i) {
-            const std::string prefix = "domain_" + std::to_string(g_domain_ids[i]) + "_";
-            ec->setValue(prefix + "valid", Value{g_domain_valid[i] ? 1 : 0});
-            ec->setValue(prefix + "armed", Value{g_domain_armed[i] ? 1 : 0});
-            ec->setValue(prefix + "wc", Value{static_cast<long>(g_domain_wc[i])});
-            // 0=zero, 1=incomplete, 2=complete (EtherLab WC state).
-            ec->setValue(prefix + "wc_state",
-                         Value{static_cast<long>(g_domain_wc_state[i])});
+    for (ElcDomainSlot &slot : g_domains) {
+        MachineInstance *dm = slot.machine;
+        if (!dm) {
+            continue;
         }
-        ec->setValue("primary_domain_id", Value{static_cast<long>(kElcPrimaryDomainId)});
+        dm->setValue("domain_id", Value{static_cast<long>(slot.id)});
+        dm->setValue("valid", Value{slot.valid ? 1 : 0});
+        dm->setValue("armed", Value{slot.armed ? 1 : 0});
+        dm->setValue("wc", Value{static_cast<long>(slot.wc)});
+        dm->setValue("wc_state", Value{static_cast<long>(slot.wc_state)});
+        dm->setValue("slave_states", Value{static_cast<long>(slot.slave_states)});
+        dm->setValue("base_offset", Value{static_cast<long>(slot.base_offset)});
+        dm->setValue("domain_size", Value{static_cast<long>(slot.domain_size)});
+        const char *dstate = "INVALID";
+        if (slot.valid && slot.wc_state == 2) {
+            dstate = "COMPLETE";
+        }
+        else if (slot.wc > 0 || slot.wc_state == 1) {
+            dstate = "INCOMPLETE";
+        }
+        setMachineStateIfChanged(dm, dstate);
+    }
+
+    if (ec) {
+        ec->setValue("primary_domain_id", Value{static_cast<long>(g_primary_domain_id)});
+        ec->setValue("domain_count", Value{static_cast<long>(g_domains.size())});
         if (g_domain_status_ok) {
             ec->setValue("all_ok_source", Value("primary_domain", Value::t_string));
         }
@@ -126,35 +205,21 @@ static void publishKernelEthercatClockworkMachines() {
     if (!wc) {
         return;
     }
-    // ETHERCAT_WC follows the primary domain WC only.
+    // ETHERCAT_WC follows the primary domain (first declared) WC only.
     const char *state = "ZERO";
-    long value = static_cast<long>(g_domain_wc[0]);
-    if (g_domain_status_ok) {
-        if (g_domain_wc_state[0] == 2 && g_domain_valid[0]) {
+    long value = 0;
+    if (g_domain_status_ok && !g_domains.empty()) {
+        const ElcDomainSlot &p = g_domains.front();
+        value = static_cast<long>(p.wc);
+        if (p.wc_state == 2 && p.valid) {
             state = "COMPLETE";
         }
-        else if (g_domain_wc_state[0] == 1 || g_domain_wc[0] > 0) {
+        else if (p.wc_state == 1 || p.wc > 0) {
             state = "INCOMPLETE";
         }
-        else {
-            state = "ZERO";
-        }
-    }
-    else {
-        value = 0;
-        state = "ZERO";
     }
     wc->setValue("VALUE", Value{value});
-    if (!wc->enabled()) {
-        wc->enable();
-    }
-    if (wc->getCurrent().getName() != state) {
-        SetStateActionTemplate ssat = SetStateActionTemplate("SELF", Value{state});
-        SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(wc));
-        if (ssa) {
-            wc->enqueueAction(ssa);
-        }
-    }
+    setMachineStateIfChanged(wc, state);
 }
 #endif
 ec_master_t *ECInterface::master = NULL;
@@ -1084,11 +1149,13 @@ void ECInterface::configureModules() {
         // Most Clockwork MODULE entries have no ESI XML; legacy iod filled PDOs via
         // ecrt bus scan. Use the captured full-bus topology conf instead.
         const char *topo = elcDefaultTopologyConfigPath();
-        int ret = elcApplyConfigFile(kernelBus.get(), topo);
+        std::vector<uint32_t> domain_ids;
+        int ret = elcApplyConfigFile(kernelBus.get(), topo, &domain_ids);
         if (ret != 0) {
             std::cerr << "Failed to apply ELC topology config " << topo << " (" << ret << ")\n";
             return;
         }
+        elcRegisterClockworkDomains(domain_ids);
         ret = elcPopulateModulesFromConfigFile(kernelBus.get(), topo);
         if (ret != 0) {
             std::cerr << "Failed to populate modules from topology " << topo << " (" << ret
@@ -1699,11 +1766,12 @@ bool ECInterface::activate() {
         g_kernel_pub_mask_valid = false;
         g_kernel_output_dirty = true; // publish zeros once after activate
         g_kernel_outputs_armed = false;
-        for (unsigned di = 0; di < kElcDomainSlots; ++di) {
-            g_domain_valid[di] = false;
-            g_domain_armed[di] = false;
-            g_domain_wc[di] = 0;
-            g_domain_wc_state[di] = 0;
+        for (ElcDomainSlot &slot : g_domains) {
+            slot.valid = false;
+            slot.armed = false;
+            slot.wc = 0;
+            slot.wc_state = 0;
+            slot.slave_states = 0;
         }
         g_domain_status_ok = false;
         // Non-null marker so existing domain checks pass (not an ecrt domain).
@@ -2223,19 +2291,19 @@ static bool refreshKernelDomainHealth(KernelEthercatBus *bus, bool log_periodic)
                   << (g_domain_status_ok ? "primary_domain" : "aggregate") << "\n";
     }
 
-    // Domain config IDs from topology (default 1 + 2). Roles are plant-defined.
     bool got_primary = false;
 
-    for (unsigned i = 0; i < kElcDomainSlots; ++i) {
+    for (size_t i = 0; i < g_domains.size(); ++i) {
+        ElcDomainSlot &slot = g_domains[i];
         struct elc_domain_status st = {};
-        int ret = bus->getDomainStatus(g_domain_ids[i], &st);
+        int ret = bus->getDomainStatus(slot.id, &st);
         if (ret != 0) {
-            g_domain_valid[i] = false;
-            g_domain_armed[i] = false;
-            g_domain_wc[i] = 0;
-            g_domain_wc_state[i] = 0;
+            slot.valid = false;
+            slot.armed = false;
+            slot.wc = 0;
+            slot.wc_state = 0;
             if (do_log) {
-                std::cerr << "ECDOMAIN id=" << g_domain_ids[i]
+                std::cerr << "ECDOMAIN id=" << slot.id
                           << " getDomainStatus failed ret=" << ret << "\n";
             }
             continue;
@@ -2243,13 +2311,15 @@ static bool refreshKernelDomainHealth(KernelEthercatBus *bus, bool log_periodic)
         if (i == 0) {
             got_primary = true;
         }
-        const bool was_armed = g_domain_armed[i];
-        g_domain_valid[i] = st.active != 0 && st.data_valid != 0;
-        g_domain_armed[i] = st.outputs_armed != 0;
-        g_domain_wc[i] = st.working_counter;
-        g_domain_wc_state[i] = st.working_counter_state;
+        const bool was_armed = slot.armed;
+        slot.valid = st.active != 0 && st.data_valid != 0;
+        slot.armed = st.outputs_armed != 0;
+        slot.wc = st.working_counter;
+        slot.wc_state = st.working_counter_state;
+        slot.base_offset = st.base_offset;
+        slot.domain_size = st.domain_size;
         // Lost arm on a still-valid domain → republish+rearm (fault epoch).
-        if (was_armed && !g_domain_armed[i] && g_domain_valid[i]) {
+        if (was_armed && !slot.armed && slot.valid) {
             g_kernel_output_dirty = true;
         }
         if (do_log) {
@@ -2266,7 +2336,7 @@ static bool refreshKernelDomainHealth(KernelEthercatBus *bus, bool log_periodic)
     }
     g_domain_status_ok = got_primary;
     // Quiet-publish path: primary domain arm is "outputs live".
-    g_kernel_outputs_armed = g_domain_armed[0];
+    g_kernel_outputs_armed = !g_domains.empty() && g_domains.front().armed;
     publishKernelEthercatClockworkMachines();
     return got_primary;
 }
@@ -2424,8 +2494,8 @@ void ECInterface::receiveState(bool pull_process_image) {
                     // Stage 2: gate all_ok on *primary* domain validity so a
                     // secondary domain incomplete does not freeze primary IO/CW.
                     // Fall back to aggregate bus_healthy when domains absent.
-                    if (g_domain_status_ok) {
-                        all_ok = (st.link_up != 0 && g_domain_valid[0]) ||
+                    if (g_domain_status_ok && !g_domains.empty()) {
+                        all_ok = (st.link_up != 0 && g_domains.front().valid) ||
                                  (!active && st.link_up != 0);
                     }
                     else {
@@ -2446,8 +2516,8 @@ void ECInterface::receiveState(bool pull_process_image) {
                     // Multi-domain: armed flags updated inside refreshKernelDomainHealth.
                     // If a healthy domain needs rearm, mark dirty so sendUpdates arms it.
                     if (g_domain_status_ok && kernelBus->hasDomainOutputAuthority()) {
-                        for (unsigned di = 0; di < kElcDomainSlots; ++di) {
-                            if (g_domain_valid[di] && !g_domain_armed[di]) {
+                        for (const ElcDomainSlot &slot : g_domains) {
+                            if (slot.valid && !slot.armed) {
                                 g_kernel_output_dirty = true;
                                 break;
                             }
@@ -2815,8 +2885,8 @@ void ECInterface::sendUpdates() {
         // domain still needs arm (e.g. secondary group recovered after drop).
         bool need_domain_rearm = false;
         if (g_domain_status_ok && kernelBus->hasDomainOutputAuthority()) {
-            for (unsigned di = 0; di < kElcDomainSlots; ++di) {
-                if (g_domain_valid[di] && !g_domain_armed[di]) {
+            for (const ElcDomainSlot &slot : g_domains) {
+                if (slot.valid && !slot.armed) {
                     need_domain_rearm = true;
                     break;
                 }
@@ -2866,25 +2936,25 @@ void ECInterface::sendUpdates() {
             }
 
             if (kernelBus->hasDomainOutputAuthority() && g_domain_status_ok) {
-                // Stage 2: arm each healthy domain independently. A secondary
-                // group offline leaves that domain disarmed; primary stays armable.
+                // Stage 2: arm each healthy domain independently. Offline groups
+                // stay disarmed; primary remains armable when valid.
                 int last_err = 0;
-                for (unsigned di = 0; di < kElcDomainSlots; ++di) {
-                    if (link_up && g_domain_valid[di] && !g_domain_armed[di]) {
+                for (ElcDomainSlot &slot : g_domains) {
+                    if (link_up && slot.valid && !slot.armed) {
                         int aret =
-                            armKernelDomain(kernelBus.get(), g_domain_ids[di],
-                                            pub.config_generation, pub.output_sequence);
+                            armKernelDomain(kernelBus.get(), slot.id, pub.config_generation,
+                                            pub.output_sequence);
                         if (aret == 0) {
-                            g_domain_armed[di] = true;
+                            slot.armed = true;
                         }
                         else if (last_err == 0) {
                             last_err = aret;
                         }
                     }
                 }
-                g_kernel_outputs_armed = g_domain_armed[0];
-                for (unsigned di = 0; di < kElcDomainSlots; ++di) {
-                    if (g_domain_valid[di] && !g_domain_armed[di]) {
+                g_kernel_outputs_armed = !g_domains.empty() && g_domains.front().armed;
+                for (const ElcDomainSlot &slot : g_domains) {
+                    if (slot.valid && !slot.armed) {
                         g_kernel_output_dirty = true; // retry arm with a fresh sequence
                         break;
                     }
@@ -2892,17 +2962,19 @@ void ECInterface::sendUpdates() {
                 if (last_err != 0 && now - last_warning > 2000000) {
                     last_warning = now;
                     std::cerr << "elc_arm_output (per-domain) failed: " << last_err
-                              << " d1_valid=" << (int)g_domain_valid[0]
-                              << " d1_armed=" << (int)g_domain_armed[0]
-                              << " d2_valid=" << (int)g_domain_valid[1]
-                              << " d2_armed=" << (int)g_domain_armed[1]
+                              << " domains=" << g_domains.size()
+                              << " primary_valid="
+                              << (g_domains.empty() ? 0 : (int)g_domains.front().valid)
+                              << " primary_armed="
+                              << (g_domains.empty() ? 0 : (int)g_domains.front().armed)
                               << " link=" << (int)link_up << " agg_faults=0x" << std::hex
                               << (got_io ? st.current_faults : 0) << std::dec << "\n";
                 }
-                else if (!g_domain_valid[0] && now - last_warning > 2000000) {
+                else if (!g_domains.empty() && !g_domains.front().valid &&
+                         now - last_warning > 2000000) {
                     last_warning = now;
                     std::cerr << "outputs published; primary domain not valid yet (link="
-                              << (int)link_up << " d2_valid=" << (int)g_domain_valid[1]
+                              << (int)link_up
                               << " agg_healthy=" << (got_io ? (int)st.bus_healthy : -1)
                               << " faults=0x" << std::hex << (got_io ? st.current_faults : 0)
                               << std::dec << ")\n";
@@ -3374,12 +3446,13 @@ void ECInterface::check_slave_config_states(void) {
 #ifdef USE_KERNEL_ETHERCAT
     unsigned int al_or_all = 0;
     unsigned int al_or_primary = 0;
-    unsigned int al_or_secondary = 0;
     unsigned int modules_seen = 0;
     unsigned int modules_op = 0;
     unsigned int modules_primary = 0;
     unsigned int modules_primary_op = 0;
     bool saw_domain_ids = false;
+    // Per-domain AL OR (aligned with g_domains slots).
+    std::vector<unsigned int> al_per_domain(g_domains.size(), 0);
 #endif
     while (iter != modules.end()) {
         ECModule *m = *iter++;
@@ -3399,17 +3472,23 @@ void ECInterface::check_slave_config_states(void) {
             if (m->elc_domain_id != 0) {
                 saw_domain_ids = true;
             }
-            // Primary domain (id 1) + unassigned: feed ETHERCAT.slave_states / M_Startup.
-            // Other domains are isolatable groups (second machine, drives, …).
-            if (m->elc_domain_id == 0 || m->elc_domain_id == kElcPrimaryDomainId) {
+            // Primary = first declared domain (or unassigned → primary for legacy).
+            const bool is_primary =
+                m->elc_domain_id == 0 ||
+                (g_primary_domain_id != 0 && m->elc_domain_id == g_primary_domain_id) ||
+                (g_domains.empty());
+            if (is_primary) {
                 al_or_primary |= al;
                 ++modules_primary;
                 if (m->slave_config_state.operational || al == 8) {
                     ++modules_primary_op;
                 }
             }
-            if (m->elc_domain_id == kElcSecondaryDomainId) {
-                al_or_secondary |= al;
+            for (size_t di = 0; di < g_domains.size(); ++di) {
+                if (m->elc_domain_id == g_domains[di].id ||
+                    (m->elc_domain_id == 0 && di == 0)) {
+                    al_per_domain[di] |= al;
+                }
             }
             ++modules_seen;
             if (m->slave_config_state.operational || al == 8) {
@@ -3429,28 +3508,28 @@ void ECInterface::check_slave_config_states(void) {
 #ifdef USE_KERNEL_ETHERCAT
     if (kernelBus && kernelBus->isOpen() && modules_seen > 0) {
         // Multi-domain: ETHERCAT.slave_states = OR of *primary* domain AL only so
-        // M_Startup (slave_states == 8) does not SHUTDOWN when a secondary group
-        // leaves OP. all_slave_states / domain_N_slave_states for diagnostics.
+        // M_Startup does not SHUTDOWN when an isolatable group leaves OP.
+        // Per-domain AL is on ECDomain_<id>.slave_states.
         const unsigned int al_for_startup =
             saw_domain_ids ? al_or_primary : al_or_all;
         master_state.al_states = al_for_startup;
+        for (size_t di = 0; di < g_domains.size(); ++di) {
+            g_domains[di].slave_states = al_per_domain[di];
+        }
         if (ethercat_status) {
             ethercat_status->setValue("slave_states",
                                       Value{static_cast<uint64_t>(al_for_startup)});
             ethercat_status->setValue("all_slave_states",
                                       Value{static_cast<uint64_t>(al_or_all)});
-            ethercat_status->setValue("domain_1_slave_states",
-                                      Value{static_cast<uint64_t>(al_or_primary)});
-            ethercat_status->setValue("domain_2_slave_states",
-                                      Value{static_cast<uint64_t>(al_or_secondary)});
         }
         static unsigned last_log_al = 0xffffffffu;
         static unsigned last_log_op = 0xffffffffu;
         if (al_for_startup != last_log_al || modules_op != last_log_op) {
             std::cout << "Kernel slave AL startup(primary)=0x" << std::hex << al_for_startup
-                      << " all=0x" << al_or_all << " domain2=0x" << al_or_secondary << std::dec
+                      << " all=0x" << al_or_all << std::dec
                       << " modules_op=" << modules_op << "/" << modules_seen
                       << " primary_op=" << modules_primary_op << "/" << modules_primary
+                      << " domains=" << g_domains.size()
                       << " offline=" << slaves_offline << "\n";
             last_log_al = al_for_startup;
             last_log_op = modules_op;

@@ -182,7 +182,7 @@ include_directories("${PROJECT_SOURCE_DIR}/include")
 include_directories("${PROJECT_BINARY_DIR}")
 include_directories("${CLOCKWORK_DIR}")
 
-if (EXISTS "/user/local/lib")
+if (EXISTS "/usr/local/lib")
 LINK_DIRECTORIES("/usr/local/lib")
 endif()
 if (EXISTS "/opt/local/lib")

@@ -100,7 +100,10 @@ class Scheduler {
     std::string getStatus();
 
     void operator()();
+    /** Signal the idle loop to exit and interrupt the worker thread. Does not destroy the singleton. */
     void stop();
+    /** stop() then delete the singleton once (process exit / clean teardown). */
+    static void shutdown();
     int64_t getNextDelay();
     int64_t getNextDelay(uint64_t start);
     void setThreadRef(boost::thread &ref);

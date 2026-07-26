@@ -6,13 +6,17 @@
 #ifndef ELC_CONFIG_FILE_H
 #define ELC_CONFIG_FILE_H
 
+#include <cstdint>
 #include <string>
+#include <vector>
 
 class KernelEthercatBus;
 
 // Apply config file to an open bus (config_begin..domain_create).
-// Returns 0 on success.
-int elcApplyConfigFile(KernelEthercatBus *bus, const char *path);
+// Returns 0 on success. On multi-domain configs, domain_ids_out (if non-null)
+// is filled with domain_config_id in declaration order (first = primary).
+int elcApplyConfigFile(KernelEthercatBus *bus, const char *path,
+                       std::vector<uint32_t> *domain_ids_out = nullptr);
 
 // After domain is created, fill each ECModule at bus positions with
 // pdo_entries / entry_details / offsets / bit_positions / syncs from the

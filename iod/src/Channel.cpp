@@ -2869,6 +2869,7 @@ void ChannelDefinition::processIgnoresPatternList(std::set<std::string>::const_i
                 if (!machine) {
                     NB_MSG << "null machine detected in machine list when processing channel IGNORES" << "\n";
                     assert(false);
+                    continue;
                 }
                 if (execute_pattern(rexp, machine->getName().c_str()) == 0) {
                     if (chn->channel_machines.count(machine)) {

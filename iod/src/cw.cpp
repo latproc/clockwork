@@ -626,7 +626,7 @@ int main(int argc, char const *argv[]) {
     load_result = loadConfig(source_files);
     if (load_result) {
         Dispatcher::instance()->stop();
-        Scheduler::instance()->stop();
+        Scheduler::shutdown();
         return load_result;
     }
 
@@ -763,7 +763,7 @@ int main(int argc, char const *argv[]) {
         MessagingInterface::abort();
         MQTTInterface::instance()->stop();
         Dispatcher::instance()->stop();
-        Scheduler::instance()->stop();
+        Scheduler::shutdown();
         processMonitor.stop();
         process.join();
         stateMonitor->stop();

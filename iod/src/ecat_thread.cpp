@@ -118,7 +118,15 @@ bool EtherCATThread::checkAndUpdateCycleDelay() {
     if (cycle_delay != desired) {
         cycle_delay = desired;
         DBG_INITIALISATION << "EtherCAT CYCLE_DELAY -> " << cycle_delay << " us\n";
+#ifdef USE_KERNEL_ETHERCAT
+        // iod-elc: applyCyclePeriodUs (locked after activate).
         ECInterface::instance()->applyCyclePeriodUs(cycle_delay);
+#else
+        // Legacy iod / iod_sdo: no applyCyclePeriodUs — update userspace timer only.
+        ECInterface::FREQUENCY =
+            cycle_delay > 0 ? static_cast<unsigned int>(1000000UL / cycle_delay) : 1;
+        set_cycle_time(cycle_delay);
+#endif
         return true;
     }
     return false;

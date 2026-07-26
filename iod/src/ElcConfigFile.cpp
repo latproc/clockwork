@@ -286,7 +286,8 @@ const char *elcDefaultTopologyConfigPath() {
     return candidates[0];
 }
 
-int elcApplyConfigFile(KernelEthercatBus *bus, const char *path) {
+int elcApplyConfigFile(KernelEthercatBus *bus, const char *path,
+                       std::vector<uint32_t> *domain_ids_out) {
     if (!bus || !bus->isOpen() || !path) {
         return -EINVAL;
     }
@@ -295,6 +296,12 @@ int elcApplyConfigFile(KernelEthercatBus *bus, const char *path) {
     if (pret != 0) {
         std::cerr << "Failed to parse ELC config " << path << " (" << pret << ")\n";
         return pret;
+    }
+    if (domain_ids_out) {
+        domain_ids_out->clear();
+        for (const auto &d : file.domains) {
+            domain_ids_out->push_back(d.config_id);
+        }
     }
 
     int ret = bus->configBegin();
@@ -421,10 +428,13 @@ int elcApplyConfigFile(KernelEthercatBus *bus, const char *path) {
             }
             std::cout << "  domain " << d.config_id << ": " << n_asgn << " slave(s)\n";
         }
-        // Roles are plant-defined; iod treats domain id 1 as primary for
-        // ETHERCAT.slave_states / ETHERCAT_WC / all_ok (see topology header).
-        std::cout << "  convention: domain 1=primary (startup/all_ok); "
-                     "other domains=isolatable groups\n";
+        // Roles are plant-defined. First declared domain is primary for
+        // ETHERCAT.slave_states / ETHERCAT_WC / all_ok. Others are isolatable
+        // groups (ECDomain_<id> on L_ECDomains).
+        if (!file.domains.empty()) {
+            std::cout << "  primary domain_config_id=" << file.domains.front().config_id
+                      << " (first declared); others isolatable via L_ECDomains\n";
+        }
     }
     return 0;
 }

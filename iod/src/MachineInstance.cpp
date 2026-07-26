@@ -761,24 +761,35 @@ MachineInstance::~MachineInstance() {
 void MachineInstance::remove_pending() {
     if (to_remove.is_empty()) { return; }
 
-    // make a local copy of the machines/channels that are to be removed
-    // and use that list to remove the machines from other lists
+    // Drain to_remove into a local vector so we do not hold list locks while
+    // touching global_lists_mutex / pending_state_change, and so entries are
+    // not left on to_remove forever (for_each alone never pops).
     // TODO: examine parameters and locals of remaining machines and
     // remove/flag affected references
     std::vector<MachineInstance*> copy_of_to_remove;
     copy_of_to_remove.reserve(8);
-    to_remove.for_each([&copy_of_to_remove](MachineInstance *m){
-        copy_of_to_remove.push_back(m);
-    });
+    MachineInstance *pending = nullptr;
+    while (to_remove.try_pop_front(pending)) {
+        copy_of_to_remove.push_back(pending);
+    }
     while (!copy_of_to_remove.empty()) {
         MachineInstance *m = copy_of_to_remove.back();
         copy_of_to_remove.pop_back();
+        // Do not call methods on m: prepare_to_remove may be used from a dtor
+        // (e.g. Channel) after the object is no longer safe to touch.
         {
             std::unique_lock<std::mutex> lock(global_lists_mutex);
             all_machines.remove(m);
             automatic_machines.remove(m);
             active_machines.remove(m);
-            ::machines.erase(m->getName());
+            for (auto it = ::machines.begin(); it != ::machines.end();) {
+                if (it->second == m) {
+                    it = ::machines.erase(it);
+                }
+                else {
+                    ++it;
+                }
+            }
             SharedWorkSet::instance()->remove(m);
         }
         {
@@ -4486,8 +4497,24 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             if (new_value.asInteger(new_delay) &&
                 state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
 #ifndef EC_SIMULATOR
+#ifdef USE_KERNEL_ETHERCAT
+                // iod-elc: lock-at-activate helper (ignore live retune after arm).
                 ECInterface::instance()->applyCyclePeriodUs(
                     static_cast<unsigned long>(new_delay > 0 ? new_delay : 100));
+#elif defined(USE_ETHERCAT)
+                // Legacy iod / iod_sdo: no applyCyclePeriodUs — ecat thread
+                // picks up get_cycle_time() via checkAndUpdateCycleDelay().
+                {
+                    unsigned long period_us =
+                        static_cast<unsigned long>(new_delay > 0 ? new_delay : 100);
+                    if (period_us < 100) {
+                        period_us = 100;
+                    }
+                    set_cycle_time(period_us);
+                    ECInterface::FREQUENCY =
+                        static_cast<unsigned int>(1000000UL / period_us);
+                }
+#endif
 #endif
                 was_changed = true;
             }
