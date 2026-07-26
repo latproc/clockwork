@@ -62,7 +62,7 @@ emit work does not get lost.
 
 **Risk:** Medium on elc. Details: `iod/IDLE_CPU_FIXES.md`.
 
-**Status:** Planned.
+**Status:** Partial on elc — cherry-picked usleep, scheduler 10 ms floor, pending-out clear, keep-alive 50 ms. Full ProcessingThread urgency/absorb (d6312cc2) deferred (conflicts with elc quiet path; needs hand-merge).
 
 ---
 
