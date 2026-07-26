@@ -214,15 +214,18 @@ bool SubscriptionManager::requestChannel() {
          setupStatus() == SubscriptionManager::e_connected) &&
         !monit_setup->disconnected()) {
         int error_count = 0;
+        // Elapsed time is now - send_time (not send_time - now: that underflows
+        // to ~2^64 when the request is in the past and floods "waited: 18446…").
         if (!smi->sent_request ||
-            smi->send_time - now > SubscriptionManagerInternals::channel_request_timeout) {
+            now - smi->send_time > SubscriptionManagerInternals::channel_request_timeout) {
             try {
                 zmq::message_t m;
                 if (!setup().recv(&m, ZMQ_DONTWAIT)) {
                     if (smi->sent_request) {
                         FileLogger fl(program_name);
                         fl.f() << channel_name
-                               << " response timed out; waited: " << (smi->send_time - now) << "\n"
+                               << " response timed out; waited: " << (now - smi->send_time)
+                               << "\n"
                                << std::flush;
                         return false;
                     }
