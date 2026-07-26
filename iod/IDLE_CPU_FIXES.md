@@ -127,10 +127,13 @@ Commits are intentionally small; this section maps theme → behaviour.
 
 ### 4.2 Scheduler wake floor (`Scheduler.cpp`)
 
-- Before signalling CW that scheduled work is ready, enforce **≥ 2 ms** since
-  the last signal (aligned with POINTSSTARTUP 1 kHz cycle; was 10 ms).
+- Before signalling CW that scheduled work is ready, enforce a floor derived
+  from **live SYSTEM settings**: `min_signal ≈ 2 × SYSTEM.POLLING_DELAY`
+  (fallback `2 × CYCLE_DELAY`, then 2000 µs). Clamp [500, 20000] µs.
+  POINTSSTARTUP (`POLLING_DELAY:=1000`) → ~2 ms; idle 2000 → ~4 ms.
 - When the batch runs, all ready TIMER items still drain in `e_running`.
 - Digital IO does **not** use this path.
+- Processing `stable_check` / quiet pull use the same POLLING_DELAY base.
 
 ### 4.2b Startup ENABLE storms
 

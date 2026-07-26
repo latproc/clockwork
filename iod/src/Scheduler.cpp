@@ -25,6 +25,7 @@
 #include "MessageLog.h"
 #include "MessagingInterface.h"
 #include "ProcessingThread.h"
+#include "clockwork.h"
 #include "watchdog.h"
 #include <assert.h>
 #include <boost/chrono.hpp>
@@ -441,14 +442,37 @@ void Scheduler::idle() {
 
         if (state == e_waiting && is_ready) {
             // Batch CW wakeups: TIMER storms used to poke processing at hundreds
-            // of Hz. Floor inter-signal gap at 2 ms (matches POINTSSTARTUP 1 kHz
-            // cycle without 10 ms soft timers). TIMER items still drain in
-            // e_running as soon as the batch runs.
+            // of Hz. Floor inter-signal gap from SYSTEM settings (live):
+            //   min_signal ≈ 2 × SYSTEM.POLLING_DELAY
+            // so POINTSSTARTUP (POLLING_DELAY:=1000) → ~2 ms, idle 2000 → ~4 ms.
+            // Falls back to 2 × CYCLE_DELAY, then 2000 µs. Clamp [500, 20000].
+            // TIMER items still drain in e_running as soon as the batch runs.
             // Scheduler::add() interrupts sleep for sooner items — wait to an
             // absolute deadline in short chunks so interrupts cannot defeat the
             // floor. Digital IO does not use this path.
             static uint64_t last_sched_signal_us = 0;
-            const uint64_t min_signal_us = 2000;
+            uint64_t min_signal_us = 2000;
+            if (MachineInstance::polling_delay &&
+                MachineInstance::polling_delay->kind == Value::t_integer &&
+                MachineInstance::polling_delay->iValue >= 100) {
+                min_signal_us =
+                    static_cast<uint64_t>(MachineInstance::polling_delay->iValue) * 2;
+            }
+            else if (ClockworkInterpreter::instance() &&
+                     ClockworkInterpreter::instance()->cycle_delay &&
+                     ClockworkInterpreter::instance()->cycle_delay->kind ==
+                         Value::t_integer &&
+                     ClockworkInterpreter::instance()->cycle_delay->iValue >= 100) {
+                min_signal_us = static_cast<uint64_t>(
+                                    ClockworkInterpreter::instance()->cycle_delay->iValue) *
+                                2;
+            }
+            if (min_signal_us < 500) {
+                min_signal_us = 500;
+            }
+            if (min_signal_us > 20000) {
+                min_signal_us = 20000;
+            }
             if (last_sched_signal_us != 0) {
                 const uint64_t deadline = last_sched_signal_us + min_signal_us;
                 while (state != e_aborted && microsecs() < deadline) {

@@ -125,13 +125,13 @@ thrash 0, quiet loops/s single-digit to ~30.
 
 **Risk:** Medium–high if LSB noise storms CW — tolerance mandatory.
 
-**Status:** Partial on elc —
-- ANALOGINPUT: on filtered VALUE change (all filter modes tolerance-gated),
-  `properties.add` + owner `setNeedsCheck`/`activate` (not full `setValue`
-  notifyDependents — that pinned ~100 loops/s on plant).
-- `MachineInstance::setValue(VALUE)` skips process-image write for DirInput.
-- COUNTER: still silent property rewrite (encoders would storm); needs rate policy.
-- Track D still blocked.
+**Status:** Partial → advancing —
+- ANALOGINPUT: properties always on filtered change; CW wake (owner activate +
+  `notifyDependents`) rate-limited to `20 × SYSTEM.POLLING_DELAY` (clamp 20–200 ms).
+- COUNTER: properties only (encoders too hot for activate even rate-limited).
+- `setValue(VALUE)` skips process-image write for DirInput.
+- Scheduler floor / stable pace / quiet pull base track SYSTEM.POLLING_DELAY (×2).
+- Track D still blocked until plant CLOCKEDANALOGINPUT inventory.
 
 ---
 

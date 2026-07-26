@@ -1062,21 +1062,37 @@ void ProcessingThread::operator()() {
             const bool paced_only =
                 !urgent_work && (stable_pending || exec_only_waiting);
             // Stable-state / waiting-exec recheck interval (µs).
-            // 2 ms ≈ 2× POINTSSTARTUP cycle (1 ms); far below old 10 ms soft lag.
-            const uint64_t stable_check_us = 2000;
+            // Track SYSTEM.POLLING_DELAY (≈ internals->cycle_delay): 2× poll so
+            // POINTSSTARTUP (1 ms) → 2 ms, idle 2 ms poll → 4 ms. Not fixed 2 ms.
+            uint64_t stable_check_us =
+                static_cast<uint64_t>(internals->cycle_delay > 100
+                                          ? internals->cycle_delay
+                                          : 100) *
+                2;
+            if (stable_check_us < 500) {
+                stable_check_us = 500;
+            }
+            if (stable_check_us > 20000) {
+                stable_check_us = 20000;
+            }
 
             // Analog-only pace for ecat pull_due (LIST/PID/plugins). Digital
             // POINT edges bypass this in ecat_thread (push every bus cycle).
-            // Quiet 5 ms when no io_urgent; busy = CYCLE_DELAY (1 ms when
-            // POINTS on). Waiting SetState must not pin busy forever.
+            // Quiet ≥ max(5 ms, 2× POLLING_DELAY); busy = POLLING_DELAY.
+            // Waiting SetState must not pin busy forever.
             {
                 static bool slow_ec_pull = false;
                 const unsigned long busy_pull =
                     static_cast<unsigned long>(internals->cycle_delay > 100
                                                    ? internals->cycle_delay
                                                    : 100);
-                const unsigned long quiet_pull =
-                    busy_pull > 5000UL ? busy_pull : 5000UL;
+                unsigned long quiet_pull = busy_pull * 2;
+                if (quiet_pull < 5000UL) {
+                    quiet_pull = 5000UL;
+                }
+                if (quiet_pull < busy_pull) {
+                    quiet_pull = busy_pull;
+                }
                 if (!io_urgent && !slow_ec_pull) {
                     set_polling_time(quiet_pull);
                     slow_ec_pull = true;

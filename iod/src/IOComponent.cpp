@@ -707,6 +707,28 @@ unsigned char mem[1000];
 
 int64_t IOComponent::filter(int64_t val) { return val; }
 
+namespace {
+// Min gap between CW wakes from continuous analog IO (µs). Tied to
+// SYSTEM.POLLING_DELAY (×20): POINTS on (1 ms) → 20 ms, idle 2 ms → 40 ms.
+// Clamped [20 ms, 200 ms]. Properties still update every filtered change;
+// activate/notifyDependents share this floor so fan-out cannot free-run.
+uint64_t dependentNotifyMinUs() {
+    uint64_t us = 40000;
+    if (MachineInstance::polling_delay &&
+        MachineInstance::polling_delay->kind == Value::t_integer &&
+        MachineInstance::polling_delay->iValue >= 100) {
+        us = static_cast<uint64_t>(MachineInstance::polling_delay->iValue) * 20;
+    }
+    if (us < 20000) {
+        us = 20000;
+    }
+    if (us > 200000) {
+        us = 200000;
+    }
+    return us;
+}
+} // namespace
+
 class InputFilterSettings {
   public:
     bool property_changed;
@@ -714,6 +736,7 @@ class InputFilterSettings {
     double last_sent;    // this is the value to send unless the read value moves away from the mean
     double prev_sent;    // this is previous value of last_sent
     uint64_t last_time;  // the last time we calculated speed;_
+    uint64_t last_dep_notify_us; // rate-limit notifyDependents
     uint16_t buffer_len; // the maximum length of the circular buffer
     const int64_t
         *tolerance; // some filters use a tolerance settable by the user in the "tolerance" property
@@ -749,12 +772,13 @@ class InputFilterSettings {
 
     InputFilterSettings()
         : property_changed(true), positions(0), last_sent(0.0), prev_sent(0.0), last_time(0),
-          buffer_len(200), tolerance(&default_tolerance), filter_c_coeff(0), filter_d_coeff(0),
-          filter_len(&default_filter_len), filter_type(0), calc_dt(&default_calc_dt),
-          calc_d2t(&default_calc_d2t), calc_stddev(&default_calc_stddev),
-          position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
-          speed(0.0), speed_scale(1.0), accel(0.0), accel_scale(1.0), speeds(4), rate_len(4),
-          input_bwf(0), vel_bwf(0), accel_bwf(0), throttle(0) {
+          last_dep_notify_us(0), buffer_len(200), tolerance(&default_tolerance), filter_c_coeff(0),
+          filter_d_coeff(0), filter_len(&default_filter_len), filter_type(0),
+          calc_dt(&default_calc_dt), calc_d2t(&default_calc_d2t),
+          calc_stddev(&default_calc_stddev), position_history(&default_position_history),
+          speed_tolerance(&default_speed_tolerance), speed(0.0), speed_scale(1.0), accel(0.0),
+          accel_scale(1.0), speeds(4), rate_len(4), input_bwf(0), vel_bwf(0), accel_bwf(0),
+          throttle(0) {
 
         //double bw_c[] = { 0.000003756838020,0.000011270514059,0.000011270514059,0.000003756838020 };
         //double bw_d[] = { 1.000000000000,-2.937170728450,2.876299723479,-0.939098940325 };
@@ -1059,20 +1083,28 @@ int64_t AnalogueInput::filter(int64_t raw) {
         return config->last_sent;
     }
 
+    // Properties always track filtered VALUE. CW wake (owner + dependents)
+    // is rate-limited from SYSTEM.POLLING_DELAY so many analogs cannot pin
+    // the outer loop; latest VALUE is already on the machine for any poller.
+    const uint64_t now_us = microsecs();
+    const bool wake_cw =
+        (config->last_dep_notify_us == 0 ||
+         now_us - config->last_dep_notify_us >= dependentNotifyMinUs());
+    if (wake_cw) {
+        config->last_dep_notify_us = now_us;
+    }
+
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
         o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
-        // On filtered change: publish VALUE and wake the owner for WHEN/stable
-        // recheck (CLOCKEDANALOGINPUT / SELF WHEN). Do NOT notifyDependents here —
-        // plant has wide analog fan-out and full cascade pins ~100 outer loops/s.
-        // Machines that depend on this VALUE should use timer/IOTIME sampling or
-        // be in the owner's stable-state WHEN path. Track C step 2 may add a
-        // rate-limited dependent notify.
         o->properties.add("VALUE", static_cast<int64_t>(config->last_sent),
                           SymbolTable::ST_REPLACE);
-        o->setNeedsCheck();
-        ProcessingThread::activate(o);
+        if (wake_cw) {
+            o->setNeedsCheck();
+            ProcessingThread::activate(o);
+            o->notifyDependents();
+        }
         if (*config->calc_stddev) {
             o->properties.add("stddev", bufferStddev(config->positions, 5),
                               SymbolTable::ST_REPLACE);
@@ -1105,6 +1137,7 @@ class CounterInternals {
     int64_t last_sent;  // this is the value to send unless the read value moves away from the mean
     int64_t prev_sent;  // this is the value to send unless the read value moves away from the mean
     uint64_t last_time; // the last time we calculated speed;_
+    uint64_t last_dep_notify_us; // rate-limit owner activate + notifyDependents
     static int64_t default_tolerance;
     static int64_t default_filter_len;
     static int64_t default_position_history;
@@ -1118,8 +1151,8 @@ class CounterInternals {
     CounterInternals()
         : positions(0), tolerance(&default_tolerance), filter_len(&default_filter_len),
           position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
-          input_scale(&default_input_scale), last_sent(0), prev_sent(0), last_time(0), speed(0),
-          buffer_len(200), speeds(4), rate_len(4) {
+          input_scale(&default_input_scale), last_sent(0), prev_sent(0), last_time(0),
+          last_dep_notify_us(0), speed(0), buffer_len(200), speeds(4), rate_len(4) {
         positions = createBuffer(buffer_len);
     }
 
@@ -1256,15 +1289,16 @@ int64_t Counter::filter(int64_t val) {
         return internals->last_sent;
     }
 
+    // Always update properties. Continuous encoders change every sample;
+    // even rate-limited activate across many COUNTERs re-pins ~100 loops/s.
+    // RATEESTIMATOR / CLOCKED wrappers poll Position on their own schedule.
+    // (last_dep_notify_us reserved if a plant opts into wake later.)
+    (void)internals->last_dep_notify_us;
     std::list<MachineInstance *>::iterator owners_iter = owners.begin();
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
         o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
                           SymbolTable::ST_REPLACE);
-        // Keep silent properties.add for COUNTER. Continuous encoders at
-        // tolerance=1 would notify every count and pin ~100 outer loops/s.
-        // ANALOGINPUT uses setValue (tolerance-gated). COUNTER on-change notify
-        // needs a separate rate/tolerance policy before enabling.
         o->properties.add("VALUE", static_cast<int64_t>(scaled_val), SymbolTable::ST_REPLACE);
         o->properties.add("Position", internals->last_sent, SymbolTable::ST_REPLACE);
         o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
