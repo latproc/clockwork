@@ -1046,26 +1046,23 @@ void Channel::checkStateChange(std::string event) {
             setState(ChannelImplementation::UPLOADING);
         }
         else if (current_state == ChannelImplementation::ACTIVE && event == "status") {
-            // Reconnecting client is re-requesting the handshake. Do not ignore:
-            // ignoring leaves the client stuck in DOWNLOADING forever.
-            pending_client_status_ = false;
-            snprintf(buf, sizeof(buf),
-                     "Channel %s: ACTIVE received 'status'; re-entering UPLOADING",
-                     channel_name.c_str());
-            MessageLog::instance()->add(buf);
-            DBG_CHANNELS << buf << "\n";
-            setState(ChannelImplementation::UPLOADING);
+            // Ignore late/duplicate status while ACTIVE. Re-entering UPLOADING on every
+            // client retry stacked SyncRemoteStates and could regress ACTIVE→DOWNLOADING.
+            // Fresh reconnects go DISCONNECTED→WAITSTART and accept status there.
+            {
+                FileLogger fl(program_name);
+                fl.f() << channel_name << " ignoring " << event << " while active\n";
+                DBG_CHANNELS << channel_name << " ignoring " << event << " while active\n";
+            }
         }
         else if (current_state == ChannelImplementation::UPLOADING) {
-            // "done" completes server upload; stray "status" while uploading
-            // should re-drive sync rather than jump to ACTIVE.
             if (event == "status") {
+                // Already uploading; do not restart sync (retries would thrash).
                 pending_client_status_ = false;
                 snprintf(buf, sizeof(buf),
-                         "Channel %s: UPLOADING received 'status'; restarting sync",
+                         "Channel %s: ignoring duplicate 'status' while UPLOADING",
                          channel_name.c_str());
                 MessageLog::instance()->add(buf);
-                setState(ChannelImplementation::UPLOADING);
             }
             else {
                 setState(ChannelImplementation::ACTIVE);
@@ -1073,7 +1070,8 @@ void Channel::checkStateChange(std::string event) {
         }
         else if (current_state == ChannelImplementation::DOWNLOADING) {
             if (event == "status") {
-                // Client still waiting; re-send done instead of abandoning handshake.
+                // Client still in handshake (or already ACTIVE and retrying late).
+                // Re-send done and finish server side so we cannot stick in DOWNLOADING.
                 if (cmd_client) {
                     MessageHeader mh(MessageHeader::SOCK_CTRL, MessageHeader::SOCK_CTRL, false);
                     mh.start_time = microsecs();
@@ -1085,6 +1083,7 @@ void Channel::checkStateChange(std::string event) {
                     MessageLog::instance()->add(buf);
                     safeSend(*cmd_client, "done", 4, mh);
                 }
+                setState(ChannelImplementation::ACTIVE);
             }
             else {
                 setState(ChannelImplementation::ACTIVE);
