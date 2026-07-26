@@ -1251,12 +1251,11 @@ void Channel::operator()() {
     long poll_timeout = 1;
     while (!aborted && communications_manager) {
         try {
-
-            if (!communications_manager->checkConnections()) {
-                usleep(50000);
-                continue;
-            }
-
+            // Keep sockets moving even when the connection monitor is briefly
+            // unhappy: previously checkConnections()==false skipped router.poll()
+            // and CTRL handling entirely, so inbound "status" piled up in TCP
+            // Recv-Q while WAITSTART never advanced.
+            const bool links_up = communications_manager->checkConnections();
             internals->router.poll();
 
             // clients have a socket to setup the channel, servers do not need it
@@ -1269,7 +1268,7 @@ void Channel::operator()() {
 
                 items = new zmq::pollitem_t[2];
                 int idx = 0;
-                if (isClient()) {
+                if (isClient() && links_up) {
                     items[idx].socket = (void *)communications_manager->setup();
                     items[idx].events = ZMQ_POLLIN;
                     items[idx].revents = 0;
@@ -1287,7 +1286,10 @@ void Channel::operator()() {
             try {
                 int rc = zmq::poll(items, num_poll_items, poll_timeout);
                 if (rc == 0) {
-                    poll_timeout = 20;
+                    poll_timeout = links_up ? 20 : 50;
+                    if (!links_up) {
+                        usleep(20000);
+                    }
                     continue;
                 }
                 else {
