@@ -212,6 +212,10 @@ class SubscriptionManager : public ConnectionManager {
 
     bool requestChannel();
 
+    // After CHANNEL setup timeout/disconnect: clear sent_request and recover
+    // the ZMQ REQ FSM (drain late reply or recreate the setup socket).
+    void resetChannelRequestState(bool recreate_setup_socket);
+
     void configureSetupConnection(const char *host, int port);
 
     bool setupConnections();

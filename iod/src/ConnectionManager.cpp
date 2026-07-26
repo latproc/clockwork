@@ -23,6 +23,7 @@
 #include "MessagingInterface.h"
 #include "cJSON.h"
 #include <assert.h>
+#include <boost/thread.hpp>
 #include <exception>
 #include <iostream>
 #include <map>
@@ -205,6 +206,99 @@ int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
     return ++idx;
 }
 
+void SubscriptionManager::resetChannelRequestState(bool recreate_setup_socket) {
+    assert(isClient());
+    SubscriptionManagerInternals *smi = dynamic_cast<SubscriptionManagerInternals *>(internals);
+    if (!smi) {
+        return;
+    }
+
+    // Drain a late reply so a plain REQ can send again when possible.
+    if (setup_ && !recreate_setup_socket) {
+        try {
+            zmq::message_t late;
+            while (setup().recv(&late, ZMQ_DONTWAIT)) {
+                FileLogger fl(program_name);
+                fl.f() << channel_name << " drained late CHANNEL reply (" << late.size()
+                       << " bytes)\n"
+                       << std::flush;
+            }
+        }
+        catch (const zmq::error_t &) {
+            // ignore — socket may already be mid-error; recreate path below
+            recreate_setup_socket = true;
+        }
+    }
+
+    smi->sent_request = false;
+    smi->send_time = 0;
+
+    if (!recreate_setup_socket) {
+        return;
+    }
+
+    // ZMQ REQ is half-open until a reply arrives; after timeout/EFSM the only
+    // reliable recovery is a new socket + reconnect (monitor must follow).
+    {
+        FileLogger fl(program_name);
+        fl.f() << channel_name << " recreating setup REQ socket for CHANNEL recovery\n"
+               << std::flush;
+    }
+    try {
+        // Capture endpoint before tearing down the monitor/socket.
+        std::string endpoint;
+        if (monit_setup) {
+            endpoint = monit_setup->endPoint();
+        }
+        if (endpoint.empty() && !subscriber_host.empty() && setup_port > 0) {
+            char url[100];
+            snprintf(url, 100, "tcp://%s:%d", subscriber_host.c_str(), setup_port);
+            endpoint = url;
+        }
+
+        if (monit_setup) {
+            monit_setup->abort();
+        }
+        int linger = 0;
+        if (setup_) {
+            try {
+                setup_->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+            }
+            catch (const zmq::error_t &) {
+            }
+            delete setup_;
+            setup_ = 0;
+        }
+        delete monit_setup;
+        monit_setup = 0;
+
+        setup_ = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+        monit_setup = new SingleConnectionMonitor(*setup_);
+        boost::thread setup_monitor(boost::ref(*monit_setup));
+
+        current_channel = "";
+        if (!endpoint.empty()) {
+            int counter = 5;
+            while (counter-- > 0 && !monit_setup->active()) {
+                usleep(100);
+            }
+            setup().connect(endpoint.c_str());
+            monit_setup->setEndPoint(endpoint.c_str());
+            setSetupStatus(SubscriptionManager::e_waiting_connect);
+        }
+        else {
+            setSetupStatus(SubscriptionManager::e_startup);
+        }
+    }
+    catch (const zmq::error_t &ex) {
+        FileLogger fl(program_name);
+        fl.f() << channel_name << " setup REQ recreate failed: " << zmq_strerror(zmq_errno())
+               << "\n"
+               << std::flush;
+        setSetupStatus(SubscriptionManager::e_error);
+    }
+}
+
 bool SubscriptionManager::requestChannel() {
     SubscriptionManagerInternals *smi = dynamic_cast<SubscriptionManagerInternals *>(internals);
     size_t len = 0;
@@ -216,35 +310,45 @@ bool SubscriptionManager::requestChannel() {
         int error_count = 0;
         // Elapsed time is now - send_time (not send_time - now: that underflows
         // to ~2^64 when the request is in the past and floods "waited: 18446…").
-        if (!smi->sent_request ||
-            now - smi->send_time > SubscriptionManagerInternals::channel_request_timeout) {
-            try {
-                zmq::message_t m;
-                if (!setup().recv(&m, ZMQ_DONTWAIT)) {
-                    if (smi->sent_request) {
+        const bool request_timed_out =
+            smi->sent_request &&
+            (now - smi->send_time > SubscriptionManagerInternals::channel_request_timeout);
+        if (!smi->sent_request || request_timed_out) {
+            if (request_timed_out) {
+                FileLogger fl(program_name);
+                fl.f() << channel_name
+                       << " response timed out; waited: " << (now - smi->send_time) << "\n"
+                       << std::flush;
+                // Clear stuck REQ: drain if possible, else new socket, then resend.
+                resetChannelRequestState(true);
+            }
+            else {
+                // First attempt (or after a clean reset): discard any unexpected
+                // buffered traffic without treating it as a timeout.
+                try {
+                    zmq::message_t m;
+                    if (setup().recv(&m, ZMQ_DONTWAIT)) {
+                        long mlen = m.size();
+                        const char *data = static_cast<const char *>(m.data());
+                        std::string unexpected(data, data + mlen);
                         FileLogger fl(program_name);
-                        fl.f() << channel_name
-                               << " response timed out; waited: " << (now - smi->send_time)
-                               << "\n"
+                        fl.f() << channel_name << " got unexpected: " << unexpected << "\n"
                                << std::flush;
-                        return false;
                     }
                 }
-                else {
-                    long len = m.size();
-                    const char* data = static_cast<const char*>(m.data());
-                    std::string unexpected(data, data + len);
-                    FileLogger fl(program_name);
-                    fl.f() << channel_name << " got unexpected: " << unexpected << "\n" << std::flush;
-                }
-            }
-            catch (const zmq::error_t &ex) {
-                {
+                catch (const zmq::error_t &ex) {
                     FileLogger fl(program_name);
                     fl.f() << channel_name << " exception " << zmq_errno() << " "
                            << zmq_strerror(zmq_errno()) << " checking for setup data\n"
                            << std::flush;
                 }
+            }
+
+            // After timeout recovery, setup may still be reconnecting.
+            if (monit_setup->disconnected() ||
+                (setupStatus() != SubscriptionManager::e_waiting_connect &&
+                 setupStatus() != SubscriptionManager::e_connected)) {
+                return false;
             }
 
             DBG_CHANNELS << "Requesting channel " << channel_name
@@ -255,7 +359,7 @@ bool SubscriptionManager::requestChannel() {
                 safeSend(setup(), channel_setup.c_str(), channel_setup.size());
                 setSetupStatus(SubscriptionManager::e_waiting_setup);
                 smi->sent_request = true;
-                smi->send_time = now;
+                smi->send_time = microsecs();
             }
             catch (const zmq::error_t &ex) {
                 ++error_count;
@@ -266,19 +370,17 @@ bool SubscriptionManager::requestChannel() {
                            << std::flush;
                 }
                 if (zmq_errno() == ETIMEDOUT) {
-                    // TBD. need propery recovery from this...
-                    //exit(zmq_errno());
-                    smi->sent_request = false;
+                    resetChannelRequestState(true);
                     return false;
                 }
                 if (zmq_errno() == EFSM /*EFSM*/ || STATE_ERROR == zmq_strerror(zmq_errno())) {
                     {
                         FileLogger fl(program_name);
-                        fl.f() << channel_name << " attempting recovery requesting channels\n"
+                        fl.f() << channel_name
+                               << " EFSM on CHANNEL send — recreating setup REQ\n"
                                << std::flush;
                     }
-                    zmq::message_t m;
-                    setup().recv(&m, ZMQ_DONTWAIT);
+                    resetChannelRequestState(true);
                     return false;
                 }
             }
@@ -480,6 +582,17 @@ void SubscriptionManager::setSetupStatus(Status new_status) {
         FileLogger fl(program_name);
         fl.f() << "setup status " << _setup_status << " -> " << new_status << "\n" << std::flush;
         state_start = microsecs();
+        // Leaving a mid-CHANNEL request without a reply: clear REQ bookkeeping so
+        // the next connect cycle can send again (socket recreate only when needed).
+        if (new_status == e_startup || new_status == e_disconnected || new_status == e_error ||
+            new_status == e_waiting_connect) {
+            SubscriptionManagerInternals *smi =
+                dynamic_cast<SubscriptionManagerInternals *>(internals);
+            if (smi && smi->sent_request) {
+                smi->sent_request = false;
+                smi->send_time = 0;
+            }
+        }
         _setup_status = new_status;
     }
 }
@@ -887,6 +1000,10 @@ bool SubscriptionManager::checkConnections() {
                        << ". aborting\n";
             }
             usleep(5);
+            // Full REQ recovery: long-lived wait_setup with no reply is the sticky case.
+            if (setupStatus() == e_waiting_setup || setupStatus() == e_waiting_connect) {
+                resetChannelRequestState(true);
+            }
             if (setupStatus() == e_error) {
                 SubscriptionManager::Status next_status =
                     monit_setup->disconnected() ? e_startup : e_connected;
@@ -898,12 +1015,15 @@ bool SubscriptionManager::checkConnections() {
         }
 #endif
         if (monit_setup->disconnected() && monit_subs.disconnected()) {
+            resetChannelRequestState(false);
             return false;
         }
     }
     if (monit_setup->disconnected()) {
         FileLogger fl(program_name);
         fl.f() << "SubscriptionManager disconnected from server clockwork\n";
+        // TCP drop leaves REQ half-open until the socket is replaced.
+        resetChannelRequestState(true);
         usleep(100);
         return false;
     }
