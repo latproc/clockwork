@@ -78,7 +78,47 @@ class ProcessingThread : public ClockworkProcessManager {
 
     void join();
 
+    /** Last once-per-second processing snapshot (always updated; PROCSNAP only prints it).
+     *  Queue depths are high-water marks over the second — end-of-loop instant is often 0
+     *  after work is drained. */
+    struct ProcSnap {
+        uint64_t at_us = 0;         // when snapshot was taken
+        uint64_t loops_per_sec = 0;
+        uint64_t loops_with_work = 0; // iterations that saw urgent/stable work
+        unsigned cycle_delay_us = 0;
+        // Peak (high-water) over the last second
+        size_t runnable = 0;
+        size_t stable = 0;
+        size_t exec = 0;
+        size_t mail = 0;
+        size_t events = 0;
+        size_t pend_ev = 0;
+        // Instant sample at report time (usually quiet)
+        size_t now_runnable = 0;
+        size_t now_stable = 0;
+        size_t now_exec = 0;
+        size_t now_mail = 0;
+        size_t now_events = 0;
+        size_t now_pend_ev = 0;
+        bool valid = false;
+    };
+    static ProcSnap lastProcSnap();
+    /** Update high-water marks while already holding runnable_mutex (or from activate). */
+    static void noteRunnablePeaks(size_t runnable, size_t stable, size_t exec, size_t mail,
+                                  size_t events, size_t pend_ev);
+
   private:
+    static void storeProcSnap(const ProcSnap &s);
+    static boost::mutex proc_snap_mutex_;
+    static ProcSnap last_proc_snap_;
+    // Peaks for the current 1s window (updated under proc_snap_mutex_ or briefly).
+    static size_t peak_runnable_;
+    static size_t peak_stable_;
+    static size_t peak_exec_;
+    static size_t peak_mail_;
+    static size_t peak_events_;
+    static size_t peak_pend_ev_;
+    static uint64_t loops_with_work_;
     static ProcessingThread *instance_;
     ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator,
                      IODCommandThread &cmd_interface, SharedThreadSafeQueue<Package*> &message_queue,

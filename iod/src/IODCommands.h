@@ -168,6 +168,21 @@ struct IODCommandBusy : public IODCommand {
     bool run(std::vector<Value> &params);
 };
 
+/** On-demand scan for WHEN-clause state thrash (iosh: SHOW CYCLING). Not continuous. */
+struct IODCommandCycling : public IODCommand {
+    bool run(std::vector<Value> &params);
+};
+
+/** One-line plant health: last PROCSNAP + fast thrash count (iosh startup). */
+struct IODCommandHealth : public IODCommand {
+    bool run(std::vector<Value> &params);
+};
+
+/** Last once-per-second processing snapshot (always stored). */
+struct IODCommandProcSnap : public IODCommand {
+    bool run(std::vector<Value> &params);
+};
+
 struct IODCommandFind : public IODCommand {
     bool run(std::vector<Value> &params);
 };

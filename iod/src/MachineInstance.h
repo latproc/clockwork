@@ -85,6 +85,28 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     };
     static constexpr size_t STATE_HISTORY_SIZE = 8;
 
+    /** Summary of recent completed state visits (from state_history).
+     *  Flags continuous fast thrash only — not "long stable + brief test hop". */
+    struct StateThrashInfo {
+        size_t history_count = 0;
+        size_t short_holds = 0;     // holds shorter than short_hold_us
+        uint64_t min_hold_us = 0;
+        uint64_t max_hold_us = 0;
+        uint64_t avg_hold_us = 0;
+        uint64_t span_us = 0;       // oldest enter → newest leave (ring wall clock)
+        uint64_t current_dwell_us = 0; // time in current state so far
+        double transitions_per_sec = 0.0;
+        bool thrashing = false;     // continuous rapid flip-flop
+        std::string path;           // e.g. a -> b -> a -> b (oldest to newest)
+    };
+    /** On-demand only (DESCRIBE / SHOW CYCLING) — not used in the processing loop.
+     *  short_hold_us: hold shorter than this counts as "short" (default 50ms).
+     *  min_short: need at least this many short holds AND almost-all-short fraction.
+     *  want_path: build path string only when thrashing (cheap when scanning plant).
+     *  Cost is O(STATE_HISTORY_SIZE) ≈ 8. */
+    StateThrashInfo analyseStateThrash(uint64_t short_hold_us = 50000, size_t min_short = 5,
+                                       bool want_path = true) const;
+
   protected:
     MachineInstance(InstanceType instance_type = MACHINE_INSTANCE);
     MachineInstance(CStringHolder name, const char *type,

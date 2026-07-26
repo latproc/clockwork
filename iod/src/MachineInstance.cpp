@@ -958,6 +958,20 @@ void MachineInstance::describe(std::ostream &out) {
     const Value *current_timer_val = getTimerVal();
     out << "Timer: " << *current_timer_val << "\n";
     if (state_history_count > 0) {
+        const StateThrashInfo thrash = analyseStateThrash();
+        if (thrash.thrashing) {
+            out << "*** FAST STATE THRASH (continuous; likely bad WHEN / competing stables) ***\n"
+                << "  " << thrash.short_holds << "/" << thrash.history_count
+                << " holds short; avg ";
+            simple_deltat(out, (int64_t)thrash.avg_hold_us);
+            out << " max ";
+            simple_deltat(out, (int64_t)thrash.max_hold_us);
+            out << " ring ";
+            simple_deltat(out, (int64_t)thrash.span_us);
+            out << " (~" << thrash.transitions_per_sec << "/s)\n"
+                << "  path: " << thrash.path << "\n"
+                << "  tip: SHOW CYCLING; plant-wide fast thrash only (ignores long-stable+brief hop)\n";
+        }
         uint64_t now = microsecs();
         out << "Recent states (most recent first):\n";
         for (size_t i = 0; i < state_history_count; ++i) {
@@ -1947,6 +1961,97 @@ void MachineInstance::pushStateHistory(const std::string &state_name, uint64_t e
     if (state_history_count < STATE_HISTORY_SIZE) {
         ++state_history_count;
     }
+}
+
+MachineInstance::StateThrashInfo
+MachineInstance::analyseStateThrash(uint64_t short_hold_us, size_t min_short,
+                                    bool want_path) const {
+    StateThrashInfo info;
+    info.history_count = state_history_count;
+    const uint64_t now = microsecs();
+    if (start_time > 0 && now > start_time) {
+        info.current_dwell_us = now - start_time;
+    }
+
+    // Need a full-ish ring of completed visits — true thrash fills the buffer.
+    if (state_history_count < 5) {
+        return info;
+    }
+
+    uint64_t sum_hold = 0;
+    uint64_t oldest_enter = 0;
+    uint64_t newest_leave = 0;
+    info.min_hold_us = ~0ULL;
+
+    for (size_t i = 0; i < state_history_count; ++i) {
+        size_t idx = (state_history_head + STATE_HISTORY_SIZE - state_history_count + i) %
+                     STATE_HISTORY_SIZE;
+        const StateHistoryEntry &e = state_history[idx];
+        const uint64_t hold = (e.left_at > e.entered_at) ? (e.left_at - e.entered_at) : 0;
+        sum_hold += hold;
+        if (hold < info.min_hold_us) {
+            info.min_hold_us = hold;
+        }
+        if (hold > info.max_hold_us) {
+            info.max_hold_us = hold;
+        }
+        if (hold < short_hold_us) {
+            ++info.short_holds;
+        }
+        if (oldest_enter == 0 || e.entered_at < oldest_enter) {
+            oldest_enter = e.entered_at;
+        }
+        if (e.left_at > newest_leave) {
+            newest_leave = e.left_at;
+        }
+    }
+    info.avg_hold_us = sum_hold / state_history_count;
+    if (info.min_hold_us == ~0ULL) {
+        info.min_hold_us = 0;
+    }
+    if (newest_leave > oldest_enter) {
+        info.span_us = newest_leave - oldest_enter;
+        info.transitions_per_sec =
+            (double)state_history_count * 1000000.0 / (double)info.span_us;
+    }
+
+    // Continuous fast thrash only. Do NOT flag long-stable machines that take
+    // an occasional short hop (CHANNELSTATUSLOCAL idle→update, scales getWeight,
+    // boot INIT sequences mixed with long dwells):
+    //   - almost every hold in the ring is short
+    //   - average and max hold are both short (no multi-second "stable" in ring)
+    //   - the whole ring was burned quickly (span)
+    //   - transition rate is high
+    const size_t almost_all =
+        (state_history_count * 3 + 3) / 4; // ceil(0.75 * n)
+    const bool almost_all_short =
+        info.short_holds >= almost_all && info.short_holds >= min_short;
+    const bool holds_uniformly_short =
+        info.avg_hold_us < short_hold_us &&
+        info.max_hold_us < short_hold_us * 4; // e.g. max < 200ms if short=50ms
+    const bool ring_burned_quickly =
+        info.span_us > 0 && info.span_us < 1000000ULL; // entire ring < 1s
+    const bool fast_enough = info.transitions_per_sec >= 10.0;
+    // Drop stale boot noise: sitting stably now means the ring is history only.
+    const bool still_thrashing_now = info.current_dwell_us < 500000ULL; // < 0.5s
+
+    info.thrashing = almost_all_short && holds_uniformly_short && ring_burned_quickly &&
+                     fast_enough && still_thrashing_now;
+
+    if (info.thrashing && want_path) {
+        std::string path;
+        path.reserve(state_history_count * 12);
+        for (size_t i = 0; i < state_history_count; ++i) {
+            size_t idx = (state_history_head + STATE_HISTORY_SIZE - state_history_count + i) %
+                         STATE_HISTORY_SIZE;
+            if (i > 0) {
+                path += " -> ";
+            }
+            path += state_history[idx].state_name;
+        }
+        info.path = std::move(path);
+    }
+    return info;
 }
 
 Action::Status MachineInstance::setState(const State &new_state, uint64_t authority, bool resume) {
