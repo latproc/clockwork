@@ -125,19 +125,15 @@ thrash 0, quiet loops/s single-digit to ~30.
 
 **Risk:** Medium–high if LSB noise storms CW — tolerance mandatory.
 
-**Status:** Split responsibility (load-safe):
+**Status:** Load-safe delivery (channel-style interest set):
 
 | Layer | Role |
 |-------|------|
-| **IA ANALOGINPUT / COUNTER** | Filter on throttle; publish **owner** `VALUE`/`raw`/`ENG` only. **No** `notifyDependents` / activate fan-out (that was the DIGITALVALUE-style storm). |
-| **A_* CLOCKED list** | **Who** sees eng updates: small `L_ClockedAnalogInputs` + `M_ClockedAnalogInputs` (`rate` + `G_CoreE24`) `SEND update` only to those machines. A_ recalculates eng from `IA.VALUE * factor + base`. |
+| **IA / COUNTER** | Filter; publish owner `VALUE`/`raw`/`ENG` (int VALUE). Then `notifyClockedUpdateConsumers()`: **SEND update only** to dependants that declare **RECEIVE update** (CLOCKED*). No full `notifyDependents`. |
+| **Plant list** | `L_ClockedAnalogInputs` + `M_ClockedAnalogInputs` (rate + `G_CoreE24`) still `SEND update` to the same A_* interest set (rate/guard poke). |
+| **Plugins** | Live int pointers on IA — no message needed. |
 
-**IA publish schedule** (owner properties only): startup once; change at
-`throttle`/`rate` + tolerance + eng `window`; safety every `safety_emit`;
-guard/`emit` flag like G_CoreE24.
-
-Plugins bind live int pointers on IA (`VALUE`/`raw`) — no CW message needed.
-HMI/eng consumers stay on A_* via the careful clock list (not full depends fan-out).
+A_ eng math unchanged: `VALUE = IA.VALUE * factor + base` inside `RECEIVE update`.
 
 ---
 

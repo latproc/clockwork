@@ -2390,6 +2390,25 @@ void MachineInstance::notifyDependents() {
     }
 }
 
+void MachineInstance::notifyClockedUpdateConsumers() {
+    // Only machines that declare RECEIVE update (CLOCKEDANALOGINPUT / CLOCKEDCOUTER*).
+    // Same interest filter idea as CHANNEL "MONITORS MACHINES LINKED TO …".
+    static Message update_msg("update");
+    for (MachineInstance *dep : depends) {
+        if (!dep || dep == this || !dep->enabled()) {
+            continue;
+        }
+        if (dep->receives_functions.find(update_msg) == dep->receives_functions.end()) {
+            continue;
+        }
+        if (dep->hasPending(update_msg)) {
+            continue; // do not flood mail queue
+        }
+        DBG_M_MESSAGING << _name << " clocked update -> " << dep->getName() << "\n";
+        sendMessageToReceiver(update_msg, dep, false);
+    }
+}
+
 void MachineInstance::notifyDependents(Message &msg) {
     std::set<MachineInstance *>::iterator dep_iter = depends.begin();
     while (dep_iter != depends.end()) {

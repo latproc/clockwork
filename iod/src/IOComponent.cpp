@@ -1184,11 +1184,12 @@ int64_t AnalogueInput::filter(int64_t raw) {
 
     // CW property publish policy (owner only — do NOT notifyDependents).
     //
-    // DIGITALVALUE/setValue-style fan-out woke every machine that depends on IA
-    // and pinned the plant. Non-critical eng consumers (A_*) stay on a small
-    // CLOCKING list: SEND update TO L_ClockedAnalogInputs only those machines
-    // recalculate factor/base/window. Plugins bind live int pointers on IA
-    // (VALUE/raw) and do not need a CW message storm.
+    // DIGITALVALUE-style notifyDependents woke every IA dependent and pinned
+    // the plant. Instead: publish owner properties, then
+    // notifyClockedUpdateConsumers() — SEND "update" only to machines that
+    // declare RECEIVE update (CLOCKEDANALOGINPUT / CLOCKEDCOUTER*). Plant
+    // L_ClockedAnalogInputs + M_ClockedAnalogInputs remain a rate/guard poke.
+    // Plugins bind live int pointers on IA (VALUE/raw).
     //
     // Publish schedule:
     //  1) once at startup
@@ -1264,6 +1265,8 @@ int64_t AnalogueInput::filter(int64_t raw) {
             o->properties.add("Acceleration", config->accel * config->accel_scale,
                               SymbolTable::ST_REPLACE);
         }
+        // Careful: only A_*/CLOCKED* with RECEIVE update (not whole depends tree).
+        o->notifyClockedUpdateConsumers();
     }
     config->last_emitted_raw = raw_val;
     config->last_emitted_eng = first_eng;
@@ -1543,6 +1546,7 @@ int64_t Counter::filter(int64_t val) {
                           SymbolTable::ST_REPLACE);
         o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
                           SymbolTable::ST_REPLACE);
+        o->notifyClockedUpdateConsumers();
     }
     internals->last_emitted_raw = raw_val;
     internals->last_emitted_eng = first_eng;

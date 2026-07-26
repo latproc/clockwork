@@ -234,6 +234,13 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     // forward the message to dependents and notify them to check their state
     void notifyDependents(Message &msg);
 
+    /**
+     * Careful fan-out for analog/counter property publish: SEND "update" only to
+     * dependants that declare RECEIVE update (CLOCKEDANALOGINPUT etc.). Does not
+     * setNeedsCheck the whole depends tree (DIGITALVALUE-style load).
+     */
+    void notifyClockedUpdateConsumers();
+
     bool needsCheck();
     void resetNeedsCheck();
     /** LIST only: default true. When false (property propagate_member_checks),
