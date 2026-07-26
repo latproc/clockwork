@@ -77,8 +77,10 @@ const char *EtherCATThread::ZMQ_Addr = "inproc://ecat_thread";
 static bool machine_was_ready = false;
 uint64_t next_ecat_receive = 0;
 
+// keep_alive is in µs. Must be ≫ bus period so idle keep-alive pings are rare.
+// Old default 4000 with period≈2000 forced need_ping every ~2 ms (500 Hz CW wake).
 EtherCATThread::EtherCATThread()
-    : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(4000), last_ping(0) {}
+    : status(e_collect), program_done(false), cycle_delay(1000), keep_alive(50000), last_ping(0) {}
 
 void EtherCATThread::setCycleDelay(long new_val) { cycle_delay = new_val; }
 
@@ -969,39 +971,68 @@ void EtherCATThread::operator()() {
             }
         }
 
-        // keep polling ethercat if we are not online but do not
-        // exchange clockwork machine state
+        // Bus cycles every period (CYCLE_DELAY). Clockwork is fed only when
+        // due (POLLING_DELAY via get_polling_time) and only when the domain
+        // changed, on first run, or on a rare keep-alive. Unchanged frames no
+        // longer always-wake CW (that locked processing at ~1/period).
+        // Digital bit changes still produce num_updates and push immediately
+        // on the next pull_due window; POINT event path is unchanged.
+        // ProcessingThread quiet path may stretch get_polling_time to ~5 ms
+        // while idle and restores POLLING_DELAY as soon as work appears.
         next_ecat_receive = microsecs() + period / 2;
+
+        // Always receive for master/domain health (legacy ecrt).
         ECInterface::instance()->receiveState();
+
+        // POLLING_DELAY (µs) → how often process data is offered to Clockwork.
+        // When equal to CYCLE_DELAY (common on this plant), pull_due every period
+        // while busy; plant-quiet stretch is applied by set_polling_time().
+        unsigned long pull_us = get_polling_time();
+        if (pull_us < 100) {
+            pull_us = 100;
+        }
+        static uint64_t last_cw_process_push = 0;
+        const bool pull_due = first_run || (now - last_cw_process_push >= pull_us);
 
         if (machine_is_ready && ECInterface::instance()->data.getProcessMask()) {
             global_clock = updateClock(global_clock);
-            if (status == e_collect) {
+
+            // Keep-alive: full interval since last CW ack (not keep_alive-period).
+            // Floor at 50 ms so idle never pings every bus cycle.
+            uint64_t ka_us = keep_alive;
+            if (ka_us < 50000) {
+                ka_us = 50000;
+            }
+            const bool need_ping =
+                keep_alive > 0 && last_ping != 0 && (now >= last_ping + ka_us);
+
+            // Collect only when a CW pull is due (or first run). Intermediate
+            // bus frames are not pushed to CW (latest sample wins on next pull).
+            if (status == e_collect && pull_due) {
                 DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state\n";
                 num_updates = ECInterface::instance()->collectState();
                 DBG_ETHERCAT_PACKETS << "Num updates from ecat_thread: " << num_updates << "\n";
-            }
+                // Advance pull clock even if nothing changed so we do not
+                // re-collect every bus cycle until the next POLLING_DELAY window.
+                last_cw_process_push = now;
 
-            // send all process domain data once the domain is operational
-            // check keep-alives on the clockwork communications channel
-            //   four periods: 4 * period / 1000 = period/250
-            bool need_ping =
-                keep_alive > 0 && (last_ping + keep_alive - period < now) ? true : false;
-
-            // if we have collected data from EtherCAT, send it to clockwork
-            if (status == e_collect && (first_run || num_updates || need_ping)) {
-                if (driver_state == s_driver_operational) {
-                    first_run = false;
-                }
-                need_ping = false;
-                int stage = sendMultiPart(sync_sock, global_clock);
+                // Push only when domain changed, first run, or keep-alive.
+                // Unchanged images: ANALOG/COUNTER IOTIME still advance via
+                // sampleRegularPolls on the CW side when a frame does arrive;
+                // POINT IOTIME only on real bit change.
+                if (first_run || num_updates || need_ping) {
+                    if (driver_state == s_driver_operational) {
+                        first_run = false;
+                    }
+                    int stage = sendMultiPart(sync_sock, global_clock);
 #if VERBOSE_DEBUG
-                if (stage == 5) {
-                    DBG_MSG << "send done\n";
-                }
+                    if (stage == 5) {
+                        DBG_MSG << "send done\n";
+                    }
 #endif
-                assert(stage == 5);
-                status = e_update; // time to send process data to EtherCAT
+                    assert(stage == 5);
+                    status = e_update; // wait for CW "go" on process data
+                }
             }
             if (status == e_update &&
                 getEtherCatResponse(sync_sock, global_clock, keep_alive_stat)) {
