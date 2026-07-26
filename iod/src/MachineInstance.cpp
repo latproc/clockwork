@@ -4707,12 +4707,16 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             errno = 0;
             int64_t value = 0; // TBD deal with sign
             if (new_value.asInteger(value)) {
-                //snprintf(buf, 100, "%s: updating output value to %ld\n", _name.c_str(),value);
-                if (io_interface->address.is_signed) {
-                    io_interface->setValue((int32_t)(value & 0xffffffff));
-                }
-                else {
-                    io_interface->setValue((uint32_t)(value & 0xffffffff));
+                // Inputs: VALUE is published from the filter / sample path.
+                // Writing the process image would treat an ANALOGINPUT/POINT as
+                // an output and corrupt PDO state.
+                if (io_interface->direction() != IOComponent::DirInput) {
+                    if (io_interface->address.is_signed) {
+                        io_interface->setValue((int32_t)(value & 0xffffffff));
+                    }
+                    else {
+                        io_interface->setValue((uint32_t)(value & 0xffffffff));
+                    }
                 }
                 properties.add("VALUE", value, SymbolTable::ST_REPLACE);
             }

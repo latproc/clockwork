@@ -971,26 +971,34 @@ int64_t AnalogueInput::filter(int64_t raw) {
 
     const int64_t prev_sent = config->last_sent;
 
-    // prepare config->last_sent by filtering the input value
+    // prepare config->last_sent by filtering the input value.
+    // All filter modes apply tolerance before accepting a new last_sent so
+    // on-change setValue does not storm CW (LSB noise / butterworth float).
     addSample(config->positions, (long)read_time, (double)raw);
-    if (config->filter_type && *config->filter_type == 0) { //TBD wrong?
-        config->last_sent = raw;
+    int64_t candidate = config->last_sent;
+    if (config->filter_type && *config->filter_type == 0) { // raw
+        candidate = raw;
     }
     else if (!config->filter_type || (config->filter_type && *config->filter_type == 1)) {
-        int64_t mean =
+        candidate =
             (bufferAverage(config->positions, static_cast<size_t>(*config->filter_len)) + 0.5f);
-        long delta = abs(mean - config->last_sent);
-        if (delta >= *config->tolerance) {
-            config->last_sent = mean;
-        }
     }
     else if (config->filter_type && *config->filter_type == 2) {
         if (config->input_bwf) {
-            double res = config->input_bwf->filter((float)raw);
-            config->last_sent = res;
+            candidate = static_cast<int64_t>(config->input_bwf->filter((float)raw) + 0.5);
         }
         else {
             assert(false);
+        }
+    }
+    {
+        const int64_t tol = (config->tolerance && *config->tolerance > 0) ? *config->tolerance : 1;
+        int64_t delta = candidate - config->last_sent;
+        if (delta < 0) {
+            delta = -delta;
+        }
+        if (delta >= tol) {
+            config->last_sent = candidate;
         }
     }
 
@@ -1004,8 +1012,8 @@ int64_t AnalogueInput::filter(int64_t raw) {
         values do not cause notifications when they change
     */
 
-    // Skip VALUE/velocity property churn when the filtered value is unchanged.
-    if (config->last_sent == prev_sent && raw == prev_sent) {
+    // Only update owner properties when filtered VALUE moved.
+    if (config->last_sent == prev_sent) {
         return config->last_sent;
     }
 
@@ -1013,9 +1021,16 @@ int64_t AnalogueInput::filter(int64_t raw) {
     while (owners_iter != owners.end()) {
         MachineInstance *o = *owners_iter++;
         o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
-        o->properties.add("VALUE", static_cast<int64_t>(config->last_sent), SymbolTable::ST_REPLACE);
-        //double v = config->speeds.average(config->speeds.length());
-        //if (fabs(v)<1.0) v = 0.0;
+        // On filtered change: publish VALUE and wake the owner for WHEN/stable
+        // recheck (CLOCKEDANALOGINPUT / SELF WHEN). Do NOT notifyDependents here —
+        // plant has wide analog fan-out and full cascade pins ~100 outer loops/s.
+        // Machines that depend on this VALUE should use timer/IOTIME sampling or
+        // be in the owner's stable-state WHEN path. Track C step 2 may add a
+        // rate-limited dependent notify.
+        o->properties.add("VALUE", static_cast<int64_t>(config->last_sent),
+                          SymbolTable::ST_REPLACE);
+        o->setNeedsCheck();
+        ProcessingThread::activate(o);
         if (*config->calc_stddev) {
             o->properties.add("stddev", bufferStddev(config->positions, 5),
                               SymbolTable::ST_REPLACE);
@@ -1204,6 +1219,10 @@ int64_t Counter::filter(int64_t val) {
         MachineInstance *o = *owners_iter++;
         o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
                           SymbolTable::ST_REPLACE);
+        // Keep silent properties.add for COUNTER. Continuous encoders at
+        // tolerance=1 would notify every count and pin ~100 outer loops/s.
+        // ANALOGINPUT uses setValue (tolerance-gated). COUNTER on-change notify
+        // needs a separate rate/tolerance policy before enabling.
         o->properties.add("VALUE", static_cast<int64_t>(scaled_val), SymbolTable::ST_REPLACE);
         o->properties.add("Position", internals->last_sent, SymbolTable::ST_REPLACE);
         o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),

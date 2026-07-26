@@ -87,7 +87,13 @@ emit work does not get lost.
 
 **Risk:** Medium–high if LSB noise storms CW — tolerance mandatory.
 
-**Status:** Planned (after A; ideally after B feed policy on elc).
+**Status:** Partial on elc —
+- ANALOGINPUT: on filtered VALUE change (all filter modes tolerance-gated),
+  `properties.add` + owner `setNeedsCheck`/`activate` (not full `setValue`
+  notifyDependents — that pinned ~100 loops/s on plant).
+- `MachineInstance::setValue(VALUE)` skips process-image write for DirInput.
+- COUNTER: still silent property rewrite (encoders would storm); needs rate policy.
+- Track D still blocked.
 
 ---
 
