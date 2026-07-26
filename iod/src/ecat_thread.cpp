@@ -971,22 +971,22 @@ void EtherCATThread::operator()() {
             }
         }
 
-        // Bus cycles every period (CYCLE_DELAY). Clockwork is fed only when
-        // due (POLLING_DELAY via get_polling_time) and only when the domain
-        // changed, on first run, or on a rare keep-alive. Unchanged frames no
-        // longer always-wake CW (that locked processing at ~1/period).
-        // Digital bit changes still produce num_updates and push immediately
-        // on the next pull_due window; POINT event path is unchanged.
-        // ProcessingThread quiet path may stretch get_polling_time to ~5 ms
-        // while idle and restores POLLING_DELAY as soon as work appears.
+        // Bus cycles every period (CYCLE_DELAY; POINTSSTARTUP on → 1000 µs).
+        //
+        // Digital POINT edges: peek every cycle; collect+push to CW immediately
+        // so end-stops / guards event within ~1 bus period while powered.
+        // Analog/COUNTER noise alone does not force a push every cycle — those
+        // use pull_due (get_polling_time quiet stretch) so LIST/PID plugins stay
+        // fed without free-running CW at 1 kHz on analog dither.
+        //
+        // dig_shadow advances only on a successful push so collectState still
+        // sees the full analog delta since the last CW frame (latest wins).
         next_ecat_receive = microsecs() + period / 2;
 
         // Always receive for master/domain health (legacy ecrt).
         ECInterface::instance()->receiveState();
 
-        // POLLING_DELAY (µs) → how often process data is offered to Clockwork.
-        // When equal to CYCLE_DELAY (common on this plant), pull_due every period
-        // while busy; plant-quiet stretch is applied by set_polling_time().
+        // Paced pull for analog-only / keep-alive (not digital).
         unsigned long pull_us = get_polling_time();
         if (pull_us < 100) {
             pull_us = 100;
@@ -997,8 +997,6 @@ void EtherCATThread::operator()() {
         if (machine_is_ready && ECInterface::instance()->data.getProcessMask()) {
             global_clock = updateClock(global_clock);
 
-            // Keep-alive: full interval since last CW ack (not keep_alive-period).
-            // Floor at 50 ms so idle never pings every bus cycle.
             uint64_t ka_us = keep_alive;
             if (ka_us < 50000) {
                 ka_us = 50000;
@@ -1006,21 +1004,25 @@ void EtherCATThread::operator()() {
             const bool need_ping =
                 keep_alive > 0 && last_ping != 0 && (now >= last_ping + ka_us);
 
-            // Collect only when a CW pull is due (or first run). Intermediate
-            // bus frames are not pushed to CW (latest sample wins on next pull).
-            if (status == e_collect && pull_due) {
-                DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state\n";
+            // Shadow of last domain image pushed to CW (digital edge detect).
+            static uint8_t *dig_shadow = 0;
+            static size_t dig_shadow_size = 0;
+            static size_t dig_shadow_cap = 0;
+
+            const bool dig_edge = ECInterface::instance()->domainHasDigitalChange(
+                dig_shadow, dig_shadow_size);
+
+            // Collect+push when: first frame, digital edge, analog pace due, or keep-alive.
+            const bool want_cw = first_run || dig_edge || need_ping || pull_due;
+
+            if (status == e_collect && want_cw) {
+                DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state"
+                                     << (dig_edge ? " (digital edge)" : "") << "\n";
                 num_updates = ECInterface::instance()->collectState();
                 DBG_ETHERCAT_PACKETS << "Num updates from ecat_thread: " << num_updates << "\n";
-                // Advance pull clock even if nothing changed so we do not
-                // re-collect every bus cycle until the next POLLING_DELAY window.
-                last_cw_process_push = now;
 
-                // Push only when domain changed, first run, or keep-alive.
-                // Unchanged images: ANALOG/COUNTER IOTIME still advance via
-                // sampleRegularPolls on the CW side when a frame does arrive;
-                // POINT IOTIME only on real bit change.
-                if (first_run || num_updates || need_ping) {
+                // Digital edge always pushes. Analog-only: push if bits changed or ping.
+                if (first_run || dig_edge || num_updates || need_ping) {
                     if (driver_state == s_driver_operational) {
                         first_run = false;
                     }
@@ -1032,6 +1034,23 @@ void EtherCATThread::operator()() {
 #endif
                     assert(stage == 5);
                     status = e_update; // wait for CW "go" on process data
+                    last_cw_process_push = now;
+
+                    // Advance dig shadow to the image we just offered CW.
+                    size_t dsz = ECInterface::instance()->copyDomainData(nullptr, 0);
+                    if (dsz > dig_shadow_cap) {
+                        delete[] dig_shadow;
+                        dig_shadow = new uint8_t[dsz];
+                        dig_shadow_cap = dsz;
+                    }
+                    if (dig_shadow && dsz) {
+                        dig_shadow_size =
+                            ECInterface::instance()->copyDomainData(dig_shadow, dsz);
+                    }
+                }
+                else if (pull_due) {
+                    // Quiet window with no domain change: still advance pace clock.
+                    last_cw_process_push = now;
                 }
             }
             if (status == e_update &&
