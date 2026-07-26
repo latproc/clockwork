@@ -545,30 +545,34 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
 
     {
         boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
-        if (!updatedComponentsIn.size()) {
-            return;
-        }
-        //  std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
-        // look at the components that changed and remove them from the outgoing queue as long as the
-        // outputs have been sent to the hardware
-        std::set<IOComponent *>::iterator iter = updatedComponentsIn.begin();
-        while (iter != updatedComponentsIn.end()) {
-            IOComponent *ioc = *iter++;
-            ioc->read_time = io_clock;
-            //std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
-            updatedComponentsIn.erase(ioc);
-            if (updates_sent && updatedComponentsOut.count(ioc)) {
-                //std::cout << "output request for " << ioc->io_name << " resolved\n";
-                updatedComponentsOut.erase(ioc);
+        // Input-domain changes: enqueue CW work and drop matching pending outs.
+        // Do NOT return early when empty — pending-out cleanup below must still
+        // run. Previously an early return left updatesWaiting() true forever
+        // whenever the domain was stable (only TX pending), forcing ~200 Hz
+        // brk_out full outer loops on the processing thread.
+        if (!updatedComponentsIn.empty()) {
+            //  std::cout << updatedComponentsIn.size() << " component updates from hardware\n";
+            // look at the components that changed and remove them from the outgoing queue as long as the
+            // outputs have been sent to the hardware
+            std::set<IOComponent *>::iterator iter = updatedComponentsIn.begin();
+            while (iter != updatedComponentsIn.end()) {
+                IOComponent *ioc = *iter++;
+                ioc->read_time = io_clock;
+                //std::cerr << "processing " << ioc->io_name << " time: " << ioc->read_time << "\n";
+                updatedComponentsIn.erase(ioc);
+                if (updates_sent && updatedComponentsOut.count(ioc)) {
+                    //std::cout << "output request for " << ioc->io_name << " resolved\n";
+                    updatedComponentsOut.erase(ioc);
+                }
+                //else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
+                updated_machines.insert(ioc);
             }
-            //else std::cout << "still waiting for " << ioc->io_name << " event: " << ioc->last_event << "\n";
-            updated_machines.insert(ioc);
         }
         // for machines with updates to send, if these machines already have the same value
         // as the hardware (and updates have been sent) we also remove them from the
-        // outgoing queue
-        if (updates_sent) {
-            iter = updatedComponentsOut.begin();
+        // outgoing queue — runs even when no inputs changed this frame
+        if (updates_sent && !updatedComponentsOut.empty()) {
+            std::set<IOComponent *>::iterator iter = updatedComponentsOut.begin();
             while (iter != updatedComponentsOut.end()) {
                 IOComponent *ioc = *iter++;
                 if (ioc->pending_value == ioc->address.value) {
@@ -577,8 +581,8 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                 }
             }
         }
+        outputs_waiting = updatedComponentsOut.size();
     } // scoped lock
-    outputs_waiting = updatedComponentsOut.size();
 }
 
 IOAddress IOComponent::add_io_entry(const char *name, unsigned int module_pos,
@@ -1876,6 +1880,7 @@ void Output::turnOn() {
     last = microsecs();
     // Commanded value is authoritative for SetStateAction completion.
     address.value = 1;
+    pending_value = 1; // processAll clears when updates_sent && pending==value
 #ifdef USE_KERNEL_ETHERCAT
     // Kernel path writes the output shadow immediately (no process-image echo).
     // Do NOT leave this in updatedComponentsOut / outputs_waiting — nothing
@@ -1895,6 +1900,7 @@ void Output::turnOn() {
 void Output::turnOff() {
     last = microsecs();
     address.value = 0;
+    pending_value = 0; // processAll clears when updates_sent && pending==value
 #ifdef USE_KERNEL_ETHERCAT
     last_event = e_none; // see turnOn — getStateString must become "off"
     ECInterface::instance()->applyKernelOutputBit(address.io_offset, address.io_bitpos, false);
