@@ -36,6 +36,19 @@ int getIntValue(cwpi_Scope s, const char *property_name, const int64_t **res) {
     return 1;
 }
 
+int getFloatValue(cwpi_Scope s, const char *property_name, const double **res) {
+    MachineInstance *scope = static_cast<MachineInstance *>(s);
+    if (!scope) {
+        MessageLog::instance()->add("getFloatValue was passed a null instance from a plugin");
+        return 0;
+    }
+    const Value &value = scope->getValue(property_name);
+    if (value.kind != Value::t_float) {
+        return 0;
+    }
+    *res = &value.fValue;
+    return 1;
+}
 
 int getBoolValue(cwpi_Scope s, const char *property_name) {
     MachineInstance *scope = static_cast<MachineInstance *>(s);

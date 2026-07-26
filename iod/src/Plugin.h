@@ -30,6 +30,8 @@ typedef double (*plugin_filter)(cwpi_Scope, double);
 
 void *getNamedScope(cwpi_Scope, const char *name);
 int getIntValue(cwpi_Scope s, const char *property_name, const int64_t **res);
+/** Live pointer to a float property (t_float). Returns 0 if missing/not float. */
+int getFloatValue(cwpi_Scope s, const char *property_name, const double **res);
 int getBoolValue(cwpi_Scope s, const char *property_name);
 char *getStringValue(cwpi_Scope, const char *property_name);
 void setIntValue(cwpi_Scope, const char *property_name, const int64_t new_value);

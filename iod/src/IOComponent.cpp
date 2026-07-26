@@ -1225,6 +1225,9 @@ int64_t AnalogueInput::filter(int64_t raw) {
         return raw_val;
     }
 
+    // VALUE stays integer filtered raw (plugins use getIntValue / Pressure.VALUE).
+    // factor/base/window only gate change-emit; eng export remains on A_* wrappers
+    // or an optional ENG property for float consumers.
     double first_eng = static_cast<double>(raw_val);
     bool first = true;
     for (MachineInstance *o : owners) {
@@ -1238,12 +1241,9 @@ int64_t AnalogueInput::filter(int64_t raw) {
             first_eng = eng;
             first = false;
         }
-        // Scaled → float VALUE (CLOCKEDANALOGINPUT export semantics).
+        o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
         if (factor != 1.0 || base != 0.0) {
-            o->properties.add("VALUE", eng, SymbolTable::ST_REPLACE);
-        }
-        else {
-            o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
+            o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
         }
         o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
         o->setNeedsCheck();
@@ -1516,6 +1516,7 @@ int64_t Counter::filter(int64_t val) {
         return raw_val;
     }
 
+    // VALUE/Position stay integer (plugins). Optional ENG float when scaled.
     double first_eng = static_cast<double>(raw_val);
     bool first = true;
     for (MachineInstance *o : owners) {
@@ -1529,13 +1530,11 @@ int64_t Counter::filter(int64_t val) {
             first_eng = eng;
             first = false;
         }
-        if (factor != 1.0 || base != 0.0) {
-            o->properties.add("VALUE", eng, SymbolTable::ST_REPLACE);
-        }
-        else {
-            o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
-        }
+        o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
         o->properties.add("Position", raw_val, SymbolTable::ST_REPLACE);
+        if (factor != 1.0 || base != 0.0) {
+            o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
+        }
         o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
                           SymbolTable::ST_REPLACE);
         o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
