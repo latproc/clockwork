@@ -500,7 +500,7 @@ int getSettings(const char *str, struct termios *settings) {
             }
         }
         else {
-            if (*tmp && *tmp != ':') {
+            if (tmp && *tmp != ':') {
                 fprintf(stderr, "skipping unrecognised setting: %s\n", fld);
             }
         }

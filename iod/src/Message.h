@@ -45,7 +45,7 @@ class CStringHolder {
     ~CStringHolder();
 
     const char *get() const;
-    bool will_free();
+    bool will_free() const;
 
   private:
     const char *s_str;

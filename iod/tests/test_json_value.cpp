@@ -143,7 +143,16 @@ TEST(Parser, ParsingCStringStopsAtInvalidCharacter) {
 TEST(Value, AssignJSON) {
     auto json_str = R"JSON({"a":1,"b":"hello"})JSON";
     Value val{cJSON_Parse(json_str)};
-    EXPECT_EQ(val.kind, Value::t_json) << "A JSON object is an object";
+    EXPECT_EQ(val.kind, Value::t_json);
+    Value val2{val};
+    EXPECT_EQ(val2.kind, Value::t_json);
+    std::string val_str = val.asString();
+    std::string val2_str = val2.asString();
+    EXPECT_EQ(val_str, val2_str);
+    val = val; // self assignment
+    EXPECT_EQ(val.kind, Value::t_json);
+    std::string val_str2 = val.asString();
+    EXPECT_EQ(val_str2, val_str) << "object changed by assignment to itself";
 }
 
 bool equal(cJSON *a, cJSON *b) {
@@ -337,7 +346,7 @@ TEST(AssignJsonExpr, AssignJsonValue) {
     JsonExpr expr(expr_str);
     auto doc = cJSON_Parse(json_str);
     auto new_json = cJSON_Parse(R"JSON({"c":3})JSON");
-    assign(expr_str, doc, new_json);
+    assign_take(expr_str, doc, own_json(new_json));
     cJSON *json = expr.apply(doc);
     EXPECT_NE(json, nullptr);
     EXPECT_EQ(json->type, cJSON_Object);
@@ -358,7 +367,7 @@ TEST(AssignJsonExpr, AssignArrayValue) {
     JsonExpr expr(expr_str);
     auto doc = cJSON_Parse(json_str);
     auto new_json = cJSON_Parse(R"JSON([1,2,3])JSON");
-    assign(expr_str, doc, new_json);
+    assign_take(expr_str, doc, own_json(new_json));
     cJSON *json = expr.apply(doc);
     EXPECT_NE(json, nullptr);
     EXPECT_EQ(json->type, cJSON_Array);
@@ -400,7 +409,7 @@ TEST(AssignJsonExpr, AssignNewKeyInJsonObject) {
     JsonExpr expr(expr_str);
     auto doc = cJSON_Parse(json_str);
     auto new_json = cJSON_Parse(R"JSON({"c":3})JSON");
-    assign(expr_str, doc, new_json);
+    assign_take(expr_str, doc, own_json(new_json));
     cJSON *json = expr.apply(doc);
     EXPECT_NE(json, nullptr);
     EXPECT_EQ(json->type, cJSON_Object);
@@ -413,6 +422,17 @@ TEST(AssignJsonExpr, AssignNewKeyInJsonObject) {
     cJSON_Delete(expected_json);
     cJSON_Delete(json);
     cJSON_Delete(doc);
+}
+
+TEST(AssignJsonExpr, AssignToNullDocumentReturnsNull) {
+    cJSON *doc = nullptr;
+    EXPECT_EQ(nullptr, assign("$.a", doc, std::string("x")));
+    EXPECT_EQ(nullptr, assign("$.a", doc, 1));
+    EXPECT_EQ(nullptr, assign("$.a", doc, static_cast<uint64_t>(1)));
+    EXPECT_EQ(nullptr, assign("$.a", doc, true));
+    EXPECT_EQ(nullptr, assign("$.a", doc, 1.5));
+    EXPECT_EQ(nullptr, assign_take("$.a", doc, own_json(cJSON_CreateObject())));
+    EXPECT_EQ(nullptr, assign("$.a", doc, Value(cJSON_CreateObject())));
 }
 
 

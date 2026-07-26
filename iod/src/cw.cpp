@@ -763,6 +763,7 @@ int main(int argc, char const *argv[]) {
         MessagingInterface::abort();
         MQTTInterface::instance()->stop();
         Dispatcher::instance()->stop();
+        Scheduler::instance()->stop();
         processMonitor.stop();
         process.join();
         stateMonitor->stop();

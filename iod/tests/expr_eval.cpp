@@ -14,6 +14,7 @@
 #include <Message.h>
 
 #include "library_globals.cpp"
+#include "Scheduler.h"
 
 bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate);
 ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &stack_iter);
@@ -29,21 +30,21 @@ class ExpressionTests {
         machine_class_->setOption("x", 7);
         scope_ = MachineInstanceFactory::create("test", machine_class_->name);
         scope_->setStateMachine(machine_class_);
-        tests_.push_back(TestCase([this]() { return evalates_a_simple_equality(); }));
-        tests_.push_back(TestCase([this]() { return evaluates_an_equality_with_an_expression(); }));
-        tests_.push_back(TestCase([this]() { return evaluates_a_machine_timer(); }));
-        tests_.push_back(TestCase([this]() { return evaluates_an_expression_timer_comparison(); }));
-        tests_.push_back(TestCase([this]() { return evaluates_a_timer_expression_comparison(); }));
-        tests_.push_back(
-            TestCase([this]() { return evaluates_a_simple_equality_that_returns_false(); }));
-        tests_.push_back(TestCase([this]() { return evaluates_a_local_property(); }));
-        tests_.push_back(TestCase([this]() { return evaluates_comparison_of_properties(); }));
-        tests_.push_back(TestCase([this]() { return condition_evaluates_expressions(); }));
-        tests_.push_back(TestCase([this]() { return evaluates_false_eq_false(); }));
-        tests_.push_back(TestCase([this]() { return assigns_a_value(); }));
-        tests_.push_back(TestCase([this]() { return assigns_a_json_value(); }));
-        tests_.push_back(TestCase([this]() { return assigns_a_json_subexpression(); }));
-        tests_.push_back(TestCase([this]() { return puts_a_json_subexpression(); }));
+        tests_.emplace_back([this]() { return evalates_a_simple_equality(); });
+        tests_.emplace_back([this]() { return evaluates_an_equality_with_an_expression(); });
+        tests_.emplace_back([this]() { return evaluates_a_machine_timer(); });
+        tests_.emplace_back([this]() { return evaluates_an_expression_timer_comparison(); });
+        tests_.emplace_back([this]() { return evaluates_a_timer_expression_comparison(); });
+        tests_.emplace_back(
+            [this]() { return evaluates_a_simple_equality_that_returns_false(); });
+        tests_.emplace_back([this]() { return evaluates_a_local_property(); });
+        tests_.emplace_back([this]() { return condition_evaluates_expressions(); });
+        tests_.emplace_back([this]() { return evaluates_false_eq_false(); });
+        tests_.emplace_back([this]() { return assigns_a_value(); });
+        tests_.emplace_back([this]() { return assigns_a_json_value(); });
+        tests_.emplace_back([this]() { return assigns_a_json_subexpression(); });
+        tests_.emplace_back([this]() { return evaluates_comparison_of_properties(); });
+        tests_.emplace_back([this]() { return puts_a_json_subexpression(); });
     }
     ~ExpressionTests() { delete scope_; }
     std::list<TestCase> tests() { return tests_; }
@@ -114,9 +115,12 @@ class ExpressionTests {
     }
 
     TestResult evaluates_comparison_of_properties() {
+        MachineInstance *test = MachineInstanceFactory::create("dummy", machine_class_->name);
+        test->setStateMachine(machine_class_);
+        test->setValue("x", 7);
         MachineInstance *one = MachineInstanceFactory::create("one", machine_class_->name);
         one->setStateMachine(machine_class_);
-        one->addLocal("test", scope_);
+        one->addLocal("test", test);
         one->addDependancy(scope_);
         one->properties.add("x", 7);
         Predicate pred(new Predicate("test.x"), opEQ, new Predicate("x"));
@@ -200,13 +204,16 @@ class ExpressionTests {
 };
 
 int main(int, char **) {
-    zmq::context_t *context = new zmq::context_t;
+    auto *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     boost::condition_variable_any cond_var;
     boost::shared_mutex cond_var_mutex;
     SharedThreadSafeQueue<Package*> queue(cond_var, cond_var_mutex);
     Dispatcher::create(queue);
     Logger::instance();
+    Scheduler::instance();
+    boost::thread scheduler_thread(boost::ref(*Scheduler::instance()));
+    Scheduler::instance()->setThreadRef(scheduler_thread);
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");
 

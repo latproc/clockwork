@@ -32,13 +32,19 @@ class Logger::Internals {
   public:
     static Logger *logger_instance;
     Level log_level;
-    std::stringstream *dummy_output = nullptr;
+    std::stringstream dummy_output;
     std::ostream *log_stream = nullptr;
 
     Internals() : log_level(None), dummy_output(0), log_stream(&std::cout) {}
 };
 
+// Mutex ordering constraint:
+// - logger_mutex protects Logger internals
+// - logstate_mutex protects LogState internals
+// - When both must be acquired, always acquire logger_mutex BEFORE logstate_mutex.
+// - Do NOT call Logger APIs from within LogState while holding logstate_mutex to avoid ABBA deadlocks.
 static std::mutex logger_mutex;
+static std::mutex logstate_mutex;
 
 Logger::Internals *Logger::internals = nullptr;
 LogState *LogState::state_instance = nullptr;
@@ -58,7 +64,7 @@ LogState *LogState::instance() {
 }
 
 void LogState::cleanup() {
-    std::lock_guard<std::mutex> lock(logger_mutex);
+    std::lock_guard<std::mutex> lock(logstate_mutex);
     delete state_instance;
     state_instance = nullptr;
 }
@@ -69,7 +75,7 @@ int LogState::define(const std::string & new_name) {
     return logid;
 }
 int LogState::lookup(const std::string &name) {
-    std::lock_guard<std::mutex> lock(logger_mutex);
+    std::lock_guard<std::mutex> lock(logstate_mutex);
     NameMapIterator iter = name_map.find(name);
     if (iter != name_map.end()) {
         return (*iter).second;
@@ -79,12 +85,12 @@ int LogState::lookup(const std::string &name) {
     }
 }
 int LogState::insert(int flag_num) {
-    std::lock_guard<std::mutex> lock(logger_mutex);
+    std::lock_guard<std::mutex> lock(logstate_mutex);
     state_flags.insert(flag_num);
     return flag_num;
 }
 int LogState::insert(std::string name) {
-    std::lock_guard<std::mutex> lock(logger_mutex);
+    std::lock_guard<std::mutex> lock(logstate_mutex);
 
     NameMapIterator iter = name_map.find(name);
     if (iter != name_map.end()) {
@@ -95,18 +101,18 @@ int LogState::insert(std::string name) {
     return -1;
 }
 void LogState::erase(int flag_num) {
-    std::lock_guard<std::mutex> lock(logger_mutex);
+    std::lock_guard<std::mutex> lock(logstate_mutex);
     state_flags.erase(flag_num);
 }
 void LogState::erase(std::string name){
-    std::lock_guard<std::mutex> lock(logger_mutex);
+    std::lock_guard<std::mutex> lock(logstate_mutex);
     NameMapIterator iter = name_map.find(name);
     if (iter != name_map.end()) {
         state_flags.insert((*iter).second);
     }
 }
 bool LogState::includes(std::string name) {
-    std::lock_guard<std::mutex> lock(logger_mutex);
+    std::lock_guard<std::mutex> lock(logstate_mutex);
     return name_map.find(name) != name_map.end();
 }
 
@@ -120,33 +126,62 @@ Logger::Logger() {
     last_time.tv_usec = 0;
 }
 
-Logger::~Logger() { delete internals; }
+Logger::~Logger() {
+    std::lock_guard<std::mutex> lock(logger_mutex);
+    delete internals;
+    internals = nullptr;
+}
 
 Logger *Logger::instance() {
-    if (!internals->logger_instance) {
+    // Note: We hold logger_mutex here; subsequent calls into LogState must not acquire logger_mutex and should use logstate_mutex only.
+    std::lock_guard<std::mutex> lock(logger_mutex);
+    if (!internals) {
         internals = new Internals();
+    }
+    if (!internals->logger_instance) {
         internals->logger_instance = new Logger;
         auto logstate = LogState::instance();
-        None = logstate->insert(LogState::instance()->define("None"));
-        Important = logstate->insert(LogState::instance()->define("Important"));
-        Debug = logstate->insert(LogState::instance()->define("Debug"));
-        Everything = logstate->insert(LogState::instance()->define("Everything"));
+        None = logstate->insert(logstate->define("None"));
+        Important = logstate->insert(logstate->define("Important"));
+        Debug = logstate->insert(logstate->define("Debug"));
+        Everything = logstate->insert(logstate->define("Everything"));
     }
     return internals->logger_instance;
 }
 Logger::Level Logger::level() {
+    std::lock_guard<std::mutex> lock(logger_mutex);
+    if (!internals) { return None; }
     return internals->log_level;
 }
 
 void Logger::setLevel(Level n) {
+    std::lock_guard<std::mutex> lock(logger_mutex);
+    if (!internals) { (void)Logger::instance(); }
     internals->log_level = n;
 }
 
-void Logger::setOutputStream(std::ostream *out) { internals->log_stream = out; }
+void Logger::setOutputStream(std::ostream *out) {
+    std::lock_guard<std::mutex> lock(logger_mutex);
+    if (!internals) { (void)Logger::instance(); }
+    internals->log_stream = out;
+}
 
 void Logger::cleanup() {
-    delete internals->logger_instance;
-    Logger::instance()->internals->logger_instance = nullptr;
+    // Phase 1: grab pointers and reset shared state under lock
+    Logger *logger_to_delete = nullptr;
+    Internals *internals_to_delete = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(logger_mutex);
+        if (internals) {
+            logger_to_delete = internals->logger_instance;
+            internals->logger_instance = nullptr;
+            internals_to_delete = internals;
+            internals = nullptr;
+        }
+    }
+    // Phase 2: perform deletions without holding logger_mutex to avoid re-entrancy deadlocks
+    delete logger_to_delete;
+    delete internals_to_delete;
 }
 
 class FileLogger::Internals {
@@ -246,20 +281,17 @@ bool LogState::includes(int flag_num) { return state_flags.count(flag_num); }
 
 std::ostream &Logger::log(Level l) {
     std::lock_guard<std::mutex> lock(logger_mutex);
-    if (!internals->dummy_output) {
-        internals->dummy_output = new std::stringstream;
-    }
+    if (!internals) { (void)Logger::instance(); }
 
     if (LogState::instance()->includes(l)) {
         char buf[40];
         getTimeString(buf, 40);
         *internals->log_stream << buf;
         return *internals->log_stream;
-    }
-    else {
-        internals->dummy_output->clear();
-        internals->dummy_output->seekp(0);
-        return *internals->dummy_output;
+    } else {
+        internals->dummy_output.clear();
+        internals->dummy_output.seekp(0);
+        return internals->dummy_output;
     }
 }
 std::ostream &LogState::operator<<(std::ostream &out) const {
@@ -288,3 +320,4 @@ int main(int argc, char **argv) {
     return 0;
 }
 #endif
+

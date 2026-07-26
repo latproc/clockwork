@@ -158,3 +158,36 @@ You may also like to install libmodbus and edit the makefile to build:
 
   cd tests
   docker run -it --rm --user $UID:$GID -v ${PWD}:/app -w /app  cw cw run_tests.cw arith.cw bitset.cw anyon.cw prop.lpc test_set_prop.cw
+
+### Part E - Running iod tests (including ASan)
+
+The `iod` subtree has a unit/integration test suite that can be run in debug or sanitizer mode.
+
+* normal test run
+
+  ```
+  cd latproc/iod
+  make test
+  ```
+
+* AddressSanitizer + UndefinedBehaviorSanitizer run
+
+  ```
+  cd latproc/iod
+  make asan-test
+  ```
+
+The ASan target supports these optional overrides:
+
+* `CTEST_TIMEOUT` (per-test timeout in seconds, default `60`)
+* `ASAN_OPTIONS`
+* `UBSAN_OPTIONS`
+
+Example:
+
+```
+cd latproc/iod
+make asan-test CTEST_TIMEOUT=120
+```
+
+Note: `test_scheduler` is intentionally excluded when `USE_ASAN=ON`. On current Boost.Context (`fcontext`) builds this test reports known sanitizer false positives during fiber stack switching.

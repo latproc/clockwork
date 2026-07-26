@@ -62,7 +62,7 @@ class ExecuteTests {
         machine_class_->addState("Start", true);
         machine_class_->default_state = State("Init");
         machine_class_->initial_state = State("Init");
-        one->properties.add("Command", "/bin/ls");
+        one->properties.add("Command", "/bin/sleep 0.1");
         one->properties.add("CommandStatus", 0);
         one->properties.add("Result", "");
         one->properties.add("Errors", "");
@@ -91,6 +91,7 @@ class ExecuteTests {
             Value s = *one->getCurrentStateVal();
             if (s == "Done" || s == "Error") break;
         }
+        res = *one->getCurrentStateVal();
         std::cout << "State: " << res << "\n";
         EXPECT_TRUE(res.kind == Value::t_symbol || res.kind == Value::t_string);
         EXPECT_TRUE(res == "Done");
@@ -104,6 +105,8 @@ class ExecuteTests {
 };
 
 int main(int, char **) {
+    static Value default_polling_delay(2000);
+    MachineInstance::polling_delay = &default_polling_delay;
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
     boost::condition_variable_any m_cond_var;
@@ -116,6 +119,7 @@ int main(int, char **) {
     Logger::instance();
     DebugExtra::instance();
     MachineClass *settings_class = new MachineClass("SYSTEMSETTINGS");
+    settings_class->setProperty("POLLING_DELAY", 2000);
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");
     ControlSystemMachine machine;

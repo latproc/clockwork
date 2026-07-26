@@ -1,5 +1,15 @@
 ASTYLE := $(shell command -v astyle 2>/dev/null)
 CLANGFORMAT := $(shell command -v clang-format 2>/dev/null)
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S),Darwin)
+    ASAN_OPTIONS ?= strict_string_checks=1:abort_on_error=1:halt_on_error=1
+else
+    ASAN_OPTIONS ?= detect_leaks=1:strict_string_checks=1:abort_on_error=1:halt_on_error=1
+endif
+UBSAN_OPTIONS ?= print_stacktrace=1:halt_on_error=1
+CTEST_TIMEOUT ?= 60
+
 ifndef JOBS
     JOBS:=-j6
 endif
@@ -46,6 +56,12 @@ xcode:
 test:
 	[ -d "build" ] || mkdir build
 	cd build && cmake -DCMAKE_BUILD_TYPE=Debug $(CMAKE_ELC_FLAGS) $(CMAKE_EXTRA) -DRUN_TESTS=ON .. && make $(JOBS) install && make test
+
+asan-test:
+	[ -d "build" ] || mkdir build
+	[ -d "build/Asan" ] || mkdir build/Asan
+	cd build/Asan && cmake -DCMAKE_BUILD_TYPE=Debug -DRUN_TESTS=ON -DUSE_ASAN=ON ../.. && cmake --build . -- $(JOBS)
+	cd build/Asan && ASAN_OPTIONS="$(ASAN_OPTIONS)" UBSAN_OPTIONS="$(UBSAN_OPTIONS)" ctest --output-on-failure --timeout $(CTEST_TIMEOUT)
 
 style:
 ifdef ASTYLE

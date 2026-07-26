@@ -1679,7 +1679,7 @@ void IOComponent::setupIOMap() {
             //std::cout << "offset: " << (offset + i) << " io name: " << ioc->io_name << "\n";
         }
     }
-    if (io_process_mask) { delete io_process_mask; }
+    if (io_process_mask) { delete io_process_mask; io_process_mask = nullptr; }
     io_process_mask = generateProcessMask(io_process_mask, process_data_size);
 }
 

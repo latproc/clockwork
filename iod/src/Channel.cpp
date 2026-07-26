@@ -2654,45 +2654,6 @@ void Channel::handleChannels() {
         if (chn->throttledItemsReady(now)) {
             chn->sendThrottledUpdates();
         }
-        /*
-            IODCommand *command = chn->getCommand();
-            if (command) {
-            {FileLogger fl(program_name);
-            fl.f() << "Processing: received command: " << *command << " on channel " << chn->channel_name << "\n";}
-            //hack?
-            if (command->param(0) == "STATE"
-                && command->numParams() == 4) {
-                MachineInstance *m = MachineInstance::find(command->param(1).asString().c_str());
-                if ( !m->isShadow()){
-                    if (command->param(3) == (int64_t)chn->getAuthority()) {
-                        // do nothing, this is an echo of a command we sent
-                        {FileLogger fl(program_name); fl.f() << "skipping echoed command\n"; }
-                    }
-                    else {
-                        (*command)();
-                    }
-                }
-                else {
-                    if (command->param(3) != 0) {
-                        {FileLogger fl(program_name);
-                            fl.f() << chn->channel_name
-                            << "(client) processing command for shadow  with auth: "
-                            << command->param(3) << "\n";
-                        }
-                        (*command)();
-                    }
-                }
-            }
-            else
-                (*command)();
-
-            {FileLogger fl(program_name);
-            fl.f() << chn->channel_name << "posting completed command: " << *command << " on channel " << chn->channel_name << "\n";}
-
-            chn->putCompletedCommand(command);
-
-            }
-        */
     }
 }
 
@@ -2905,7 +2866,11 @@ void ChannelDefinition::processIgnoresPatternList(std::set<std::string>::const_i
             std::list<MachineInstance *>::iterator machines = MachineInstance::begin();
             while (machines != MachineInstance::end()) {
                 MachineInstance *machine = *machines++;
-                if (machine && execute_pattern(rexp, machine->getName().c_str()) == 0) {
+                if (!machine) {
+                    NB_MSG << "null machine detected in machine list when processing channel IGNORES" << "\n";
+                    assert(false);
+                }
+                if (execute_pattern(rexp, machine->getName().c_str()) == 0) {
                     if (chn->channel_machines.count(machine)) {
                         DBG_CHANNELS << "unpublished " << machine->getName() << "\n";
                         machine->unpublish();

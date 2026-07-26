@@ -339,13 +339,16 @@ int main(int argc, const char *argv[]) {
     char *pn = strdup(argv[0]);
     program_name = strdup(basename(pn));
     free(pn);
-
-    const char *home_dir = getenv("HOME");
-    size_t len = strlen(home_dir) + strlen(history_name) + 2;
-    history_file = new char[len];
-    snprintf(history_file, len, "%s/%s", home_dir, history_name);
-    if (read_history(history_file) != 0) {
-        printf("Error reading history from %s: %s\n", history_name, strerror(errno));
+    {
+        const char *home_dir = getenv("HOME");
+        if (home_dir) {
+            size_t len = strlen(home_dir) + strlen(history_name) + 2;
+            history_file = new char[len];
+            snprintf(history_file, len, "%s/%s", home_dir, history_name);
+            if (read_history(history_file) != 0) {
+                printf("Error reading history from %s: %s\n", history_name, strerror(errno));
+            }
+        }
     }
 
     context = new zmq::context_t;

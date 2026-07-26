@@ -84,4 +84,42 @@ TEST(SymbolTable, SymbolValueAddsTokenId) {
     EXPECT_TRUE(st.exists(value.token_id));
 }
 
+TEST(SymbolTable, RandomSeedMakesSequenceDeterministic) {
+    SymbolTable st;
+    EXPECT_TRUE(SymbolTable::isKeyword("RANDOMSEED"));
+    EXPECT_TRUE(st.add("RANDOMSEED", Value(static_cast<int64_t>(31415))));
+
+    const Value first_a = SymbolTable::getKeyValue("RANDOM");
+    const Value second_a = SymbolTable::getKeyValue("RANDOM");
+    EXPECT_EQ(first_a.kind, Value::t_integer);
+    EXPECT_EQ(second_a.kind, Value::t_integer);
+    EXPECT_NE(first_a, second_a);
+
+    EXPECT_TRUE(st.add("RANDOMSEED", Value(static_cast<int64_t>(31415))));
+    const Value first_b = SymbolTable::getKeyValue("RANDOM");
+    const Value second_b = SymbolTable::getKeyValue("RANDOM");
+    EXPECT_EQ(first_a, first_b);
+    EXPECT_EQ(second_a, second_b);
+}
+
+TEST(SymbolTable, RandomSeedAcceptsStringSeed) {
+    SymbolTable st;
+    EXPECT_TRUE(st.add("RANDOMSEED", Value("fixed-seed", Value::t_string)));
+    const Value first_a = SymbolTable::getKeyValue("RANDOM");
+    const Value second_a = SymbolTable::getKeyValue("RANDOM");
+
+    EXPECT_TRUE(st.add(std::string("RANDOMSEED"), Value("fixed-seed", Value::t_string)));
+    const Value first_b = SymbolTable::getKeyValue("RANDOM");
+    const Value second_b = SymbolTable::getKeyValue("RANDOM");
+    EXPECT_EQ(first_a, first_b);
+    EXPECT_EQ(second_a, second_b);
+}
+
+TEST(SymbolTable, OtherKeywordsRemainReadOnly) {
+    SymbolTable st;
+    EXPECT_FALSE(st.add("RANDOM", Value(static_cast<int64_t>(1))));
+    EXPECT_FALSE(st.add("NOW", Value(static_cast<int64_t>(1))));
+    EXPECT_NE(SymbolTable::getKeyValue("RANDOM"), SymbolTable::Null);
+}
+
 } // namespace

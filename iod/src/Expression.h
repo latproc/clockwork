@@ -62,6 +62,7 @@ enum PredicateOperator {
     opAbsoluteValue,
     opSquareRoot,
     opString,
+    opSymbol,
     opGetSubExpr,
     opPutSubExpr
 };
@@ -81,12 +82,12 @@ struct ExprNode {
     ExprNode(const ExprNode &other);
     ~ExprNode();
     Value tmpval;
-    const Value *val;
-    const Value *node;
+    const Value *val = nullptr;
+    const Value *node = nullptr;
     boost::optional<std::string> json_expression;
     boost::optional<Value> default_value;
-    PredicateOperator op;
-    enum { t_int, t_op } kind;
+    PredicateOperator op = opNone;
+    enum { t_int, t_op } kind = t_int;
 
   private:
     ExprNode &operator=(const ExprNode &other);

@@ -4,6 +4,9 @@
 #include <vector>
 #include <string>
 #include <stdlib.h>
+#include <atomic>
+#include <chrono>
+#include <boost/chrono.hpp>
 #include "ThreadSafeQueue.h"
 #include <boost/thread.hpp>
 #include "Message.h"
@@ -217,38 +220,47 @@ public:
                  boost::condition_variable_any& cv_any,
                  boost::shared_mutex& cv_mutex)
         : owner_cond(owner_cond), queues_(queues), cond_var_(cv_any),
-          cond_var_mutex_(cv_mutex), stop_(false) {}
+          cond_var_mutex_(cv_mutex) {}
 
     void stop() {
-        {
-            std::unique_lock<std::mutex> lock(stop_mutex_);
-            stop_ = true;
-        }
+        stop_.store(true, std::memory_order_release);
         cond_var_.notify_all();
     }
 
+    bool ready() const { return ready_.load(std::memory_order_acquire); }
+
     void process() {
+        ready_.store(true, std::memory_order_release);
         owner_cond.notify_all(); // Let the owner know we are ready
         while (true) {
             boost::shared_lock<boost::shared_mutex> lock(cond_var_mutex_);
-            cond_var_.wait(lock, [this] { return stop_ || any_non_empty(); });
-            if (stop_) {
+            cond_var_.wait_for(lock, boost::chrono::milliseconds(20), [this] {
+                return stop_.load(std::memory_order_acquire) || any_non_empty();
+            });
+            if (stop_.load(std::memory_order_acquire)) {
                 break;
             }
+            if (!any_non_empty()) {
+                continue;
+            }
+
+            lock.unlock();
+            bool processed = false;
             for (auto& queue : queues_) {
                 T value;
                 if (queue->try_dequeue(value)) {
                     std::cout << "dequeued: " << value << std::endl;
                     ++count_;
+                    processed = true;
                 }
             }
-            owner_cond.notify_all();
+            if (processed) {
+                owner_cond.notify_all();
+            }
         }
     }
 
-    int count() {
-        return count_;
-    }
+    int count() { return count_.load(std::memory_order_acquire); }
 
 private:
     bool any_non_empty() {
@@ -264,9 +276,9 @@ private:
     std::vector<SharedThreadSafeQueue<T>*>& queues_;
     boost::condition_variable_any& cond_var_;
     boost::shared_mutex& cond_var_mutex_;
-    bool stop_;
-    std::mutex stop_mutex_;
-    int count_ = 0;
+    std::atomic<bool> ready_{false};
+    std::atomic<bool> stop_{false};
+    std::atomic<int> count_{0};
 };
 
 
@@ -282,19 +294,33 @@ TEST(SharedThreadSafeQueueTest, NotifiesSharedConditionVariable) {
     std::mutex test_mutex;
     QueueManager<std::string> manager(test_cond, queues, cond_var_any_, cond_var_mutex_);
     std::thread manager_thread(&QueueManager<std::string>::process, &manager);
-    {
-        std::unique_lock<std::mutex> lock(test_mutex);
-        test_cond.wait(lock);
+
+    bool manager_started = false;
+    for (int i = 0; i < 200; ++i) {
+        if (manager.ready()) {
+            manager_started = true;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
+    if (!manager_started) {
+        manager.stop();
+        manager_thread.join();
+        FAIL() << "Queue manager thread failed to start";
+    }
+
     std::string s1 = "hello";
     std::string s2 = "world";
     queue.enqueue(s1);
     queue2.enqueue(s2);
+    bool all_received = false;
     {
         std::unique_lock<std::mutex> lock(test_mutex);
-        test_cond.wait(lock, [&manager] { return manager.count() == 2; });
+        all_received =
+            test_cond.wait_for(lock, std::chrono::seconds(2), [&manager] { return manager.count() == 2; });
     }
     manager.stop();
     manager_thread.join();
+    EXPECT_TRUE(all_received);
     EXPECT_EQ(manager.count(), 2);
 }

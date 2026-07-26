@@ -52,6 +52,7 @@ CStringHolder::CStringHolder(CStringHolder &&orig) : s_str(orig.s_str), str(orig
 CStringHolder::CStringHolder() : s_str(0), str(0) {}
 
 CStringHolder &CStringHolder::operator=(const CStringHolder &orig) {
+    if (this == &orig) return *this;
     if (str) {
         free(str);
         str = 0;
@@ -64,6 +65,7 @@ CStringHolder &CStringHolder::operator=(const CStringHolder &orig) {
 }
 
 CStringHolder & CStringHolder::operator=(CStringHolder &&orig) {
+    if (this == &orig) return *this;
     if (str) {
         free(str);
     }
@@ -81,7 +83,7 @@ CStringHolder::~CStringHolder() {
 
 const char *CStringHolder::get() const { return (str) ? str : s_str; }
 
-bool CStringHolder::will_free() { return str != 0; }
+bool CStringHolder::will_free() const { return str != 0; }
 
 //CStringHolder::CStringHolder() { if (str) free( str ); }
 
@@ -112,17 +114,17 @@ Message &Message::operator=(const Message &other) {
     if (this == &other) {
         return *this;
     }
-    delete params;
-    params = nullptr;
     kind = other.kind;
     seq = other.seq;
     text = other.text;
+
+    if (params) { // free any existing params to avoid leaks
+        delete params;
+        params = nullptr;
+    }
     if (other.params) {
         params = new std::list<Value>();
         std::copy(other.params->begin(), other.params->end(), back_inserter(*params));
-    }
-    else {
-        params = 0;
     }
     return *this;
 }
@@ -131,10 +133,14 @@ Message &Message::operator=(Message && other) {
     if (this == &other) {
         return *this;
     }
-    delete params;
     kind = other.kind;
     seq = other.seq;
     text = other.text;
+
+    if (params) {
+        delete params;
+        params = nullptr;
+    }
     params = other.params;
     other.params = 0;
     return *this;
@@ -209,6 +215,7 @@ Package::Package(Package &&other)
 Package::~Package() { delete message; }
 
 Package &Package::operator=(const Package &other) {
+    if (this == &other) { return *this; }
     transmitter = other.transmitter;
     receiver = other.receiver;
     if (message) {

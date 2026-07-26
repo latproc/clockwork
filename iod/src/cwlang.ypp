@@ -182,6 +182,7 @@ struct Subcondition {
 %token REFERS FIND SEEK CPU BOARD
 %token DIGITALIN ADC TOUCH PIN ETHERNET DIGITALIO DAC SPI SDIO JTAG UART
 %token FORMAT SEPARATED SERIALISE RESET LOAD JSON DESERIALISE
+%token SYMBOLTYPE
 
 %union {
 	bool bVal;
@@ -529,7 +530,7 @@ chn_definition_section:
 }
 
 | OPTION chn_option_settings ';'
-| THROTTLE INTEGERVAL ';' { current_channelclass->setThrottleTime($2 * 1000); }
+| THROTTLE INTEGERVAL ';' { current_channelclass->setThrottleTime(static_cast<unsigned int>($2 * 1000)); }
 | tokPUBLISHER ';' { current_channelclass->setPublisher(true); }
 | MODBUS ';' { current_channelclass->addFeature(ChannelDefinition::ReportModbusUpdates); }
 ;
@@ -1013,6 +1014,7 @@ value {
 | expression AS INTEGER { $$ = new Predicate(0, opInteger, $1); }
 | expression AS FLOAT { $$ = new Predicate(0, opFloat, $1); }
 | expression AS STRINGTYPE { $$ = new Predicate(0, opString, $1); }
+| expression AS SYMBOLTYPE { $$ = new Predicate(0, opSymbol, $1); }
 | expression AS JSON { $$ = new Predicate(0, opJson, $1); }
 | SQRT expression { $$ = new Predicate(0, opSquareRoot, $2); }
 | '!' expression { $$ = new Predicate(0, opNegate, $2);}

@@ -180,6 +180,8 @@ class WebRequestTests {
 };
 
 int main() {
+    static Value default_polling_delay(2000);
+    MachineInstance::polling_delay = &default_polling_delay;
     start_test_server();
     zmq::context_t *context = new zmq::context_t;
     MessagingInterface::setContext(context);
@@ -192,6 +194,7 @@ int main() {
     Dispatcher::create(queue);
     Logger::instance();
     MachineClass *settings_class = new MachineClass("SYSTEMSETTINGS");
+    settings_class->setProperty("POLLING_DELAY", 2000);
     zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
     dispatch_sync.connect("inproc://dispatcher_sync");
     ControlSystemMachine machine;

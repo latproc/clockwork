@@ -108,7 +108,7 @@ class Scheduler {
   protected:
     SchedulerInternals *internals;
     Scheduler();
-    ~Scheduler() {}
+    ~Scheduler();
     static Scheduler *instance_;
     //std::priority_queue<ScheduledItem*, std::vector<ScheduledItem*>, CompareSheduledItems> items;
     PriorityQueue items;

@@ -61,7 +61,9 @@
 
 #include <chrono>
 #include <iostream>
+#if defined(__GLIBC__)
 #include <malloc.h>
+#endif
 
 extern bool program_done;
 extern bool machine_is_ready;
@@ -882,14 +884,6 @@ void ProcessingThread::operator()() {
                         throttled_items += channel.second->pendingThrottledCount();
                     }
                 }
-#if defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 33)
-                const struct mallinfo2 allocator = mallinfo2();
-#else
-                // mallinfo2() arrived in glibc 2.33.  Older controller
-                // images retain the same fields in mallinfo(), using int
-                // counters that are sufficient for this diagnostic snapshot.
-                const struct mallinfo allocator = mallinfo();
-#endif
                 last_memory_snapshot = curr_t;
                 std::cerr << "MEMSNAPSHOT"
                           << " scheduler=" << Scheduler::instance()->pendingCount()
@@ -899,13 +893,23 @@ void ProcessingThread::operator()() {
                           << " mail_items=" << mail_items
                           << " throttled_items=" << throttled_items
                           << " message_log=" << MessageLog::instance()->count()
-                          << " cjson_nodes=" << cJSON_LiveNodeCount()
-                          << " malloc_in_use_kb=" << allocator.uordblks / 1024
+                          << " cjson_nodes=" << cJSON_LiveNodeCount();
+#if defined(__GLIBC__)
+#if defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2, 33)
+                // mallinfo2() arrived in glibc 2.33.
+                const struct mallinfo2 allocator = mallinfo2();
+#else
+                // Older controller images retain the same fields in mallinfo(),
+                // using int counters that are sufficient for this diagnostic.
+                const struct mallinfo allocator = mallinfo();
+#endif
+                std::cerr << " malloc_in_use_kb=" << allocator.uordblks / 1024
                           << " malloc_free_kb=" << allocator.fordblks / 1024
                           << " malloc_arena_kb=" << allocator.arena / 1024
                           << " malloc_mmap_kb=" << allocator.hblkhd / 1024
-                          << " malloc_releasable_kb=" << allocator.keepcost / 1024
-                          << "\n";
+                          << " malloc_releasable_kb=" << allocator.keepcost / 1024;
+#endif
+                std::cerr << "\n";
             }
             //TBD add a guard here to detect/prevent rapid cycling
 

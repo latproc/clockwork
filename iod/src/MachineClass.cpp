@@ -512,7 +512,6 @@ bool MachineClass::cExport(const std::string &filename) {
             const Parameter &p = *p_iter++;
             params << ", MachineBase *" << p.val;
             values << ", " << p.val;
-            MachineInstance *p_machine = MachineInstance::find(p.val.asString().c_str());
             refs << "\tMachineBase *_" << p.val << ";\n";
             symbols[p.val.sValue] = PredicateSymbolDetails(p.val.sValue, "machine", p.val.sValue);
             setup << "\tm->_" << p.val << " = " << p.val << ";\n";

@@ -25,6 +25,92 @@
 #include <iterator>
 #include <utility>
 #include <chrono>
+#include <string>
+#include <functional>
+#include <random>
+#include <mutex>
+#include <boost/optional.hpp>
+
+namespace {
+    uint64_t hash_string(const std::string& s) {
+        return static_cast<uint64_t>(std::hash<std::string>{}(s));
+    }
+
+    void assign_hashed(std::map<int, uint64_t> & dest, int key, const Value & src) {
+        dest[key] = hash_string(src.asString());
+    }
+
+    void update_token(std::map<int, uint64_t> &tokens, const std::string &key, const Value &value) {
+        if (value.kind == Value::t_symbol) {
+            int tok = Tokeniser::instance()->getTokenId((key));
+            assign_hashed(tokens, tok, value);
+        }
+    }
+
+    // Clockwork RNG: deterministic when seeded via the RANDOMSEED keyword.
+    // We use mt19937_64 to get a full 64-bit output.
+    std::mutex rng_mutex;
+    std::mt19937_64 rng_engine;
+    bool rng_seeded = false;
+
+    uint64_t make_time_seed() {
+        // A simple time-based seed for the default case.
+        return static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::high_resolution_clock::now().time_since_epoch())
+                .count());
+    }
+
+    void seed_rng(uint64_t seed) {
+        std::lock_guard<std::mutex> lock(rng_mutex);
+        rng_engine.seed(seed);
+        rng_seeded = true;
+    }
+
+    uint64_t next_u64() {
+        std::lock_guard<std::mutex> lock(rng_mutex);
+        if (!rng_seeded) {
+            // Default: seed once from time so RANDOM works out of the box.
+            rng_engine.seed(make_time_seed());
+            rng_seeded = true;
+        }
+        // mt19937_64 produces 64-bit results directly.
+        return static_cast<uint64_t>(rng_engine());
+    }
+
+    uint64_t seed_from_value(const Value &v) {
+        if (v.kind == Value::t_integer) {
+            return static_cast<uint64_t>(v.iValue);
+        }
+        if (v.kind == Value::t_float) {
+            return static_cast<uint64_t>(v.fValue);
+        }
+        if (v.kind == Value::t_string || v.kind == Value::t_symbol) {
+            const std::string s = v.asString();
+            return s.empty() ? make_time_seed() : hash_string(s);
+        }
+        return make_time_seed();
+    }
+
+    boost::optional<Value> try_set_keyword(SymbolTable *keywords_table, const char *name, const Value &val) {
+        if (!keywords_table || !name || !keywords_table->exists(name)) {
+            return boost::none;
+        }
+
+        // Only allow mutation of specific keywords.
+        if (strcmp(name, "RANDOMSEED") == 0) {
+            const uint64_t seed = seed_from_value(val);
+            seed_rng(seed);
+            // Store the effective seed back into the keyword table as an integer.
+            return Value{static_cast<uint64_t>(seed)};
+        }
+
+        // Other keywords remain read-only.
+        return boost::none;
+    }
+
+    // ... next_u64, etc.
+}
 
 const Value SymbolTable::Null;
 const Value SymbolTable::True(true);
@@ -122,6 +208,7 @@ SymbolTable::SymbolTable() {
         keyword_table->add("UTCTIMESTAMP", "");
         keyword_table->add("ISOTIMESTAMP", "");
         keyword_table->add("RANDOM", "");
+        keyword_table->add("RANDOMSEED", "");
         keywords = keyword_table;
         reserved = new std::set<std::string>;
         reserved->insert("NAME");
@@ -193,8 +280,11 @@ const Value &SymbolTable::getKeyValue(const char *name) {
             clock = (uint64_t)microsecs();
             return clock;
         }
+        else if (strcmp("SEED", name) == 0) {
+
+        }
         else if (strcmp("RANDOM", name) == 0) {
-            uint64_t val = random();
+            uint64_t val = next_u64() / 2; // Avoid the possibility of negative values
             res = val;
             return res;
         }
@@ -246,10 +336,9 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         }
         if (strcmp("LOCALTIME", name) == 0) {
             char buf[40];
-            const char *fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03lu";
-            if (sizeof(long long) == sizeof(uint64_t)) {
-                fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03llu";
-            }
+            const char *fmt = sizeof(long long) == sizeof(uint64_t)
+                ? "%04d/%02d/%02d %02d:%02d:%02d.%03llu"
+                : "%04d/%02d/%02d %02d:%02d:%02d.%03lu";
             snprintf(buf, 40, fmt, lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour,
                      lt.tm_min, lt.tm_sec, local.time_of_day().total_milliseconds());
             res = Value(buf, Value::t_string);
@@ -257,10 +346,9 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         }
         if (strcmp("UTCTIME", name) == 0) {
             char buf[40];
-            const char *fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03lu";
-            if (sizeof(long long) == sizeof(uint64_t)) {
-                fmt = "%04d/%02d/%02d %02d:%02d:%02d.%03llu";
-            }
+            const char *fmt = sizeof(long long) == sizeof(uint64_t)
+                ? "%04d/%02d/%02d %02d:%02d:%02d.%03lu"
+                : "%04d/%02d/%02d %02d:%02d:%02d.%03llu";
             lt = to_tm(utc);
             snprintf(buf, 40, fmt, lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour,
                      lt.tm_min, lt.tm_sec, local.time_of_day().total_milliseconds());
@@ -269,10 +357,9 @@ const Value &SymbolTable::getKeyValue(const char *name) {
         }
         if (strcmp("TIMESEQ", name) == 0) {
             char buf[40];
-            const char *fmt = "%02d%02d%02d%02d%02d%02d%03lu";
-            if (sizeof(long long) == sizeof(uint64_t)) {
-                fmt = "%02d%02d%02d%02d%02d%02d%03llu";
-            }
+            const char *fmt = sizeof(long long) == sizeof(uint64_t)
+                ? "%02d%02d%02d%02d%02d%02d%03lu"
+                : "%02d%02d%02d%02d%02d%02d%03llu";
             snprintf(buf, 40, fmt, lt.tm_year - 100, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour,
                      lt.tm_min, lt.tm_sec, local.time_of_day().total_milliseconds());
             res = Value(buf, Value::t_string);
@@ -313,6 +400,13 @@ const Value &SymbolTable::getKeyValue(const char *name) {
 }
 
 bool SymbolTable::add(const char *name, const Value &val, ReplaceMode replace_mode) {
+    if (keywords && keywords->exists(name)) {
+        if (auto new_value = try_set_keyword(keywords, name, val)) {
+            keywords->st[std::string(name)] = *new_value;
+            return true;
+        }
+        return false;
+    }
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
         std::string s(name);
         st[s] = val;
@@ -328,6 +422,13 @@ bool SymbolTable::add(const char *name, const Value &val, ReplaceMode replace_mo
 }
 
 bool SymbolTable::add(const std::string &name, const Value &val, ReplaceMode replace_mode) {
+    if (keywords && keywords->exists(name.c_str())) {
+        if (auto new_value = try_set_keyword(keywords, name.c_str(), val)) {
+            keywords->st[std::string(name)] = *new_value;
+            return true;
+        }
+        return false;
+    }
     if (replace_mode == ST_REPLACE || (replace_mode == NO_REPLACE && st.find(name) == st.end())) {
         st[name] = val;
         if (val.kind == Value::t_symbol) {

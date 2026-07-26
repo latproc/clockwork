@@ -153,31 +153,31 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
                 return false;
             }
             const State *s = mi->getStateMachine()->findState(state_name.c_str());
-            if (!s) {
-                if (mi->isShadow()) {
-                    // shadow machines are intended to move to their initial state if the requested state is unknown
-                    s = &mi->getStateMachine()->initial_state;
-                }
-                else {
-                    char buf[150];
-                    snprintf(buf, 150, "Error: machine %s has no state called '%s'",
-                             mi->getName().c_str(), state_name.c_str());
-                    MessageLog::instance()->add(buf);
-                    error_str = buf;
-                    return false;
-                }
+            if (!s && mi->isShadow()) {
+                // shadow machines are intended to move to their initial state if the requested state is unknown
+                s = &mi->getStateMachine()->initial_state;
+                auto & log = MessageLog::instance()->get_stream();
+                log << "Error: " << mi->fullName() << "has no state called " << state_name << " and no initial state; ";
+                auto error_msg = MessageLog::instance()->access_stream_message();
+                MessageLog::instance()->release_stream();
+                error_str = error_msg.c_str();
+                return false;
             }
-            /*  it would be safer to push the requested state change onto the machine's
-                action list but some machines do not poll their action list because they
-                do not expect to receive events
-            */
+            if (!s) {
+                auto & log = MessageLog::instance()->get_stream();
+                log << "Error: " << mi->fullName() << "has no state called " << state_name;
+                auto error_msg = MessageLog::instance()->access_stream_message();
+                MessageLog::instance()->release_stream();
+                error_str = error_msg.c_str();
+                return false;
+            }
             if (mi->isShadow()) {
-                mi->setState(state_name.c_str(), auth, false);
+                mi->setState(*s, auth, false); //Request the control to change state
             }
             else {
                 SetStateActionTemplate ssat("SELF", state_name);
-                mi->enqueueAction(ssat.factory(
-                    mi)); // execute this state change once all other actions are complete
+                // execute this state change once all other actions are complete
+                mi->enqueueAction(ssat.factory( mi));
             }
             result_str = "OK";
             return true;
@@ -900,25 +900,26 @@ bool IODCommandShowMessages::run(std::vector<Value> &params) {
         ++idx;
     }
 
-    cJSON *result = log->toJSON((unsigned int)num);
-    if (result) {
-        if (use_json) {
+    if (use_json) {
+        auto result = log->toJSON((unsigned int)num);
+        if (result) {
             char *text = cJSON_Print(result);
             result_str = text;
             free(text);
+            cJSON_Delete(result);
+            return true;
+        } else {
+            error_str = "Failed to read the error log";
+            return false;
         }
-        else {
-            char *res = log->toString((unsigned int)num);
+    } else {
+        char *res = log->toString((unsigned int)num);
+        if (res) {
             result_str = res;
             free(res);
         }
-        cJSON_Delete(result);
-        return true;
     }
-    else {
-        error_str = "Failed to read the error log";
-        return false;
-    }
+    return true;
 }
 
 bool IODCommandTriggers::run(std::vector<Value> &params) {
@@ -1161,16 +1162,16 @@ bool IODCommandModbus::run(std::vector<Value> &params) {
 
 bool IODCommandModbusExport::run(std::vector<Value> &params) {
 
-    const char *file_name = modbus_map();
+    std::string file_name_str = modbus_map();
     if (params.size() == 3) {
-        file_name = params[2].asString().c_str();
+        file_name_str = params[2].asString();
     }
     const char *backup_file_name = "modbus_mappings.bak";
-    if (rename(file_name, backup_file_name)) {
+    if (rename(file_name_str.c_str(), backup_file_name)) {
         std::cerr << "file rename error: " << strerror(errno) << "\n";
     }
     std::list<MachineInstance *>::iterator m_iter = MachineInstance::begin();
-    std::ofstream out(file_name);
+    std::ofstream out(file_name_str);
     if (!out) {
         error_str = "not able to open mapping file for write";
         return false;
@@ -1523,6 +1524,7 @@ bool IODCommandFreeze::run(std::vector<Value> &params) {
     uint64_t now = start;
     while (now - start < 10000000) {
         usleep(100000);
+        now = microsecs();
     }
     result_str = "OK";
     return true;
@@ -1532,14 +1534,12 @@ extern bool program_done;
 extern bool all_ok;
 
 bool IODCommandToggleEtherCAT::run(std::vector<Value> &params) {
-    uint64_t start = microsecs();
     all_ok = !all_ok;
     result_str = "OK";
     return true;
 }
 
 bool IODCommandShutdown::run(std::vector<Value> &params) {
-    uint64_t start = microsecs();
     program_done = true;
     result_str = "OK";
     return true;
@@ -1625,3 +1625,4 @@ bool IODCommandSDO::run(std::vector<Value> &params) {
     }
     }
 */
+
