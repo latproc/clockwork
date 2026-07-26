@@ -304,6 +304,11 @@ void initialise_commands() {
     commands.push_back("SCHEDULER");
     commands.push_back("SEND");
     commands.push_back("SHOW");
+    commands.push_back("SHOW CYCLING");
+    commands.push_back("SHOW HEALTH");
+    commands.push_back("SHOW PROCSNAP");
+    commands.push_back("SHOW LOAD");
+    commands.push_back("SHOW BUSY");
     commands.push_back("SHUTDOWN");
     commands.push_back("SET");
     commands.push_back("TOGGLE");
@@ -328,6 +333,20 @@ void check_messages() {
         }
         if (*p) {
             std::cout << "recent messages:\n" << p << "\n";
+        }
+        free(data);
+    }
+}
+
+void print_startup_status() {
+    std::list<Value> params;
+    params.push_back(Value{"SHOW"});
+    params.push_back(Value{"HEALTH"});
+    char *data = send_command(params);
+    if (data) {
+        std::cout << data;
+        if (data[0] && data[strlen(data) - 1] != '\n') {
+            std::cout << "\n";
         }
         free(data);
     }
@@ -393,6 +412,7 @@ int main(int argc, const char *argv[]) {
         if (!quiet) {
             initialise_machine_names(0);
             check_messages();
+            print_startup_status();
         }
         initialise_commands();
 

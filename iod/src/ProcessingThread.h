@@ -78,6 +78,38 @@ class ProcessingThread : public ClockworkProcessManager {
 
     void join();
 
+    /** Last once-per-second snapshot. Queue depths are high-water marks over
+     *  the second; "now_*" is post-drain instant (often zero when idle). */
+    struct ProcSnap {
+        uint64_t at_us = 0;
+        uint64_t loops_per_sec = 0;
+        uint64_t loops_with_work = 0;
+        unsigned cycle_delay_us = 0;
+        size_t runnable = 0;
+        size_t stable = 0;
+        size_t exec = 0;
+        size_t mail = 0;
+        size_t events = 0;
+        size_t pend_ev = 0;
+        size_t now_runnable = 0;
+        size_t now_stable = 0;
+        size_t now_exec = 0;
+        size_t now_mail = 0;
+        size_t now_events = 0;
+        size_t now_pend_ev = 0;
+        // mqtt-fix idle diagnostics (also stored)
+        uint64_t absorb = 0;
+        uint64_t brk_dig = 0;
+        uint64_t brk_out = 0;
+        uint64_t brk_exec = 0;
+        uint64_t brk_oth = 0;
+        size_t out_n = 0;
+        bool valid = false;
+    };
+    static ProcSnap lastProcSnap();
+    static void noteRunnablePeaks(size_t runnable, size_t stable, size_t exec, size_t mail,
+                                  size_t events, size_t pend_ev);
+
   private:
     static ProcessingThread *instance_;
     ProcessingThread(ControlSystemMachine *m, HardwareActivation &activator,
@@ -90,6 +122,17 @@ class ProcessingThread : public ClockworkProcessManager {
                                     AutoStatStorage &avg_io_time);
     /** POLLING_DELAY: regular_poll ANALOG/COUNTER IOTIME without a domain push. */
     void sampleRegularPolls(uint64_t curr_t);
+
+    static void storeProcSnap(const ProcSnap &s);
+    static boost::mutex proc_snap_mutex_;
+    static ProcSnap last_proc_snap_;
+    static size_t peak_runnable_;
+    static size_t peak_stable_;
+    static size_t peak_exec_;
+    static size_t peak_mail_;
+    static size_t peak_events_;
+    static size_t peak_pend_ev_;
+    static uint64_t loops_with_work_;
 
     HardwareActivation &activate_hardware;
     IODCommandThread &command_interface;

@@ -27,6 +27,7 @@
 #include "MessageEncoding.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
+#include "ProcessingThread.h"
 #include "Scheduler.h"
 #include "SharedWorkSet.h"
 #include "Statistic.h"
@@ -578,6 +579,137 @@ bool IODCommandFind::run(std::vector<Value> &params) {
     return true;
 }
 
+bool IODCommandCycling::run(std::vector<Value> &params) {
+    uint64_t short_hold_us = 50000;
+    if (params.size() >= 3) {
+        long ms = 0;
+        if (params[2].asInteger(ms) && ms > 0) {
+            short_hold_us = static_cast<uint64_t>(ms) * 1000ULL;
+        }
+    }
+    std::ostringstream ss;
+    size_t scanned = 0;
+    size_t flagged = 0;
+    ss << "FAST STATE THRASH (on-demand; no CW-loop cost)\n"
+       << "Continuous flip-flop only: almost all of last "
+       << MachineInstance::STATE_HISTORY_SIZE << " holds short (<" << (short_hold_us / 1000)
+       << "ms),\n"
+       << "avg+max short, ring <1s, >=10/s, still thrashing now.\n"
+       << "Ignores long-stable + brief test/update hops.\n\nOffenders:\n";
+    for (auto iter = MachineInstance::begin(); iter != MachineInstance::end(); ++iter) {
+        MachineInstance *m = *iter;
+        if (!m) {
+            continue;
+        }
+        ++scanned;
+        if (m->state_history_count < 5) {
+            continue;
+        }
+        MachineInstance::StateThrashInfo t = m->analyseStateThrash(short_hold_us, 5, true);
+        if (!t.thrashing) {
+            continue;
+        }
+        ++flagged;
+        ss << "  " << m->fullName() << "  (" << m->_type << ")  now=" << m->getCurrentStateString()
+           << " for " << (t.current_dwell_us / 1000) << "ms\n"
+           << "    short=" << t.short_holds << "/" << t.history_count
+           << "  avg=" << t.avg_hold_us << "us  max=" << t.max_hold_us << "us"
+           << "  ring=" << t.span_us << "us  ~" << t.transitions_per_sec << "/s\n"
+           << "    path: " << t.path << "\n"
+           << "    → DESCRIBE " << m->getName() << ";\n";
+    }
+    if (flagged == 0) {
+        ss << "  (none — no continuous fast thrash)\n";
+    }
+    ss << "\nscanned " << scanned << ", continuous thrash " << flagged << "\n";
+    result_str = ss.str();
+    return true;
+}
+
+bool IODCommandProcSnap::run(std::vector<Value> &params) {
+    const ProcessingThread::ProcSnap s = ProcessingThread::lastProcSnap();
+    std::ostringstream ss;
+    if (!s.valid) {
+        ss << "PROCSNAP: (no sample yet — wait ~1s after start)\n";
+        result_str = ss.str();
+        return true;
+    }
+    const uint64_t age_ms =
+        (microsecs() > s.at_us) ? (microsecs() - s.at_us) / 1000ULL : 0;
+    ss << "PROCSNAP loops/s=" << s.loops_per_sec << " work_loops=" << s.loops_with_work
+       << " cycle_delay_us=" << s.cycle_delay_us << "  age=" << age_ms << "ms\n"
+       << "  peak: runnable=" << s.runnable << " stableQ=" << s.stable << " exec=" << s.exec
+       << " mail=" << s.mail << " ev=" << s.events << " pendEv=" << s.pend_ev << "\n"
+       << "  now:  runnable=" << s.now_runnable << " stableQ=" << s.now_stable
+       << " exec=" << s.now_exec << " mail=" << s.now_mail << " ev=" << s.now_events
+       << " pendEv=" << s.now_pend_ev
+       << "  (now=post-drain; zeros normal when idle)\n"
+       << "  absorb=" << s.absorb << " brk_dig=" << s.brk_dig << " brk_out=" << s.brk_out
+       << " brk_exec=" << s.brk_exec << " brk_oth=" << s.brk_oth << " outN=" << s.out_n << "\n";
+    result_str = ss.str();
+    return true;
+}
+
+bool IODCommandHealth::run(std::vector<Value> &params) {
+    const ProcessingThread::ProcSnap s = ProcessingThread::lastProcSnap();
+    size_t thrash = 0;
+    std::string thrash_names;
+    for (auto iter = MachineInstance::begin(); iter != MachineInstance::end(); ++iter) {
+        MachineInstance *m = *iter;
+        if (!m || m->state_history_count < 5) {
+            continue;
+        }
+        MachineInstance::StateThrashInfo t = m->analyseStateThrash(50000, 5, false);
+        if (!t.thrashing) {
+            continue;
+        }
+        ++thrash;
+        if (thrash <= 3) {
+            if (!thrash_names.empty()) {
+                thrash_names += ',';
+            }
+            thrash_names += m->getName();
+        }
+    }
+    if (thrash > 3) {
+        thrash_names += ",…";
+    }
+
+    std::ostringstream ss;
+    bool issue = false;
+    if (!s.valid) {
+        ss << "status: LOAD (waiting for first PROCSNAP ~1s)";
+    }
+    else {
+        const uint64_t age_ms =
+            (microsecs() > s.at_us) ? (microsecs() - s.at_us) / 1000ULL : 0;
+        const bool busy = (s.exec > 0 || s.mail > 0 || s.stable > 8 || s.runnable > 20);
+        const bool stale = age_ms > 3000;
+        if (busy || stale) {
+            issue = true;
+        }
+        ss << "status: "
+           << (stale ? "LOAD STALE" : (busy ? "LOAD BUSY" : "LOAD ok"))
+           << " loops/s=" << s.loops_per_sec << " work_loops=" << s.loops_with_work
+           << " peak[runnable=" << s.runnable << " stableQ=" << s.stable << " exec=" << s.exec
+           << " mail=" << s.mail << " ev=" << s.events << " pendEv=" << s.pend_ev << "]"
+           << " age=" << age_ms << "ms";
+    }
+    if (thrash > 0) {
+        issue = true;
+        ss << " | THRASH " << thrash << " (" << thrash_names << ")  → SHOW CYCLING;";
+    }
+    else {
+        ss << " | THRASH none";
+    }
+    if (issue) {
+        ss << "  ** check **";
+    }
+    ss << "\n";
+    result_str = ss.str();
+    return true;
+}
+
 bool IODCommandBusy::run(std::vector<Value> &params) {
     std::ostringstream ss;
     if (!SharedWorkSet::instance()->empty()) {
@@ -980,6 +1112,10 @@ bool IODCommandHelp::run(std::vector<Value> &params) {
        << "SEND command\n"
        << "SET machine_name TO state_name\n"
        << "SLAVES\n"
+       << "SHOW CYCLING [max_hold_ms]  (fast continuous thrash)\n"
+       << "SHOW HEALTH  (one-line LOAD+THRASH)\n"
+       << "SHOW PROCSNAP / SHOW LOAD\n"
+       << "SHOW BUSY\n"
        << "TOGGLE output_name\n"
        << "ERRORS [JSON]\n";
     std::string s = ss.str();

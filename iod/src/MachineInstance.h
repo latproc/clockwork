@@ -85,6 +85,22 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     };
     static constexpr size_t STATE_HISTORY_SIZE = 8;
 
+    /** Continuous fast thrash only — not long-stable + brief test hop. On-demand. */
+    struct StateThrashInfo {
+        size_t history_count = 0;
+        size_t short_holds = 0;
+        uint64_t min_hold_us = 0;
+        uint64_t max_hold_us = 0;
+        uint64_t avg_hold_us = 0;
+        uint64_t span_us = 0;
+        uint64_t current_dwell_us = 0;
+        double transitions_per_sec = 0.0;
+        bool thrashing = false;
+        std::string path;
+    };
+    StateThrashInfo analyseStateThrash(uint64_t short_hold_us = 50000, size_t min_short = 5,
+                                       bool want_path = true) const;
+
   protected:
     MachineInstance(InstanceType instance_type = MACHINE_INSTANCE);
     MachineInstance(CStringHolder name, const char *type,
