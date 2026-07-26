@@ -410,6 +410,16 @@ IODCommand *parseCommandString(const char *data) {
     else if (count == 2 && ds == "SHOW" && params[1] == "BUSY") {
         command = new IODCommandBusy;
     }
+    else if ((count == 2 || count == 3) && ds == "SHOW" && params[1] == "CYCLING") {
+        command = new IODCommandCycling;
+    }
+    else if (count == 2 && ds == "SHOW" && params[1] == "HEALTH") {
+        command = new IODCommandHealth;
+    }
+    else if (count == 2 && ds == "SHOW" &&
+             (params[1] == "PROCSNAP" || params[1] == "LOAD")) {
+        command = new IODCommandProcSnap;
+    }
     else if (count == 2 && ds == "SHOW" && params[1] == "TRIGGERS") {
         command = new IODCommandTriggers;
     }

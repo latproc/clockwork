@@ -78,6 +78,49 @@ extern void handle_io_sampling(uint64_t clock);
 
 #define VERBOSE_DEBUG 0
 
+boost::mutex ProcessingThread::proc_snap_mutex_;
+ProcessingThread::ProcSnap ProcessingThread::last_proc_snap_;
+size_t ProcessingThread::peak_runnable_ = 0;
+size_t ProcessingThread::peak_stable_ = 0;
+size_t ProcessingThread::peak_exec_ = 0;
+size_t ProcessingThread::peak_mail_ = 0;
+size_t ProcessingThread::peak_events_ = 0;
+size_t ProcessingThread::peak_pend_ev_ = 0;
+uint64_t ProcessingThread::loops_with_work_ = 0;
+
+ProcessingThread::ProcSnap ProcessingThread::lastProcSnap() {
+    boost::mutex::scoped_lock lock(proc_snap_mutex_);
+    return last_proc_snap_;
+}
+
+void ProcessingThread::storeProcSnap(const ProcSnap &s) {
+    boost::mutex::scoped_lock lock(proc_snap_mutex_);
+    last_proc_snap_ = s;
+}
+
+void ProcessingThread::noteRunnablePeaks(size_t n_runnable, size_t n_stable, size_t n_exec,
+                                         size_t n_mail, size_t n_events, size_t n_pend_ev) {
+    boost::mutex::scoped_lock lock(proc_snap_mutex_);
+    if (n_runnable > peak_runnable_) {
+        peak_runnable_ = n_runnable;
+    }
+    if (n_stable > peak_stable_) {
+        peak_stable_ = n_stable;
+    }
+    if (n_exec > peak_exec_) {
+        peak_exec_ = n_exec;
+    }
+    if (n_mail > peak_mail_) {
+        peak_mail_ = n_mail;
+    }
+    if (n_events > peak_events_) {
+        peak_events_ = n_events;
+    }
+    if (n_pend_ev > peak_pend_ev_) {
+        peak_pend_ev_ = n_pend_ev;
+    }
+}
+
 unsigned int CommandSocketInfo::last_idx = 5;
 
 class ProcessingThreadInternals {
@@ -963,6 +1006,24 @@ void ProcessingThread::operator()() {
                 static size_t last_runnable_count = 0;
                 boost::recursive_mutex::scoped_lock lock(runnable_mutex);
                 size_t runnable_count = runnable.size();
+                // Peak sample before purging inert entries.
+                size_t n_stable = 0, n_exec = 0, n_mail = 0, n_events = 0;
+                for (MachineInstance *mi : runnable) {
+                    if (mi->queuedForStableStateTest()) {
+                        ++n_stable;
+                    }
+                    if (mi->executingCommand()) {
+                        ++n_exec;
+                    }
+                    if (mi->hasMail()) {
+                        ++n_mail;
+                    }
+                    if (!mi->pendingEvents().empty()) {
+                        ++n_events;
+                    }
+                }
+                noteRunnablePeaks(runnable_count, n_stable, n_exec, n_mail, n_events,
+                                  MachineInstance::pendingEvents().size());
                 for (auto it = runnable.begin(); it != runnable.end();) {
                     MachineInstance *mi = *it;
                     if (mi->hasMail() || !mi->pendingEvents().empty()) {
@@ -988,6 +1049,10 @@ void ProcessingThread::operator()() {
                 const bool urgent_work = io_urgent || machine_urgent;
                 machines_have_work =
                     urgent_work || exec_only_waiting || stable_pending;
+                if (machines_have_work || urgent_work || io_urgent) {
+                    boost::mutex::scoped_lock plock(proc_snap_mutex_);
+                    ++loops_with_work_;
+                }
                 if (runnable_count != last_runnable_count) {
                     last_runnable_count = runnable_count;
                 }
@@ -1880,10 +1945,9 @@ void ProcessingThread::operator()() {
         machine.idle(); // in case any of the above triggered a change to the machine state
         last_machine_change = machine.lastUpdated();
 
-        // PROCSNAP: opt-in via DEBUG DEBUG_PROCSNAP on|off (default off).
-        // Do NOT usleep here to rate-limit — that delays EtherCAT/timer/cmd.
-        // Idle rate uses interruptible zmq_poll + quiet EC pull in the wait loop.
-        if (LOGS(DebugExtra::instance()->DEBUG_PROCSNAP)) {
+        // Once-per-second snapshot always stored (SHOW HEALTH / PROCSNAP).
+        // STDERR detail only when DEBUG DEBUG_PROCSNAP is on.
+        {
             static uint64_t last_iter_us = 0;
             static uint64_t iter_count = 0;
             static uint64_t last_report_us = 0;
@@ -1893,12 +1957,12 @@ void ProcessingThread::operator()() {
                 last_report_us = last_iter_us;
             }
             else if (last_iter_us - last_report_us >= 1000000) {
+                const bool want_detail = LOGS(DebugExtra::instance()->DEBUG_PROCSNAP);
                 size_t n_runnable = 0;
                 size_t n_stable = 0;
                 size_t n_exec = 0;
                 size_t n_mail = 0;
                 size_t n_events = 0;
-                // Sample a few names so we can see what never leaves runnable.
                 std::string sample_exec;
                 std::string sample_mail;
                 std::string sample_stable;
@@ -1911,7 +1975,7 @@ void ProcessingThread::operator()() {
                         const bool ml = mi->hasMail();
                         if (st) {
                             ++n_stable;
-                            if (sample_stable.size() < 140) {
+                            if (want_detail && sample_stable.size() < 140) {
                                 if (!sample_stable.empty()) {
                                     sample_stable += ',';
                                 }
@@ -1920,7 +1984,7 @@ void ProcessingThread::operator()() {
                         }
                         if (ex) {
                             ++n_exec;
-                            if (sample_exec.size() < 200) {
+                            if (want_detail && sample_exec.size() < 200) {
                                 if (!sample_exec.empty()) {
                                     sample_exec += ',';
                                 }
@@ -1937,7 +2001,7 @@ void ProcessingThread::operator()() {
                         }
                         if (ml) {
                             ++n_mail;
-                            if (sample_mail.size() < 140) {
+                            if (want_detail && sample_mail.size() < 140) {
                                 if (!sample_mail.empty()) {
                                     sample_mail += ',';
                                 }
@@ -1949,41 +2013,85 @@ void ProcessingThread::operator()() {
                         }
                     }
                 }
-                const char *hw_s = "?";
-                switch (IOComponent::getHardwareState()) {
-                case IOComponent::s_hardware_preinit:
-                    hw_s = "pre";
-                    break;
-                case IOComponent::s_hardware_init:
-                    hw_s = "init";
-                    break;
-                case IOComponent::s_operational:
-                    hw_s = "op";
-                    break;
+                const size_t n_pend = MachineInstance::pendingEvents().size();
+                noteRunnablePeaks(n_runnable, n_stable, n_exec, n_mail, n_events, n_pend);
+
+                ProcSnap snap;
+                snap.at_us = last_iter_us;
+                snap.loops_per_sec = iter_count;
+                snap.cycle_delay_us = static_cast<unsigned>(internals->cycle_delay);
+                snap.now_runnable = n_runnable;
+                snap.now_stable = n_stable;
+                snap.now_exec = n_exec;
+                snap.now_mail = n_mail;
+                snap.now_events = n_events;
+                snap.now_pend_ev = n_pend;
+                snap.absorb = snap_absorb;
+                snap.brk_dig = snap_brk_dig;
+                snap.brk_out = snap_brk_out;
+                snap.brk_exec = snap_brk_exec;
+                snap.brk_oth = snap_brk_oth;
+                snap.out_n = IOComponent::updatesWaiting();
+                {
+                    boost::mutex::scoped_lock plock(proc_snap_mutex_);
+                    snap.runnable = peak_runnable_;
+                    snap.stable = peak_stable_;
+                    snap.exec = peak_exec_;
+                    snap.mail = peak_mail_;
+                    snap.events = peak_events_;
+                    snap.pend_ev = peak_pend_ev_;
+                    snap.loops_with_work = loops_with_work_;
+                    peak_runnable_ = peak_stable_ = peak_exec_ = peak_mail_ = 0;
+                    peak_events_ = peak_pend_ev_ = 0;
+                    loops_with_work_ = 0;
                 }
-                std::cerr << "PROCSNAP loops/s=" << iter_count
-                          << " cycle_delay_us=" << internals->cycle_delay
-                          << " runnable=" << n_runnable
-                          << " stableQ=" << n_stable
-                          << " exec=" << n_exec
-                          << " mail=" << n_mail
-                          << " ev=" << n_events
-                          << " pendEv=" << MachineInstance::pendingEvents().size()
-                          << " outN=" << IOComponent::updatesWaiting()
-                          << " hw=" << hw_s
-                          << " absorb=" << snap_absorb
-                          << " brk_dig=" << snap_brk_dig
-                          << " brk_out=" << snap_brk_out
-                          << " brk_exec=" << snap_brk_exec
-                          << " brk_oth=" << snap_brk_oth
-                          << " oth[1..7]=" << snap_oth_idx[1] << "," << snap_oth_idx[2]
-                          << "," << snap_oth_idx[3] << "," << snap_oth_idx[4]
-                          << "," << snap_oth_idx[5] << "," << snap_oth_idx[6]
-                          << "," << snap_oth_idx[7]
-                          << "\n"
-                          << "  exec: " << sample_exec << "\n"
-                          << "  mail: " << sample_mail << "\n"
-                          << "  stable: " << sample_stable << "\n";
+                snap.valid = true;
+                storeProcSnap(snap);
+
+                if (want_detail) {
+                    const char *hw_s = "?";
+                    switch (IOComponent::getHardwareState()) {
+                    case IOComponent::s_hardware_preinit:
+                        hw_s = "pre";
+                        break;
+                    case IOComponent::s_hardware_init:
+                        hw_s = "init";
+                        break;
+                    case IOComponent::s_operational:
+                        hw_s = "op";
+                        break;
+                    }
+                    std::cerr << "PROCSNAP loops/s=" << snap.loops_per_sec
+                              << " work_loops=" << snap.loops_with_work
+                              << " cycle_delay_us=" << snap.cycle_delay_us << "\n"
+                              << "  peak: runnable=" << snap.runnable
+                              << " stableQ=" << snap.stable
+                              << " exec=" << snap.exec
+                              << " mail=" << snap.mail
+                              << " ev=" << snap.events
+                              << " pendEv=" << snap.pend_ev << "\n"
+                              << "  now:  runnable=" << snap.now_runnable
+                              << " stableQ=" << snap.now_stable
+                              << " exec=" << snap.now_exec
+                              << " mail=" << snap.now_mail
+                              << " ev=" << snap.now_events
+                              << " pendEv=" << snap.now_pend_ev
+                              << "  (now=post-drain; zeros normal when idle)\n"
+                              << "  outN=" << snap.out_n << " hw=" << hw_s
+                              << " absorb=" << snap.absorb
+                              << " brk_dig=" << snap.brk_dig
+                              << " brk_out=" << snap.brk_out
+                              << " brk_exec=" << snap.brk_exec
+                              << " brk_oth=" << snap.brk_oth
+                              << " oth[1..7]=" << snap_oth_idx[1] << "," << snap_oth_idx[2]
+                              << "," << snap_oth_idx[3] << "," << snap_oth_idx[4]
+                              << "," << snap_oth_idx[5] << "," << snap_oth_idx[6]
+                              << "," << snap_oth_idx[7]
+                              << "\n"
+                              << "  exec: " << sample_exec << "\n"
+                              << "  mail: " << sample_mail << "\n"
+                              << "  stable: " << sample_stable << "\n";
+                }
                 iter_count = 0;
                 snap_absorb = snap_brk_dig = snap_brk_out = snap_brk_exec = snap_brk_oth = 0;
                 for (int i = 0; i < 8; ++i) {
