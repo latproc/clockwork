@@ -186,7 +186,8 @@ Channel::Channel(const std::string &ch_name, const std::string &type)
       channel_name(ch_name), internals(0), port(0), mif(0), communications_manager(0),
       monit_subs(0), monit_pubs(0), connect_responder(0), disconnect_responder(0), throttle_time(0),
       connections(0), aborted(false), started_(false), cmd_client(0), cmd_server(0),
-      last_throttled_send(0), does_monitor(false), does_share(false), does_update(false) {
+      last_throttled_send(0), does_monitor(false), does_share(false), does_update(false),
+      last_client_status_send_us_(0), pending_client_status_(false) {
     internals = new ChannelInternals();
     if (all == nullptr) {
         all = new std::map<std::string, Channel *>;
@@ -363,7 +364,61 @@ bool Channel::syncRemoteStates(std::list<std::string> &messages) {
     return true;
 }
 
+void Channel::sendClientHandshakeStatus(const char *reason) {
+    if (!isClient() || !cmd_client) {
+        return;
+    }
+    MessageHeader mh(MessageHeader::SOCK_CTRL, MessageHeader::SOCK_CTRL, false);
+    mh.start_time = microsecs();
+    char buf[160];
+    snprintf(buf, sizeof(buf), "Channel %s (client); sending 'status' to partner (%s)",
+             channel_name.c_str(), reason ? reason : "handshake");
+    MessageLog::instance()->add(buf);
+    DBG_CHANNELS << buf << "\n";
+    safeSend(*cmd_client, "status", 6, mh);
+    last_client_status_send_us_ = mh.start_time;
+}
+
+void Channel::maybeRetryClientHandshakeStatus() {
+    if (!isClient() || current_state != ChannelImplementation::DOWNLOADING) {
+        return;
+    }
+    if (!cmd_client || connections == 0) {
+        return;
+    }
+    if (communications_manager && communications_manager->monit_subs.disconnected()) {
+        return;
+    }
+    const uint64_t now = microsecs();
+    if (last_client_status_send_us_ != 0 &&
+        (now - last_client_status_send_us_) < client_status_retry_us_) {
+        return;
+    }
+    sendClientHandshakeStatus(last_client_status_send_us_ == 0 ? "enter" : "retry");
+}
+
+bool Channel::shouldIgnoreWaitStart(const State &prior) const {
+    // Do not regress a handshake that already left WAITSTART.
+    return prior == ChannelImplementation::UPLOADING ||
+           prior == ChannelImplementation::DOWNLOADING ||
+           prior == ChannelImplementation::ACTIVE;
+}
+
 Action::Status Channel::setState(const State &new_state, uint64_t authority, bool resume) {
+    const State prior = current_state;
+
+    // Server: refuse WAITSTART if handshake already progressed (queued action race).
+    if (!isClient() && new_state == ChannelImplementation::WAITSTART &&
+        shouldIgnoreWaitStart(prior)) {
+        char buf[160];
+        snprintf(buf, sizeof(buf),
+                 "Channel %s: ignoring WAITSTART while already in %s", channel_name.c_str(),
+                 prior.getName().c_str());
+        MessageLog::instance()->add(buf);
+        DBG_CHANNELS << buf << "\n";
+        return Action::Complete;
+    }
+
     MachineInstance::setState(new_state, authority, resume);
     setNeedsCheck(); // conservative: likely to need attention after a setstate
     DBG_CHANNELS << "--- Channel " << channel_name << " " << getCurrent() << " --> " << new_state << " authority "
@@ -435,12 +490,29 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
         MessageLog::instance()->add(buf);
         DBG_CHANNELS << buf << "\n";
         enableShadows();
+        // Consume latched early "status" so we do not depend on a client resend.
+        if (pending_client_status_) {
+            pending_client_status_ = false;
+            snprintf(buf, 100,
+                     "Channel %s: applying latched client 'status' after WAITSTART",
+                     channel_name.c_str());
+            MessageLog::instance()->add(buf);
+            DBG_CHANNELS << buf << "\n";
+            SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"UPLOADING"});
+            enqueueAction(ssat.factory(this));
+        }
     }
     else if (new_state == ChannelImplementation::UPLOADING) {
         snprintf(buf, 100, "Channel %s: (%s) setting state to UPLOADING", channel_name.c_str(),
                  (isClient()) ? "client" : "server");
         MessageLog::instance()->add(buf);
         DBG_CHANNELS << buf << "\n";
+
+        // Handshake has progressed; clear any leftover latch/retry clock.
+        pending_client_status_ = false;
+        if (isClient()) {
+            last_client_status_send_us_ = 0;
+        }
 
         setNeedsCheck();
         SyncRemoteStatesActionTemplate srsat(this, cmd_client);
@@ -451,18 +523,12 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
                  (isClient()) ? "client" : "server");
         MessageLog::instance()->add(buf);
         DBG_CHANNELS << channel_name << " DOWNLOADING\n";
-        MessageHeader mh(MessageHeader::SOCK_CTRL, MessageHeader::SOCK_CTRL, false);
-        mh.start_time = microsecs();
-        std::string ack;
         if (isClient()) {
-            snprintf(buf, 100, "Channel %s (client); sending 'status' to partner",
-                     channel_name.c_str());
-            MessageLog::instance()->add(buf);
-            DBG_CHANNELS << buf << "\n";
-
-            safeSend(*cmd_client, "status", 6, mh);
+            sendClientHandshakeStatus("enter DOWNLOADING");
         }
         else {
+            MessageHeader mh(MessageHeader::SOCK_CTRL, MessageHeader::SOCK_CTRL, false);
+            mh.start_time = microsecs();
             snprintf(buf, 100, "Channel %s is server; sending 'done' to partner",
                      channel_name.c_str());
             MessageLog::instance()->add(buf);
@@ -478,6 +544,12 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
         DBG_CHANNELS << channel_name << " DISCONNECTED\n";
         disableShadows();
         setNeedsCheck();
+        last_client_status_send_us_ = 0;
+        pending_client_status_ = false;
+    }
+    else if (new_state == ChannelImplementation::ACTIVE) {
+        last_client_status_send_us_ = 0;
+        pending_client_status_ = false;
     }
     return res;
 }
@@ -614,6 +686,15 @@ void Channel::addConnection() {
                 SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"ACTIVE"});
                 enqueueAction(ssat.factory(this));
             }
+            else if (shouldIgnoreWaitStart(current_state)) {
+                // Handshake already progressed (e.g. early status applied); do not regress.
+                std::stringstream ss;
+                ss << "Channel " << channel_name
+                   << " first connection while already in " << current_state
+                   << "; skipping WAITSTART";
+                MessageLog::instance()->add(ss.str());
+                DBG_CHANNELS << ss.str() << "\n";
+            }
             else {
                 SetStateActionTemplate ssat(CStringHolder("SELF"), Value{"WAITSTART"});
                 enqueueAction(ssat.factory(this));
@@ -624,7 +705,8 @@ void Channel::addConnection() {
         assert("Cannot add a second connection to a client" && false);
     }
     else if (!definition()->isPublisher()) {
-        if (current_state != ChannelImplementation::WAITSTART) {
+        if (current_state != ChannelImplementation::WAITSTART &&
+            !shouldIgnoreWaitStart(current_state)) {
             std::stringstream ss;
             ss << "Channel " << channel_name << " added another connection " << connections
                << " when in state: " << current_state << "; now waiting for start";
@@ -909,7 +991,7 @@ void Channel::stopServer() {
 // of data for the channel
 
 void Channel::checkStateChange(std::string event) {
-    char buf[100];
+    char buf[160];
     DBG_CHANNELS << "Received " << event << " in " << current_state << " on " << channel_name
                  << "\n";
 
@@ -919,6 +1001,15 @@ void Channel::checkStateChange(std::string event) {
     if (current_state == ChannelImplementation::DISCONNECTED) {
         checkCommunications();
         if (current_state == ChannelImplementation::DISCONNECTED) {
+            // Server: latch early "status" so WAITSTART can apply it when ready.
+            if (!isClient() && event == "status") {
+                pending_client_status_ = true;
+                snprintf(buf, sizeof(buf),
+                         "Channel %s latched early 'status' while DISCONNECTED",
+                         channel_name.c_str());
+                MessageLog::instance()->add(buf);
+                DBG_CHANNELS << buf << "\n";
+            }
             return;
         }
     }
@@ -928,6 +1019,7 @@ void Channel::checkStateChange(std::string event) {
                      channel_name.c_str());
             MessageLog::instance()->add(buf);
             DBG_CHANNELS << buf << "\n";
+            last_client_status_send_us_ = 0; // stop retries once partner advances us
             if (setState(ChannelImplementation::UPLOADING) == Action::Failed) {
             }
         }
@@ -944,31 +1036,73 @@ void Channel::checkStateChange(std::string event) {
         }
     }
     else {
-        // note that the start event may arrive before our switch to waitstart.
-        // we rely on the client resending if necessary
+        // "status" may arrive before WAITSTART. Latch it and also rely on client retry.
         if (current_state == ChannelImplementation::CONNECTED && event == "status") {
+            pending_client_status_ = false;
             setState(ChannelImplementation::UPLOADING);
         }
         else if (current_state == ChannelImplementation::WAITSTART && event == "status") {
+            pending_client_status_ = false;
             setState(ChannelImplementation::UPLOADING);
         }
         else if (current_state == ChannelImplementation::ACTIVE && event == "status") {
-            {
-                FileLogger fl(program_name);
-                fl.f() << "ignoring " << event << " while active\n";
-                DBG_CHANNELS << "ignoring " << event << " while active\n";
-            }
-            //setState(ChannelImplementation::UPLOADING);
+            // Reconnecting client is re-requesting the handshake. Do not ignore:
+            // ignoring leaves the client stuck in DOWNLOADING forever.
+            pending_client_status_ = false;
+            snprintf(buf, sizeof(buf),
+                     "Channel %s: ACTIVE received 'status'; re-entering UPLOADING",
+                     channel_name.c_str());
+            MessageLog::instance()->add(buf);
+            DBG_CHANNELS << buf << "\n";
+            setState(ChannelImplementation::UPLOADING);
         }
         else if (current_state == ChannelImplementation::UPLOADING) {
-            setState(ChannelImplementation::ACTIVE);
+            // "done" completes server upload; stray "status" while uploading
+            // should re-drive sync rather than jump to ACTIVE.
+            if (event == "status") {
+                pending_client_status_ = false;
+                snprintf(buf, sizeof(buf),
+                         "Channel %s: UPLOADING received 'status'; restarting sync",
+                         channel_name.c_str());
+                MessageLog::instance()->add(buf);
+                setState(ChannelImplementation::UPLOADING);
+            }
+            else {
+                setState(ChannelImplementation::ACTIVE);
+            }
         }
         else if (current_state == ChannelImplementation::DOWNLOADING) {
-            setState(ChannelImplementation::ACTIVE);
+            if (event == "status") {
+                // Client still waiting; re-send done instead of abandoning handshake.
+                if (cmd_client) {
+                    MessageHeader mh(MessageHeader::SOCK_CTRL, MessageHeader::SOCK_CTRL, false);
+                    mh.start_time = microsecs();
+                    mh.needReply(true);
+                    snprintf(buf, sizeof(buf),
+                             "Channel %s is server; re-sending 'done' (client status while "
+                             "DOWNLOADING)",
+                             channel_name.c_str());
+                    MessageLog::instance()->add(buf);
+                    safeSend(*cmd_client, "done", 4, mh);
+                }
+            }
+            else {
+                setState(ChannelImplementation::ACTIVE);
+            }
         }
         else {
-            DBG_CHANNELS << "Unexpected channel state " << current_state << " on " << channel_name
-                         << "\n";
+            if (event == "status") {
+                pending_client_status_ = true;
+                snprintf(buf, sizeof(buf),
+                         "Channel %s latched early 'status' in state %s", channel_name.c_str(),
+                         current_state.getName().c_str());
+                MessageLog::instance()->add(buf);
+                DBG_CHANNELS << buf << "\n";
+            }
+            else {
+                DBG_CHANNELS << "Unexpected channel state " << current_state << " on "
+                             << channel_name << "\n";
+            }
             //assert(false);
         }
     }
@@ -2711,6 +2845,22 @@ void Channel::checkCommunications() {
         else {
             setState(ChannelImplementation::UPLOADING);
         }
+    }
+    else if (isClient() && current_state == ChannelImplementation::DOWNLOADING) {
+        // Reliable handshake: resend "status" until the server advances us.
+        maybeRetryClientHandshakeStatus();
+    }
+    else if (!isClient() && current_state == ChannelImplementation::WAITSTART &&
+             pending_client_status_) {
+        // Apply latched status if WAITSTART entry missed it (ordering edge).
+        pending_client_status_ = false;
+        char buf[160];
+        snprintf(buf, sizeof(buf),
+                 "Channel %s: applying latched client 'status' while WAITSTART",
+                 channel_name.c_str());
+        MessageLog::instance()->add(buf);
+        DBG_CHANNELS << buf << "\n";
+        setState(ChannelImplementation::UPLOADING);
     }
 }
 
