@@ -1001,21 +1001,21 @@ void ProcessingThread::operator()() {
             const bool paced_only =
                 !urgent_work && (stable_pending || exec_only_waiting);
             // Stable-state / waiting-exec recheck interval (µs).
-            const uint64_t stable_check_us = 10000; // 10 ms
+            // 2 ms ≈ 2× POINTSSTARTUP cycle (1 ms); far below old 10 ms soft lag.
+            const uint64_t stable_check_us = 2000;
 
             {
-                // Busy EC pull only for digital/IO urgency. Waiting SetState
-                // must not pin POLLING_DELAY at CYCLE_DELAY forever.
-                // No IO urgency: 10 ms pull. ANALOG IOTIME still advances on
-                // each received frame; POINT edges set io_urgent and restore
-                // busy_pull on the next processing pass (max lag ≈ 10 ms).
+                // Analog-only pace for ecat pull_due (LIST/PID/plugins). Digital
+                // POINT edges bypass this in ecat_thread (push every bus cycle).
+                // Quiet 5 ms when no io_urgent; busy = CYCLE_DELAY (1 ms when
+                // POINTS on). Waiting SetState must not pin busy forever.
                 static bool slow_ec_pull = false;
                 const unsigned long busy_pull =
                     static_cast<unsigned long>(internals->cycle_delay > 100
                                                    ? internals->cycle_delay
                                                    : 100);
                 const unsigned long quiet_pull =
-                    busy_pull > 10000UL ? busy_pull : 10000UL;
+                    busy_pull > 5000UL ? busy_pull : 5000UL;
                 if (!io_urgent && !slow_ec_pull) {
                     set_polling_time(quiet_pull);
                     slow_ec_pull = true;
@@ -1174,7 +1174,7 @@ void ProcessingThread::operator()() {
                 // Wait for "done" (interruptible poll, not busy spin).
                 zmq::pollitem_t spoll = {(void *)sched_sync, 0, ZMQ_POLLIN, 0};
                 bool got_done = false;
-                for (int n = 0; n < 50; ++n) { // up to ~50 ms
+                for (int n = 0; n < 10; ++n) { // up to ~10 ms (do not black out EC long)
                     try {
                         if (zmq::poll(&spoll, 1, std::chrono::milliseconds(1)) > 0 &&
                             (spoll.revents & ZMQ_POLLIN)) {
