@@ -312,6 +312,12 @@ class Channel : public MachineInstance, public ChannelImplementation {
     void addConnection();
     void dropConnection();
 
+    // Client handshake: send/retry "status" while stuck in DOWNLOADING.
+    // Server handshake: latch early "status" until WAITSTART can consume it.
+    void sendClientHandshakeStatus(const char *reason);
+    void maybeRetryClientHandshakeStatus();
+    bool shouldIgnoreWaitStart(const State &prior) const;
+
     void sendPropertyChangeMessage(MachineInstance *m, const std::string &name, const Value &key,
                                    const Value &val, uint64_t authority = 0);
     /*
@@ -365,6 +371,14 @@ class Channel : public MachineInstance, public ChannelImplementation {
     bool does_monitor;
     bool does_share;
     bool does_update;
+
+    // Handshake recovery (see CW2CW WAITSTART/DOWNLOADING hang)
+    // Client: last time "status" was sent; 0 means never/not in handshake.
+    uint64_t last_client_status_send_us_;
+    // Server: "status" arrived before WAITSTART (or was otherwise not applied yet).
+    bool pending_client_status_;
+    // Resend interval while client remains in DOWNLOADING (microseconds).
+    static const uint64_t client_status_retry_us_ = 500000; // 500 ms
 
     friend class SyncRemoteStatesAction;
     friend class ChannelDefinition;
