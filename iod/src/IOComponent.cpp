@@ -1182,15 +1182,22 @@ int64_t AnalogueInput::filter(int64_t raw) {
         value_changed = (static_cast<int64_t>(config->last_sent) != prev_sent);
     }
 
-    // CW emit policy (replaces plant CLOCKING list for non-critical analogs):
+    // CW property publish policy (owner only — do NOT notifyDependents).
+    //
+    // DIGITALVALUE/setValue-style fan-out woke every machine that depends on IA
+    // and pinned the plant. Non-critical eng consumers (A_*) stay on a small
+    // CLOCKING list: SEND update TO L_ClockedAnalogInputs only those machines
+    // recalculate factor/base/window. Plugins bind live int pointers on IA
+    // (VALUE/raw) and do not need a CW message storm.
+    //
+    // Publish schedule:
     //  1) once at startup
-    //  2) filtered raw change + engineering window (factor/base/window)
-    //  3) safety keepalive at safety_emit even if unchanged
-    // Gated by emit flag / guard (on|off|true|false).
+    //  2) filtered raw change + eng window (factor/base/window on owner)
+    //  3) safety keepalive at safety_emit
+    // Gated by emit flag / guard (on|off|true|false), like G_CoreE24.
     const int64_t raw_val = static_cast<int64_t>(config->last_sent);
     const bool allowed = emitAllowed(config->emit_guard, config->emit_flag);
 
-    // Per-owner scale (A_* used factor/base/window; same OPTIONs on ANALOGINPUT).
     bool any_change = false;
     for (MachineInstance *o : owners) {
         if (!o) {
@@ -1225,9 +1232,8 @@ int64_t AnalogueInput::filter(int64_t raw) {
         return raw_val;
     }
 
-    // VALUE stays integer filtered raw (plugins use getIntValue / Pressure.VALUE).
-    // factor/base/window only gate change-emit; eng export remains on A_* wrappers
-    // or an optional ENG property for float consumers.
+    // VALUE = integer filtered raw (plugins). Optional ENG for scaled consumers
+    // that read IA directly. No activate/notifyDependents — keeps fan-out off.
     double first_eng = static_cast<double>(raw_val);
     bool first = true;
     for (MachineInstance *o : owners) {
@@ -1246,9 +1252,6 @@ int64_t AnalogueInput::filter(int64_t raw) {
             o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
         }
         o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
-        o->setNeedsCheck();
-        ProcessingThread::activate(o);
-        o->notifyDependents();
         if (*config->calc_stddev) {
             o->properties.add("stddev", bufferStddev(config->positions, 5),
                               SymbolTable::ST_REPLACE);
@@ -1516,7 +1519,8 @@ int64_t Counter::filter(int64_t val) {
         return raw_val;
     }
 
-    // VALUE/Position stay integer (plugins). Optional ENG float when scaled.
+    // VALUE/Position integer only; no notifyDependents (same as ANALOGINPUT).
+    // CLOCKEDCOUTER* / rate estimators poll Position on their own schedule.
     double first_eng = static_cast<double>(raw_val);
     bool first = true;
     for (MachineInstance *o : owners) {
@@ -1539,9 +1543,6 @@ int64_t Counter::filter(int64_t val) {
                           SymbolTable::ST_REPLACE);
         o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
                           SymbolTable::ST_REPLACE);
-        o->setNeedsCheck();
-        ProcessingThread::activate(o);
-        o->notifyDependents();
     }
     internals->last_emitted_raw = raw_val;
     internals->last_emitted_eng = first_eng;

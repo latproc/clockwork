@@ -125,27 +125,19 @@ thrash 0, quiet loops/s single-digit to ~30.
 
 **Risk:** Medium–high if LSB noise storms CW — tolerance mandatory.
 
-**Status:** Advancing — IO-level emit replaces CLOCKING list for non-critical IO:
+**Status:** Split responsibility (load-safe):
 
-**ANALOGINPUT / COUNTER emit policy**
-1. **Startup** — one emit when first sample is ready  
-2. **Change** — filter tick (`throttle`/`rate` ms, default 100) + tolerance; eng
-   `VALUE = raw * factor + base`; change only if `|Δeng| > window` (or raw change
-   if window=0)  
-3. **Safety** — re-emit at least every `safety_emit` ms (default 1000) even if
-   unchanged  
-4. **Guard/flag** — `emit` 0/1 on settings, or machine `guard`/`emit_guard` in
-   state `off`/`false` freezes emit (same idea as `G_CoreE24` on
-   `M_ClockedAnalogInputs`)
+| Layer | Role |
+|-------|------|
+| **IA ANALOGINPUT / COUNTER** | Filter on throttle; publish **owner** `VALUE`/`raw`/`ENG` only. **No** `notifyDependents` / activate fan-out (that was the DIGITALVALUE-style storm). |
+| **A_* CLOCKED list** | **Who** sees eng updates: small `L_ClockedAnalogInputs` + `M_ClockedAnalogInputs` (`rate` + `G_CoreE24`) `SEND update` only to those machines. A_ recalculates eng from `IA.VALUE * factor + base`. |
 
-Scale OPTIONs on ANALOGINPUT/COUNTER: `factor`, `base`, `window` (same as A_*
-CLOCKED wrappers). Settings: `throttle`/`rate`, `safety_emit`, `emit`.
+**IA publish schedule** (owner properties only): startup once; change at
+`throttle`/`rate` + tolerance + eng `window`; safety every `safety_emit`;
+guard/`emit` flag like G_CoreE24.
 
-Plant can retire `L_ClockedAnalogInputs` / `M_ClockedAnalogInputs` once A_*
-wrappers are simplified or scale is on the IA_* machines.
-
-**Track D:** inventory done (8 CLOCKEDANALOGINPUT + 5 CLOCKEDCOUTER16BIT);
-migration optional after plant validation.
+Plugins bind live int pointers on IA (`VALUE`/`raw`) — no CW message needed.
+HMI/eng consumers stay on A_* via the careful clock list (not full depends fan-out).
 
 ---
 
