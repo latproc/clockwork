@@ -1,16 +1,24 @@
-EtherCAT transport source: /opt/etherlab-cyclic-kmod
-Installed prefix (headers + libelcethercat): /opt/elc
+EtherCAT transport source: `/opt/etherlab-cyclic-kmod`
 
-Docs:
+| Install | Path |
+|---------|------|
+| Kernel module (DKMS) | `elc-ethercat` → `/lib/modules/$(uname -r)/updates/dkms/elc_ethercat.ko` |
+| Userland lib + headers | `make install-lib` → **`/usr/local`** (`libelcethercat`, `elc_ethercat.h`) |
+| pkg-config | `/usr/local/lib/pkgconfig/elcethercat.pc` |
+| Tools (`elc_bus`, `elc_sdo`, …) | `make tools` → tree `tools/`; **copy to `/usr/local/bin`** for boot (DKMS install does **not** install tools) |
+| Legacy prefix (optional) | `/opt/elc` still works as fallback |
+
+Docs (in source tree):
+
   /opt/etherlab-cyclic-kmod/docs/libelcethercat.md
   /opt/etherlab-cyclic-kmod/docs/uapi.md
   /opt/etherlab-cyclic-kmod/docs/developer-guide.md
   /opt/etherlab-cyclic-kmod/docs/process-image-exchange.md
   /opt/etherlab-cyclic-kmod/docs/iod-session-handoff.md
 
-module=elc_ethercat
-device=/dev/elc_ethercat0
-library=libelcethercat
+module=elc_ethercat  
+device=/dev/elc_ethercat0  
+library=libelcethercat  
 
 ## Module load (required for arm)
 
@@ -18,25 +26,31 @@ The cyclic kthread must be real-time or domain working-counter flaps
 `ELC_IO_FAULT_DOMAIN_INCOMPLETE` (0x20) under load → `bus_healthy=0` → outputs
 publish but never arm (even with 34/34 OP and link up).
 
-**This host does not install the module under `/lib/modules`.** Use the
-out-of-tree `.ko` (operator-guide style):
+**Plant path: DKMS + modprobe** (RT defaults in `/etc/modprobe.d/elc_ethercat.conf`):
 
 ```sh
-# path (override with ELC_KO=…):
-KO=/opt/etherlab-cyclic-kmod/kernel/elc_ethercat.ko
-
 # stop iod first, then:
 rmmod elc_ethercat 2>/dev/null || true
-insmod "$KO" cycle_cpu=1 cycle_fifo_priority=90
+modprobe elc_ethercat   # uses cycle_cpu=1 cycle_fifo_priority=90 from modprobe.d
+# or explicit:
+# modprobe elc_ethercat cycle_cpu=1 cycle_fifo_priority=90
 
 # verify:
 cat /sys/module/elc_ethercat/parameters/cycle_fifo_priority   # 90
 cat /sys/module/elc_ethercat/parameters/cycle_cpu              # 1
 ls -l /dev/elc_ethercat0
+dkms status | grep elc
 ```
 
-`iod-elc.sh` loads via `insmod` with those params when the device is missing,
-and reloads (rmmod+insmod) if priority is still 0 and the module is free.
+**Fallback (no DKMS):** out-of-tree `.ko` via `ELC_KO=…` / insmod:
+
+```sh
+KO=${ELC_KO:-/opt/etherlab-cyclic-kmod/kernel/elc_ethercat.ko}
+insmod "$KO" cycle_cpu=1 cycle_fifo_priority=90
+```
+
+`iod-elc.sh` prefers **modprobe**, then **insmod** of `ELC_KO` if modprobe fails,
+and reloads (rmmod + load) if priority is still 0 and the module is free.
 
 **Important:** restarting iod alone does **not** reload the module. If
 `cycle_fifo_priority` is still `0`, the kthread is created soft-RT at every
@@ -44,13 +58,42 @@ and reloads (rmmod+insmod) if priority is still 0 and the module is free.
 
 Mitigations (in order):
 
-1. `iod-elc.sh` `insmod` with RT params; reload if soft-RT while free.
+1. `/etc/modprobe.d/elc_ethercat.conf` + `iod-elc.sh` modprobe with RT params;
+   reload if soft-RT while free.
 2. After `cycle_activate`, `iod-elc` promotes `elc_cycle` to SCHED_FIFO 90 / CPU 1
    (`KernelEthercatBus::ensureCycleThreadRealtime`).
 3. Manual: `chrt -f -p 90 $(pgrep -x elc_cycle); taskset -cp 1 $(pgrep -x elc_cycle)`.
 
 Verify: `ps -eLo class,rtprio,psr,comm | grep elc_cycle` → `FF  90  1 elc_cycle`.
 Log on activate may also show: `elc_cycle tid=… promoted SCHED_FIFO prio=90 cpu=1`.
+
+### One-command plant helper
+
+```sh
+# status / install tools+lib / reload module with RT / full setup
+/opt/latproc/scripts/elc-plant.sh status
+/opt/latproc/scripts/elc-plant.sh setup          # install-userland + reload-module + verify
+/opt/latproc/scripts/elc-plant.sh install-userland
+/opt/latproc/scripts/elc-plant.sh reload-module  # stops iod, modprobe, starts iod
+/opt/latproc/scripts/elc-plant.sh verify
+```
+
+Source tree helper (same tree as DKMS):
+
+```sh
+cd /opt/etherlab-cyclic-kmod
+make dkms-install          # kernel only
+make install-lib           # headers + lib → /usr/local + ldconfig
+make install-tools         # elc_bus elc_sdo … → /usr/local/bin
+```
+
+### Userland rebuild note
+
+```sh
+# after make install-lib to /usr/local:
+export PKG_CONFIG_PATH=/usr/local/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}
+# rebuild iod-elc (CMake prefers /usr/local then /opt/elc)
+```
 
 ## Rates (bus vs Clockwork)
 

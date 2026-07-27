@@ -19,12 +19,26 @@ log=/dev/null
 [ -z "${IOD:-}" ] && IOD="${BASEDIR}/iod/build-elc/iod-elc"
 [ -r /tmp/iod ] && : > /tmp/iod
 
-export LD_LIBRARY_PATH="/opt/elc/lib:${BASEDIR}/code/plugins:${LD_LIBRARY_PATH:-}"
-export PATH="/opt/elc/bin:/opt/etherlab-cyclic-kmod/tools:${PATH}"
+# Userland: make install-lib → /usr/local; tools from source tree or PATH.
+# Legacy /opt/elc remains a fallback. ldconfig/RUNPATH often enough for the lib.
+export LD_LIBRARY_PATH="/usr/local/lib:/opt/elc/lib:${BASEDIR}/code/plugins:${LD_LIBRARY_PATH:-}"
+export PATH="/usr/local/bin:/opt/etherlab-cyclic-kmod/tools:/opt/elc/bin:${PATH}"
 
 ELC_DEVICE="${ELC_DEVICE:-/dev/elc_ethercat0}"
-ELC_BUS="${ELC_BUS:-$(command -v elc_bus || true)}"
-ELC_SDO="${ELC_SDO:-$(command -v elc_sdo || true)}"
+ELC_TOOLS_DIR="${ELC_TOOLS_DIR:-/opt/etherlab-cyclic-kmod/tools}"
+# Prefer PATH (/usr/local/bin after install), then source-tree tools.
+if [ -z "${ELC_BUS:-}" ]; then
+  ELC_BUS="$(command -v elc_bus 2>/dev/null || true)"
+fi
+if [ -z "${ELC_BUS}" ] && [ -x "${ELC_TOOLS_DIR}/elc_bus" ]; then
+  ELC_BUS="${ELC_TOOLS_DIR}/elc_bus"
+fi
+if [ -z "${ELC_SDO:-}" ]; then
+  ELC_SDO="$(command -v elc_sdo 2>/dev/null || true)"
+fi
+if [ -z "${ELC_SDO}" ] && [ -x "${ELC_TOOLS_DIR}/elc_sdo" ]; then
+  ELC_SDO="${ELC_TOOLS_DIR}/elc_sdo"
+fi
 
 if [ -z "${RECIPE_IN:-}" ]; then
   if [ -r "${BASEDIR}/code/config/recipes/ed3l_velocity_pdo.recipe.in" ]; then
@@ -35,11 +49,11 @@ if [ -z "${RECIPE_IN:-}" ]; then
 fi
 
 if [ -z "${ELC_BUS}" ] || [ ! -x "${ELC_BUS}" ]; then
-  echo "ERROR: elc_bus not found (install libelcethercat tools or set ELC_BUS)" >&2
+  echo "ERROR: elc_bus not found (cd /opt/etherlab-cyclic-kmod && make tools; install to /usr/local/bin or set ELC_BUS)" >&2
   exit 1
 fi
 if [ -z "${ELC_SDO}" ] || [ ! -x "${ELC_SDO}" ]; then
-  echo "ERROR: elc_sdo not found (install libelcethercat tools or set ELC_SDO)" >&2
+  echo "ERROR: elc_sdo not found (cd /opt/etherlab-cyclic-kmod && make tools; install to /usr/local/bin or set ELC_SDO)" >&2
   exit 1
 fi
 if [ ! -r "${RECIPE_IN}" ]; then
@@ -48,26 +62,27 @@ if [ ! -r "${RECIPE_IN}" ]; then
 fi
 # Kernel cyclic task must be SCHED_FIFO or domain WC flaps incomplete under
 # load (fault 0x20 DOMAIN_INCOMPLETE → bus_healthy=0 → outputs never arm).
-# Module is not installed via DKMS on this machine — load from the build tree
-# with insmod (operator-guide). Optional override: ELC_KO=/path/to/elc_ethercat.ko
+# Prefer DKMS module via modprobe (see /etc/modprobe.d/elc_ethercat.conf).
+# Optional tree .ko: ELC_KO=/path/to/elc_ethercat.ko (insmod fallback only).
 ELC_CYCLE_CPU="${ELC_CYCLE_CPU:-1}"
 ELC_CYCLE_FIFO_PRIORITY="${ELC_CYCLE_FIFO_PRIORITY:-90}"
 ELC_KO="${ELC_KO:-/opt/etherlab-cyclic-kmod/kernel/elc_ethercat.ko}"
 
 load_elc_module() {
-  # Prefer insmod of the built .ko with RT params; fall back to modprobe if
-  # the module was installed under /lib/modules.
+  # Prefer modprobe (DKMS /lib/modules + modprobe.d RT options). Fall back to
+  # insmod of a tree/out-of-tree .ko when DKMS is not installed.
   echo "Loading elc_ethercat (cycle_cpu=${ELC_CYCLE_CPU} cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY})"
+  if modprobe elc_ethercat "cycle_cpu=${ELC_CYCLE_CPU}" \
+      "cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY}" 2>/dev/null; then
+    return 0
+  fi
+  echo "WARNING: modprobe elc_ethercat failed; trying insmod ${ELC_KO}" >&2
   if [ -f "${ELC_KO}" ]; then
     if insmod "${ELC_KO}" "cycle_cpu=${ELC_CYCLE_CPU}" \
         "cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY}"; then
       return 0
     fi
     echo "WARNING: insmod ${ELC_KO} failed" >&2
-  fi
-  if modprobe elc_ethercat "cycle_cpu=${ELC_CYCLE_CPU}" \
-      "cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY}" 2>/dev/null; then
-    return 0
   fi
   return 1
 }
@@ -97,12 +112,14 @@ promote_elc_cycle_rt() {
 ensure_elc_module
 if [ ! -c "${ELC_DEVICE}" ]; then
   echo "ERROR: kernel EtherCAT device missing: ${ELC_DEVICE}" >&2
-  echo "Load (this host uses out-of-tree .ko, not modprobe):" >&2
-  echo "  insmod ${ELC_KO} cycle_cpu=${ELC_CYCLE_CPU} cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY}" >&2
+  echo "Load (DKMS preferred):" >&2
+  echo "  modprobe elc_ethercat cycle_cpu=${ELC_CYCLE_CPU} cycle_fifo_priority=${ELC_CYCLE_FIFO_PRIORITY}" >&2
+  echo "  # or: insmod ${ELC_KO} cycle_cpu=… cycle_fifo_priority=…" >&2
+  echo "  # RT defaults: /etc/modprobe.d/elc_ethercat.conf" >&2
   exit 1
 fi
 # Params are immutable after load. Restarting iod alone does not reload the
-# module — if it was loaded soft-RT, try rmmod+insmod while master is free
+# module — if it was loaded soft-RT, try rmmod+modprobe while master is free
 # (before iod/elc_sdo claim it). elc_cycle only exists after cycle activate;
 # iod-elc also promotes post-activate as a safety net.
 if [ -r /sys/module/elc_ethercat/parameters/cycle_fifo_priority ]; then

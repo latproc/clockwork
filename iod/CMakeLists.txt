@@ -586,12 +586,12 @@ endif() # BUILD_LEGACY_IOD
 
 # Kernel transport controller (default on this branch).
 if(BUILD_IOD_ELC)
-  # Prefer /opt/elc when callers did not set CMAKE_PREFIX_PATH / PKG_CONFIG_PATH.
-  list(APPEND CMAKE_PREFIX_PATH "/opt/elc")
+  # Prefer make install-lib → /usr/local; fall back to legacy /opt/elc.
+  list(APPEND CMAKE_PREFIX_PATH "/usr/local" "/opt/elc")
   if(DEFINED ENV{PKG_CONFIG_PATH} AND NOT "$ENV{PKG_CONFIG_PATH}" STREQUAL "")
-    set(ENV{PKG_CONFIG_PATH} "/opt/elc/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
+    set(ENV{PKG_CONFIG_PATH} "/usr/local/lib/pkgconfig:/opt/elc/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
   else()
-    set(ENV{PKG_CONFIG_PATH} "/opt/elc/lib/pkgconfig")
+    set(ENV{PKG_CONFIG_PATH} "/usr/local/lib/pkgconfig:/opt/elc/lib/pkgconfig")
   endif()
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(ELC REQUIRED elcethercat)
@@ -615,14 +615,19 @@ if(BUILD_IOD_ELC)
     USE_KERNEL_ETHERCAT 
     USE_SDO=1
   )
-  target_link_directories_compat(iod-elc "/opt/elc/lib")
+  # Link dirs: pkg-config path first, then common install prefixes.
+  foreach(_elc_libdir ${ELC_LIBRARY_DIRS} /usr/local/lib /opt/elc/lib)
+    if(_elc_libdir)
+      target_link_directories_compat(iod-elc "${_elc_libdir}")
+    endif()
+  endforeach()
   target_link_libraries(iod-elc 
     cw_client 
     ${ELC_LIBRARIES} 
     dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl
   )
   install(TARGETS iod-elc RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
-  message(STATUS "Building iod-elc with libelcethercat kernel transport (BUILD_IOD_ELC=ON)")
+  message(STATUS "Building iod-elc with libelcethercat (${ELC_VERSION}) include=${ELC_INCLUDE_DIRS}")
 elseif(NOT BUILD_LEGACY_IOD)
   message(WARNING "Neither BUILD_IOD_ELC nor BUILD_LEGACY_IOD is enabled; no iod binary will be built")
 endif()
