@@ -1892,11 +1892,15 @@ void Output::turnOn() {
     last_event = e_none;
     ECInterface::instance()->applyKernelOutputBit(address.io_offset, address.io_bitpos, true);
 #else
+    // last_event MUST be set before markChange(): markChange only writes the
+    // process-image bit when last_event is e_on/e_off. Setting it after left
+    // update_data unchanged (mask set, data still 0) so SetState stayed Running
+    // forever as "turning_on" while the bus never got the bit.
+    last_event = e_on;
     updatedComponentsOut.insert(this);
     updatesSent(false);
     outputs_waiting = updatedComponentsOut.size();
     markChange();
-    last_event = e_on; // wait for process-image echo on legacy ecrt path
 #endif
 }
 
@@ -1908,11 +1912,11 @@ void Output::turnOff() {
     last_event = e_none; // see turnOn — getStateString must become "off"
     ECInterface::instance()->applyKernelOutputBit(address.io_offset, address.io_bitpos, false);
 #else
+    last_event = e_off;
     updatedComponentsOut.insert(this);
     updatesSent(false);
     outputs_waiting = updatedComponentsOut.size();
     markChange();
-    last_event = e_off;
 #endif
 }
 

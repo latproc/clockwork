@@ -1316,16 +1316,15 @@ void ProcessingThread::operator()() {
                         break;
                     }
                 }
-                // Outputs: quiet pace only.
+                // Outputs: leave wait promptly — do not absorb for 5ms+ while
+                // digital/analog outs are pending (softstart SetState hangs).
                 if (IOComponent::updatesWaiting() ||
                     IOComponent::getHardwareState() != IOComponent::s_operational) {
                     static uint64_t last_out_service_us = 0;
-                    unsigned long out_us = get_polling_time();
+                    // Service pending outs every bus period (min 1 ms), not 5 ms.
+                    unsigned long out_us = get_cycle_time();
                     if (out_us < 1000) {
                         out_us = 1000;
-                    }
-                    if (out_us < 5000) {
-                        out_us = 5000;
                     }
                     if (last_out_service_us == 0 ||
                         curr_t - last_out_service_us >= out_us) {
@@ -1381,13 +1380,14 @@ void ProcessingThread::operator()() {
                 curr_t - last_checked_machines >= machine_check_delay) {
                 break;
             }
-            // Outputs: quiet pace only (same as EC absorb path).
+            // Outputs: same cadence as bus (min 1 ms). Pending digital/analog
+            // outs must not wait behind quiet 5–10 ms absorb.
             if (IOComponent::updatesWaiting() ||
                 IOComponent::getHardwareState() != IOComponent::s_operational) {
                 static uint64_t last_out_wait_us = 0;
-                unsigned long out_us = get_polling_time();
-                if (out_us < 5000) {
-                    out_us = 5000;
+                unsigned long out_us = get_cycle_time();
+                if (out_us < 1000) {
+                    out_us = 1000;
                 }
                 if (last_out_wait_us == 0 || curr_t - last_out_wait_us >= out_us) {
                     last_out_wait_us = curr_t;
@@ -1897,11 +1897,11 @@ void ProcessingThread::operator()() {
                     IOComponent::clearPendingOutputUpdates();
 #endif
                 }
-                else if (IOComponent::getHardwareState() == IOComponent::s_operational) {
-                    // Nothing to build (stale / non-output entries). Do not spin
-                    // forever on updatesWaiting() at the quiet out-pace.
-                    IOComponent::clearPendingOutputUpdates();
-                }
+                // Do NOT clearPendingOutputUpdates() when getUpdates() is null:
+                // that discarded real digital/analog pending turnOn/setValue and
+                // left SetStateAction Running forever (softstart stuck starting).
+                // Pending outs stay until processAll matches pending_value or
+                // a later getUpdates() succeeds.
             }
         }
         if (update_state == s_update_sent) {

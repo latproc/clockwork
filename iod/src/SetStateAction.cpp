@@ -28,6 +28,7 @@
 #include "MessageLog.h"
 #include "Scheduler.h"
 #include "options.h"
+#include <cstring>
 
 SetStateActionTemplate::SetStateActionTemplate(CStringHolder target, Value newstate,
                                                StateChangeReason reason)
@@ -199,9 +200,11 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
 
             if (value == "on") {
                 machine->io_interface->turnOn();
-                // If IO already reports the target (kernel: after optimistic
-                // turnOn), finish now so we do not sit in Running forever.
-                if (value.getName() == machine->io_interface->getStateString()) {
+                // After turnOn, address.value is 1 and last_event is e_on
+                // ("turning_on"). Complete the CW POINT immediately so softstart
+                // is not stuck Waiting while the EC image catches up.
+                const char *io_st = machine->io_interface->getStateString();
+                if (value.getName() == io_st || strcmp(io_st, "turning_on") == 0) {
                     status = machine->setState(value, authority, false);
                     if (status == Complete || status == Failed) {
                         result_str = (status == Complete) ? "OK" : "Failed";
@@ -216,7 +219,8 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
             }
             else if (value == "off") {
                 machine->io_interface->turnOff();
-                if (value.getName() == machine->io_interface->getStateString()) {
+                const char *io_st = machine->io_interface->getStateString();
+                if (value.getName() == io_st || strcmp(io_st, "turning_off") == 0) {
                     status = machine->setState(value, authority, false);
                     if (status == Complete || status == Failed) {
                         result_str = (status == Complete) ? "OK" : "Failed";
@@ -411,9 +415,14 @@ Action::Status SetStateAction::checkComplete() {
     {
         if (machine->io_interface) {
             IOComponent *pt = machine->io_interface;
-            if (value.getName() == pt->getStateString()) {
-                // Hardware matches; update POINT machine STATE (was completing
-                // without setState, so DESCRIBE always showed off while PWM ran).
+            const char *io_st = pt->getStateString();
+            // Accept intermediate turning_on/off as commanded match so we do
+            // not block the action stack until domain echo (TX-only digitals).
+            const bool matched =
+                (value.getName() == io_st) ||
+                (value.getName() == "on" && strcmp(io_st, "turning_on") == 0) ||
+                (value.getName() == "off" && strcmp(io_st, "turning_off") == 0);
+            if (matched) {
                 status = machine->setState(value, authority, false);
                 if (status != Complete && status != Failed) {
                     return status;
@@ -428,7 +437,7 @@ Action::Status SetStateAction::checkComplete() {
                 return status;
             }
             else {
-                DBG_M_ACTIONS << machine->getName() << " still in " << pt->getStateString()
+                DBG_M_ACTIONS << machine->getName() << " still in " << io_st
                               << " waiting for " << value << "\n";
                 return status;
             }
