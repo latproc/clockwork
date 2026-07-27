@@ -93,6 +93,15 @@ class SDOEntry {
     void requestRead(uint64_t now, uint32_t delay_ms = 0);
     uint32_t pollIntervalMs() const;
 
+    /**
+     * Slave lost power/link or left the bus: forget the last sync so an explicit
+     * `default` is re-applied after the next successful upload (same path as
+     * cold start). Also queues a read so disabled L_SDO entries still re-run.
+     */
+    void markNeedsRecommission(uint64_t now_us);
+    /** All prepared entries bound to this ECModule. */
+    static void recommissionModule(ECModule *module, uint64_t now_us);
+
   private:
     SDOEntry(const SDOEntry &);
     SDOEntry &operator=(const SDOEntry &);

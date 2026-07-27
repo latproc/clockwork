@@ -157,6 +157,47 @@ int KernelEthercatBus::sdoUpload(struct elc_sdo_upload *req) {
     return elc_sdo_upload(handle, req);
 }
 
+int KernelEthercatBus::sdoDownload(uint16_t position, uint16_t index, uint8_t subindex,
+                                   uint8_t type, const uint8_t *data, uint16_t data_len) {
+    if (!handle || !data || data_len == 0 || data_len > ELC_SETUP_SDO_DATA_MAX) {
+        return -EINVAL;
+    }
+
+    int ret = elc_setup_begin(handle);
+    if (ret) {
+        return ret;
+    }
+
+    struct elc_setup_sdo sdo = {};
+    sdo.struct_size = sizeof(sdo);
+    sdo.api_major = ELC_API_VERSION_MAJOR;
+    sdo.sequence = 1;
+    sdo.position = position;
+    sdo.index = index;
+    sdo.subindex = subindex;
+    sdo.type = type;
+    sdo.data_len = data_len;
+    memcpy(sdo.data, data, data_len);
+
+    ret = elc_setup_add_sdo(handle, &sdo);
+    if (ret) {
+        elc_setup_reset(handle);
+        return ret;
+    }
+
+    struct elc_setup_apply apply = {};
+    apply.struct_size = sizeof(apply);
+    apply.api_major = ELC_API_VERSION_MAJOR;
+    ret = elc_setup_apply(handle, &apply);
+    // Begin on the next call clears applied state; explicit reset keeps the
+    // batch list empty if apply failed mid-way.
+    if (ret) {
+        elc_setup_reset(handle);
+        return ret;
+    }
+    return 0;
+}
+
 int KernelEthercatBus::configBegin() {
     if (!handle) {
         return -EINVAL;

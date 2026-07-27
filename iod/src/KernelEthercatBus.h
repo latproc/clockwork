@@ -29,6 +29,13 @@ class KernelEthercatBus {
     int setupApply(struct elc_setup_apply *result);
     int setupReset();
     int sdoUpload(struct elc_sdo_upload *req);
+    /**
+     * Runtime CoE download via a one-shot setup batch (same path as elc_sdo write).
+     * type is elc_sdo_type (ELC_SDO_U8/U16/U32/…). data_len must match type.
+     * Safe while the cyclic domain is active; blocks until the mailbox completes.
+     */
+    int sdoDownload(uint16_t position, uint16_t index, uint8_t subindex, uint8_t type,
+                    const uint8_t *data, uint16_t data_len);
 
     int configBegin();
     int configAddSlave(const struct elc_config_slave *slave);

@@ -553,6 +553,29 @@ void SDOEntry::requestRead(uint64_t now, uint32_t delay_ms) {
     next_poll_time = now + static_cast<uint64_t>(delay_ms) * 1000;
 }
 
+void SDOEntry::markNeedsRecommission(uint64_t now_us) {
+    // Forget the prior sync so the next successful upload is treated as a
+    // first_read and re-queues any explicit `default` write.
+    sync_done = false;
+    error_count = 0;
+    op = READ;
+    requestRead(now_us, 50); // short settle after link/power returns
+}
+
+void SDOEntry::recommissionModule(ECModule *module, uint64_t now_us) {
+    if (!module) {
+        return;
+    }
+    for (SDOEntry *entry : prepared_sdo_entries) {
+        if (!entry || entry->getModule() != module) {
+            continue;
+        }
+        DBG_ETHERCAT_SDO << "Recommission SDO " << entry->getName()
+                         << " on module " << module->getName() << "\n";
+        entry->markNeedsRecommission(now_us);
+    }
+}
+
 SDOEntry *SDOEntry::find(std::string name) {
     std::list<SDOEntry *>::iterator iter = prepared_sdo_entries.begin();
     while (iter != prepared_sdo_entries.end()) {
@@ -929,6 +952,113 @@ Value SDOEntry::readValue() {
     return SymbolTable::Null;
 }
 
+#ifdef USE_KERNEL_ETHERCAT
+// Map Clockwork bit-width to elc_sdo_type + byte length for mailbox I/O.
+static bool kernelSdoTypeAndLen(size_t bit_size, uint8_t *type_out, uint16_t *len_out) {
+    if (!type_out || !len_out) {
+        return false;
+    }
+    switch (bit_size) {
+    case 1:
+    case 8:
+        *type_out = ELC_SDO_U8;
+        *len_out = 1;
+        return true;
+    case 16:
+        *type_out = ELC_SDO_U16;
+        *len_out = 2;
+        return true;
+    case 32:
+        *type_out = ELC_SDO_U32;
+        *len_out = 4;
+        return true;
+    default:
+        return false;
+    }
+}
+
+static void kernelSdoPackValue(size_t bit_size, int64_t value, uint8_t *data, uint16_t len) {
+    memset(data, 0, len);
+    if (bit_size <= 8) {
+        data[0] = static_cast<uint8_t>(value & 0xff);
+    }
+    else if (bit_size == 16) {
+        uint16_t v = static_cast<uint16_t>(value & 0xffff);
+        memcpy(data, &v, 2);
+    }
+    else if (bit_size == 32) {
+        uint32_t v = static_cast<uint32_t>(value & 0xffffffffu);
+        memcpy(data, &v, 4);
+    }
+}
+
+// Synchronous CoE upload into the entry request buffer. Returns true on success.
+static bool kernelSdoUploadEntry(SDOEntry *entry) {
+    if (!entry || !entry->getModule() || !ECInterface::instance()->getKernelBus() ||
+        !ECInterface::instance()->getKernelBus()->isOpen()) {
+        return false;
+    }
+    uint8_t type = 0;
+    uint16_t len = 0;
+    if (!kernelSdoTypeAndLen(entry->getSize(), &type, &len)) {
+        return false;
+    }
+    struct elc_sdo_upload req = {};
+    req.struct_size = sizeof(req);
+    req.api_major = ELC_API_VERSION_MAJOR;
+    req.position = entry->getModule()->position;
+    req.index = entry->getIndex();
+    req.subindex = entry->getSubindex();
+    req.requested_len = len;
+    int ret = ECInterface::instance()->getKernelBus()->sdoUpload(&req);
+    if (ret != 0 || req.result != 0) {
+        DBG_ETHERCAT_SDO << "kernel SDO upload failed " << entry->getName() << " 0x" << std::hex
+                         << entry->getIndex() << ":" << (int)entry->getSubindex() << std::dec
+                         << " ret=" << ret << " result=" << req.result
+                         << " abort=0x" << std::hex << req.abort_code << std::dec << "\n";
+        return false;
+    }
+    uint8_t *dst = ecrt_sdo_request_data(entry->getRequest());
+    if (!dst) {
+        return false;
+    }
+    memset(dst, 0, 8);
+    size_t copy = req.result_len < len ? req.result_len : len;
+    memcpy(dst, req.data, copy);
+    return true;
+}
+
+// Synchronous CoE download of curr value. Returns true on success.
+static bool kernelSdoDownloadEntry(SDOEntry *entry, const Value &val) {
+    if (!entry || !entry->getModule() || !ECInterface::instance()->getKernelBus() ||
+        !ECInterface::instance()->getKernelBus()->isOpen()) {
+        return false;
+    }
+    uint8_t type = 0;
+    uint16_t len = 0;
+    if (!kernelSdoTypeAndLen(entry->getSize(), &type, &len)) {
+        return false;
+    }
+    uint8_t data[8] = {};
+    kernelSdoPackValue(entry->getSize(), val.iValue, data, len);
+    int ret = ECInterface::instance()->getKernelBus()->sdoDownload(
+        entry->getModule()->position, entry->getIndex(), entry->getSubindex(), type, data, len);
+    if (ret != 0) {
+        DBG_ETHERCAT_SDO << "kernel SDO download failed " << entry->getName() << " 0x" << std::hex
+                         << entry->getIndex() << ":" << (int)entry->getSubindex() << std::dec
+                         << " ret=" << ret << " val=" << val << "\n";
+        return false;
+    }
+    // Mirror written value into the request buffer so confirmation/readValue agree.
+    uint8_t *dst = ecrt_sdo_request_data(entry->getRequest());
+    if (dst) {
+        memset(dst, 0, 8);
+        memcpy(dst, data, len);
+    }
+    return true;
+}
+#endif // USE_KERNEL_ETHERCAT
+
 void ECInterface::checkSDOUpdates() {
     const uint64_t now = microsecs();
     if (now < sdo_not_before) {
@@ -970,6 +1100,34 @@ void ECInterface::checkSDOUpdates() {
                     current_update_entry++;
                     return;
                 }
+#ifdef USE_KERNEL_ETHERCAT
+                // iod-elc: ecrt SDO is stubbed; use libelcethercat mailbox I/O.
+                if (kernelBus && kernelBus->isOpen()) {
+                    if (kernelSdoUploadEntry(entry)) {
+                        bool first_read = !entry->ready();
+                        entry->syncValue();
+                        entry->success();
+                        entry->schedulePoll(now);
+                        if (first_read && entry->machineInstance() &&
+                            entry->machineInstance()->properties.exists("default")) {
+                            const Value &val =
+                                entry->machineInstance()->properties.lookup("default");
+                            DBG_ETHERCAT_SDO
+                                << "Applying SDO default after initial/recommission read for "
+                                << entry->getName() << ": " << val << "\n";
+                            queueInitialisationRequest(entry, val);
+                        }
+                    }
+                    else {
+                        entry->failure();
+                        entry->requestRead(now, 250);
+                        sdo_not_before = now + 250000;
+                    }
+                    current_update_entry++;
+                    sdo_entry_state = e_None;
+                    return;
+                }
+#endif
                 if (ecrt_sdo_request_state(sdo) == EC_REQUEST_BUSY) {
                     return;
                 }
@@ -1083,6 +1241,32 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
         ec_sdo_request_t *sdo = entry->getRequest();
 
         if (sdo_entry_state == e_None) {
+#ifdef USE_KERNEL_ETHERCAT
+            if (kernelBus && kernelBus->isOpen()) {
+                entry->setOperation(SDOEntry::WRITE);
+                DBG_ETHERCAT_SDO << "SDO entry - kernel write " << curr.second << "\n";
+                if (kernelSdoDownloadEntry(entry, curr.second)) {
+                    entry->syncValue();
+                    entry->success();
+                    entry->requestRead(now, 1); // confirm with a prompt upload
+                    current_init_entry = initialisation_entries.erase(current_init_entry);
+                }
+                else {
+                    entry->failure();
+                    sdo_not_before = now + 250000;
+                    if (entry->getErrorCount() < 4) {
+                        current_init_entry++;
+                    }
+                    else {
+                        current_init_entry = initialisation_entries.erase(current_init_entry);
+                        entry->setOperation(SDOEntry::READ);
+                        entry->requestRead(now, 250);
+                    }
+                }
+                sdo_entry_state = e_None;
+                return false;
+            }
+#endif
             if (ecrt_sdo_request_state(sdo) == EC_REQUEST_BUSY) {
                 return false;
             }
@@ -3564,6 +3748,16 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
                  m->slave_config_state.online ? "yes" : "no", s.online ? "yes" : "no");
         MessageLog::instance()->add(buf);
         std::cout << buf << "\n";
+#ifdef USE_SDO
+        // Drive power/link loss clears ramp/profile SDOs (Estun A.76 etc.).
+        // Offline: mark stale. Online again: re-queue upload → default write.
+        if (!s.online) {
+            SDOEntry::recommissionModule(m, microsecs());
+        }
+        else if (m->slave_config_state.online == 0) {
+            SDOEntry::recommissionModule(m, microsecs());
+        }
+#endif
     }
     if (s.operational != m->slave_config_state.operational) {
         snprintf(buf, BUFSIZE, "Slave %d (%s) operational %s -> %s (kernel)", i,
@@ -3610,6 +3804,12 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
                  m->name.c_str(), m->slave_config_state.online ? "online" : "offline",
                  s.online ? "online" : "offline");
         MessageLog::instance()->add(buf);
+#ifdef USE_SDO
+        // Same recommission contract as the kernel path (power/link loss).
+        if (!s.online || m->slave_config_state.online == 0) {
+            SDOEntry::recommissionModule(m, microsecs());
+        }
+#endif
     }
     if (s.operational != m->slave_config_state.operational) {
         DBG_ETHERCAT << m->name << ": " << (s.operational ? "" : "Not ") << "operational\n";
