@@ -96,6 +96,11 @@ class ECModule {
      * machine group, or IO vs drives) — not fixed in code.
      */
     uint32_t elc_domain_id;
+    /**
+     * True after the first time this module was observed online. Used so SDO
+     * recommission runs only on *return* (power/link recovery), not cold start.
+     */
+    bool sdo_seen_online;
     unsigned int *offsets;
     unsigned int *bit_positions;
     unsigned int sync_count;

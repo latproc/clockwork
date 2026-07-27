@@ -77,6 +77,9 @@ static bool g_kernel_output_dirty = true;
 static bool g_kernel_outputs_armed = false;
 static std::vector<uint8_t> g_kernel_pub_mask; // cached full-domain publish mask
 static bool g_kernel_pub_mask_valid = false;
+// CAP_OUTPUT_LEASE: configured once pre-activate; renewed from sendUpdates.
+static bool g_output_lease_enabled = false;
+static uint32_t g_output_lease_budget = 0;
 // Multi-domain isolation (API 0.12/0.17): each domain_config_id is a WC /
 // validity / arm boundary. N domains → N ECDomain_<id> machines on L_ECDomains.
 // First domain declared in topology is *primary* (ETHERCAT_WC / all_ok /
@@ -399,6 +402,7 @@ ECModule::ECModule() : pdo_entries(0), pdos(0), syncs(0), num_entries(0), entry_
     revision_no = 0;
     elc_config_id = 0;
     elc_domain_id = 0;
+    sdo_seen_online = false;
     sync_count = 0;
 }
 
@@ -553,26 +557,31 @@ void SDOEntry::requestRead(uint64_t now, uint32_t delay_ms) {
     next_poll_time = now + static_cast<uint64_t>(delay_ms) * 1000;
 }
 
-void SDOEntry::markNeedsRecommission(uint64_t now_us) {
+void SDOEntry::markNeedsRecommission(uint64_t now_us, uint32_t settle_ms) {
     // Forget the prior sync so the next successful upload is treated as a
     // first_read and re-queues any explicit `default` write.
     sync_done = false;
     error_count = 0;
     op = READ;
-    requestRead(now_us, 50); // short settle after link/power returns
+    requestRead(now_us, settle_ms);
 }
 
 void SDOEntry::recommissionModule(ECModule *module, uint64_t now_us) {
     if (!module) {
         return;
     }
+    // Spread mailbox work across slaves (and entries) so a multi-drive return
+    // does not freeze the ecat thread in setup_apply for hundreds of ms.
+    uint32_t stagger_ms = 200 + static_cast<uint32_t>(module->position) * 30u;
     for (SDOEntry *entry : prepared_sdo_entries) {
         if (!entry || entry->getModule() != module) {
             continue;
         }
         DBG_ETHERCAT_SDO << "Recommission SDO " << entry->getName()
-                         << " on module " << module->getName() << "\n";
-        entry->markNeedsRecommission(now_us);
+                         << " on module " << module->getName()
+                         << " in " << stagger_ms << " ms\n";
+        entry->markNeedsRecommission(now_us, stagger_ms);
+        stagger_ms += 15;
     }
 }
 
@@ -1103,6 +1112,8 @@ void ECInterface::checkSDOUpdates() {
 #ifdef USE_KERNEL_ETHERCAT
                 // iod-elc: ecrt SDO is stubbed; use libelcethercat mailbox I/O.
                 if (kernelBus && kernelBus->isOpen()) {
+                    // At most one mailbox op per call, then back off so the ecat
+                    // thread can renew domain output leases (SM WD if starved).
                     if (kernelSdoUploadEntry(entry)) {
                         bool first_read = !entry->ready();
                         entry->syncValue();
@@ -1117,6 +1128,8 @@ void ECInterface::checkSDOUpdates() {
                                 << entry->getName() << ": " << val << "\n";
                             queueInitialisationRequest(entry, val);
                         }
+                        // 10 ms when outputs armed (lease path critical); 2 ms at prep.
+                        sdo_not_before = now + (g_kernel_outputs_armed ? 10000 : 2000);
                     }
                     else {
                         entry->failure();
@@ -1250,6 +1263,7 @@ bool ECInterface::checkSDOInitialisation() // returns true when no more initiali
                     entry->success();
                     entry->requestRead(now, 1); // confirm with a prompt upload
                     current_init_entry = initialisation_entries.erase(current_init_entry);
+                    sdo_not_before = now + (g_kernel_outputs_armed ? 10000 : 2000);
                 }
                 else {
                     entry->failure();
@@ -1893,6 +1907,9 @@ bool ECInterface::deactivate() {
         kernelBus->cycleDeactivate();
         active = false;
         activated_cycle_period_us_ = 0;
+        g_output_lease_enabled = false;
+        g_output_lease_budget = 0;
+        g_kernel_outputs_armed = false;
         domain1 = nullptr;
         if (domain1_pd) {
             delete[] domain1_pd;
@@ -2016,12 +2033,70 @@ bool ECInterface::activate() {
         }
         FREQUENCY = period_us > 0 ? static_cast<unsigned int>(1000000UL / period_us) : FREQUENCY;
         set_cycle_time(period_us);
+
+        // Output hang failsafe (optional CAP). Kernel decrements remaining every
+        // *bus* cycle (period_us). Userspace renews from ecat sendUpdates — that
+        // loop is *not* CW POLLING_DELAY, and can stall for hundreds of ms during
+        // cold-start SDO defaults / mailbox. Hang wall-time must be large enough
+        // that normal startup and brief ecat stalls do not disarm and thrash OP.
+        //
+        // budget_cycles = hang_us / bus_period_us
+        // hang_us = max(2 s, 200 × max(bus_period, POLLING_DELAY)), cap 5 s.
+        // Still a real lockup cut-off; not a 50 ms trip on first SDO burst.
+        g_output_lease_enabled = false;
+        g_output_lease_budget = 0;
+        if (kernelBus->hasOutputLease() && kernelBus->configGeneration() != 0) {
+            unsigned long poll_us = get_polling_time();
+            if (poll_us < 100) {
+                poll_us = 100;
+            }
+            const uint64_t renew_gap_us =
+                std::max<uint64_t>(period_us, static_cast<uint64_t>(poll_us));
+            // 2 s floor: startup SDO (paced ~10 ms/op × many entries) easily
+            // exceeds 50–200 ms; false expire → disarm → SM WD / unclean start.
+            uint64_t hang_us = std::max<uint64_t>(2000000ULL, 200ULL * renew_gap_us);
+            if (hang_us > 5000000ULL) {
+                hang_us = 5000000ULL; // cap 5 s
+            }
+            uint32_t budget = static_cast<uint32_t>(hang_us / period_us);
+            if (budget < 400) {
+                budget = 400; // min ~100 ms at 250 µs bus
+            }
+            if (budget > ELC_OUTPUT_LEASE_CYCLES_MAX) {
+                budget = ELC_OUTPUT_LEASE_CYCLES_MAX;
+            }
+            // Must configure before cycle activate (kernel rejects when active).
+            int lret = kernelBus->configureOutputLease(budget);
+            if (lret == 0) {
+                g_output_lease_enabled = true;
+                g_output_lease_budget = budget;
+                std::cerr << "elc output lease: budget=" << budget
+                          << " bus_cycles (~" << (budget * period_us) << " us hang) "
+                          << "bus_period_us=" << period_us
+                          << " poll_us=" << poll_us
+                          << " (renew in ecat sendUpdates, not POLLING_DELAY)\n";
+            }
+            else {
+                std::cerr << "elc_configure_output_lease failed ret=" << lret
+                          << " (outputs continue without hang failsafe)\n";
+            }
+        }
+
         struct elc_cycle_activate act = {};
         int ret = kernelBus->cycleActivate(period_ns, 0, &act);
         if (ret != 0 || act.result != 0) {
             std::cerr << "elc_cycle_activate failed ret=" << ret << " result=" << act.result
                       << "\n";
             return false;
+        }
+        // Fill remaining immediately so arm is not blocked on remaining==0 while
+        // the ecat thread is still starting (configure leaves remaining at 0).
+        if (g_output_lease_enabled) {
+            int rret = kernelBus->renewOutputLease();
+            if (rret != 0) {
+                std::cerr << "elc_renew_output_lease (post-activate) failed ret=" << rret
+                          << "\n";
+            }
         }
         activated_cycle_period_us_ = period_us;
         size_t dsz = act.domain_size ? act.domain_size : kernelBus->domainSize();
@@ -3254,6 +3329,17 @@ void ECInterface::sendUpdates() {
             g_kernel_output_dirty = true;
         }
 
+        // Renew hang lease every ecat sendUpdates tick (quiet or dirty).
+        // Kernel burns remaining every bus cycle; without this quiet path the
+        // early return below would let the lease expire while still "armed".
+        if (g_output_lease_enabled) {
+            int rret = kernelBus->renewOutputLease();
+            if (rret != 0 && now - last_warning > 2000000) {
+                last_warning = now;
+                std::cerr << "elc_renew_output_lease failed ret=" << rret << "\n";
+            }
+        }
+
         // Kernel RT task keeps applying the last published image while armed.
         // Only publish when the commanded shadow changed, or until a valid
         // domain still needs arm (e.g. secondary group recovered after drop).
@@ -3691,11 +3777,10 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
             got = true;
         }
         else if (ret == 0 && st.active && st.state_result != 0) {
-            // Cycle active but slave state query failed → offline.
-            s.online = 0;
-            s.operational = 0;
-            s.al_state = 0;
-            got = true;
+            // Query glitch only — do NOT force offline. Transient state_result
+            // failures used to mark every slave offline and storm SDO
+            // recommission (mailbox blocks → output lease expiry → SM WD).
+            got = false;
         }
         // ret==0 && !st.active → fall through to discovery AL (PREOP path for STARTUP).
     }
@@ -3749,13 +3834,14 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
         MessageLog::instance()->add(buf);
         std::cout << buf << "\n";
 #ifdef USE_SDO
-        // Drive power/link loss clears ramp/profile SDOs (Estun A.76 etc.).
-        // Offline: mark stale. Online again: re-queue upload → default write.
-        if (!s.online) {
-            SDOEntry::recommissionModule(m, microsecs());
-        }
-        else if (m->slave_config_state.online == 0) {
-            SDOEntry::recommissionModule(m, microsecs());
+        // Recommission only on return (offline→online) after we have seen the
+        // module online once. Cold start uses the normal first-read/default path.
+        // Never storm on the offline edge or on query glitches.
+        if (s.online && !m->slave_config_state.online) {
+            if (m->sdo_seen_online) {
+                SDOEntry::recommissionModule(m, microsecs());
+            }
+            m->sdo_seen_online = true;
         }
 #endif
     }
@@ -3805,9 +3891,11 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
                  s.online ? "online" : "offline");
         MessageLog::instance()->add(buf);
 #ifdef USE_SDO
-        // Same recommission contract as the kernel path (power/link loss).
-        if (!s.online || m->slave_config_state.online == 0) {
-            SDOEntry::recommissionModule(m, microsecs());
+        if (s.online && !m->slave_config_state.online) {
+            if (m->sdo_seen_online) {
+                SDOEntry::recommissionModule(m, microsecs());
+            }
+            m->sdo_seen_online = true;
         }
 #endif
     }

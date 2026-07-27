@@ -523,6 +523,56 @@ int KernelEthercatBus::disarmOutput(struct elc_output_disarm *disarm) {
     return ret;
 }
 
+int KernelEthercatBus::configureOutputLease(uint32_t cycle_budget) {
+    if (!handle) {
+        return -EINVAL;
+    }
+    if (!hasOutputLease()) {
+        return -ENOTSUP;
+    }
+    if (cycle_budget == 0 || cycle_budget > ELC_OUTPUT_LEASE_CYCLES_MAX) {
+        return -EINVAL;
+    }
+    if (!config_generation_) {
+        return -EINVAL;
+    }
+    struct elc_output_lease_config cfg = {};
+    elc_init_api_header(&cfg, sizeof(cfg));
+    cfg.config_generation = config_generation_;
+    cfg.cycle_budget = cycle_budget;
+    return elc_configure_output_lease(handle, &cfg);
+}
+
+int KernelEthercatBus::renewOutputLease(struct elc_output_lease_renew *renew) {
+    if (!handle) {
+        return -EINVAL;
+    }
+    if (!hasOutputLease()) {
+        return -ENOTSUP;
+    }
+    struct elc_output_lease_renew local = {};
+    elc_init_api_header(&local, sizeof(local));
+    if (config_generation_) {
+        local.config_generation = config_generation_;
+    }
+    int ret = elc_renew_output_lease(handle, &local);
+    if (renew) {
+        *renew = local;
+    }
+    return ret;
+}
+
+int KernelEthercatBus::getOutputLeaseStatus(struct elc_output_lease_status *st) {
+    if (!handle || !st) {
+        return -EINVAL;
+    }
+    elc_init_api_header(st, sizeof(*st));
+    if (config_generation_) {
+        st->config_generation = config_generation_;
+    }
+    return elc_get_output_lease_status(handle, st);
+}
+
 int KernelEthercatBus::getIoStatus(struct elc_io_status *st) {
     if (!handle || !st) {
         return -EINVAL;

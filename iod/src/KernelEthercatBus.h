@@ -81,6 +81,18 @@ class KernelEthercatBus {
     int disarmOutput(struct elc_output_disarm *disarm = nullptr);
     int getIoStatus(struct elc_io_status *st);
 
+    /**
+     * Output hang failsafe (ELC_CAP_OUTPUT_LEASE). Must be configured after
+     * config apply and *before* cycle activate (kernel rejects when active).
+     * cycle_budget is in bus cycles; remaining is refilled by renewOutputLease.
+     */
+    int configureOutputLease(uint32_t cycle_budget);
+    int renewOutputLease(struct elc_output_lease_renew *renew = nullptr);
+    int getOutputLeaseStatus(struct elc_output_lease_status *st);
+    bool hasOutputLease() const {
+        return (capabilities_ & ELC_CAP_OUTPUT_LEASE) != 0;
+    }
+
     /** Per bus-position discovery status (works before cycle activate). */
     int getSlaveInfo(uint16_t position, struct elc_slave_info *info);
     /**

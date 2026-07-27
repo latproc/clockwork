@@ -16,8 +16,11 @@ endif
 
 # This branch: iod-elc (kernel elc) + cw + support tools. Legacy iod/iod_sdo off.
 # Override: make release CMAKE_EXTRA='-DBUILD_LEGACY_IOD=ON'
+# Default release builds only iod-elc (fast iterate). Full tree:
+#   make release RELEASE_TARGETS=all
 CMAKE_ELC_FLAGS ?= -DBUILD_IOD_ELC=ON -DBUILD_LEGACY_IOD=OFF -DCMAKE_PREFIX_PATH=/opt/elc
 export PKG_CONFIG_PATH := /opt/elc/lib/pkgconfig:$(PKG_CONFIG_PATH)
+RELEASE_TARGETS ?= iod-elc
 
 all:
 	[ -d "build" ] || mkdir build
@@ -26,12 +29,27 @@ all:
 release:
 	[ -d "build" ] || mkdir build
 	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release $(CMAKE_ELC_FLAGS) $(CMAKE_EXTRA) ../.. && make $(JOBS)
+	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release $(CMAKE_ELC_FLAGS) $(CMAKE_EXTRA) ../..
+	@if [ "$(RELEASE_TARGETS)" = "all" ]; then \
+		$(MAKE) -C build/Release $(JOBS); \
+	else \
+		$(MAKE) -C build/Release $(JOBS) $(RELEASE_TARGETS); \
+	fi
 
-release-install:
-	[ -d "build" ] || mkdir build
-	[ -d "build/Release" ] || mkdir build/Release
-	cd build/Release && cmake -DCMAKE_BUILD_TYPE=Release $(CMAKE_ELC_FLAGS) $(CMAKE_EXTRA) ../.. && make $(JOBS) install
+# Install Release binary into iod/ (CMake DESTINATION = project root).
+# Stop iod first if you get "Text file busy".
+release-install: release
+	@if [ "$(RELEASE_TARGETS)" = "all" ]; then \
+		$(MAKE) -C build/Release $(JOBS) install; \
+	else \
+		echo "Installing $(RELEASE_TARGETS) -> $(CURDIR)/"; \
+		for t in $(RELEASE_TARGETS); do \
+			src="build/Release/$$t"; \
+			test -x "$$src" || { echo "missing $$src"; exit 1; }; \
+			cp -a "$$src" "./$$t" || { echo "cp failed (iod running? svc -d /etc/service/iod)"; exit 1; }; \
+			ls -la "./$$t"; \
+		done; \
+	fi
 
 client:
 	[ -d "build" ] || mkdir build

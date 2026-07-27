@@ -98,7 +98,7 @@ class SDOEntry {
      * `default` is re-applied after the next successful upload (same path as
      * cold start). Also queues a read so disabled L_SDO entries still re-run.
      */
-    void markNeedsRecommission(uint64_t now_us);
+    void markNeedsRecommission(uint64_t now_us, uint32_t settle_ms = 200);
     /** All prepared entries bound to this ECModule. */
     static void recommissionModule(ECModule *module, uint64_t now_us);
 
