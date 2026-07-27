@@ -67,18 +67,18 @@ Mitigations (in order):
 Verify: `ps -eLo class,rtprio,psr,comm | grep elc_cycle` → `FF  90  1 elc_cycle`.
 Log on activate may also show: `elc_cycle tid=… promoted SCHED_FIFO prio=90 cpu=1`.
 
-### One-command plant helper
+### One-command plant helper (in transport tree)
 
 ```sh
-# status / install tools+lib / reload module with RT / full setup
-/opt/latproc/scripts/elc-plant.sh status
-/opt/latproc/scripts/elc-plant.sh setup          # install-userland + reload-module + verify
-/opt/latproc/scripts/elc-plant.sh install-userland
-/opt/latproc/scripts/elc-plant.sh reload-module  # stops iod, modprobe, starts iod
-/opt/latproc/scripts/elc-plant.sh verify
+cd /opt/etherlab-cyclic-kmod
+./scripts/elc-plant.sh status
+./scripts/elc-plant.sh setup          # install-userland + reload-module + verify
+./scripts/elc-plant.sh install-userland
+./scripts/elc-plant.sh reload-module  # stops iod, modprobe, starts iod
+./scripts/elc-plant.sh verify
 ```
 
-Source tree helper (same tree as DKMS):
+Or step-by-step:
 
 ```sh
 cd /opt/etherlab-cyclic-kmod
