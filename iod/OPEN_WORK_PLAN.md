@@ -1,6 +1,6 @@
 # Open work plan (iod / Clockwork)
 
-**Updated:** 2026-07-26  
+**Updated:** 2026-07-28  
 **Branches:** `feature/iod-elc-kernel-transport` (elc), `prod-experimental-mqtt-fix` (legacy iod/iod_sdo)
 
 This file keeps multi-session context so thrash/PROCSNAP, idle CPU, and analog
@@ -15,6 +15,7 @@ emit work does not get lost.
 | Multi-domain isolation + Martin safety fixes | elc `7fe6f81f` |
 | `SHOW CYCLING` / `SHOW HEALTH` / peak `PROCSNAP`, iosh status line | elc `50900dc8` |
 | `IDLE_CPU_FIXES.md` (measurement guide from mqtt-fix plant) | elc (also on mqtt-fix `f3c01bca`) |
+| Legacy turnOn/pending-out/SetState hang under quiet EC (softstart) | mqtt-fix `7e062d0c` — **review for later:** `OUTPUT_PENDING_SETSTATE_REVIEW.md` |
 
 ---
 
