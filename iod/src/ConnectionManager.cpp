@@ -123,7 +123,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
       setup_port(setup_port_num), authority(0),
       subscriber_(*MessagingInterface::getContext(), (protocol == eCLOCKWORK) ? ZMQ_SUB : ZMQ_PAIR),
       sender_(0), subscriber_port(remote_port), monit_subs(subscriber_), monit_pubs(0),
-      monit_setup(0), setup_(0), _setup_status(e_startup), sub_status_(ss_init) {
+      monit_setup(0), setup_(0), _setup_status(e_startup), sub_status_(ss_init), setup_monitor_thread(0) {
     internals = new SubscriptionManagerInternals();
     SubscriptionManagerInternals::all.push_back(this);
     state_start = microsecs();
@@ -148,6 +148,17 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 }
 
 SubscriptionManager::~SubscriptionManager() {
+    if (setup_monitor_thread) {
+        if (monit_setup) {
+            monit_setup->abort();
+        }
+        if (setup_monitor_thread->joinable()) {
+            setup_monitor_thread->join();
+        }
+        delete setup_monitor_thread;
+        setup_monitor_thread = 0;
+    }
+
     std::cout << "SubscriptionManagers: " << SubscriptionManagerInternals::all.size() << std::endl;
     auto iter = SubscriptionManagerInternals::all.begin();
     while (iter != SubscriptionManagerInternals::all.end()) {
@@ -183,7 +194,14 @@ void SubscriptionManager::init() {
     }
     boost::thread subscriber_monitor(boost::ref(monit_subs));
     if (isClient()) {
-        boost::thread setup_monitor(boost::ref(*monit_setup));
+        if (setup_monitor_thread) {
+            if (setup_monitor_thread->joinable()) {
+                setup_monitor_thread->join();
+            }
+            delete setup_monitor_thread;
+            setup_monitor_thread = 0;
+        }
+        setup_monitor_thread = new boost::thread(boost::ref(*monit_setup));
     }
     run_status = e_waiting_cmd;
 }
@@ -256,9 +274,20 @@ void SubscriptionManager::resetChannelRequestState(bool recreate_setup_socket) {
             endpoint = url;
         }
 
-        if (monit_setup) {
-            monit_setup->abort();
+        // Stop monitor thread BEFORE deleting the socket it references.
+        // Otherwise zmq::monitor_t::check_event asserts (humid exit 134).
+        SingleConnectionMonitor *old_monitor = monit_setup;
+        if (old_monitor) {
+            old_monitor->abort();
         }
+        if (setup_monitor_thread) {
+            if (setup_monitor_thread->joinable()) {
+                setup_monitor_thread->join();
+            }
+            delete setup_monitor_thread;
+            setup_monitor_thread = 0;
+        }
+
         int linger = 0;
         if (setup_) {
             try {
@@ -269,18 +298,22 @@ void SubscriptionManager::resetChannelRequestState(bool recreate_setup_socket) {
             delete setup_;
             setup_ = 0;
         }
-        delete monit_setup;
-        monit_setup = 0;
 
         setup_ = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
         monit_setup = new SingleConnectionMonitor(*setup_);
-        boost::thread setup_monitor(boost::ref(*monit_setup));
+        if (old_monitor) {
+            // Keep humid disconnect/connect responders on the new monitor.
+            monit_setup->transferRespondersFrom(*old_monitor);
+            delete old_monitor;
+            old_monitor = 0;
+        }
+        setup_monitor_thread = new boost::thread(boost::ref(*monit_setup));
 
         current_channel = "";
         if (!endpoint.empty()) {
-            int counter = 5;
+            int counter = 50;
             while (counter-- > 0 && !monit_setup->active()) {
-                usleep(100);
+                usleep(1000);
             }
             setup().connect(endpoint.c_str());
             monit_setup->setEndPoint(endpoint.c_str());

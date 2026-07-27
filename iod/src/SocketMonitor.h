@@ -61,6 +61,8 @@ class SocketMonitor : public zmq::monitor_t {
     bool active();
     void addResponder(uint16_t event, EventResponder *responder);
     void removeResponder(uint16_t event, EventResponder *responder);
+    // Move event responders to another monitor (used when recreating a socket).
+    void transferRespondersFrom(SocketMonitor &other);
     void checkResponders(const zmq_event_t &event_, const char *addr_) const;
     void setMonitorSocketName(std::string name);
     const std::string &monitorSocketName() const;

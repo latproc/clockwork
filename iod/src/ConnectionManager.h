@@ -29,6 +29,7 @@
 #include "value.h"
 #include <boost/thread/recursive_mutex.hpp>
 #include <map>
+#include <boost/thread.hpp>
 #include <pthread.h>
 #include <set>
 #include <sstream>
@@ -266,6 +267,8 @@ class SubscriptionManager : public ConnectionManager {
     zmq::socket_t *setup_;
     Status _setup_status;
     SubStatus sub_status_;
+    // Owned monitor thread for setup REQ; join before deleting monit_setup.
+    boost::thread *setup_monitor_thread;
 };
 
 #endif
