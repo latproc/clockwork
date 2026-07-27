@@ -52,6 +52,7 @@
 #ifdef USE_KERNEL_ETHERCAT
 #include "KernelEthercatBus.h"
 #include "ElcConfigFile.h"
+#include "ElcSetupRecipe.h"
 #include "options.h"
 #include "IOComponent.h"
 #endif
@@ -1451,6 +1452,15 @@ void ECInterface::configureModules() {
         if (ret != 0) {
             std::cerr << "Failed to populate modules from topology " << topo << " (" << ret
                       << ")\n";
+        }
+        // ED3L PDO map / mode setup SDOs (same as elc_sdo recipe). Idempotent
+        // with shell pre-recipe; required for cold start if script skips it.
+        {
+            int r = ElcSetupRecipe::applyForAllEd3lOnBus(kernelBus.get());
+            if (r != 0) {
+                std::cerr << "WARNING: ED3L setup recipe apply failed ret=" << r
+                          << " (servos may lack PDO map)\n";
+            }
         }
         // Ready for STARTUP SEND activate: bus configured, report PREOP via kernel AL.
         master_state.link_up = 1;
@@ -3339,6 +3349,9 @@ void ECInterface::sendUpdates() {
             g_kernel_output_dirty = true;
         }
 
+        // Servo power-return: apply ED3L PDO-map recipe then L_SDO defaults.
+        ElcSetupRecipe::processPending(kernelBus.get());
+
         // API 0.18 publish-renew: successful publishOutput refills remaining —
         // do not ioctl renew every tick. Legacy kernels without that CAP still
         // get a slow explicit renew so quiet (non-dirty) paths stay alive.
@@ -3850,12 +3863,16 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
         MessageLog::instance()->add(buf);
         std::cout << buf << "\n";
 #ifdef USE_SDO
-        // Recommission only on return (offline→online) after we have seen the
-        // module online once. Cold start uses the normal first-read/default path.
-        // Never storm on the offline edge or on query glitches.
+        // Return after power/link loss (not cold start): re-map ED3L PDO recipe
+        // then L_SDO defaults. Recipe is queued (applied off the AL hot path).
         if (s.online && !m->slave_config_state.online) {
             if (m->sdo_seen_online) {
-                SDOEntry::recommissionModule(m, microsecs());
+                if (ElcSetupRecipe::isEd3lModule(m)) {
+                    ElcSetupRecipe::requestReapply(m->position);
+                }
+                else {
+                    SDOEntry::recommissionModule(m, microsecs());
+                }
             }
             m->sdo_seen_online = true;
         }
@@ -3909,7 +3926,15 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
 #ifdef USE_SDO
         if (s.online && !m->slave_config_state.online) {
             if (m->sdo_seen_online) {
-                SDOEntry::recommissionModule(m, microsecs());
+#ifdef USE_KERNEL_ETHERCAT
+                if (ElcSetupRecipe::isEd3lModule(m)) {
+                    ElcSetupRecipe::requestReapply(m->position);
+                }
+                else
+#endif
+                {
+                    SDOEntry::recommissionModule(m, microsecs());
+                }
             }
             m->sdo_seen_online = true;
         }
