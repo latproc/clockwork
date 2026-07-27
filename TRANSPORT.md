@@ -128,11 +128,18 @@ Binary preference in the script: `/opt/latproc/iod/iod-elc`, else
 
 ## Open work (task list pointer)
 
-Portable backlog (multi-domain stages, plant prove-out, **slave identity /
-EL5152 product+revision auto-match + override**, **fail-closed startup** if
-any module mapping errors without an explicit override):
+Portable backlog (**slave identity / EL5152 product+revision auto-match +
+override**, **fail-closed startup** if any module mapping errors without an
+explicit override):
 
   `code/llm-rules/cw_issues/IOD_ELC_OPEN_WORK_20260726.md`
+
+**Stage 4 (2026-07-27):** dual-domain servo control power-off is
+**proven at elc and under CW/iod-elc**. elc: domain 2 incomplete, domain 1
+valid (`/opt/etherlab-cyclic-kmod/docs/testing.md` *Live domain bus firewall*).
+CW: after `ECDomain_*` status fix, plant re-prove logged
+`ECDomain_2 COMPLETE -> INCOMPLETE` (`faults=0x20`) on power-off and both
+COMPLETE / 34/34 after restore.
 
 Do not start `iod-elc` / reload the module while kernel-module work is
 in progress without coordinating with the operator.

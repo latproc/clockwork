@@ -1,6 +1,6 @@
 # Open work plan (iod / Clockwork)
 
-**Updated:** 2026-07-26 (evening)  
+**Updated:** 2026-07-27 (Stage 4 elc + CW domain isolation proven)  
 **Branch:** `feature/iod-elc-kernel-transport` (elc tip includes channel client recovery)  
 **Also:** `prod-experimental-mqtt-fix` (legacy iod/iod_sdo)
 
@@ -14,6 +14,7 @@ channel/HMI client recovery.
 | Item | Notes / tip commits |
 |------|---------------------|
 | Multi-domain isolation + Martin safety | elc |
+| **Stage 4 dual-domain servo control power-off** (domain bus WC firewall) | **elc + CW 2026-07-27.** elc WC firewall; CW active mirrors + plant re-prove d2 `COMPLETE→INCOMPLETE` (`faults=0x20`); lifecycle hold so dual INVALID/size=0 is not “both bus-failed” |
 | `SHOW CYCLING` / `HEALTH` / peak `PROCSNAP` | elc `50900dc8`; also mqtt-fix (Track A) |
 | Idle CPU / urgency / pending-out / keep-alive | elc Track B |
 | Dig ASAP + analog pace (kernel `domain1_pd`) | elc Track B2 |

@@ -607,8 +607,11 @@ MachineClass *makeEtherCatDomainMachineClass() {
     result->setProperty("domain_id", Value(0));
     result->setProperty("valid", Value(0));
     result->setProperty("armed", Value(0));
+    result->setProperty("rearm", Value(0));
+    result->setProperty("status_known", Value(0));
     result->setProperty("wc", Value(0));
     result->setProperty("wc_state", Value(0));
+    result->setProperty("faults", Value(0));
     result->setProperty("slave_states", Value(0));
     result->setProperty("base_offset", Value(0));
     result->setProperty("domain_size", Value(0));

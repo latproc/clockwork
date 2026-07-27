@@ -83,23 +83,63 @@ static bool g_kernel_pub_mask_valid = false;
 // slave_states). Plant LPC pulls a REFERENCE by domain_id (DOMAINREF).
 struct ElcDomainSlot {
     uint32_t id = 0;
+    bool active = false;
     bool valid = false;
     bool armed = false;
+    bool rearm_required = false;
+    // False until the first successful getDomainStatus after (re)activate.
+    // Lifecycle / ESTALE must not publish dual INVALID + size=0 as a bus fault.
+    bool status_known = false;
     uint32_t wc = 0;
     uint8_t wc_state = 0;
+    uint32_t faults = 0;
     uint32_t slave_states = 0;
     uint32_t base_offset = 0;
     uint32_t domain_size = 0;
+    // Last CW state name we applied (for edge log + change detection).
+    const char *published_state = "INVALID";
     MachineInstance *machine = nullptr;
 };
 static std::vector<ElcDomainSlot> g_domains;
 static bool g_domain_status_ok = false; // primary domain status available
 static uint32_t g_primary_domain_id = 0;
+// True when every configured domain is WC-complete + data_valid (for poll rate).
+static bool g_all_domains_complete = false;
+// Cycle is active but at least one domain has no successful status yet.
+static bool g_domain_status_pending = false;
+
+// Map elc WC/data_valid to CW ETHERCAT_DOMAIN states.
+// Domain bus firewall: WC completeness is the isolation boundary — do not
+// report COMPLETE unless wc_state is complete *and* data_valid.
+//
+// Returns nullptr when the slot has no bus sample yet (post-activate /
+// ESTALE): caller must hold the previous CW state (not force INVALID).
+static const char *domainSlotCwState(const ElcDomainSlot &slot) {
+    // EC_WC_*: ZERO=0, INCOMPLETE=1, COMPLETE=2 (EtherLab / elc UAPI).
+    if (!slot.status_known) {
+        return nullptr; // lifecycle hold — not a bus fault
+    }
+    // Kernel reports inactive only when the cycle is not running for this
+    // controller context. Prefer INCOMPLETE over INVALID while ECInterface
+    // still has active==true so dual INVALID is reserved for true session-down.
+    if (!slot.active) {
+        return "INCOMPLETE";
+    }
+    if (slot.wc_state == 2 && slot.valid) {
+        return "COMPLETE";
+    }
+    // Live or failed segment: WC incomplete, faults, or !data_valid.
+    return "INCOMPLETE";
+}
 
 static MachineInstance *ensureECDomainMachine(uint32_t domain_id) {
     const std::string name = "ECDomain_" + std::to_string(domain_id);
     MachineInstance *mi = MachineInstance::find(name.c_str());
     if (mi) {
+        // Status mirrors must be active so setState is reliable (not PASSIVE).
+        if (!mi->isActive()) {
+            mi->markActive();
+        }
         return mi;
     }
     mi = MachineInstanceFactory::create(name.c_str(), "ETHERCAT_DOMAIN");
@@ -114,6 +154,7 @@ static MachineInstance *ensureECDomainMachine(uint32_t domain_id) {
     }
     mi->setDefinitionLocation("Internal", 0);
     mi->setValue("domain_id", Value{static_cast<long>(domain_id)});
+    mi->markActive();
     machines[name] = mi;
     MachineInstance *list = MachineInstance::find("L_ECDomains");
     if (list) {
@@ -125,13 +166,14 @@ static MachineInstance *ensureECDomainMachine(uint32_t domain_id) {
             mi->enable();
         }
     }
-    std::cerr << "Registered " << name << " on L_ECDomains\n";
+    std::cerr << "Registered " << name << " on L_ECDomains (active status mirror)\n";
     return mi;
 }
 
 void elcRegisterClockworkDomains(const std::vector<uint32_t> &domain_ids) {
     g_domains.clear();
     g_domain_status_ok = false;
+    g_all_domains_complete = false;
     g_primary_domain_id = domain_ids.empty() ? 0 : domain_ids.front();
     for (uint32_t id : domain_ids) {
         ElcDomainSlot slot;
@@ -146,15 +188,27 @@ void elcRegisterClockworkDomains(const std::vector<uint32_t> &domain_ids) {
     }
 }
 
+// Status mirrors (ECDomain_*, ETHERCAT_WC): queue SetState when changed.
+// ECDomain machines are markActive() so they are not PASSIVE and the action
+// runs on the processing thread (passive machines dropped status updates).
 static void setMachineStateIfChanged(MachineInstance *m, const char *state) {
-    if (!m) {
+    if (!m || !state) {
         return;
     }
     if (!m->enabled()) {
         m->enable();
     }
+    // Keep the machine active so idle() processes the SetStateAction.
+    if (!m->isActive()) {
+        m->markActive();
+    }
     if (m->getCurrent().getName() == state) {
         return;
+    }
+    // Drop any unfinished SetState so we do not queue COMPLETE→INCOMPLETE→…
+    // behind a backlog of stale transitions when domains flap.
+    if (m->executingCommand()) {
+        m->clearAllActions();
     }
     SetStateActionTemplate ssat = SetStateActionTemplate("SELF", Value{state});
     SetStateAction *ssa = dynamic_cast<SetStateAction *>(ssat.factory(m));
@@ -168,32 +222,68 @@ static void publishKernelEthercatClockworkMachines() {
     MachineInstance *ec = MachineInstance::find("ETHERCAT");
     MachineInstance *wc = MachineInstance::find("ETHERCAT_WC");
 
+    bool all_complete = !g_domains.empty();
+    bool any_known = false;
+    bool any_pending = false;
     for (ElcDomainSlot &slot : g_domains) {
         MachineInstance *dm = slot.machine;
+        const char *dstate = domainSlotCwState(slot);
+        if (!slot.status_known) {
+            any_pending = true;
+            all_complete = false;
+        }
+        else {
+            any_known = true;
+            if (!(slot.valid && slot.wc_state == 2 && slot.active)) {
+                all_complete = false;
+            }
+        }
         if (!dm) {
+            if (dstate) {
+                slot.published_state = dstate;
+            }
             continue;
         }
         dm->setValue("domain_id", Value{static_cast<long>(slot.id)});
-        dm->setValue("valid", Value{slot.valid ? 1 : 0});
-        dm->setValue("armed", Value{slot.armed ? 1 : 0});
-        dm->setValue("wc", Value{static_cast<long>(slot.wc)});
-        dm->setValue("wc_state", Value{static_cast<long>(slot.wc_state)});
-        dm->setValue("slave_states", Value{static_cast<long>(slot.slave_states)});
-        dm->setValue("base_offset", Value{static_cast<long>(slot.base_offset)});
-        dm->setValue("domain_size", Value{static_cast<long>(slot.domain_size)});
-        const char *dstate = "INVALID";
-        if (slot.valid && slot.wc_state == 2) {
-            dstate = "COMPLETE";
+        // status_known=0 → lifecycle hold (not "bus failed"). Keep last size/offset.
+        dm->setValue("status_known", Value{slot.status_known ? 1 : 0});
+        if (slot.status_known) {
+            dm->setValue("valid", Value{slot.valid ? 1 : 0});
+            dm->setValue("armed", Value{slot.armed ? 1 : 0});
+            dm->setValue("rearm", Value{slot.rearm_required ? 1 : 0});
+            dm->setValue("wc", Value{static_cast<long>(slot.wc)});
+            dm->setValue("wc_state", Value{static_cast<long>(slot.wc_state)});
+            dm->setValue("faults", Value{static_cast<long>(slot.faults)});
+            dm->setValue("slave_states", Value{static_cast<long>(slot.slave_states)});
+            if (slot.domain_size != 0) {
+                dm->setValue("base_offset", Value{static_cast<long>(slot.base_offset)});
+                dm->setValue("domain_size", Value{static_cast<long>(slot.domain_size)});
+            }
         }
-        else if (slot.wc > 0 || slot.wc_state == 1) {
-            dstate = "INCOMPLETE";
+        if (!dstate) {
+            // Lifecycle: hold last CW state; do not COMPLETE→INVALID→INCOMPLETE.
+            continue;
+        }
+        if (slot.published_state != dstate) {
+            std::cerr << "ECDomain_" << slot.id << " " << slot.published_state << " -> "
+                      << dstate << " valid=" << (int)slot.valid
+                      << " wc=" << slot.wc << " wc_state=" << (unsigned)slot.wc_state
+                      << " faults=0x" << std::hex << slot.faults << std::dec
+                      << " armed=" << (int)slot.armed
+                      << " rearm=" << (int)slot.rearm_required
+                      << " slave_al=0x" << std::hex << slot.slave_states << std::dec
+                      << " known=1\n";
+            slot.published_state = dstate;
         }
         setMachineStateIfChanged(dm, dstate);
     }
+    g_domain_status_pending = any_pending;
+    g_all_domains_complete = all_complete && any_known && !any_pending;
 
     if (ec) {
         ec->setValue("primary_domain_id", Value{static_cast<long>(g_primary_domain_id)});
         ec->setValue("domain_count", Value{static_cast<long>(g_domains.size())});
+        ec->setValue("domain_status_pending", Value{any_pending ? 1 : 0});
         if (g_domain_status_ok) {
             ec->setValue("all_ok_source", Value("primary_domain", Value::t_string));
         }
@@ -206,20 +296,20 @@ static void publishKernelEthercatClockworkMachines() {
         return;
     }
     // ETHERCAT_WC follows the primary domain (first declared) WC only.
-    const char *state = "ZERO";
-    long value = 0;
-    if (g_domain_status_ok && !g_domains.empty()) {
+    // Hold last VALUE/state while primary status is not yet known (lifecycle).
+    if (g_domain_status_ok && !g_domains.empty() && g_domains.front().status_known) {
         const ElcDomainSlot &p = g_domains.front();
-        value = static_cast<long>(p.wc);
+        const char *state = "INCOMPLETE";
+        long value = static_cast<long>(p.wc);
         if (p.wc_state == 2 && p.valid) {
             state = "COMPLETE";
         }
-        else if (p.wc_state == 1 || p.wc > 0) {
-            state = "INCOMPLETE";
+        else if (p.wc_state == 0 && p.wc == 0 && !p.active && p.faults == 0) {
+            state = "ZERO";
         }
+        wc->setValue("VALUE", Value{value});
+        setMachineStateIfChanged(wc, state);
     }
-    wc->setValue("VALUE", Value{value});
-    setMachineStateIfChanged(wc, state);
 }
 #endif
 ec_master_t *ECInterface::master = NULL;
@@ -1766,14 +1856,26 @@ bool ECInterface::activate() {
         g_kernel_pub_mask_valid = false;
         g_kernel_output_dirty = true; // publish zeros once after activate
         g_kernel_outputs_armed = false;
+        // Clear live samples but do NOT force CW dual INVALID / size=0.
+        // status_known=false holds last COMPLETE/INCOMPLETE until getDomainStatus.
         for (ElcDomainSlot &slot : g_domains) {
+            slot.active = false;
             slot.valid = false;
             slot.armed = false;
+            slot.rearm_required = false;
+            slot.status_known = false;
             slot.wc = 0;
             slot.wc_state = 0;
-            slot.slave_states = 0;
+            slot.faults = 0;
+            // Keep domain_size / base_offset / published_state for hold.
         }
         g_domain_status_ok = false;
+        g_all_domains_complete = false;
+        g_domain_status_pending = !g_domains.empty();
+        if (g_domain_status_pending) {
+            std::cerr << "ECDOMAIN lifecycle: post-activate awaiting domain status"
+                         " (holding prior CW states)\n";
+        }
         // Non-null marker so existing domain checks pass (not an ecrt domain).
         domain1 = reinterpret_cast<ec_domain_t *>(domain1_pd);
         data.setDataSize(dsz);
@@ -2272,6 +2374,7 @@ static bool refreshKernelDomainHealth(KernelEthercatBus *bus, bool log_periodic)
     }
     static uint64_t last_log_us = 0;
     const uint64_t now = microsecs();
+    // Periodic summary at 1 Hz (edge COMPLETE/INCOMPLETE logs are separate).
     const bool do_log =
         log_periodic && (last_log_us == 0 || now - last_log_us >= 1000000ULL);
     if (do_log) {
@@ -2288,7 +2391,8 @@ static bool refreshKernelDomainHealth(KernelEthercatBus *bus, bool log_periodic)
                   << io.configured_slave_count
                   << " domain_auth=" << (bus->hasDomainOutputAuthority() ? 1 : 0)
                   << " all_ok_src="
-                  << (g_domain_status_ok ? "primary_domain" : "aggregate") << "\n";
+                  << (g_domain_status_ok ? "primary_domain" : "aggregate")
+                  << " pending=" << (g_domain_status_pending ? 1 : 0) << "\n";
     }
 
     bool got_primary = false;
@@ -2298,13 +2402,13 @@ static bool refreshKernelDomainHealth(KernelEthercatBus *bus, bool log_periodic)
         struct elc_domain_status st = {};
         int ret = bus->getDomainStatus(slot.id, &st);
         if (ret != 0) {
-            slot.valid = false;
-            slot.armed = false;
-            slot.wc = 0;
-            slot.wc_state = 0;
+            // ESTALE / not ready: hold last known sample. Do not invent
+            // active=0, size=0, dual INVALID (lifecycle, not bus isolation).
+            slot.status_known = false;
             if (do_log) {
                 std::cerr << "ECDOMAIN id=" << slot.id
-                          << " getDomainStatus failed ret=" << ret << "\n";
+                          << " getDomainStatus failed ret=" << ret
+                          << " (holding prior CW state)\n";
             }
             continue;
         }
@@ -2312,17 +2416,25 @@ static bool refreshKernelDomainHealth(KernelEthercatBus *bus, bool log_periodic)
             got_primary = true;
         }
         const bool was_armed = slot.armed;
+        slot.status_known = true;
+        slot.active = st.active != 0;
+        // data_valid already incorporates WC-firewall healthy + snapshot.
         slot.valid = st.active != 0 && st.data_valid != 0;
         slot.armed = st.outputs_armed != 0;
+        slot.rearm_required = st.rearm_required != 0;
         slot.wc = st.working_counter;
         slot.wc_state = st.working_counter_state;
+        slot.faults = st.current_faults;
         slot.base_offset = st.base_offset;
-        slot.domain_size = st.domain_size;
+        if (st.domain_size != 0) {
+            slot.domain_size = st.domain_size;
+        }
         // Lost arm on a still-valid domain → republish+rearm (fault epoch).
         if (was_armed && !slot.armed && slot.valid) {
             g_kernel_output_dirty = true;
         }
         if (do_log) {
+            const char *cw = domainSlotCwState(slot);
             std::cerr << "ECDOMAIN id=" << st.domain_config_id
                       << (i == 0 ? " (primary)" : "")
                       << " active=" << (int)st.active << " data_valid=" << (int)st.data_valid
@@ -2331,12 +2443,14 @@ static bool refreshKernelDomainHealth(KernelEthercatBus *bus, bool log_periodic)
                       << " armed=" << (int)st.outputs_armed
                       << " rearm=" << (int)st.rearm_required << " faults=0x" << std::hex
                       << st.current_faults << std::dec << " base=" << st.base_offset
-                      << " size=" << st.domain_size << "\n";
+                      << " size=" << st.domain_size
+                      << " cw=" << (cw ? cw : "HOLD") << "\n";
         }
     }
     g_domain_status_ok = got_primary;
     // Quiet-publish path: primary domain arm is "outputs live".
-    g_kernel_outputs_armed = !g_domains.empty() && g_domains.front().armed;
+    g_kernel_outputs_armed =
+        !g_domains.empty() && g_domains.front().status_known && g_domains.front().armed;
     publishKernelEthercatClockworkMachines();
     return got_primary;
 }
@@ -2475,11 +2589,15 @@ void ECInterface::receiveState(bool pull_process_image) {
             last_receive = microsecs();
         }
         // IO / domain status is not needed every bus tick once armed and healthy.
-        // Rate-limit: 10 ms when IO domain healthy+armed, 1 ms until first arm.
+        // Rate-limit: 10 ms when all domains complete + armed; 1 ms while any
+        // domain is incomplete/invalid (so CW ECDomain_* tracks power-off quickly).
         {
             static uint64_t last_io_status = 0;
             const uint64_t io_period_us =
-                (g_kernel_outputs_armed && all_ok) ? 10000ULL : 1000ULL;
+                (g_kernel_outputs_armed && all_ok && g_all_domains_complete &&
+                 !g_domain_status_pending)
+                    ? 10000ULL
+                    : 1000ULL;
             uint64_t t = microsecs();
             if (last_io_status == 0 || t - last_io_status >= io_period_us) {
                 last_io_status = t;
@@ -3585,7 +3703,11 @@ void ECInterface::check_slave_config_states(void) {
         const unsigned int al_for_startup =
             saw_domain_ids ? al_or_primary : al_or_all;
         master_state.al_states = al_for_startup;
+        bool al_changed = false;
         for (size_t di = 0; di < g_domains.size(); ++di) {
+            if (g_domains[di].slave_states != al_per_domain[di]) {
+                al_changed = true;
+            }
             g_domains[di].slave_states = al_per_domain[di];
         }
         if (ethercat_status) {
@@ -3593,6 +3715,10 @@ void ECInterface::check_slave_config_states(void) {
                                       Value{static_cast<uint64_t>(al_for_startup)});
             ethercat_status->setValue("all_slave_states",
                                       Value{static_cast<uint64_t>(al_or_all)});
+        }
+        // Push per-domain AL onto ECDomain_* promptly (do not wait for next WC poll).
+        if (al_changed) {
+            publishKernelEthercatClockworkMachines();
         }
         static unsigned last_log_al = 0xffffffffu;
         static unsigned last_log_op = 0xffffffffu;
