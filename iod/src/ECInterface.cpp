@@ -33,6 +33,7 @@
 #include <fstream>
 #include <iomanip>
 #include <algorithm>
+#include <cstdlib>
 #include <iostream>
 #include <vector>
 #include <list>
@@ -2034,51 +2035,58 @@ bool ECInterface::activate() {
         FREQUENCY = period_us > 0 ? static_cast<unsigned int>(1000000UL / period_us) : FREQUENCY;
         set_cycle_time(period_us);
 
-        // Output hang failsafe (optional CAP). Kernel decrements remaining every
-        // *bus* cycle (period_us). Userspace renews from ecat sendUpdates — that
-        // loop is *not* CW POLLING_DELAY, and can stall for hundreds of ms during
-        // cold-start SDO defaults / mailbox. Hang wall-time must be large enough
-        // that normal startup and brief ecat stalls do not disarm and thrash OP.
+        // Output hang failsafe (optional CAP). Off by default — enable with
+        // ELC_OUTPUT_LEASE=1. When on: configure pre-activate; renew slowly
+        // from sendUpdates (not every ecat tick — 4 kHz renew hammered
+        // master-fsm and correlated with OP thrash / SM WD).
         //
-        // budget_cycles = hang_us / bus_period_us
-        // hang_us = max(2 s, 200 × max(bus_period, POLLING_DELAY)), cap 5 s.
-        // Still a real lockup cut-off; not a 50 ms trip on first SDO burst.
+        // Hang ~2 s so cold-start SDO mailbox stalls do not false-expire.
         g_output_lease_enabled = false;
         g_output_lease_budget = 0;
-        if (kernelBus->hasOutputLease() && kernelBus->configGeneration() != 0) {
-            unsigned long poll_us = get_polling_time();
-            if (poll_us < 100) {
-                poll_us = 100;
+        {
+            const char *lease_env = getenv("ELC_OUTPUT_LEASE");
+            const bool want_lease =
+                lease_env && lease_env[0] == '1' && lease_env[1] == '\0';
+            if (want_lease && kernelBus->hasOutputLease() &&
+                kernelBus->configGeneration() != 0) {
+                unsigned long poll_us = get_polling_time();
+                if (poll_us < 100) {
+                    poll_us = 100;
+                }
+                const uint64_t renew_gap_us =
+                    std::max<uint64_t>(period_us, static_cast<uint64_t>(poll_us));
+                uint64_t hang_us =
+                    std::max<uint64_t>(2000000ULL, 200ULL * renew_gap_us);
+                if (hang_us > 5000000ULL) {
+                    hang_us = 5000000ULL;
+                }
+                uint32_t budget = static_cast<uint32_t>(hang_us / period_us);
+                if (budget < 400) {
+                    budget = 400;
+                }
+                if (budget > ELC_OUTPUT_LEASE_CYCLES_MAX) {
+                    budget = ELC_OUTPUT_LEASE_CYCLES_MAX;
+                }
+                int lret = kernelBus->configureOutputLease(budget);
+                if (lret == 0) {
+                    g_output_lease_enabled = true;
+                    g_output_lease_budget = budget;
+                    std::cerr << "elc output lease: ON budget=" << budget
+                              << " bus_cycles (~" << (budget * period_us)
+                              << " us hang) bus_period_us=" << period_us
+                              << " poll_us=" << poll_us
+                              << " renew_period_us=50000\n";
+                }
+                else {
+                    std::cerr << "elc_configure_output_lease failed ret=" << lret
+                              << " (lease off)\n";
+                }
             }
-            const uint64_t renew_gap_us =
-                std::max<uint64_t>(period_us, static_cast<uint64_t>(poll_us));
-            // 2 s floor: startup SDO (paced ~10 ms/op × many entries) easily
-            // exceeds 50–200 ms; false expire → disarm → SM WD / unclean start.
-            uint64_t hang_us = std::max<uint64_t>(2000000ULL, 200ULL * renew_gap_us);
-            if (hang_us > 5000000ULL) {
-                hang_us = 5000000ULL; // cap 5 s
-            }
-            uint32_t budget = static_cast<uint32_t>(hang_us / period_us);
-            if (budget < 400) {
-                budget = 400; // min ~100 ms at 250 µs bus
-            }
-            if (budget > ELC_OUTPUT_LEASE_CYCLES_MAX) {
-                budget = ELC_OUTPUT_LEASE_CYCLES_MAX;
-            }
-            // Must configure before cycle activate (kernel rejects when active).
-            int lret = kernelBus->configureOutputLease(budget);
-            if (lret == 0) {
-                g_output_lease_enabled = true;
-                g_output_lease_budget = budget;
-                std::cerr << "elc output lease: budget=" << budget
-                          << " bus_cycles (~" << (budget * period_us) << " us hang) "
-                          << "bus_period_us=" << period_us
-                          << " poll_us=" << poll_us
-                          << " (renew in ecat sendUpdates, not POLLING_DELAY)\n";
+            else if (want_lease) {
+                std::cerr << "elc output lease: requested but CAP/generation missing\n";
             }
             else {
-                std::cerr << "elc_configure_output_lease failed ret=" << lret
-                          << " (outputs continue without hang failsafe)\n";
+                std::cerr << "elc output lease: OFF (set ELC_OUTPUT_LEASE=1 to enable)\n";
             }
         }
 
@@ -3329,14 +3337,19 @@ void ECInterface::sendUpdates() {
             g_kernel_output_dirty = true;
         }
 
-        // Renew hang lease every ecat sendUpdates tick (quiet or dirty).
-        // Kernel burns remaining every bus cycle; without this quiet path the
-        // early return below would let the lease expire while still "armed".
+        // Renew hang lease slowly (50 ms). Every-tick renew flooded elc
+        // ctx->lock / master-fsm and showed up as SKIPPED + OP thrash.
         if (g_output_lease_enabled) {
-            int rret = kernelBus->renewOutputLease();
-            if (rret != 0 && now - last_warning > 2000000) {
-                last_warning = now;
-                std::cerr << "elc_renew_output_lease failed ret=" << rret << "\n";
+            static uint64_t last_lease_renew_us = 0;
+            const uint64_t renew_period_us = 50000;
+            if (last_lease_renew_us == 0 ||
+                now - last_lease_renew_us >= renew_period_us) {
+                last_lease_renew_us = now;
+                int rret = kernelBus->renewOutputLease();
+                if (rret != 0 && now - last_warning > 2000000) {
+                    last_warning = now;
+                    std::cerr << "elc_renew_output_lease failed ret=" << rret << "\n";
+                }
             }
         }
 
