@@ -1123,6 +1123,14 @@ void EtherCATThread::operator()() {
         ECInterface::instance()->sendUpdates();
         checkAndUpdateCycleDelay();
     }
+    // Clean leave of OP before the process closes the elc fd. Hard SIGKILL
+    // still cannot run this path (svc -k) and will SM-watchdog on stop.
+#ifdef USE_KERNEL_ETHERCAT
+    if (ECInterface::instance()) {
+        std::cerr << "ecat_thread: deactivating EtherCAT before exit\n";
+        (void)ECInterface::instance()->deactivate();
+    }
+#endif
 #ifdef USE_CHRONO
     send_stop_message();
     std::lock_guard<std::mutex> lock(pipe_mtx);

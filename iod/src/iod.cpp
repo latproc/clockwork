@@ -76,6 +76,12 @@
 bool program_done = false;
 bool machine_is_ready = false;
 
+// svc -d / daemontools send SIGTERM. Set program_done so threads leave cleanly
+// and ecat can deactivate (reduces SM-watchdog spam vs SIGKILL / svc -k).
+static void iod_request_shutdown(int /*sig*/) {
+    program_done = true;
+}
+
 void usage(int argc, char *argv[]);
 void displaySymbolTable();
 
@@ -357,6 +363,15 @@ int main(int argc, char const *argv[]) {
 #else
     pthread_setname_np(pthread_self(), thread_name.c_str());
 #endif
+
+    {
+        struct sigaction sa;
+        memset(&sa, 0, sizeof(sa));
+        sa.sa_handler = iod_request_shutdown;
+        sigemptyset(&sa.sa_mask);
+        sigaction(SIGTERM, &sa, nullptr);
+        sigaction(SIGINT, &sa, nullptr);
+    }
 
     boost::condition_variable_any processing_condition;
     boost::shared_mutex processing_queue_mutex;
