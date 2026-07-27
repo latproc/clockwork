@@ -104,13 +104,16 @@ void ConnectionManager::abort() {
 class SubscriptionManagerInternals : public ConnectionManagerInternals {
 
   public:
-    SubscriptionManagerInternals() : sent_request(false), send_time(0) {}
+    SubscriptionManagerInternals()
+        : sent_request(false), send_time(0), last_setup_recreate_time(0) {}
 
     ~SubscriptionManagerInternals() {}
     // helpers for connection resume
     bool sent_request;
     uint64_t send_time;
+    uint64_t last_setup_recreate_time;
     static const uint64_t channel_request_timeout = 3000000;
+    static const uint64_t setup_recreate_min_interval = 2000000; // 2s
     static std::list<SubscriptionManager*> all;
 };
 
@@ -253,6 +256,17 @@ void SubscriptionManager::resetChannelRequestState(bool recreate_setup_socket) {
 
     if (!recreate_setup_socket) {
         return;
+    }
+
+    // Rate-limit full socket teardown/rebuild (join+new thread is expensive).
+    {
+        const uint64_t now = microsecs();
+        if (smi->last_setup_recreate_time &&
+            now - smi->last_setup_recreate_time <
+                SubscriptionManagerInternals::setup_recreate_min_interval) {
+            return;
+        }
+        smi->last_setup_recreate_time = now;
     }
 
     // ZMQ REQ is half-open until a reply arrives; after timeout/EFSM the only
@@ -1056,7 +1070,21 @@ bool SubscriptionManager::checkConnections() {
         FileLogger fl(program_name);
         fl.f() << "SubscriptionManager disconnected from server clockwork\n";
         // TCP drop leaves REQ half-open until the socket is replaced.
-        resetChannelRequestState(true);
+        // Only recreate once when leaving a "had a session" state. While we are
+        // already in e_waiting_connect / e_startup after a recreate, the monitor
+        // still reports disconnected until TCP comes back — recreating every
+        // poll (~50ms) storms sockets and can strand humid.
+        const Status st = setupStatus();
+        if (st == e_done || st == e_waiting_setup || st == e_connected || st == e_error ||
+            st == e_waiting_subscriber || st == e_settingup_subscriber) {
+            resetChannelRequestState(true);
+        }
+        else {
+            resetChannelRequestState(false);
+            if (st != e_waiting_connect && st != e_startup) {
+                setSetupStatus(e_startup);
+            }
+        }
         usleep(100);
         return false;
     }
