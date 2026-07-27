@@ -265,6 +265,30 @@ static int parse_file(const char *path, ParsedFile &out) {
 
 } // namespace
 
+int elcPositionsForDomain(const char *path, uint32_t domain_config_id,
+                          std::vector<uint16_t> *positions_out) {
+    if (!path || !positions_out) {
+        return -EINVAL;
+    }
+    positions_out->clear();
+    ParsedFile file;
+    int ret = parse_file(path, file);
+    if (ret != 0) {
+        return ret;
+    }
+    for (const auto &da : file.domain_assigns) {
+        if (da.domain_config_id != domain_config_id) {
+            continue;
+        }
+        auto it = file.slave_ix.find(da.slave_config_id);
+        if (it == file.slave_ix.end()) {
+            continue;
+        }
+        positions_out->push_back(file.slaves[it->second].position);
+    }
+    return 0;
+}
+
 const char *elcDefaultTopologyConfigPath() {
     const char *env = getenv("ELC_TOPOLOGY_CONFIG");
     if (env && env[0]) {

@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <string>
+#include <vector>
 
 static int opt_verbose = 0;
 static int opt_test_only = 0;
@@ -50,6 +51,15 @@ static unsigned long polling_time_ = 2000;
 static bool c_export = false;
 static bool fix_invalid_auto_transitions = false;
 static std::string ethercat_adapter_name;
+
+struct CliSetupRecipe {
+    std::string path;
+    std::string positions;
+    unsigned long domain_id = 0;
+    unsigned long product_code = 0;
+    unsigned long vendor_id = 0;
+};
+static std::vector<CliSetupRecipe> elc_setup_recipes;
 
 static std::map<std::string, int> thread_cpu_affinities;
 static std::map<std::string, int> thread_rt_priorities;
@@ -176,3 +186,76 @@ void set_fix_invalid_transitions(bool which) { fix_invalid_auto_transitions = wh
 void set_ethercat_adapter(const char *adapter) { ethercat_adapter_name = adapter; }
 
 const char *ethercat_adapter() { return ethercat_adapter_name.c_str(); }
+
+void elc_setup_recipe_add(const char *path) {
+    CliSetupRecipe r;
+    r.path = path ? path : "";
+    elc_setup_recipes.push_back(r);
+}
+
+void elc_setup_recipe_set_last_positions(const char *list) {
+    if (elc_setup_recipes.empty()) {
+        return;
+    }
+    elc_setup_recipes.back().positions = list ? list : "";
+}
+
+void elc_setup_recipe_set_last_domain(unsigned long domain_id) {
+    if (elc_setup_recipes.empty()) {
+        return;
+    }
+    elc_setup_recipes.back().domain_id = domain_id;
+}
+
+void elc_setup_recipe_set_last_product(unsigned long product_code) {
+    if (elc_setup_recipes.empty()) {
+        return;
+    }
+    elc_setup_recipes.back().product_code = product_code;
+}
+
+void elc_setup_recipe_set_last_vendor(unsigned long vendor_id) {
+    if (elc_setup_recipes.empty()) {
+        return;
+    }
+    elc_setup_recipes.back().vendor_id = vendor_id;
+}
+
+unsigned elc_setup_recipe_count(void) {
+    return static_cast<unsigned>(elc_setup_recipes.size());
+}
+
+const char *elc_setup_recipe_path_at(unsigned i) {
+    if (i >= elc_setup_recipes.size()) {
+        return nullptr;
+    }
+    return elc_setup_recipes[i].path.c_str();
+}
+
+const char *elc_setup_recipe_positions_at(unsigned i) {
+    if (i >= elc_setup_recipes.size() || elc_setup_recipes[i].positions.empty()) {
+        return nullptr;
+    }
+    return elc_setup_recipes[i].positions.c_str();
+}
+
+unsigned long elc_setup_recipe_domain_at(unsigned i) {
+    if (i >= elc_setup_recipes.size()) {
+        return 0;
+    }
+    return elc_setup_recipes[i].domain_id;
+}
+
+unsigned long elc_setup_recipe_product_at(unsigned i) {
+    if (i >= elc_setup_recipes.size()) {
+        return 0;
+    }
+    return elc_setup_recipes[i].product_code;
+}
+
+unsigned long elc_setup_recipe_vendor_at(unsigned i) {
+    if (i >= elc_setup_recipes.size()) {
+        return 0;
+    }
+    return elc_setup_recipes[i].vendor_id;
+}

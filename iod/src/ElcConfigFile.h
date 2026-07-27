@@ -26,4 +26,9 @@ int elcPopulateModulesFromConfigFile(KernelEthercatBus *bus, const char *path);
 // Default topology for this machine (34 slaves).
 const char *elcDefaultTopologyConfigPath();
 
+// Positions of slaves assigned to domain_config_id (topology domain_slave lines).
+// Returns 0 on success (empty out if domain has no slaves). Negative on parse error.
+int elcPositionsForDomain(const char *path, uint32_t domain_config_id,
+                          std::vector<uint16_t> *positions_out);
+
 #endif

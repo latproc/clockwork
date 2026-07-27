@@ -115,7 +115,9 @@ void usage(int argc, char const *argv[]) {
         << "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
         << "[-mp modbus_port] [-ps persistent_store_port] "
         << "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics\n"
-        << "[--fix-invalid true [-e ethernet_interface]" << "\n";
+        << "[--setup-recipe FILE] [--setup-positions LIST] [--setup-domain ID]\n"
+        << "  [--setup-product CODE] [--setup-vendor ID]  (repeatable; elc ordered setup SDOs)\n"
+        << "[--fix-invalid true] [-e ethernet_interface]" << "\n";
 }
 
 static void listDirectory(const std::string pathToCheck, std::list<std::string> &file_list) {
@@ -1211,6 +1213,32 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
         }
         else if (strcmp(argv[i], "--name") == 0 && i < argc - 1) { // set the system name
             set_device_name(argv[++i]);
+        }
+        else if ((strcmp(argv[i], "--setup-recipe") == 0 || strcmp(argv[i], "-R") == 0) &&
+                 i < argc - 1) {
+            // Repeatable. Optional @positions suffix: path@29-33
+            const char *arg = argv[++i];
+            const char *at = strchr(arg, '@');
+            if (at && at != arg) {
+                std::string path(arg, at);
+                elc_setup_recipe_add(path.c_str());
+                elc_setup_recipe_set_last_positions(at + 1);
+            }
+            else {
+                elc_setup_recipe_add(arg);
+            }
+        }
+        else if (strcmp(argv[i], "--setup-positions") == 0 && i < argc - 1) {
+            elc_setup_recipe_set_last_positions(argv[++i]);
+        }
+        else if (strcmp(argv[i], "--setup-domain") == 0 && i < argc - 1) {
+            elc_setup_recipe_set_last_domain(strtoul(argv[++i], nullptr, 0));
+        }
+        else if (strcmp(argv[i], "--setup-product") == 0 && i < argc - 1) {
+            elc_setup_recipe_set_last_product(strtoul(argv[++i], nullptr, 0));
+        }
+        else if (strcmp(argv[i], "--setup-vendor") == 0 && i < argc - 1) {
+            elc_setup_recipe_set_last_vendor(strtoul(argv[++i], nullptr, 0));
         }
         else if (strcmp(argv[i], "--stats") == 0) { // do not keep stats
             enable_statistics(true);

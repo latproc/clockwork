@@ -88,6 +88,24 @@ void set_fix_invalid_transitions(bool which);
 void set_ethercat_adapter(const char *adapter);
 const char *ethercat_adapter();
 
+/**
+ * CLI ordered setup recipes (elc_sdo format). Repeatable.
+ * Each --setup-recipe starts a new entry; following --setup-positions /
+ * --setup-domain / --setup-product / --setup-vendor attach to the last entry.
+ * Plant ECSETUPRECIPE machines are also discovered; CLI is an extra source.
+ */
+void elc_setup_recipe_add(const char *path);
+void elc_setup_recipe_set_last_positions(const char *list);
+void elc_setup_recipe_set_last_domain(unsigned long domain_id);
+void elc_setup_recipe_set_last_product(unsigned long product_code);
+void elc_setup_recipe_set_last_vendor(unsigned long vendor_id);
+unsigned elc_setup_recipe_count(void);
+const char *elc_setup_recipe_path_at(unsigned i);
+const char *elc_setup_recipe_positions_at(unsigned i);
+unsigned long elc_setup_recipe_domain_at(unsigned i);
+unsigned long elc_setup_recipe_product_at(unsigned i);
+unsigned long elc_setup_recipe_vendor_at(unsigned i);
+
 #ifdef __cplusplus
 }
 #endif

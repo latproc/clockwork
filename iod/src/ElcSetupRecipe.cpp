@@ -1,17 +1,21 @@
 /*
- * ED3L velocity PDO setup recipe apply for iod-elc.
+ * Ordered setup-recipe apply for iod-elc (generic control system).
  * Recipe format matches elc_sdo: sequence position type index subindex value
- * Template uses POS for position; expanded per slave.
+ * Template may use POS (expanded per target position) and/or fixed positions.
  */
 
 #include "ElcSetupRecipe.h"
 #include "ECInterface.h"
+#include "ElcConfigFile.h"
 #include "KernelEthercatBus.h"
+#include "MachineInstance.h"
 #include "MessageLog.h"
 #include "SDOEntry.h"
 #include "elc_ethercat.h"
+#include "options.h"
 #include "value.h"
 
+#include <algorithm>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
@@ -25,14 +29,22 @@
 namespace ElcSetupRecipe {
 namespace {
 
-// ESTUN/Summa ED3L (ESI ProductCode #xED310001)
-constexpr uint32_t kEd3lProductCode = 0xED310001u;
-
 std::mutex g_pending_mu;
 std::set<uint16_t> g_pending_positions;
 uint64_t g_last_apply_us = 0;
 // Min gap between re-apply batches while cycling (avoid storm).
 constexpr uint64_t kMinApplyGapUs = 500000; // 500 ms
+
+struct RecipeSpec {
+    std::string path;
+    std::string positions_text; // "29-33" / "29,30"
+    uint32_t domain_id = 0;
+    uint32_t product_code = 0;
+    uint32_t vendor_id = 0;
+    bool reapply = true;
+    bool enabled = true;
+    MachineInstance *machine = nullptr; // optional status updates
+};
 
 bool parseU64(const std::string &text, uint64_t maximum, uint64_t *value) {
     if (text.empty() || text[0] == '-') {
@@ -81,28 +93,32 @@ bool encodeValue(const std::string &type, const std::string &text, struct elc_se
         req->data[3] = static_cast<uint8_t>(u >> 24);
         return true;
     }
-    // Plant recipe only uses u8/u16/u32.
     return false;
 }
 
 struct TemplateLine {
-    uint32_t seq_offset = 0; // original sequence from file
+    uint32_t seq_offset = 0;
+    bool is_pos = true;
+    uint16_t fixed_position = 0;
     std::string type;
     uint16_t index = 0;
     uint8_t subindex = 0;
     std::string value;
 };
 
-bool loadTemplate(const char *path, std::vector<TemplateLine> *out) {
+bool loadTemplate(const char *path, std::vector<TemplateLine> *out, bool *has_pos,
+                  std::set<uint16_t> *fixed_positions) {
     std::ifstream in(path);
     if (!in) {
         return false;
+    }
+    if (has_pos) {
+        *has_pos = false;
     }
     std::string line;
     unsigned lineno = 0;
     while (std::getline(in, line)) {
         ++lineno;
-        // strip comments
         auto hash = line.find('#');
         if (hash != std::string::npos) {
             line.resize(hash);
@@ -110,19 +126,33 @@ bool loadTemplate(const char *path, std::vector<TemplateLine> *out) {
         std::istringstream iss(line);
         std::string seq_s, pos_s, type, index_s, sub_s, value;
         if (!(iss >> seq_s >> pos_s >> type >> index_s >> sub_s >> value)) {
-            continue; // blank
-        }
-        if (pos_s != "POS" && pos_s != "pos") {
-            // Allow fixed position lines; plant template uses POS only.
             continue;
         }
         TemplateLine tl;
         uint64_t v = 0;
         if (!parseU64(seq_s, UINT32_MAX, &v) || v == 0) {
-            std::cerr << "ElcSetupRecipe: bad sequence line " << lineno << "\n";
+            std::cerr << "ElcSetupRecipe: bad sequence line " << lineno << " in " << path << "\n";
             return false;
         }
         tl.seq_offset = static_cast<uint32_t>(v);
+        if (pos_s == "POS" || pos_s == "pos") {
+            tl.is_pos = true;
+            if (has_pos) {
+                *has_pos = true;
+            }
+        }
+        else {
+            if (!parseU64(pos_s, UINT16_MAX, &v)) {
+                std::cerr << "ElcSetupRecipe: bad position line " << lineno << " in " << path
+                          << "\n";
+                return false;
+            }
+            tl.is_pos = false;
+            tl.fixed_position = static_cast<uint16_t>(v);
+            if (fixed_positions) {
+                fixed_positions->insert(tl.fixed_position);
+            }
+        }
         tl.type = type;
         if (!parseU64(index_s, UINT16_MAX, &v) || v == 0) {
             return false;
@@ -138,49 +168,383 @@ bool loadTemplate(const char *path, std::vector<TemplateLine> *out) {
     return !out->empty();
 }
 
-} // namespace
-
-const char *defaultEd3lRecipePath() {
-    static const char *paths[] = {
-        "/opt/latproc/code/config/recipes/ed3l_velocity_pdo.recipe.in",
-        "/opt/latproc/iod/recipes/ed3l_velocity_pdo.recipe.in",
-        nullptr,
-    };
-    for (int i = 0; paths[i]; ++i) {
-        if (FILE *f = fopen(paths[i], "r")) {
-            fclose(f);
-            return paths[i];
-        }
-    }
-    return paths[0];
-}
-
-bool isEd3lProduct(uint32_t product_code) {
-    return product_code == kEd3lProductCode;
-}
-
-bool isEd3lModule(const ECModule *m) {
-    if (!m) {
+bool parsePositionsList(const std::string &text, std::vector<uint16_t> *out) {
+    if (text.empty() || !out) {
         return false;
     }
-    if (isEd3lProduct(m->product_code)) {
-        return true;
+    out->clear();
+    std::string tok;
+    for (size_t i = 0; i <= text.size(); ++i) {
+        char c = (i < text.size()) ? text[i] : ',';
+        if (c == ',' || c == ' ' || c == ';' || c == '\t') {
+            if (tok.empty()) {
+                continue;
+            }
+            // range a-b
+            auto dash = tok.find('-');
+            if (dash != std::string::npos && dash > 0 && dash + 1 < tok.size()) {
+                uint64_t a = 0, b = 0;
+                if (!parseU64(tok.substr(0, dash), UINT16_MAX, &a) ||
+                    !parseU64(tok.substr(dash + 1), UINT16_MAX, &b) || a > b) {
+                    return false;
+                }
+                for (uint64_t p = a; p <= b; ++p) {
+                    out->push_back(static_cast<uint16_t>(p));
+                }
+            }
+            else {
+                uint64_t p = 0;
+                if (!parseU64(tok, UINT16_MAX, &p)) {
+                    return false;
+                }
+                out->push_back(static_cast<uint16_t>(p));
+            }
+            tok.clear();
+            continue;
+        }
+        tok.push_back(c);
     }
-    const std::string &n = m->getName();
-    return n.find("ED3L") != std::string::npos || n.find("Summa") != std::string::npos;
+    // unique sorted
+    std::sort(out->begin(), out->end());
+    out->erase(std::unique(out->begin(), out->end()), out->end());
+    return !out->empty();
 }
+
+bool optionTruthy(const Value &v, bool default_when_null = true) {
+    if (v.isNull() || v.kind == Value::t_empty) {
+        return default_when_null;
+    }
+    if (v.kind == Value::t_bool) {
+        return v.bValue;
+    }
+    int64_t n = 0;
+    if (v.asInteger(n)) {
+        return n != 0;
+    }
+    std::string s = v.asString();
+    if (s.empty() || s == "0" || s == "false" || s == "FALSE" || s == "no" || s == "off") {
+        return false;
+    }
+    return true;
+}
+
+uint32_t optionU32(MachineInstance *mi, const char *name) {
+    if (!mi) {
+        return 0;
+    }
+    const Value &v = mi->getValue(name);
+    if (v.isNull() || v.kind == Value::t_empty) {
+        return 0;
+    }
+    int64_t n = 0;
+    if (v.asInteger(n) && n >= 0) {
+        return static_cast<uint32_t>(n);
+    }
+    uint64_t u = 0;
+    if (parseU64(v.asString(), UINT32_MAX, &u)) {
+        return static_cast<uint32_t>(u);
+    }
+    return 0;
+}
+
+std::string optionString(MachineInstance *mi, const char *name) {
+    if (!mi) {
+        return {};
+    }
+    const Value &v = mi->getValue(name);
+    if (v.isNull() || v.kind == Value::t_empty) {
+        return {};
+    }
+    return v.asString();
+}
+
+void setMachineStatus(MachineInstance *mi, const char *status, const char *err) {
+    if (!mi) {
+        return;
+    }
+    mi->setValue("status", Value(status));
+    if (err) {
+        mi->setValue("last_error", Value(err));
+    }
+    else {
+        mi->setValue("last_error", Value(""));
+    }
+}
+
+void collectFromMachines(std::vector<RecipeSpec> *out) {
+    for (auto it = MachineInstance::begin(); it != MachineInstance::end(); ++it) {
+        MachineInstance *mi = *it;
+        if (!mi || mi->_type != "ECSETUPRECIPE") {
+            continue;
+        }
+        RecipeSpec s;
+        s.machine = mi;
+        s.path = optionString(mi, "recipe");
+        if (s.path.empty()) {
+            s.path = optionString(mi, "file"); // alias
+        }
+        s.positions_text = optionString(mi, "positions");
+        s.domain_id = optionU32(mi, "domain_id");
+        s.product_code = optionU32(mi, "product_code");
+        s.vendor_id = optionU32(mi, "vendor_id");
+        s.reapply = optionTruthy(mi->getValue("reapply"), true);
+        s.enabled = optionTruthy(mi->getValue("enabled"), true);
+        if (!s.enabled) {
+            setMachineStatus(mi, "disabled", nullptr);
+            continue;
+        }
+        if (s.path.empty()) {
+            setMachineStatus(mi, "failed", "recipe path empty");
+            std::cerr << "ElcSetupRecipe: " << mi->getName() << " has empty recipe path\n";
+            continue;
+        }
+        out->push_back(s);
+    }
+}
+
+void collectFromCli(std::vector<RecipeSpec> *out) {
+    unsigned n = elc_setup_recipe_count();
+    for (unsigned i = 0; i < n; ++i) {
+        const char *path = elc_setup_recipe_path_at(i);
+        if (!path || !path[0]) {
+            continue;
+        }
+        RecipeSpec s;
+        s.path = path;
+        const char *pos = elc_setup_recipe_positions_at(i);
+        if (pos) {
+            s.positions_text = pos;
+        }
+        s.domain_id = static_cast<uint32_t>(elc_setup_recipe_domain_at(i));
+        s.product_code = static_cast<uint32_t>(elc_setup_recipe_product_at(i));
+        s.vendor_id = static_cast<uint32_t>(elc_setup_recipe_vendor_at(i));
+        s.reapply = true;
+        s.enabled = true;
+        out->push_back(s);
+    }
+}
+
+bool identityMatches(uint32_t vendor_id, uint32_t product_code, const RecipeSpec &s) {
+    if (s.vendor_id != 0 && vendor_id != s.vendor_id) {
+        return false;
+    }
+    if (s.product_code != 0 && product_code != s.product_code) {
+        return false;
+    }
+    return true;
+}
+
+bool resolvePositions(KernelEthercatBus *bus, const RecipeSpec &spec,
+                      const std::vector<TemplateLine> &tmpl, bool has_pos,
+                      const std::set<uint16_t> &fixed_in_file,
+                      std::vector<uint16_t> *out, std::string *err) {
+    out->clear();
+    std::vector<uint16_t> candidates;
+
+    if (!spec.positions_text.empty()) {
+        if (!parsePositionsList(spec.positions_text, &candidates)) {
+            if (err) {
+                *err = "bad positions list: " + spec.positions_text;
+            }
+            return false;
+        }
+    }
+    else if (spec.domain_id != 0) {
+        const char *topo = elcDefaultTopologyConfigPath();
+        int r = elcPositionsForDomain(topo, spec.domain_id, &candidates);
+        if (r != 0) {
+            if (err) {
+                *err = "domain_id positions failed from topology";
+            }
+            return false;
+        }
+        if (candidates.empty()) {
+            if (err) {
+                *err = "no slaves assigned to domain_id in topology";
+            }
+            return false;
+        }
+    }
+    else if (spec.product_code != 0 || spec.vendor_id != 0) {
+        // Fill from bus listSlaves then modules fallback.
+        if (bus) {
+            for (const auto &sl : bus->listSlaves()) {
+                if (identityMatches(sl.vendor_id, sl.product_code, spec)) {
+                    candidates.push_back(sl.position);
+                }
+            }
+        }
+        if (candidates.empty()) {
+            for (unsigned p = 0; p < 128; ++p) {
+                ECModule *m = ECInterface::findModule(p);
+                if (m && identityMatches(m->vendor_id, m->product_code, spec)) {
+                    candidates.push_back(static_cast<uint16_t>(p));
+                }
+            }
+        }
+        if (candidates.empty()) {
+            if (err) {
+                *err = "no slaves match vendor_id/product_code";
+            }
+            return false;
+        }
+    }
+    else if (!fixed_in_file.empty() && !has_pos) {
+        candidates.assign(fixed_in_file.begin(), fixed_in_file.end());
+    }
+    else if (has_pos) {
+        if (err) {
+            *err = "POS recipe needs positions, domain_id, or product/vendor filter";
+        }
+        return false;
+    }
+    else {
+        if (err) {
+            *err = "no targets resolved";
+        }
+        return false;
+    }
+
+    // Optional identity filter on top of positions/domain.
+    if (spec.product_code != 0 || spec.vendor_id != 0) {
+        std::vector<uint16_t> filtered;
+        for (uint16_t p : candidates) {
+            ECModule *m = ECInterface::findModule(p);
+            uint32_t vid = m ? m->vendor_id : 0;
+            uint32_t pid = m ? m->product_code : 0;
+            if (!m && bus) {
+                for (const auto &sl : bus->listSlaves()) {
+                    if (sl.position == p) {
+                        vid = sl.vendor_id;
+                        pid = sl.product_code;
+                        break;
+                    }
+                }
+            }
+            if (identityMatches(vid, pid, spec)) {
+                filtered.push_back(p);
+            }
+        }
+        candidates.swap(filtered);
+        if (candidates.empty()) {
+            if (err) {
+                *err = "identity filter removed all positions";
+            }
+            return false;
+        }
+    }
+
+    std::sort(candidates.begin(), candidates.end());
+    candidates.erase(std::unique(candidates.begin(), candidates.end()), candidates.end());
+    *out = std::move(candidates);
+    (void)tmpl;
+    return true;
+}
+
+bool positionInResolved(const RecipeSpec &spec, uint16_t position, KernelEthercatBus *bus) {
+    if (!spec.enabled || !spec.reapply || spec.path.empty()) {
+        return false;
+    }
+    std::vector<TemplateLine> tmpl;
+    bool has_pos = false;
+    std::set<uint16_t> fixed;
+    if (!loadTemplate(spec.path.c_str(), &tmpl, &has_pos, &fixed)) {
+        return false;
+    }
+    std::vector<uint16_t> pos;
+    std::string err;
+    if (!resolvePositions(bus, spec, tmpl, has_pos, fixed, &pos, &err)) {
+        return false;
+    }
+    return std::find(pos.begin(), pos.end(), position) != pos.end();
+}
+
+std::vector<RecipeSpec> allSpecs() {
+    std::vector<RecipeSpec> specs;
+    collectFromMachines(&specs);
+    collectFromCli(&specs);
+    return specs;
+}
+
+} // namespace
 
 int applyForPositions(KernelEthercatBus *bus, const char *recipe_path,
                       const std::vector<uint16_t> &positions) {
-    if (!bus || !bus->isOpen() || positions.empty()) {
+    if (!bus || !bus->isOpen() || !recipe_path || !recipe_path[0]) {
         return -EINVAL;
     }
-    const char *path = recipe_path && recipe_path[0] ? recipe_path : defaultEd3lRecipePath();
     std::vector<TemplateLine> tmpl;
-    if (!loadTemplate(path, &tmpl)) {
-        std::cerr << "ElcSetupRecipe: failed to load template " << path << "\n";
+    bool has_pos = false;
+    std::set<uint16_t> fixed_in_file;
+    if (!loadTemplate(recipe_path, &tmpl, &has_pos, &fixed_in_file)) {
+        std::cerr << "ElcSetupRecipe: failed to load template " << recipe_path << "\n";
         return -ENOENT;
     }
+
+    // Build work list: for each target position, emit POS lines at that pos;
+    // fixed lines once per matching position (if positions empty, all fixed).
+    struct Work {
+        uint32_t sequence;
+        uint16_t position;
+        TemplateLine tl;
+    };
+    std::vector<Work> work;
+    uint32_t seq = 0;
+
+    if (has_pos) {
+        if (positions.empty()) {
+            std::cerr << "ElcSetupRecipe: POS lines but no positions for " << recipe_path << "\n";
+            return -EINVAL;
+        }
+        uint32_t seq_base = 0;
+        for (uint16_t pos : positions) {
+            for (const TemplateLine &tl : tmpl) {
+                if (!tl.is_pos) {
+                    continue;
+                }
+                Work w;
+                w.sequence = seq_base + tl.seq_offset;
+                w.position = pos;
+                w.tl = tl;
+                work.push_back(w);
+            }
+            seq_base += 100;
+        }
+        // Fixed lines once each (not per POS slave)
+        for (const TemplateLine &tl : tmpl) {
+            if (tl.is_pos) {
+                continue;
+            }
+            Work w;
+            w.sequence = seq_base + tl.seq_offset;
+            w.position = tl.fixed_position;
+            w.tl = tl;
+            work.push_back(w);
+        }
+    }
+    else {
+        // Fixed-only: apply each line; if positions filter given, only those positions.
+        for (const TemplateLine &tl : tmpl) {
+            if (!positions.empty() &&
+                std::find(positions.begin(), positions.end(), tl.fixed_position) ==
+                    positions.end()) {
+                continue;
+            }
+            Work w;
+            w.sequence = tl.seq_offset;
+            w.position = tl.fixed_position;
+            w.tl = tl;
+            work.push_back(w);
+        }
+    }
+
+    if (work.empty()) {
+        std::cerr << "ElcSetupRecipe: nothing to apply for " << recipe_path << "\n";
+        return -EINVAL;
+    }
+
+    std::sort(work.begin(), work.end(),
+              [](const Work &a, const Work &b) { return a.sequence < b.sequence; });
 
     int ret = bus->setupBegin();
     if (ret) {
@@ -188,33 +552,26 @@ int applyForPositions(KernelEthercatBus *bus, const char *recipe_path,
         return ret;
     }
 
-    uint32_t seq = 0;
-    uint32_t seq_base = 0;
-    for (uint16_t pos : positions) {
-        for (const TemplateLine &tl : tmpl) {
-            struct elc_setup_sdo sdo = {};
-            elc_init_api_header(&sdo, sizeof(sdo));
-            // Monotonic sequences across slaves (elc requires increasing sequence).
-            seq = seq_base + tl.seq_offset;
-            sdo.sequence = seq;
-            sdo.position = pos;
-            sdo.index = tl.index;
-            sdo.subindex = tl.subindex;
-            if (!encodeValue(tl.type, tl.value, &sdo)) {
-                std::cerr << "ElcSetupRecipe: encode failed pos=" << pos << " 0x" << std::hex
-                          << tl.index << std::dec << "\n";
-                bus->setupReset();
-                return -EINVAL;
-            }
-            ret = bus->setupAddSDO(&sdo);
-            if (ret) {
-                std::cerr << "ElcSetupRecipe: add_sdo failed ret=" << ret << " pos=" << pos
-                          << " seq=" << seq << "\n";
-                bus->setupReset();
-                return ret;
-            }
+    for (const Work &w : work) {
+        struct elc_setup_sdo sdo = {};
+        elc_init_api_header(&sdo, sizeof(sdo));
+        sdo.sequence = w.sequence ? w.sequence : ++seq;
+        sdo.position = w.position;
+        sdo.index = w.tl.index;
+        sdo.subindex = w.tl.subindex;
+        if (!encodeValue(w.tl.type, w.tl.value, &sdo)) {
+            std::cerr << "ElcSetupRecipe: encode failed pos=" << w.position << " 0x" << std::hex
+                      << w.tl.index << std::dec << "\n";
+            bus->setupReset();
+            return -EINVAL;
         }
-        seq_base += 100; // match iod-elc.sh spacing
+        ret = bus->setupAddSDO(&sdo);
+        if (ret) {
+            std::cerr << "ElcSetupRecipe: add_sdo failed ret=" << ret << " pos=" << w.position
+                      << " seq=" << sdo.sequence << "\n";
+            bus->setupReset();
+            return ret;
+        }
     }
 
     struct elc_setup_apply apply = {};
@@ -222,23 +579,111 @@ int applyForPositions(KernelEthercatBus *bus, const char *recipe_path,
     ret = bus->setupApply(&apply);
     if (ret) {
         std::cerr << "ElcSetupRecipe: apply failed ret=" << ret
-                  << " failed_seq=" << apply.failed_sequence
-                  << " pos=" << apply.failed_position << " idx=0x" << std::hex
-                  << apply.failed_index << std::dec << ":" << (int)apply.failed_subindex
-                  << " abort=0x" << std::hex << apply.abort_code << std::dec << "\n";
+                  << " failed_seq=" << apply.failed_sequence << " pos=" << apply.failed_position
+                  << " idx=0x" << std::hex << apply.failed_index << std::dec << ":"
+                  << (int)apply.failed_subindex << " abort=0x" << std::hex << apply.abort_code
+                  << std::dec << "\n";
         bus->setupReset();
         return ret;
     }
 
     std::ostringstream msg;
-    msg << "ElcSetupRecipe: applied " << path << " for " << positions.size()
-        << " slave(s):";
-    for (uint16_t p : positions) {
-        msg << " " << p;
+    msg << "ElcSetupRecipe: applied " << recipe_path;
+    if (!positions.empty()) {
+        msg << " for " << positions.size() << " slave(s):";
+        for (uint16_t p : positions) {
+            msg << " " << p;
+        }
     }
     MessageLog::instance()->add(msg.str());
     std::cerr << msg.str() << "\n";
     return 0;
+}
+
+int applyAllConfigured(KernelEthercatBus *bus) {
+    if (!bus || !bus->isOpen()) {
+        return -EINVAL;
+    }
+    std::vector<RecipeSpec> specs = allSpecs();
+    if (specs.empty()) {
+        std::cerr << "ElcSetupRecipe: no ECSETUPRECIPE machines and no --setup-recipe; skip\n";
+        return 0;
+    }
+
+    int worst = 0;
+    for (RecipeSpec &spec : specs) {
+        std::vector<TemplateLine> tmpl;
+        bool has_pos = false;
+        std::set<uint16_t> fixed;
+        if (!loadTemplate(spec.path.c_str(), &tmpl, &has_pos, &fixed)) {
+            std::cerr << "ElcSetupRecipe: cannot load " << spec.path << "\n";
+            setMachineStatus(spec.machine, "failed", "load failed");
+            worst = -ENOENT;
+            continue;
+        }
+        std::vector<uint16_t> positions;
+        std::string err;
+        if (!resolvePositions(bus, spec, tmpl, has_pos, fixed, &positions, &err)) {
+            std::cerr << "ElcSetupRecipe: resolve failed for " << spec.path << ": " << err << "\n";
+            setMachineStatus(spec.machine, "failed", err.c_str());
+            worst = -EINVAL;
+            continue;
+        }
+        int r = applyForPositions(bus, spec.path.c_str(), positions);
+        if (r != 0) {
+            setMachineStatus(spec.machine, "failed", "apply failed");
+            worst = r;
+        }
+        else {
+            setMachineStatus(spec.machine, "applied", nullptr);
+        }
+    }
+    return worst;
+}
+
+bool positionWantsReapply(uint16_t position) {
+    // bus may be null for identity-only path; resolve still works for positions/domain text
+    KernelEthercatBus *bus = nullptr;
+    // Prefer open bus from ECInterface if available via processPending path only;
+    // here we re-check specs without bus list when possible.
+    std::vector<RecipeSpec> specs = allSpecs();
+    for (const RecipeSpec &s : specs) {
+        if (!s.reapply || !s.enabled) {
+            continue;
+        }
+        // Cheap: positions text / fixed file; domain needs topology
+        if (!s.positions_text.empty()) {
+            std::vector<uint16_t> pos;
+            if (parsePositionsList(s.positions_text, &pos) &&
+                std::find(pos.begin(), pos.end(), position) != pos.end()) {
+                return true;
+            }
+            continue;
+        }
+        if (s.domain_id != 0) {
+            std::vector<uint16_t> pos;
+            if (elcPositionsForDomain(elcDefaultTopologyConfigPath(), s.domain_id, &pos) == 0 &&
+                std::find(pos.begin(), pos.end(), position) != pos.end()) {
+                // still honor product/vendor if set
+                if (s.product_code == 0 && s.vendor_id == 0) {
+                    return true;
+                }
+                ECModule *m = ECInterface::findModule(position);
+                if (m && identityMatches(m->vendor_id, m->product_code, s)) {
+                    return true;
+                }
+            }
+            continue;
+        }
+        if (s.product_code != 0 || s.vendor_id != 0) {
+            ECModule *m = ECInterface::findModule(position);
+            if (m && identityMatches(m->vendor_id, m->product_code, s)) {
+                return true;
+            }
+        }
+    }
+    (void)bus;
+    return false;
 }
 
 void requestReapply(uint16_t position) {
@@ -264,47 +709,37 @@ void processPending(KernelEthercatBus *bus) {
         g_pending_positions.clear();
     }
     g_last_apply_us = now;
-    (void)applyForPositions(bus, defaultEd3lRecipePath(), batch);
-    // Plant L_SDO defaults: mark recommission so ramps/mode follow map.
-#ifdef USE_SDO
+
+    std::vector<RecipeSpec> specs = allSpecs();
     for (uint16_t pos : batch) {
+        bool any = false;
+        for (RecipeSpec &spec : specs) {
+            if (!spec.reapply || !spec.enabled) {
+                continue;
+            }
+            if (!positionInResolved(spec, pos, bus)) {
+                continue;
+            }
+            std::vector<uint16_t> one = {pos};
+            int r = applyForPositions(bus, spec.path.c_str(), one);
+            any = true;
+            if (r != 0) {
+                setMachineStatus(spec.machine, "failed", "reapply failed");
+            }
+            else {
+                setMachineStatus(spec.machine, "applied", nullptr);
+            }
+        }
+        if (!any) {
+            // No recipe owns this position — L_SDO recommission only below.
+        }
+#ifdef USE_SDO
         ECModule *m = ECInterface::findModule(pos);
         if (m) {
             SDOEntry::recommissionModule(m, now);
         }
-    }
 #endif
-}
-
-int applyForAllEd3lOnBus(KernelEthercatBus *bus, const char *recipe_path) {
-    if (!bus || !bus->isOpen()) {
-        return -EINVAL;
     }
-    std::vector<uint16_t> positions;
-    // Prefer configured modules with product/name match.
-    // ECInterface::modules is private; use listSlaves discovery.
-    auto slaves = bus->listSlaves();
-    for (const auto &s : slaves) {
-        if (isEd3lProduct(s.product_code) ||
-            (s.name[0] && (strstr(s.name, "ED3L") || strstr(s.name, "Summa")))) {
-            positions.push_back(s.position);
-        }
-    }
-    if (positions.empty()) {
-        // Fallback: plant MODULE names via findModule scan by position 0..63
-        for (unsigned p = 0; p < 64; ++p) {
-            ECModule *m = ECInterface::findModule(p);
-            if (m && isEd3lModule(m)) {
-                positions.push_back(static_cast<uint16_t>(p));
-            }
-        }
-    }
-    if (positions.empty()) {
-        std::cerr << "ElcSetupRecipe: no ED3L slaves found; skip recipe\n";
-        return 0;
-    }
-    return applyForPositions(bus, recipe_path ? recipe_path : defaultEd3lRecipePath(),
-                             positions);
 }
 
 } // namespace ElcSetupRecipe
