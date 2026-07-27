@@ -78,9 +78,11 @@ static bool g_kernel_output_dirty = true;
 static bool g_kernel_outputs_armed = false;
 static std::vector<uint8_t> g_kernel_pub_mask; // cached full-domain publish mask
 static bool g_kernel_pub_mask_valid = false;
-// CAP_OUTPUT_LEASE: configured once pre-activate; renewed from sendUpdates.
+// CAP_OUTPUT_LEASE: 0.18 uses timeout_ms + publish/arm refill; no renew loop.
 static bool g_output_lease_enabled = false;
-static uint32_t g_output_lease_budget = 0;
+static uint32_t g_output_lease_timeout_ms = 0;
+static bool g_output_lease_publish_renew = false;
+static void enableKernelOutputLeaseAfterActivate();
 // Multi-domain isolation (API 0.12/0.17): each domain_config_id is a WC /
 // validity / arm boundary. N domains → N ECDomain_<id> machines on L_ECDomains.
 // First domain declared in topology is *primary* (ETHERCAT_WC / all_ok /
@@ -1909,7 +1911,8 @@ bool ECInterface::deactivate() {
         active = false;
         activated_cycle_period_us_ = 0;
         g_output_lease_enabled = false;
-        g_output_lease_budget = 0;
+        g_output_lease_timeout_ms = 0;
+        g_output_lease_publish_renew = false;
         g_kernel_outputs_armed = false;
         domain1 = nullptr;
         if (domain1_pd) {
@@ -2035,60 +2038,12 @@ bool ECInterface::activate() {
         FREQUENCY = period_us > 0 ? static_cast<unsigned int>(1000000UL / period_us) : FREQUENCY;
         set_cycle_time(period_us);
 
-        // Output hang failsafe (optional CAP). Off by default — enable with
-        // ELC_OUTPUT_LEASE=1. When on: configure pre-activate; renew slowly
-        // from sendUpdates (not every ecat tick — 4 kHz renew hammered
-        // master-fsm and correlated with OP thrash / SM WD).
-        //
-        // Hang ~2 s so cold-start SDO mailbox stalls do not false-expire.
+        // Output hang failsafe deferred until after cycle activate when the
+        // kernel supports API 0.18 (configure-while-active + publish refill).
+        // See enableKernelOutputLeaseIfRequested() below.
         g_output_lease_enabled = false;
-        g_output_lease_budget = 0;
-        {
-            const char *lease_env = getenv("ELC_OUTPUT_LEASE");
-            const bool want_lease =
-                lease_env && lease_env[0] == '1' && lease_env[1] == '\0';
-            if (want_lease && kernelBus->hasOutputLease() &&
-                kernelBus->configGeneration() != 0) {
-                unsigned long poll_us = get_polling_time();
-                if (poll_us < 100) {
-                    poll_us = 100;
-                }
-                const uint64_t renew_gap_us =
-                    std::max<uint64_t>(period_us, static_cast<uint64_t>(poll_us));
-                uint64_t hang_us =
-                    std::max<uint64_t>(2000000ULL, 200ULL * renew_gap_us);
-                if (hang_us > 5000000ULL) {
-                    hang_us = 5000000ULL;
-                }
-                uint32_t budget = static_cast<uint32_t>(hang_us / period_us);
-                if (budget < 400) {
-                    budget = 400;
-                }
-                if (budget > ELC_OUTPUT_LEASE_CYCLES_MAX) {
-                    budget = ELC_OUTPUT_LEASE_CYCLES_MAX;
-                }
-                int lret = kernelBus->configureOutputLease(budget);
-                if (lret == 0) {
-                    g_output_lease_enabled = true;
-                    g_output_lease_budget = budget;
-                    std::cerr << "elc output lease: ON budget=" << budget
-                              << " bus_cycles (~" << (budget * period_us)
-                              << " us hang) bus_period_us=" << period_us
-                              << " poll_us=" << poll_us
-                              << " renew_period_us=50000\n";
-                }
-                else {
-                    std::cerr << "elc_configure_output_lease failed ret=" << lret
-                              << " (lease off)\n";
-                }
-            }
-            else if (want_lease) {
-                std::cerr << "elc output lease: requested but CAP/generation missing\n";
-            }
-            else {
-                std::cerr << "elc output lease: OFF (set ELC_OUTPUT_LEASE=1 to enable)\n";
-            }
-        }
+        g_output_lease_timeout_ms = 0;
+        g_output_lease_publish_renew = false;
 
         struct elc_cycle_activate act = {};
         int ret = kernelBus->cycleActivate(period_ns, 0, &act);
@@ -2096,15 +2051,6 @@ bool ECInterface::activate() {
             std::cerr << "elc_cycle_activate failed ret=" << ret << " result=" << act.result
                       << "\n";
             return false;
-        }
-        // Fill remaining immediately so arm is not blocked on remaining==0 while
-        // the ecat thread is still starting (configure leaves remaining at 0).
-        if (g_output_lease_enabled) {
-            int rret = kernelBus->renewOutputLease();
-            if (rret != 0) {
-                std::cerr << "elc_renew_output_lease (post-activate) failed ret=" << rret
-                          << "\n";
-            }
         }
         activated_cycle_period_us_ = period_us;
         size_t dsz = act.domain_size ? act.domain_size : kernelBus->domainSize();
@@ -2183,6 +2129,9 @@ bool ECInterface::activate() {
         std::cout << "Kernel cycle active period_us=" << period_us
                   << " period_ns=" << period_ns << " freq=" << FREQUENCY
                   << " domain_size=" << dsz << "\n";
+        // API 0.18: enable hang failsafe after OP is up (configure-while-active).
+        // Prefer timeout_ms; publish/arm refill remaining (no renew storm).
+        enableKernelOutputLeaseAfterActivate();
         return true;
     }
 #endif
@@ -2724,6 +2673,59 @@ static bool refreshKernelDomainHealth(KernelEthercatBus *bus, bool log_periodic)
 
 static void logKernelDomainHealth(KernelEthercatBus *bus) {
     (void)refreshKernelDomainHealth(bus, true);
+}
+
+// Hang failsafe after cycle is up (elc API 0.18 configure-while-active).
+// ELC_OUTPUT_LEASE=0 forces off; =1 forces on; unset = on when CAP present.
+static void enableKernelOutputLeaseAfterActivate() {
+    g_output_lease_enabled = false;
+    g_output_lease_timeout_ms = 0;
+    g_output_lease_publish_renew = false;
+    if (!ECInterface::instance() || !ECInterface::instance()->getKernelBus()) {
+        return;
+    }
+    KernelEthercatBus *bus = ECInterface::instance()->getKernelBus();
+    if (!bus->isOpen() || !bus->hasOutputLease() || bus->configGeneration() == 0) {
+        std::cerr << "elc output lease: OFF (no CAP_OUTPUT_LEASE / generation)\n";
+        return;
+    }
+    const char *lease_env = getenv("ELC_OUTPUT_LEASE");
+    if (lease_env && lease_env[0] == '0' && lease_env[1] == '\0') {
+        std::cerr << "elc output lease: OFF (ELC_OUTPUT_LEASE=0)\n";
+        return;
+    }
+    const bool force_on = lease_env && lease_env[0] == '1' && lease_env[1] == '\0';
+    // Auto-enable when 0.18 publish-renew is available; otherwise require =1
+    // (legacy cycle_budget path was plant-noisy without publish refill).
+    if (!force_on && !bus->hasOutputLeasePublishRenew()) {
+        std::cerr << "elc output lease: OFF (no PUBLISH_RENEW CAP; set "
+                     "ELC_OUTPUT_LEASE=1 for legacy renew path)\n";
+        return;
+    }
+    // Wall hang: default 2000 ms (docs 500–2000). Override ELC_OUTPUT_LEASE_MS.
+    uint32_t timeout_ms = 2000;
+    if (const char *ms_env = getenv("ELC_OUTPUT_LEASE_MS")) {
+        char *end = nullptr;
+        unsigned long v = strtoul(ms_env, &end, 10);
+        if (end != ms_env && v > 0 && v <= 600000UL) {
+            timeout_ms = static_cast<uint32_t>(v);
+        }
+    }
+    int lret = bus->configureOutputLease(timeout_ms, 0 /* all domains */);
+    if (lret != 0) {
+        std::cerr << "elc output lease: configure failed ret=" << lret << "\n";
+        return;
+    }
+    g_output_lease_enabled = true;
+    g_output_lease_timeout_ms = timeout_ms;
+    g_output_lease_publish_renew = bus->hasOutputLeasePublishRenew();
+    std::cerr << "elc output lease: ON timeout_ms=" << timeout_ms
+              << " publish_renew=" << (g_output_lease_publish_renew ? 1 : 0)
+              << " (hang = no publish for ~timeout; not POLLING_DELAY)\n";
+    // Legacy: seed remaining if kernel did not (0.18 seeds on configure).
+    if (!g_output_lease_publish_renew) {
+        (void)bus->renewOutputLease();
+    }
 }
 
 // Arm one domain authority (flags = domain_config_id). Requires a prior
@@ -3337,9 +3339,10 @@ void ECInterface::sendUpdates() {
             g_kernel_output_dirty = true;
         }
 
-        // Renew hang lease slowly (50 ms). Every-tick renew flooded elc
-        // ctx->lock / master-fsm and showed up as SKIPPED + OP thrash.
-        if (g_output_lease_enabled) {
+        // API 0.18 publish-renew: successful publishOutput refills remaining —
+        // do not ioctl renew every tick. Legacy kernels without that CAP still
+        // get a slow explicit renew so quiet (non-dirty) paths stay alive.
+        if (g_output_lease_enabled && !g_output_lease_publish_renew) {
             static uint64_t last_lease_renew_us = 0;
             const uint64_t renew_period_us = 50000;
             if (last_lease_renew_us == 0 ||

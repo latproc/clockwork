@@ -37,7 +37,11 @@ int KernelEthercatBus::open(const char *device_path) {
         return ret;
     }
 
-    ret = elc_require_api(handle, 0, 16);
+    // Prefer 0.18 (timeout_ms + publish-renew lease); fall back to 0.16.
+    ret = elc_require_api(handle, 0, 18);
+    if (ret != 0) {
+        ret = elc_require_api(handle, 0, 16);
+    }
     if (ret != 0) {
         elc_close(handle);
         handle = nullptr;
@@ -64,6 +68,10 @@ int KernelEthercatBus::open(const char *device_path) {
     std::cerr << "KernelEthercatBus opened (" << device_path
               << ") caps=0x" << std::hex << capabilities_ << std::dec
               << " domain_output_authority=" << (domain_output_authority_ ? 1 : 0)
+#ifdef ELC_CAP_OUTPUT_LEASE_PUBLISH_RENEW
+              << " lease_publish_renew="
+              << ((capabilities_ & ELC_CAP_OUTPUT_LEASE_PUBLISH_RENEW) ? 1 : 0)
+#endif
               << "\n";
     DBG_ETHERCAT << "KernelEthercatBus opened (" << device_path << ")\n";
     return 0;
@@ -523,23 +531,28 @@ int KernelEthercatBus::disarmOutput(struct elc_output_disarm *disarm) {
     return ret;
 }
 
-int KernelEthercatBus::configureOutputLease(uint32_t cycle_budget) {
+int KernelEthercatBus::configureOutputLease(uint32_t timeout_ms, uint32_t domain_config_id) {
     if (!handle) {
         return -EINVAL;
     }
     if (!hasOutputLease()) {
         return -ENOTSUP;
     }
-    if (cycle_budget == 0 || cycle_budget > ELC_OUTPUT_LEASE_CYCLES_MAX) {
-        return -EINVAL;
-    }
     if (!config_generation_) {
         return -EINVAL;
     }
+#ifdef ELC_OUTPUT_LEASE_TIMEOUT_MS_MAX
+    if (timeout_ms > ELC_OUTPUT_LEASE_TIMEOUT_MS_MAX) {
+        return -EINVAL;
+    }
+#endif
+    // timeout_ms==0 and cycle_budget==0 disables lease on target domains.
     struct elc_output_lease_config cfg = {};
     elc_init_api_header(&cfg, sizeof(cfg));
     cfg.config_generation = config_generation_;
-    cfg.cycle_budget = cycle_budget;
+    cfg.flags = domain_config_id; // 0 = all domains
+    cfg.timeout_ms = timeout_ms;
+    cfg.cycle_budget = 0; // derive from timeout_ms when non-zero (API 0.18)
     return elc_configure_output_lease(handle, &cfg);
 }
 

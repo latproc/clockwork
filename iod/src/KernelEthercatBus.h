@@ -82,15 +82,24 @@ class KernelEthercatBus {
     int getIoStatus(struct elc_io_status *st);
 
     /**
-     * Output hang failsafe (ELC_CAP_OUTPUT_LEASE). Must be configured after
-     * config apply and *before* cycle activate (kernel rejects when active).
-     * cycle_budget is in bus cycles; remaining is refilled by renewOutputLease.
+     * Output hang failsafe (ELC_CAP_OUTPUT_LEASE).
+     * API 0.18: timeout_ms (wall time), optional domain_config_id (0=all),
+     * remaining seeded on configure; allowed while cycling. With
+     * ELC_CAP_OUTPUT_LEASE_PUBLISH_RENEW, successful publish/arm refill the
+     * budget — no high-rate renew ioctl required.
      */
-    int configureOutputLease(uint32_t cycle_budget);
+    int configureOutputLease(uint32_t timeout_ms, uint32_t domain_config_id = 0);
     int renewOutputLease(struct elc_output_lease_renew *renew = nullptr);
     int getOutputLeaseStatus(struct elc_output_lease_status *st);
     bool hasOutputLease() const {
         return (capabilities_ & ELC_CAP_OUTPUT_LEASE) != 0;
+    }
+    bool hasOutputLeasePublishRenew() const {
+#ifdef ELC_CAP_OUTPUT_LEASE_PUBLISH_RENEW
+        return (capabilities_ & ELC_CAP_OUTPUT_LEASE_PUBLISH_RENEW) != 0;
+#else
+        return false;
+#endif
     }
 
     /** Per bus-position discovery status (works before cycle activate). */

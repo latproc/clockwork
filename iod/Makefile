@@ -18,8 +18,9 @@ endif
 # Override: make release CMAKE_EXTRA='-DBUILD_LEGACY_IOD=ON'
 # Default release builds only iod-elc (fast iterate). Full tree:
 #   make release RELEASE_TARGETS=all
-CMAKE_ELC_FLAGS ?= -DBUILD_IOD_ELC=ON -DBUILD_LEGACY_IOD=OFF -DCMAKE_PREFIX_PATH=/opt/elc
-export PKG_CONFIG_PATH := /opt/elc/lib/pkgconfig:$(PKG_CONFIG_PATH)
+# Prefer /usr/local (API 0.18+ install) then /opt/elc.
+CMAKE_ELC_FLAGS ?= -DBUILD_IOD_ELC=ON -DBUILD_LEGACY_IOD=OFF -DCMAKE_PREFIX_PATH=/usr/local\;/opt/elc
+export PKG_CONFIG_PATH := /usr/local/lib/pkgconfig:/opt/elc/lib/pkgconfig:$(PKG_CONFIG_PATH)
 RELEASE_TARGETS ?= iod-elc
 
 all:
@@ -36,8 +37,9 @@ release:
 		$(MAKE) -C build/Release $(JOBS) $(RELEASE_TARGETS); \
 	fi
 
-# Install Release binary into iod/ (CMake DESTINATION = project root).
-# Stop iod first if you get "Text file busy".
+# Install Release binary into iod/ (project root). Safe while iod is running:
+# write to a temp name then rename over the live path (avoids ETXTBSY on open
+# inode). Running process keeps the old image until svc -k / restart.
 release-install: release
 	@if [ "$(RELEASE_TARGETS)" = "all" ]; then \
 		$(MAKE) -C build/Release $(JOBS) install; \
@@ -46,8 +48,10 @@ release-install: release
 		for t in $(RELEASE_TARGETS); do \
 			src="build/Release/$$t"; \
 			test -x "$$src" || { echo "missing $$src"; exit 1; }; \
-			cp -a "$$src" "./$$t" || { echo "cp failed (iod running? svc -d /etc/service/iod)"; exit 1; }; \
+			tmp="./.$$t.new.$$$$"; \
+			cp -a "$$src" "$$tmp" && mv -f "$$tmp" "./$$t"; \
 			ls -la "./$$t"; \
+			echo "  (running iod still uses old text until: svc -k /etc/service/iod)"; \
 		done; \
 	fi
 
