@@ -155,8 +155,10 @@ void usage(const char *name) { std::cout << name << " [-q] [-h host] [-p port]\n
 
 std::list<char *> machine_names;
 std::list<const char *> commands;
+std::list<const char *> show_commands;
 char *machine_name_generator(const char *text, int state);
 char *command_generator(const char *text, int state);
+char *show_command_generator(const char *text, int state);
 
 /*  Attempt to complete on the contents of TEXT.  START and END bound the
     region of rl_line_buffer that contains the word to complete.  TEXT is
@@ -171,10 +173,28 @@ char **my_rl_completion(const char *text, int start, int end) {
     if (start == 0) {
         matches = rl_completion_matches(text, command_generator);
     }
+    else if (strncmp(rl_line_buffer, "SHOW ", 5) == 0) {
+        matches = rl_completion_matches(text, show_command_generator);
+    }
     else {
         matches = rl_completion_matches(text, machine_name_generator);
     }
     return (matches);
+}
+
+char *show_command_generator(const char *text, int state) {
+    static std::list<const char *>::iterator iter;
+    static size_t len;
+    if (!state) {
+        iter = show_commands.begin();
+        len = strlen(text);
+    }
+    while (iter != show_commands.end()) {
+        const char *name = *iter++;
+        if (strncmp(name, text, len) == 0) return strdup(name);
+    }
+    rl_attempted_completion_over = 1;
+    return nullptr;
 }
 
 /*  Generator function for command completion.  STATE lets us know whether
@@ -286,33 +306,46 @@ void initialise_machine_names(char *data) {
 
 void initialise_commands() {
     commands.push_back("CHANNELS");
+    commands.push_back("CHANNEL");
     commands.push_back("CLEAR");
+    commands.push_back("DATA");
+    commands.push_back("DEBUG");
     commands.push_back("DESCRIBE");
     commands.push_back("DISABLE");
     commands.push_back("ENABLE");
+    commands.push_back("EC");
     commands.push_back("FIND");
+    commands.push_back("FREEZE");
     commands.push_back("GET");
     commands.push_back("HELP");
     commands.push_back("INFO");
     commands.push_back("LIST");
+    commands.push_back("MASTER");
     commands.push_back("MESSAGES");
     commands.push_back("MODBUS");
     commands.push_back("NOTICE");
+    commands.push_back("PERSISTENT");
     commands.push_back("PROPERTY");
     commands.push_back("QUIT");
+    commands.push_back("REFRESH");
     commands.push_back("RESUME");
     commands.push_back("SCHEDULER");
+    commands.push_back("SDO");
     commands.push_back("SEND");
-    commands.push_back("SHOW");
-    commands.push_back("SHOW CYCLING");
-    commands.push_back("SHOW HEALTH");
-    commands.push_back("SHOW PROCSNAP");
-    commands.push_back("SHOW LOAD");
-    commands.push_back("SHOW BUSY");
-    commands.push_back("SHUTDOWN");
     commands.push_back("SET");
+    commands.push_back("SHUTDOWN");
+    commands.push_back("SHOW");
+    commands.push_back("SLAVES");
+    commands.push_back("STATE");
+    commands.push_back("STATS");
     commands.push_back("TOGGLE");
     commands.push_back("TRACING");
+    show_commands.push_back("BUSY");
+    show_commands.push_back("CYCLING");
+    show_commands.push_back("HEALTH");
+    show_commands.push_back("LOAD");
+    show_commands.push_back("PROCSNAP");
+    show_commands.push_back("TRIGGERS");
 }
 
 void check_messages() {

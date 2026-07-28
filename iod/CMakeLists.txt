@@ -1,5 +1,7 @@
 cmake_minimum_required (VERSION 3.10)
 project (Latproc)
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
 
 set (Latproc_VERSION_MAJOR 0)
 set (Latproc_VERSION_MINOR 9.7)
@@ -146,6 +148,7 @@ set(HEADER_FILES
     )
 
 add_library (cw_client
+	${CLOCKWORK_DIR}/cw_client_api.cpp
 	${CLOCKWORK_DIR}/MessagingInterface.cpp
 	${CLOCKWORK_DIR}/MessageLog.cpp
 	${CLOCKWORK_DIR}/MessageEncoding.cpp
@@ -171,6 +174,10 @@ add_library (cw_client
     ${CLOCKWORK_DIR}/process.cpp
 	${HEADER_FILES}
 )
+target_include_directories(cw_client PUBLIC
+  $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+target_link_libraries(cw_client PUBLIC ${ZeroMQ_LIBRARY})
 
 if (EXISTS "/usr/local/include")
 include_directories("/usr/local/include")
@@ -702,9 +709,20 @@ if(USE_SOEM)
 	install(TARGETS cw_ecat RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
 
-install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib COMPONENT libs)
+install(TARGETS cw_client EXPORT cw_clientTargets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libs)
+install(DIRECTORY include/cw_client DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT cw_clientTargets NAMESPACE cw_client::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cw_client)
+configure_package_config_file(cmake/cw_clientConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/cw_clientConfig.cmake
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cw_client)
+write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/cw_clientConfigVersion.cmake
+  VERSION ${Latproc_VERSION_MAJOR}.${Latproc_VERSION_MINOR} COMPATIBILITY SameMajorVersion)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cw_clientConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cw_clientConfigVersion.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cw_client)
 install(TARGETS cw_interpreter ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib COMPONENT libs)
-install(TARGETS cw_client ARCHIVE DESTINATION ${PROJECT_SOURCE_DIR}/stage/lib COMPONENT clientlib)
 
 add_custom_target(libs
   DEPENDS cw_client cw_interpreter
