@@ -921,8 +921,7 @@ void processPending(KernelEthercatBus *bus) {
             SDOEntry::recommissionModule(m, now);
         }
 #endif
-        // SDO accel is overwritten every cycle by RxPDO 0x6083/0x6084. Re-push
-        // ANALOGOUTPUT plant defaults into the armed process image (A.76).
+        // Recipe CoE done; re-seed process-image defaults for plant outputs.
         reapplyOutputDefaults();
         return;
     }

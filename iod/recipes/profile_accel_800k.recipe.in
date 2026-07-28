@@ -1,0 +1,4 @@
+# PREOP profile accel/decel for axes that use 800000 (plant ANALOGOUTPUT default).
+# Pair with ECSETUPRECIPE positions / domain filter — no product hardcoding in iod.
+1 POS u32 0x6083 0 800000
+2 POS u32 0x6084 0 800000

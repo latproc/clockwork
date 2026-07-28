@@ -141,8 +141,8 @@ void reapplyOutputDefaults() {
         const Value &def = m->properties.lookup("default");
         const Value *use = nullptr;
         if (!(cur.isNull() || cur.kind == Value::t_empty)) {
-            // ANALOGOUTPUT: non-zero VALUE wins; 0 may mean "not yet seeded"
-            // — use plant default when default is non-zero (A.76 accel).
+            // ANALOGOUTPUT: if VALUE is still 0 but plant `default` is non-zero,
+            // prefer default (first seed before plant writes a real command).
             long cur_i = 0;
             long def_i = 0;
             const bool cur_ok = cur.asInteger(cur_i);

@@ -39,9 +39,9 @@ void initialiseOutputs();
 
 /**
  * Push plant `default` values for ANALOGOUTPUT / digital outputs into the
- * live process image (kernel output shadow). Safe to call after activate and
- * after servo power-return recipe re-apply. Without this, domain arm can
- * cyclic-write 0 into profile accel/decel (Estun A.76).
+ * live process image (kernel output shadow). Safe after activate, domain arm,
+ * and setup-recipe re-apply. Generic: any plant POINT/ANALOGOUTPUT with a
+ * `default` property — no product-specific indices or positions.
  */
 void reapplyOutputDefaults();
 

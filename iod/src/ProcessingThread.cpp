@@ -1788,11 +1788,9 @@ void ProcessingThread::operator()() {
                     upd = IOComponent::getDefaults();
                     if (!upd) {
 #ifdef USE_KERNEL_ETHERCAT
-                        // Do not invent all-zero default_data/mask here: that
-                        // overwrites initialiseOutputs() and leaves profile
-                        // accel/decel PDO at 0 (Estun A.76) once domain arms.
-                        // Kernel path already re-pushes ANALOGOUTPUT defaults
-                        // at activate via reapplyOutputDefaults().
+                        // Do not invent all-zero default_data/mask: that would
+                        // overwrite initialiseOutputs(). Kernel path re-pushes
+                        // plant ANALOGOUTPUT defaults at activate.
                         IOComponent::setHardwareState(IOComponent::s_operational);
                         DBG_INITIALISATION
                             << "No process defaults blob; hardware operational (kernel); "
