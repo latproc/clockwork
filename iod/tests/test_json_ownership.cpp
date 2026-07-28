@@ -131,4 +131,43 @@ TEST(JsonOwnership, AssignValueClonesBoolEmptyAndJsonKinds) {
     EXPECT_LE(cJSON_LiveNodeCount(), live_before);
 }
 
+// Regression: apply() clones via Print+Parse. Callers that use DEFAULT when the
+// field is JSON null must still free that clone (via Value), or live node count
+// grows on every ITEM ${field} OF json DEFAULT ... with a null field.
+TEST(JsonOwnership, ApplyJsonNullConsumedByValueDoesNotLeak) {
+    const long live_before = cJSON_LiveNodeCount();
+    cJSON *doc = cJSON_Parse(R"JSON({"a":null,"b":1})JSON");
+    ASSERT_NE(nullptr, doc);
+
+    for (int i = 0; i < 100; ++i) {
+        cJSON *sub = apply("$.a", doc);
+        ASSERT_NE(nullptr, sub);
+        EXPECT_EQ(cJSON_NULL, sub->type);
+        Value resolved(sub); // must free the null node
+        EXPECT_EQ(Value::t_empty, resolved.kind);
+        // DEFAULT path: empty means "use default" without retaining apply() tree
+        if (resolved.kind == Value::t_empty) {
+            resolved = Value("");
+        }
+        EXPECT_EQ(Value::t_string, resolved.kind);
+    }
+
+    cJSON_Delete(doc);
+    EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
+}
+
+TEST(JsonOwnership, ApplyMissingKeyIsNullptrNoLeak) {
+    const long live_before = cJSON_LiveNodeCount();
+    cJSON *doc = cJSON_Parse(R"JSON({"a":1})JSON");
+    ASSERT_NE(nullptr, doc);
+
+    cJSON *sub = apply("$.missing", doc);
+    EXPECT_EQ(nullptr, sub);
+    Value resolved(sub);
+    EXPECT_EQ(Value::t_empty, resolved.kind);
+
+    cJSON_Delete(doc);
+    EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
+}
+
 } // namespace
