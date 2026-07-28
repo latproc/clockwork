@@ -331,3 +331,43 @@ verbose switch — not all are in the uncommitted patch set above.
 | `oth[3]` | ECAT_OUT ZMQ wakes |
 | `outN` | `updatesWaiting()` size |
 | `hw` | `pre` / `init` / `op` hardware state |
+
+---
+
+## Kernel elc path: CiA402 inputs must not be reapply targets (2026-07-28)
+
+**Symptom:** After multi-domain kernel transport, `ethercat domain -v` showed
+live `0x6041`/`0x603F` (e.g. A.76 = 0x76) while iod `Error.VALUE` stayed 0 and
+controlword never pulsed `0x80`.
+
+**Cause:** `reapplyOutputDefaults()` walked `output_points`, which also lists
+`DIGITALVALUE`/`COUNTER` (PDO registration). Those often have `VALUE=0`, so
+`setValue(0)` → `applyKernelOutputValue` on **input** PDO bytes. Every
+`mergeKernelOutputShadow` then forced zeros over the kernel input snapshot.
+
+**Fixes (keep):**
+
+1. `reapplyOutputDefaults` — only `ANALOGOUTPUT` / true `DirOutput` POINTs.
+2. `DigitalValue` — `DirInput` + regular poll; `setValue` must not publish DirInput
+   into the output shadow.
+3. `updateDomain` — do not expand `g_kernel_output_mask` from full CW process
+   masks (inputs).
+4. Regular-poll `handleChange` — always run `filter()` so machine `VALUE` tracks
+   the wire (LPC `Error.VALUE` / statusword).
+5. Plant LPC `CIA402_Setup_ESTUN` — fault clear when Module OP (Guard not
+   required); Guard only gates enable. `NotReady` only when OP + no error + Guard off.
+
+**Verify (slave 29 example):**
+
+```bash
+ethercat domain -v | sed -n '/0:29, SM3/,/0:30/p'
+printf 'GET IA_CoreVB1MotorAlarm;\nDESCRIBE M_CoreVB1PumpServo;\n' | /opt/latproc/iod/iosh
+for i in 1 2 3 4 5 6 7 8; do
+  ethercat upload -p 29 0x6040 0 --type uint16
+  ethercat upload -p 29 0x603F 0 --type uint16
+  sleep 0.25
+done
+```
+
+Expect: GET matches domain; with A.76, setup enters ClearFault and SDO may show
+`6040=0x80`; after clear, `603F=0` and setup can sit NotReady if E24/Guard is false.
