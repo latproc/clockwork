@@ -292,11 +292,16 @@ void setValue(MachineInstance *m, const std::string &property, const Value &valu
         assert(predicate->left_p->json_expression);
         Value lhs = eval(predicate->left_p, m);
         assert(lhs.kind == Value::t_json);
-        cJSON *result = assign(predicate->left_p->json_expression.value(), lhs.json, value, boost::none, m);
-        auto result_str = cJSON_PrintUnformatted(result);
-        result = cJSON_Parse(result_str);
-        free(result_str);
-        m->setValue(property, Value(result));
+        // assign() mutates the tree in place and may replace the root (returning a
+        // new pointer after deleting the old one). Do not Print+Parse a second
+        // full copy — that doubled peak memory and is unnecessary once the tree
+        // is already updated. Keep lhs.json in sync if the root pointer changes.
+        cJSON *result =
+            assign(predicate->left_p->json_expression.value(), lhs.json, value, boost::none, m);
+        if (result != lhs.json) {
+            lhs.json = result;
+        }
+        m->setValue(property, lhs);
     }
     else {
         m->setValue(property, value);
@@ -324,14 +329,18 @@ Action::Status PredicateAction::run() {
                 if (rhs.kind == Value::t_symbol) {
                     val = eval(predicate->right_p, owner);
                     if (val.kind == Value::t_json) {
-                        cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), val.json, owner);
-                        if (sub_expr && sub_expr->type != cJSON_NULL) {
-                            val = Value(sub_expr);
-                        }
-                        else if (predicate->right_p->default_value) {
+                        // apply() always returns a newly allocated tree (or nullptr).
+                        // Value(cJSON*) takes ownership for objects/arrays and frees
+                        // scalar/null nodes after conversion. The previous branch that
+                        // skipped Value() on JSON-null / DEFAULT leaked that tree on
+                        // every ITEM ${...} OF json DEFAULT ... with a null field.
+                        cJSON *sub_expr = apply(predicate->right_p->json_expression.value(),
+                                                val.json, owner);
+                        val = Value(sub_expr);
+                        if (val.kind == Value::t_empty && predicate->right_p->default_value) {
                             val = *predicate->right_p->default_value;
                         }
-                        else {
+                        else if (val.kind == Value::t_empty) {
                             val = SymbolTable::Null;
                         }
                     }
@@ -350,6 +359,12 @@ Action::Status PredicateAction::run() {
                     assert(rhs.kind == Value::t_json);
                     cJSON *sub_expr = apply(predicate->right_p->json_expression.value(), rhs.json, owner);
                     val = Value(sub_expr);
+                    if (val.kind == Value::t_empty && predicate->right_p->default_value) {
+                        val = *predicate->right_p->default_value;
+                    }
+                    else if (val.kind == Value::t_empty) {
+                        val = SymbolTable::Null;
+                    }
                 }
             }
             else {
