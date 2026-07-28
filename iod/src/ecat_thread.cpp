@@ -32,10 +32,12 @@
 
 #include <boost/thread/condition.hpp>
 #include <boost/thread/mutex.hpp>
+#include <cstring>
 #include <fstream>
 #include <list>
 #include <map>
 #include <utility>
+#include <vector>
 #ifndef EC_SIMULATOR
 #include <iostream>
 #endif
@@ -1030,6 +1032,31 @@ void EtherCATThread::operator()() {
         ECInterface::instance()->receiveState(true);
 #endif
 
+        // Ensure the app process mask is installed. Legacy path set it only on
+        // DEFAULT_DATA; if that packet was skipped or lost, collectState never
+        // runs and CW inputs (0x603F DIGITALVALUE etc.) stay at 0 forever.
+        if (machine_is_ready && !ECInterface::instance()->data.getProcessMask()) {
+            uint8_t *pm = IOComponent::getProcessMask();
+            int max_off = IOComponent::getMaxIOOffset();
+            if (pm && max_off >= 0) {
+                size_t mask_len = static_cast<size_t>(max_off) + 1;
+                size_t dsz = ECInterface::instance()->copyDomainData(nullptr, 0);
+                size_t len = mask_len > dsz ? mask_len : dsz;
+                if (len == 0) {
+                    len = mask_len;
+                }
+                std::vector<uint8_t> full(len, 0);
+                size_t copy_n = mask_len < len ? mask_len : len;
+                memcpy(full.data(), pm, copy_n);
+                ECInterface::instance()->data.setDataSize(len);
+                ECInterface::instance()->data.setMinIOIndex(0);
+                ECInterface::instance()->data.setMaxIOIndex(
+                    static_cast<unsigned int>(len - 1));
+                ECInterface::instance()->data.setAppProcessMask(full.data(), len);
+                std::cerr << "ecat_thread: installed late app process mask len=" << len
+                          << "\n";
+            }
+        }
         if (machine_is_ready && ECInterface::instance()->data.getProcessMask()) {
             global_clock = updateClock(global_clock);
 

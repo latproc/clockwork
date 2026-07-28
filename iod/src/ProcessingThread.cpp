@@ -60,7 +60,9 @@
 #include <sstream>
 
 #include <chrono>
+#include <cstring>
 #include <iostream>
+#include <vector>
 #if defined(__GLIBC__)
 #include <malloc.h>
 #endif
@@ -598,17 +600,14 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     static unsigned long total_mp_time = 0;
     static unsigned long mp_count = 0;
 #endif
-    uint8_t *mask_p = incoming_process_mask;
-    int n = incoming_data_size;
-    while (n && *mask_p == 0) {
-        ++mask_p;
-        --n;
-    }
-    if (n) { // io has indicated a change
+    // Always absorb the coherent domain image when a frame arrives.
+    // Do not skip when the ecat update_mask is all-zero (quiet diff): processAll
+    // uses the static process map so multi-bit DIGITALVALUE (alarms/statuswords)
+    // still leave 0 when the wire already has A.76 / fault bits.
+    if (incoming_data_size && incoming_process_data && incoming_process_mask) {
         if (machine_is_ready) {
 #if VERBOSE_DEBUG
-            std::cout << "Processing got masked EtherCAT data at byte " << (incoming_data_size - n)
-                      << "\n";
+            std::cout << "Processing EtherCAT process image size " << incoming_data_size << "\n";
 #endif
 #ifdef KEEPSTATS
             AutoStat stats(avg_io_time);
@@ -1792,6 +1791,48 @@ void ProcessingThread::operator()() {
                         // Do not invent all-zero default_data/mask: that would
                         // overwrite initialiseOutputs(). Kernel path re-pushes
                         // plant ANALOGOUTPUT defaults at activate.
+                        //
+                        // Still install the app process mask: ecat_thread only
+                        // collectState/pushes inputs when data.getProcessMask()
+                        // is set, and the only other install site is the
+                        // DEFAULT_DATA packet we are skipping. Without this,
+                        // multi-bit DIGITALVALUE/COUNTER (0x603F/0x6041 etc.)
+                        // stay at VALUE=0 forever while ethercat domain -v is live.
+                        {
+                            uint8_t *pm = IOComponent::getProcessMask();
+                            const int max_off = IOComponent::getMaxIOOffset();
+                            if (pm && max_off >= 0) {
+                                // IOComponent mask covers registered bytes only.
+                                // Pad to full domain image if domain is larger so
+                                // collectState can walk domain_size safely.
+                                size_t mask_len = static_cast<size_t>(max_off) + 1;
+                                size_t dsz =
+                                    ECInterface::instance()->copyDomainData(nullptr, 0);
+                                size_t len = mask_len;
+                                if (dsz > len) {
+                                    len = dsz;
+                                }
+                                std::vector<uint8_t> full_mask(len, 0);
+                                memcpy(full_mask.data(), pm, mask_len);
+                                ECInterface::instance()->data.setDataSize(len);
+                                ECInterface::instance()->data.setMinIOIndex(0);
+                                ECInterface::instance()->data.setMaxIOIndex(
+                                    static_cast<unsigned int>(len - 1));
+                                ECInterface::instance()->data.setAppProcessMask(
+                                    full_mask.data(), len);
+                                DBG_INITIALISATION
+                                    << "Kernel path: installed app process mask len="
+                                    << len << " io_mask=" << mask_len
+                                    << " (no DEFAULT_DATA packet)\n";
+                            }
+                            else {
+                                std::cerr
+                                    << "WARNING: kernel operational without process "
+                                       "mask (pm="
+                                    << (pm ? "ok" : "null") << " max_off=" << max_off
+                                    << ") — inputs will not update\n";
+                            }
+                        }
                         IOComponent::setHardwareState(IOComponent::s_operational);
                         DBG_INITIALISATION
                             << "No process defaults blob; hardware operational (kernel); "
