@@ -53,6 +53,7 @@
 #include "KernelEthercatBus.h"
 #include "ElcConfigFile.h"
 #include "ElcSetupRecipe.h"
+#include "EtherCATSetup.h"
 #include "options.h"
 #include "IOComponent.h"
 #endif
@@ -2106,6 +2107,11 @@ bool ECInterface::activate() {
         active = true;
         initialised = true;
         all_ok = true;
+        // initialiseOutputs() ran before activate; applyKernelOutputValue no-ops
+        // while inactive and this path just zeroed the shadow. Re-push plant
+        // ANALOGOUTPUT defaults (accel/decel, torque limits, …) before first arm
+        // so Estun PV does not see 6083=0 → A.76.
+        reapplyOutputDefaults();
 #ifdef USE_DC
         // Same seed as the legacy ecrt activate path: monotonic ns aligned to
         // cycle. refreshKernelApplicationTime() then tracks the kernel clock.
@@ -3869,6 +3875,8 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
         // Return after power/link loss: queue ECSETUPRECIPE re-apply (client
         // debounce/retry in ElcSetupRecipe::processPending). First-ever online
         // is cold start — configure-time applyAllConfigured already ran.
+        // Always re-push ANALOGOUTPUT defaults into the process image on return
+        // so RxPDO accel/decel are not left at 0 (Estun A.76) while armed.
         if (s.online && !m->slave_config_state.online) {
             if (m->sdo_seen_online) {
                 if (ElcSetupRecipe::positionWantsReapply(m->position)) {
@@ -3877,6 +3885,7 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
                 else {
                     SDOEntry::recommissionModule(m, microsecs());
                 }
+                reapplyOutputDefaults();
             }
             m->sdo_seen_online = true;
         }

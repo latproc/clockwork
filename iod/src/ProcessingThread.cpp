@@ -1788,27 +1788,16 @@ void ProcessingThread::operator()() {
                     upd = IOComponent::getDefaults();
                     if (!upd) {
 #ifdef USE_KERNEL_ETHERCAT
-                        // Seed empty defaults so PROCESS_DATA path can apply
-                        // turnOn/turnOff bits into the domain (ecat_thread gates
-                        // on default_data for legacy; kernel allows apply anyway).
-                        size_t psz = IOComponent::getMaxIOOffset() + 1;
-                        if (psz > 0 && psz < 100000) {
-                            uint8_t *zdata = new uint8_t[psz];
-                            uint8_t *zmask = new uint8_t[psz];
-                            memset(zdata, 0, psz);
-                            memset(zmask, 0, psz);
-                            IOComponent::setDefaultData(zdata);
-                            IOComponent::setDefaultMask(zmask);
-                            delete[] zdata;
-                            delete[] zmask;
-                            upd = IOComponent::getDefaults();
-                        }
-                        if (!upd) {
-                            IOComponent::setHardwareState(IOComponent::s_operational);
-                            DBG_INITIALISATION
-                                << "No process defaults; hardware operational (kernel)\n";
-                            continue;
-                        }
+                        // Do not invent all-zero default_data/mask here: that
+                        // overwrites initialiseOutputs() and leaves profile
+                        // accel/decel PDO at 0 (Estun A.76) once domain arms.
+                        // Kernel path already re-pushes ANALOGOUTPUT defaults
+                        // at activate via reapplyOutputDefaults().
+                        IOComponent::setHardwareState(IOComponent::s_operational);
+                        DBG_INITIALISATION
+                            << "No process defaults blob; hardware operational (kernel); "
+                               "output defaults applied at activate\n";
+                        continue;
 #else
                         assert(upd);
 #endif

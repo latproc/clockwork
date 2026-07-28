@@ -485,6 +485,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     friend class UpdateListItemsAction;
     friend void fixListState(MachineInstance &list);
     friend void initialiseOutputs();
+    friend void reapplyOutputDefaults();
 
     friend int changeState(void *s, const char *new_state);
 };

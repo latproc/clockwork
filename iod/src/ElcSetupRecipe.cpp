@@ -7,6 +7,7 @@
 #include "ElcSetupRecipe.h"
 #include "ECInterface.h"
 #include "ElcConfigFile.h"
+#include "EtherCATSetup.h"
 #include "KernelEthercatBus.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
@@ -920,6 +921,9 @@ void processPending(KernelEthercatBus *bus) {
             SDOEntry::recommissionModule(m, now);
         }
 #endif
+        // SDO accel is overwritten every cycle by RxPDO 0x6083/0x6084. Re-push
+        // ANALOGOUTPUT plant defaults into the armed process image (A.76).
+        reapplyOutputDefaults();
         return;
     }
 

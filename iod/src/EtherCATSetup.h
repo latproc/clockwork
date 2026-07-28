@@ -37,6 +37,14 @@ class ManualConfigurationSelector {
 
 void initialiseOutputs();
 
+/**
+ * Push plant `default` values for ANALOGOUTPUT / digital outputs into the
+ * live process image (kernel output shadow). Safe to call after activate and
+ * after servo power-return recipe re-apply. Without this, domain arm can
+ * cyclic-write 0 into profile accel/decel (Estun A.76).
+ */
+void reapplyOutputDefaults();
+
 class DeviceInfo;
 void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_configuration);
 
