@@ -3856,6 +3856,9 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
                  m->slave_config_state.al_state, s.al_state);
         MessageLog::instance()->add(buf);
         std::cout << buf << "\n";
+        // Do not queue recipe on AL edges alone. Cold start already applies
+        // pre-activate; PREOP→OP flaps would re-run mapping CoE in OP and fail.
+        // processPending keeps a queued return-online job until PREOP+/identity.
     }
     if (s.online != m->slave_config_state.online) {
         snprintf(buf, BUFSIZE, "Slave %d (%s) online %s -> %s (kernel)", i, m->name.c_str(),
@@ -3863,8 +3866,9 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
         MessageLog::instance()->add(buf);
         std::cout << buf << "\n";
 #ifdef USE_SDO
-        // Return after power/link loss: re-apply matching ECSETUPRECIPE(s) then
-        // L_SDO defaults. Recipe apply is queued (off the AL hot path).
+        // Return after power/link loss: queue ECSETUPRECIPE re-apply (client
+        // debounce/retry in ElcSetupRecipe::processPending). First-ever online
+        // is cold start — configure-time applyAllConfigured already ran.
         if (s.online && !m->slave_config_state.online) {
             if (m->sdo_seen_online) {
                 if (ElcSetupRecipe::positionWantsReapply(m->position)) {

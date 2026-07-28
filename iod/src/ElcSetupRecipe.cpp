@@ -21,6 +21,7 @@
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <mutex>
 #include <set>
 #include <sstream>
@@ -29,11 +30,32 @@
 namespace ElcSetupRecipe {
 namespace {
 
+// Pending re-apply after power/link return. Not a fire-and-forget set: drives
+// often appear online in INIT (identity 0 / invalid mailbox) before PREOP, and
+// a single early SDO batch fails then never retries — long "not ready" window.
+struct PendingReapply {
+    uint16_t position = 0;
+    uint64_t first_queued_us = 0;
+    uint64_t next_try_us = 0;
+    uint64_t ready_since_us = 0; // 0 = not mailbox-ready yet
+    unsigned attempts = 0;
+    int last_ret = 0;
+};
+
 std::mutex g_pending_mu;
-std::set<uint16_t> g_pending_positions;
+std::map<uint16_t, PendingReapply> g_pending;
 uint64_t g_last_apply_us = 0;
-// Min gap between re-apply batches while cycling (avoid storm).
+
+// Min gap between any re-apply attempts (avoid SDO storm / bus thrash).
 constexpr uint64_t kMinApplyGapUs = 500000; // 500 ms
+// Must stay PREOP+ with real identity this long before first try.
+constexpr uint64_t kReadyHoldUs = 750000; // 750 ms
+// Backoff after failed apply (doubles each fail, capped).
+constexpr uint64_t kInitialBackoffUs = 1000000; // 1 s
+constexpr uint64_t kMaxBackoffUs = 8000000;     // 8 s
+constexpr unsigned kMaxAttempts = 40;
+// Give up and leave machine status failed after this age.
+constexpr uint64_t kMaxPendingAgeUs = 300000000ULL; // 5 min
 
 struct RecipeSpec {
     std::string path;
@@ -686,9 +708,84 @@ bool positionWantsReapply(uint16_t position) {
     return false;
 }
 
+/** True when CoE setup batches are likely to work (not INIT / ghost identity). */
+bool slaveMailboxReady(KernelEthercatBus *bus, uint16_t position, std::string *why_not) {
+    ECModule *m = ECInterface::findModule(position);
+    if (!m) {
+        if (why_not) {
+            *why_not = "no module";
+        }
+        return false;
+    }
+    if (!m->slave_config_state.online) {
+        if (why_not) {
+            *why_not = "offline";
+        }
+        return false;
+    }
+    const uint8_t al = m->slave_config_state.al_state;
+    // INIT(1) and unknown(0): mailbox often refused (0x0016 invalid mailbox).
+    // PREOP(2), SAFEOP(4), OP(8) are usable for setup SDO.
+    if (al != 0x02 && al != 0x04 && al != 0x08) {
+        if (why_not) {
+            *why_not = "AL not PREOP+ (0x" + std::to_string(al) + ")";
+        }
+        return false;
+    }
+    uint32_t vid = m->vendor_id;
+    uint32_t pid = m->product_code;
+    if (vid == 0 && pid == 0 && bus) {
+        struct elc_slave_info info = {};
+        if (bus->getSlaveInfo(position, &info) == 0) {
+            vid = info.vendor_id;
+            pid = info.product_code;
+        }
+    }
+    if (vid == 0 && pid == 0) {
+        if (why_not) {
+            *why_not = "identity 0:0 (SII not ready)";
+        }
+        return false;
+    }
+    return true;
+}
+
+uint64_t backoffUs(unsigned attempts) {
+    // attempts is 1-based after a failure: 1→1s, 2→2s, 3→4s, … cap 8s
+    uint64_t b = kInitialBackoffUs;
+    for (unsigned i = 1; i < attempts && b < kMaxBackoffUs; ++i) {
+        b *= 2;
+        if (b > kMaxBackoffUs) {
+            b = kMaxBackoffUs;
+        }
+    }
+    return b;
+}
+
 void requestReapply(uint16_t position) {
+    const uint64_t now = microsecs();
     std::lock_guard<std::mutex> lock(g_pending_mu);
-    g_pending_positions.insert(position);
+    auto it = g_pending.find(position);
+    if (it == g_pending.end()) {
+        PendingReapply p;
+        p.position = position;
+        p.first_queued_us = now;
+        p.next_try_us = now; // readiness hold still applies
+        p.ready_since_us = 0;
+        p.attempts = 0;
+        g_pending[position] = p;
+        std::cerr << "ElcSetupRecipe: queued reapply pos=" << position << "\n";
+        return;
+    }
+    // Already pending: online flapped — reset readiness hold so we do not
+    // apply on a single PREOP blip, but keep attempt history for backoff.
+    it->second.ready_since_us = 0;
+    if (it->second.next_try_us > now + kReadyHoldUs) {
+        // keep longer backoff
+    }
+    else {
+        it->second.next_try_us = now;
+    }
 }
 
 void processPending(KernelEthercatBus *bus) {
@@ -699,39 +796,106 @@ void processPending(KernelEthercatBus *bus) {
     if (g_last_apply_us && now - g_last_apply_us < kMinApplyGapUs) {
         return;
     }
-    std::vector<uint16_t> batch;
+
+    PendingReapply chosen;
+    bool have = false;
     {
         std::lock_guard<std::mutex> lock(g_pending_mu);
-        if (g_pending_positions.empty()) {
+        if (g_pending.empty()) {
             return;
         }
-        batch.assign(g_pending_positions.begin(), g_pending_positions.end());
-        g_pending_positions.clear();
+
+        // Drop or update readiness for each entry; pick one due attempt.
+        for (auto it = g_pending.begin(); it != g_pending.end();) {
+            PendingReapply &p = it->second;
+            if (now - p.first_queued_us > kMaxPendingAgeUs) {
+                std::cerr << "ElcSetupRecipe: reapply give up pos=" << p.position
+                          << " after " << (now - p.first_queued_us) / 1000000ULL
+                          << "s attempts=" << p.attempts << " last_ret=" << p.last_ret
+                          << "\n";
+                // status updated below without lock if we tracked machine — defer
+                it = g_pending.erase(it);
+                continue;
+            }
+
+            std::string why;
+            if (!slaveMailboxReady(bus, p.position, &why)) {
+                p.ready_since_us = 0;
+                ++it;
+                continue;
+            }
+            if (p.ready_since_us == 0) {
+                p.ready_since_us = now;
+                std::cerr << "ElcSetupRecipe: pos=" << p.position
+                          << " mailbox-ready; holding " << (kReadyHoldUs / 1000) << "ms\n";
+            }
+            if (now - p.ready_since_us < kReadyHoldUs) {
+                ++it;
+                continue;
+            }
+            if (now < p.next_try_us) {
+                ++it;
+                continue;
+            }
+            if (p.attempts >= kMaxAttempts) {
+                std::cerr << "ElcSetupRecipe: reapply max attempts pos=" << p.position
+                          << " attempts=" << p.attempts << " last_ret=" << p.last_ret << "\n";
+                it = g_pending.erase(it);
+                continue;
+            }
+            // Prefer oldest first_queued among due entries.
+            if (!have || p.first_queued_us < chosen.first_queued_us) {
+                chosen = p;
+                have = true;
+            }
+            ++it;
+        }
+        if (!have) {
+            return;
+        }
+        // Leave entry in map until success or final give-up; mark next_try far
+        // so we do not double-pick before this call finishes.
+        g_pending[chosen.position].next_try_us = now + kMinApplyGapUs;
     }
+
     g_last_apply_us = now;
+    const uint16_t pos = chosen.position;
 
     std::vector<RecipeSpec> specs = allSpecs();
-    for (uint16_t pos : batch) {
-        bool any = false;
-        for (RecipeSpec &spec : specs) {
-            if (!spec.reapply || !spec.enabled) {
-                continue;
-            }
-            if (!positionInResolved(spec, pos, bus)) {
-                continue;
-            }
-            std::vector<uint16_t> one = {pos};
-            int r = applyForPositions(bus, spec.path.c_str(), one);
-            any = true;
-            if (r != 0) {
-                setMachineStatus(spec.machine, "failed", "reapply failed");
-            }
-            else {
-                setMachineStatus(spec.machine, "applied", nullptr);
-            }
+    bool any_recipe = false;
+    bool all_ok = true;
+    int last_r = 0;
+    MachineInstance *status_mi = nullptr;
+
+    for (RecipeSpec &spec : specs) {
+        if (!spec.reapply || !spec.enabled) {
+            continue;
         }
-        if (!any) {
-            // No recipe owns this position — L_SDO recommission only below.
+        if (!positionInResolved(spec, pos, bus)) {
+            continue;
+        }
+        any_recipe = true;
+        if (spec.machine) {
+            status_mi = spec.machine;
+            setMachineStatus(spec.machine, "pending", "reapply in progress");
+        }
+        std::vector<uint16_t> one = {pos};
+        int r = applyForPositions(bus, spec.path.c_str(), one);
+        last_r = r;
+        if (r != 0) {
+            all_ok = false;
+            setMachineStatus(spec.machine, "retrying", "reapply failed; will retry");
+        }
+        else {
+            setMachineStatus(spec.machine, "applied", nullptr);
+        }
+    }
+
+    if (!any_recipe) {
+        // No recipe owns this position — L_SDO recommission only.
+        {
+            std::lock_guard<std::mutex> lock(g_pending_mu);
+            g_pending.erase(pos);
         }
 #ifdef USE_SDO
         ECModule *m = ECInterface::findModule(pos);
@@ -739,6 +903,49 @@ void processPending(KernelEthercatBus *bus) {
             SDOEntry::recommissionModule(m, now);
         }
 #endif
+        return;
+    }
+
+    if (all_ok) {
+        std::cerr << "ElcSetupRecipe: reapply ok pos=" << pos << " attempts="
+                  << (chosen.attempts + 1) << "\n";
+        {
+            std::lock_guard<std::mutex> lock(g_pending_mu);
+            g_pending.erase(pos);
+        }
+#ifdef USE_SDO
+        // Defaults after successful PDO/mode recipe only (avoid fighting INIT).
+        ECModule *m = ECInterface::findModule(pos);
+        if (m) {
+            SDOEntry::recommissionModule(m, now);
+        }
+#endif
+        return;
+    }
+
+    // Failed: schedule retry with backoff; do not run L_SDO until recipe works.
+    const unsigned next_attempt = chosen.attempts + 1;
+    const uint64_t delay = backoffUs(next_attempt);
+    {
+        std::lock_guard<std::mutex> lock(g_pending_mu);
+        auto it = g_pending.find(pos);
+        if (it != g_pending.end()) {
+            it->second.attempts = next_attempt;
+            it->second.last_ret = last_r;
+            it->second.next_try_us = now + delay;
+            // If AL dropped during apply, require a fresh ready hold.
+            std::string why;
+            if (!slaveMailboxReady(bus, pos, &why)) {
+                it->second.ready_since_us = 0;
+            }
+        }
+    }
+    std::cerr << "ElcSetupRecipe: reapply failed pos=" << pos << " ret=" << last_r
+              << " attempt=" << next_attempt << " retry_in_ms=" << (delay / 1000) << "\n";
+    if (status_mi && next_attempt >= kMaxAttempts) {
+        setMachineStatus(status_mi, "failed", "reapply exhausted retries");
+        std::lock_guard<std::mutex> lock(g_pending_mu);
+        g_pending.erase(pos);
     }
 }
 

@@ -37,10 +37,18 @@ int applyAllConfigured(KernelEthercatBus *bus);
 /** True if any machine/CLI recipe wants re-apply for this bus position. */
 bool positionWantsReapply(uint16_t position);
 
-/** Queue a position for re-apply (servo/power return). Thread-safe. */
+/**
+ * Queue a position for re-apply after offline→online (servo/power return).
+ * Thread-safe. Debounced + retried in processPending until CoE succeeds or
+ * max attempts / max age. Safe to call on every online/PREOP edge.
+ */
 void requestReapply(uint16_t position);
 
-/** Drain queue (one or more batches). Safe from ecat userspace loop. */
+/**
+ * Progress pending re-applies: wait until mailbox-ready (PREOP+ and non-zero
+ * identity), hold briefly, apply one position per call with gap, re-queue
+ * failures with exponential backoff. Safe from ecat userspace loop.
+ */
 void processPending(KernelEthercatBus *bus);
 
 } // namespace ElcSetupRecipe
