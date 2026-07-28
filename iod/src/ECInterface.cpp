@@ -2582,7 +2582,11 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
             // domain1_pd already matches — first write after a wiped snapshot).
             if (*mask) {
                 const uint8_t prev = out[i];
-                omask[i] = static_cast<uint8_t>(omask[i] | *mask);
+                // Do NOT expand g_kernel_output_mask from CW process packets.
+                // Those masks can include input PDOs (legacy DirBidirectional
+                // DIGITALVALUE, full process map). mergeKernelOutputShadow would
+                // then force image zeros over live 0x6041/0x603F every snapshot.
+                // Output mask bits are set only by applyKernelOutputBit/Value.
                 out[i] = static_cast<uint8_t>((out[i] & ~*mask) | (*data & *mask));
                 pd[i] = static_cast<uint8_t>((pd[i] & ~*mask) | (*data & *mask));
                 if (out[i] != prev) {

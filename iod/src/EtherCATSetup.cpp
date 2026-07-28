@@ -130,12 +130,29 @@ void reapplyOutputDefaults() {
     // Prefer VALUE already set on the machine (plant may have updated it);
     // fall back to the configured `default` property.
     // Friend of MachineInstance only for setState; analog path uses setValue.
+    //
+    // Only true outputs. output_points also holds DIGITALVALUE/COUNTER/POINT
+    // inputs (linked for PDO registration). Pushing VALUE=0 through setValue
+    // for those was applyKernelOutputValue over TxPDO (0x6041/0x603F), so
+    // mergeKernelOutputShadow zeroed every input snapshot.
     unsigned pushed = 0;
     std::list<MachineInstance *>::iterator iter = output_points.begin();
     while (iter != output_points.end()) {
         MachineInstance *m = *iter++;
         if (!m || !m->io_interface) {
             continue;
+        }
+        if (m->_type != "ANALOGOUTPUT" && m->_type != "OUTPUT" &&
+            m->_type != "OUTPUTREGISTER") {
+            // POINT may be an output (type:Output) or input — only DirOutput.
+            if (m->_type == "POINT") {
+                if (m->io_interface->direction() != IOComponent::DirOutput) {
+                    continue;
+                }
+            }
+            else {
+                continue;
+            }
         }
         const Value &cur = m->getValue("VALUE");
         const Value &def = m->properties.lookup("default");
