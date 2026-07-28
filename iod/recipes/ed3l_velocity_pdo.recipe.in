@@ -22,4 +22,9 @@
 18 POS u16 0x1c13 1 0x1a00
 19 POS u8  0x1c12 0 1
 20 POS u8  0x1c13 0 1
-21 POS u8  0x6060 0 3
+# Non-zero profile accel/decel (SDO). Force mode 0 (not PV) until domain is
+# armed with plant accel PDO — PV+6083=0 (disarmed zeros) → Estun A.76.
+# Mode PV (3) is applied after domain arm (ECInterface post-arm).
+21 POS u32 0x6083 0 200000
+22 POS u32 0x6084 0 200000
+23 POS u8  0x6060 0 0

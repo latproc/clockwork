@@ -78,6 +78,8 @@ static std::vector<uint8_t> g_kernel_output_mask;
 // Publish only when the shadow changes (or until first successful arm).
 static bool g_kernel_output_dirty = true;
 static bool g_kernel_outputs_armed = false;
+// After first full domain arm: set ED3L mode PV and pulse fault reset (A.76).
+static bool g_servo_pv_after_arm_done = false;
 static std::vector<uint8_t> g_kernel_pub_mask; // cached full-domain publish mask
 static bool g_kernel_pub_mask_valid = false;
 // CAP_OUTPUT_LEASE: 0.18 uses timeout_ms + publish/arm refill; no renew loop.
@@ -1925,6 +1927,7 @@ bool ECInterface::deactivate() {
         g_output_lease_timeout_ms = 0;
         g_output_lease_publish_renew = false;
         g_kernel_outputs_armed = false;
+        g_servo_pv_after_arm_done = false;
         domain1 = nullptr;
         if (domain1_pd) {
             delete[] domain1_pd;
@@ -2080,6 +2083,7 @@ bool ECInterface::activate() {
         g_kernel_pub_mask_valid = false;
         g_kernel_output_dirty = true; // publish zeros once after activate
         g_kernel_outputs_armed = false;
+        g_servo_pv_after_arm_done = false;
         // Clear live samples but do NOT force CW dual INVALID / size=0.
         // status_known=false holds last COMPLETE/INCOMPLETE until getDomainStatus.
         for (ElcDomainSlot &slot : g_domains) {
@@ -2107,11 +2111,55 @@ bool ECInterface::activate() {
         active = true;
         initialised = true;
         all_ok = true;
-        // initialiseOutputs() ran before activate; applyKernelOutputValue no-ops
-        // while inactive and this path just zeroed the shadow. Re-push plant
-        // ANALOGOUTPUT defaults (accel/decel, torque limits, …) before first arm
-        // so Estun PV does not see 6083=0 → A.76.
+        // initialiseOutputs() ran before activate; this path zeroed the shadow.
+        // cycleActivate already started the RT task (often on zeros). Re-push
+        // plant ANALOGOUTPUT defaults and publish immediately so the first
+        // armed frames are not 6083/6084=0 (Estun A.76 in PV).
         reapplyOutputDefaults();
+        {
+            size_t pdsz = dsz;
+            if (g_kernel_output_image.size() < pdsz) {
+                g_kernel_output_image.resize(pdsz, 0);
+                g_kernel_output_mask.resize(pdsz, 0);
+            }
+            std::vector<uint8_t> pub_mask(pdsz, 0xff);
+            uint8_t *proc_mask = IOComponent::getProcessMask();
+            size_t proc_len = 0;
+            if (proc_mask) {
+                int max_off = IOComponent::getMaxIOOffset();
+                if (max_off >= 0) {
+                    proc_len = static_cast<size_t>(max_off) + 1;
+                }
+            }
+            for (size_t i = 0; i < pdsz; ++i) {
+                uint8_t m = g_kernel_output_mask[i];
+                if (proc_mask && i < proc_len) {
+                    m = static_cast<uint8_t>(m | proc_mask[i]);
+                }
+                if (m) {
+                    pub_mask[i] = m;
+                }
+            }
+            auto publish_shadow = [&](const char *tag) -> int {
+                struct elc_output_publish pub = {};
+                int pret = kernelBus->publishOutput(g_kernel_output_image.data(), pub_mask.data(),
+                                                    pdsz, &pub);
+                if (pret != 0) {
+                    std::cerr << "WARNING: " << tag << " publish failed ret=" << pret << "\n";
+                }
+                else {
+                    g_kernel_output_dirty = false;
+                    g_kernel_pub_mask = pub_mask;
+                    g_kernel_pub_mask_valid = true;
+                    std::cerr << tag << ": published (domain_size=" << pdsz
+                              << " seq=" << pub.output_sequence << ")\n";
+                }
+                return pret;
+            };
+            (void)publish_shadow("post-activate defaults");
+            // Fault-reset / mode PV wait until domains are armed (disarmed
+            // outputs are zero-gated — reset would not stick; PV+0 accel → A.76).
+        }
 #ifdef USE_DC
         // Same seed as the legacy ecrt activate path: monotonic ns aligned to
         // cycle. refreshKernelApplicationTime() then tracks the kernel clock.
@@ -2435,7 +2483,7 @@ static void display(uint8_t *p, size_t n) {
 
 #ifdef USE_KERNEL_ETHERCAT
 void ECInterface::applyKernelOutputBit(unsigned int io_offset, unsigned int bitpos, bool on) {
-    if (!active || !domain1_pd) {
+    if (!domain1_pd) {
         return;
     }
     size_t dsz = kernelBus ? kernelBus->domainSize() : 0;
@@ -2469,7 +2517,10 @@ void ECInterface::applyKernelOutputBit(unsigned int io_offset, unsigned int bitp
 
 void ECInterface::applyKernelOutputValue(unsigned int io_offset, unsigned int bitpos,
                                          unsigned int bitlen, uint32_t value) {
-    if (!active || !domain1_pd || bitlen == 0) {
+    // Allow writes as soon as the process-image shadow exists (after activate
+    // allocates domain1_pd), not only while "active" is latched — so defaults
+    // can be seeded before the first publish/arm (Estun A.76).
+    if (!domain1_pd || bitlen == 0) {
         return;
     }
     size_t dsz = kernelBus ? kernelBus->domainSize() : 0;
@@ -3448,11 +3499,133 @@ void ECInterface::sendUpdates() {
                     }
                 }
                 g_kernel_outputs_armed = !g_domains.empty() && g_domains.front().armed;
+                bool all_valid_armed = true;
                 for (const ElcDomainSlot &slot : g_domains) {
                     if (slot.valid && !slot.armed) {
                         g_kernel_output_dirty = true; // retry arm with a fresh sequence
+                        all_valid_armed = false;
                         break;
                     }
+                }
+                // First time every valid domain is armed: PDO carries plant
+                // accel/decel. Then set mode PV and clear latched A.76.
+                if (all_valid_armed && g_kernel_outputs_armed && !g_servo_pv_after_arm_done) {
+                    g_servo_pv_after_arm_done = true;
+                    reapplyOutputDefaults();
+                    g_kernel_output_dirty = true;
+                    // Ensure image is live before mode change.
+                    {
+                        size_t pdsz = dsz;
+                        if (g_kernel_pub_mask.size() != pdsz) {
+                            g_kernel_pub_mask.assign(pdsz, 0xff);
+                        }
+                        struct elc_output_publish pub2 = {};
+                        (void)kernelBus->publishOutput(g_kernel_output_image.data(),
+                                                       g_kernel_pub_mask.data(), pdsz, &pub2);
+                    }
+                    std::vector<uint16_t> servo_pos;
+                    if (elcPositionsForDomain(elcDefaultTopologyConfigPath(), 2, &servo_pos) != 0 ||
+                        servo_pos.empty()) {
+                        // Fallback: modules that look like servos by name/product.
+                        for (unsigned p = 0; p < 64; ++p) {
+                            ECModule *mod = findModule(p);
+                            if (mod && mod->name.find("ED3L") != std::string::npos) {
+                                servo_pos.push_back(static_cast<uint16_t>(p));
+                            }
+                        }
+                    }
+                    // 1) Accel SDO + PDO, 2) fault reset while not depending on PV,
+                    // 3) then mode PV. Entering PV with 6083=0 latches A.76 hard.
+                    for (uint16_t spos : servo_pos) {
+                        uint8_t acc[4] = {0x40, 0x0d, 0x03, 0x00}; // 200000 LE
+                        (void)kernelBus->sdoDownload(spos, 0x6083, 0, ELC_SDO_U32, acc, 4);
+                        (void)kernelBus->sdoDownload(spos, 0x6084, 0, ELC_SDO_U32, acc, 4);
+                    }
+                    reapplyOutputDefaults();
+                    g_kernel_output_dirty = true;
+                    {
+                        size_t pdsz = dsz;
+                        struct elc_output_publish pub2 = {};
+                        (void)kernelBus->publishOutput(g_kernel_output_image.data(),
+                                                       g_kernel_pub_mask.data(), pdsz, &pub2);
+                    }
+                    // Fault reset rising edge on ControlWord PDOs.
+                    unsigned cw_n = 0;
+                    for (auto it = MachineInstance::begin(); it != MachineInstance::end(); ++it) {
+                        MachineInstance *mi = *it;
+                        if (!mi || mi->_type != "ANALOGOUTPUT" || !mi->io_interface) {
+                            continue;
+                        }
+                        if (mi->getName().find("ControlWord") == std::string::npos) {
+                            continue;
+                        }
+                        mi->setValue("VALUE", 0x80);
+                        mi->io_interface->setValue(static_cast<uint32_t>(0x80));
+                        ++cw_n;
+                    }
+                    if (cw_n) {
+                        auto pub_img = [&]() {
+                            size_t pdsz = dsz;
+                            struct elc_output_publish pub2 = {};
+                            (void)kernelBus->publishOutput(g_kernel_output_image.data(),
+                                                           g_kernel_pub_mask.data(), pdsz, &pub2);
+                        };
+                        // Rising-edge fault reset; hold long enough for cyclic + firmware.
+                        for (int pass = 0; pass < 2; ++pass) {
+                            for (auto it = MachineInstance::begin(); it != MachineInstance::end();
+                                 ++it) {
+                                MachineInstance *mi = *it;
+                                if (!mi || mi->_type != "ANALOGOUTPUT" || !mi->io_interface) {
+                                    continue;
+                                }
+                                if (mi->getName().find("ControlWord") == std::string::npos) {
+                                    continue;
+                                }
+                                mi->setValue("VALUE", 0x80);
+                                mi->io_interface->setValue(static_cast<uint32_t>(0x80));
+                            }
+                            for (uint16_t spos : servo_pos) {
+                                uint8_t cw[2] = {0x80, 0x00};
+                                (void)kernelBus->sdoDownload(spos, 0x6040, 0, ELC_SDO_U16, cw, 2);
+                            }
+                            pub_img();
+                            usleep(300000);
+                            for (auto it = MachineInstance::begin(); it != MachineInstance::end();
+                                 ++it) {
+                                MachineInstance *mi = *it;
+                                if (!mi || mi->_type != "ANALOGOUTPUT" || !mi->io_interface) {
+                                    continue;
+                                }
+                                if (mi->getName().find("ControlWord") == std::string::npos) {
+                                    continue;
+                                }
+                                mi->setValue("VALUE", 0);
+                                mi->io_interface->setValue(static_cast<uint32_t>(0));
+                            }
+                            for (uint16_t spos : servo_pos) {
+                                uint8_t cw[2] = {0x00, 0x00};
+                                (void)kernelBus->sdoDownload(spos, 0x6040, 0, ELC_SDO_U16, cw, 2);
+                            }
+                            pub_img();
+                            usleep(50000);
+                        }
+                        std::cerr << "post-arm: pulsed fault reset on " << cw_n
+                                  << " ControlWord(s) (2x)\n";
+                    }
+                    // Mode PV only after accel is live and reset attempted.
+                    for (uint16_t spos : servo_pos) {
+                        uint8_t acc[4] = {0x40, 0x0d, 0x03, 0x00};
+                        (void)kernelBus->sdoDownload(spos, 0x6083, 0, ELC_SDO_U32, acc, 4);
+                        (void)kernelBus->sdoDownload(spos, 0x6084, 0, ELC_SDO_U32, acc, 4);
+                        uint8_t mode = 3;
+                        int mret = kernelBus->sdoDownload(spos, 0x6060, 0, ELC_SDO_U8, &mode, 1);
+                        std::cerr << "post-arm: mode PV pos=" << spos
+                                  << (mret == 0 ? " ok" : " FAIL") << " ret=" << mret << "\n";
+                        (void)kernelBus->sdoDownload(spos, 0x6083, 0, ELC_SDO_U32, acc, 4);
+                        (void)kernelBus->sdoDownload(spos, 0x6084, 0, ELC_SDO_U32, acc, 4);
+                    }
+                    reapplyOutputDefaults();
+                    g_kernel_output_dirty = true;
                 }
                 if (last_err != 0 && now - last_warning > 2000000) {
                     last_warning = now;
