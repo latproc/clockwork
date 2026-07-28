@@ -3929,8 +3929,10 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
         // Return after power/link loss: queue ECSETUPRECIPE re-apply (client
         // debounce/retry in ElcSetupRecipe::processPending). First-ever online
         // is cold start — configure-time applyAllConfigured already ran.
-        // Return after power/link loss: queue plant setup recipes / L_SDO, and
-        // re-seed process-image defaults for any ANALOGOUTPUT with a default.
+        // Return after power/link loss: queue plant setup recipes / L_SDO.
+        // Do not reapplyOutputDefaults() here — every slave online edge would
+        // spam the full image; defaults are pushed at activate, first arm, and
+        // after a successful setup-recipe re-apply.
         if (s.online && !m->slave_config_state.online) {
             if (m->sdo_seen_online) {
                 if (ElcSetupRecipe::positionWantsReapply(m->position)) {
@@ -3939,7 +3941,6 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
                 else {
                     SDOEntry::recommissionModule(m, microsecs());
                 }
-                reapplyOutputDefaults();
             }
             m->sdo_seen_online = true;
         }

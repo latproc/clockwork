@@ -1,12 +1,18 @@
 # Ordered CoE setup for velocity PDO map (kernel elc_setup batch).
-# Applied in PREOP by iod (ECSETUPRECIPE / --setup-recipe) before cycle activate.
-#
-# Objects that must not be zero when the slave enters OP while in PP/PV should
-# be written here as SDO (not only left to cyclic PDO defaults). Plant may use
-# several ECSETUPRECIPE machines for different positions / values.
+# Applied in PREOP by iod (ECSETUPRECIPE) before cycle activate / OP.
 #
 # Format: sequence position type index subindex value
-# POS is expanded per target bus position by iod.
+# POS expanded per target bus position.
+#
+# Profile accel/decel (0x6083/0x6084):
+#   Write non-zero values HERE in PREOP if the slave will enter PP/PV and these
+#   objects are RxPDO-mapped. First OP frames may zero-gate cyclic outputs until
+#   plant ANALOGOUTPUT defaults are published — SDO pre-load avoids that window.
+#   Per-group values: extra ECSETUPRECIPE (e.g. profile_accel_800k.recipe.in).
+#
+# Mode of operation (0x6060):
+#   Set only after accel objects are valid. If the drive rejects mode in PREOP
+#   (SDO abort), leave mode to plant L_SDO / enable path after process image is live.
 1  POS u8  0x1c12 0 0
 2  POS u8  0x1c13 0 0
 3  POS u8  0x1600 0 0
@@ -27,10 +33,6 @@
 18 POS u16 0x1c13 1 0x1a00
 19 POS u8  0x1c12 0 1
 20 POS u8  0x1c13 0 1
-# PREOP object values (before OP). Profile accel/decel must be non-zero if
-# mode is PP/PV and these objects are RxPDO-mapped (cyclic can otherwise
-# write 0 while outputs are zero-gated). Plant ANALOGOUTPUT defaults should
-# match; use extra ECSETUPRECIPE entries for per-group values if needed.
 21 POS u32 0x6083 0 200000
 22 POS u32 0x6084 0 200000
 23 POS u8  0x6060 0 3

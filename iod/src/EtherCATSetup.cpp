@@ -169,8 +169,14 @@ void reapplyOutputDefaults() {
         }
     }
     if (pushed) {
-        std::cerr << "reapplyOutputDefaults: pushed " << pushed
-                  << " output value(s) into process image\n";
+        static uint64_t last_log_us = 0;
+        const uint64_t now = microsecs();
+        // Log at most once per second (callers may invoke after arm + recipe).
+        if (!last_log_us || now - last_log_us > 1000000ULL) {
+            last_log_us = now;
+            std::cerr << "reapplyOutputDefaults: pushed " << pushed
+                      << " output value(s) into process image\n";
+        }
     }
 }
 
