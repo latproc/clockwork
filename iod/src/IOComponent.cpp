@@ -113,12 +113,20 @@ void handle_io_sampling(uint64_t io_clock) {
         return;
     }
     last_sample = now;
+    std::list<Package *> no_machine_events;
     std::set<IOComponent *>::iterator iter = regular_polls.begin();
     while (iter != regular_polls.end()) {
         IOComponent *ioc = *iter++;
         ioc->read_time = io_clock;
-        // regular_poll devices: handleChange mirrors wire value into address.value.
-        ioc->filter(ioc->address.value);
+        // Read live process image into address.value, then filter/publish.
+        // (Previously only re-filtered a stale address.value, so analogs stuck
+        // at 0 when processAll never enqueued a bit-edge for that sample.)
+        if (IOComponent::getProcessData()) {
+            ioc->handleChange(no_machine_events);
+        }
+        else {
+            ioc->filter(ioc->address.value);
+        }
     }
 }
 
@@ -475,9 +483,17 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
         return;
     }
 
-    // step through the incoming mask and update bits in process data
+    // Care bits: prefer the static process map (all registered IO). The ecat
+    // update_mask is often *diff-only* after the first frame; if we only absorb
+    // those bits, multi-bit DIGITALVALUE (0x603F/0x6041) never leave 0 when the
+    // first coherent push was missed or preinit already matched zeros.
+    // Fall back to the frame mask when the process map is not ready.
+    const uint8_t *care_base = io_process_mask ? io_process_mask : mask;
+
+    // step through care bits and update process data from the coherent image
     const uint8_t *p = data;
-    const uint8_t *m = mask;
+    const uint8_t *m = care_base;
+    const uint8_t *frame_m = mask;
     uint8_t *q = io_process_data;
     IOComponent *just_added = 0;
     // ANALOG/COUNTER on regular_polls: refresh address.value for sampleRegularPolls
@@ -485,24 +501,20 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
     // forced ~1 kHz full processing loops with empty stableQ/exec.
     std::set<IOComponent *> regular_poll_dirty;
     for (unsigned int i = 0; i < process_data_size; ++i) {
+        // Union process-map care with this frame's update mask.
+        uint8_t care = static_cast<uint8_t>((m ? *m : 0) | (frame_m ? *frame_m : 0));
         if (!last_process_data) {
-            if (*m) {
+            if (care) {
                 notifyComponentsAt(i);
             }
         }
-        //      if (*m && *p==*q) {
-        //          std::cout<<"warning: incoming_data == process_data but mask indicates a change at byte "
-        //          << (int)(m-mask) << std::setw(2) <<  std::hex << " value: 0x" << (int)(*m) << std::dec << "\n";
-        //      }
-        if (*p != *q && *m) { // copy masked bits if any
+        if (*p != *q && care) { // copy cared bits if any changed
             uint8_t bitmask = 0x01;
             int j = 0;
-            // check each bit against the mask and if the mask if
-            // set, check if the bit has changed. If the bit has
-            // changed, notify components that use this bit and
-            // update the bit
+            // check each bit against the care mask and if set, check if the bit
+            // has changed. If it has, notify components and update the bit.
             while (bitmask) {
-                if (*m & bitmask) {
+                if (care & bitmask) {
                     //std::cout << "looking up " << i << ":" << j << "\n";
                     IOComponent *ioc = (*indexed_components)[i * 8 + j];
                     if (ioc && ioc != just_added) {
@@ -564,7 +576,12 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
         }
         ++p;
         ++q;
-        ++m;
+        if (m) {
+            ++m;
+        }
+        if (frame_m) {
+            ++frame_m;
+        }
     }
 
     // Mirror wire value into address.value for polled analogs/counters without
@@ -1363,7 +1380,17 @@ class CounterInternals {
     }
 };
 
-DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {}
+DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {
+    // Inputs only (0x603F/0x6041 etc.). Default IOComponent is bidirectional,
+    // which let generateUpdateMask / updateDomain poison g_kernel_output_mask
+    // and zero process-image inputs on every mergeKernelOutputShadow.
+    direction_ = DirInput;
+    // Sample like ANALOGINPUT/COUNTER: multi-bit CiA objects (error code,
+    // statusword) must track 0 as well as non-zero. Edge-only processAll can
+    // miss a transition when the first bit of the value is unchanged (e.g.
+    // 0x76 → 0x00), leaving Error.VALUE stuck and ClearFault thrashing.
+    regular_polls.insert(this);
+}
 
 int64_t DigitalValue::filter(int64_t val) {
     // IO only: stamp sample time and publish masked VALUE. Bit decode / flags
@@ -2200,18 +2227,22 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             }
         }
         if (regular_polls.count(this)) {
-            // this device is polled on a regular clock, do not process here
+            // Polled multi-bit: always absorb wire value and run filter so machine
+            // VALUE/ENG/IOTIME track (ANALOGINPUT/COUNTER/DIGITALVALUE). Skipping
+            // filter left Error.VALUE=0 while address.value already held 0x76.
             raw_value = val;
-            address.value = val;
+            address.value = filter(val);
         }
         else if (hardware_state == s_hardware_init ||
                  (hardware_state == s_operational && raw_value != val)) {
             //std::cerr << "raw io value changed from " << raw_value << " to " << val << "\n";
             raw_value = val;
             int64_t new_val = filter(val);
-            if (hardware_state == s_operational) { //&& address.value != new_val) {
-                address.value = new_val;
-            }
+            // Always publish address.value (including s_hardware_init). If we only
+            // set raw_value during init and the first operational sample matches,
+            // multi-bit DIGITALVALUE stayed at 0 forever (filter/setValue may also
+            // have run before owners were linked).
+            address.value = new_val;
         }
     }
 }
@@ -2265,6 +2296,11 @@ void IOComponent::setValue(uint32_t new_value) {
     pending_value = new_value;
     last = microsecs();
     address.value = new_value;
+    // Never publish inputs into the kernel output shadow (zeros TxPDO in merge).
+    if (direction_ == DirInput) {
+        last_event = e_none;
+        return;
+    }
 #ifdef USE_KERNEL_ETHERCAT
     last_event = e_none;
     ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
@@ -2283,6 +2319,10 @@ void IOComponent::setValue(int32_t new_value) {
     pending_value = new_value;
     last = microsecs();
     address.value = new_value;
+    if (direction_ == DirInput) {
+        last_event = e_none;
+        return;
+    }
 #ifdef USE_KERNEL_ETHERCAT
     last_event = e_none;
     ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
@@ -2301,6 +2341,10 @@ void IOComponent::setValue(uint64_t new_value) {
     pending_value = new_value;
     last = microsecs();
     address.value = static_cast<int64_t>(new_value);
+    if (direction_ == DirInput) {
+        last_event = e_none;
+        return;
+    }
 #ifdef USE_KERNEL_ETHERCAT
     last_event = e_none;
     ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
@@ -2319,6 +2363,10 @@ void IOComponent::setValue(int64_t new_value) {
     pending_value = new_value;
     last = microsecs();
     address.value = new_value;
+    if (direction_ == DirInput) {
+        last_event = e_none;
+        return;
+    }
 #ifdef USE_KERNEL_ETHERCAT
     last_event = e_none;
     ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
