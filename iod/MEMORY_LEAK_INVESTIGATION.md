@@ -8,9 +8,14 @@ must identify memory that remains owned after its legitimate lifetime, prove the
 responsible call path, make the smallest safe ownership correction, and verify the
 result under a comparable workload.
 
-**Updated:** 2026-07-28  
+**Updated:** 2026-07-29  
 **Branch:** `prod-experimental-mqtt-fix`  
-**Sampling tree:** `/opt/latproc/sampling/iod-memory/` (monitor CSV + bpf traces)
+**Plant host:** `2C-120` (2G4C / `--name 2GRAB`)  
+**Sampling tree (when monitor installed):** `/opt/latproc/sampling/iod-memory/`  
+**Note (2026-07-29):** `/etc/service/memory_monitor` and
+`/opt/latproc/sampling/iod-memory/` are **not present** on this host right now;
+use `/proc/<pid>/smaps`, `pmap`, and optional `DEBUG_MEMSNAPSHOT` (needs
+`/tmp/iod-verbose` for file capture — see `iod.sh`).
 
 ## Safety rules for a live machine
 
@@ -291,7 +296,7 @@ a new tree from `apply` / `Parse` / `clone_json` must use `Value(cJSON *)`.
 
 ### Example D — production-activity live cJSON (still open)
 
-**Evidence:** 2G4C-120 PID `3342133`, ~22.7 h, 2026-07-28/29 (see
+**Evidence (historical):** 2G4C plant PID `3342133`, ~22.7 h, 2026-07-28/29 (see
 `llm-rules/cw_issues/IOD_WEBREQUEST_MEMORY_GROWTH_20260721.md`).
 
 | Condition | cjson / malloc_in_use |
@@ -302,13 +307,32 @@ a new tree from `apply` / `Parse` / `clone_json` must use `Value(cJSON *)`.
 | Worker anon arenas | Grew with WEBREQUEST traffic |
 | Free / releasable | Stayed small (~4 MiB / tens of KiB) |
 
+**Evidence (current run, RSS/smaps only — no MEMSNAPSHOT):** 2C-120 PID
+`127846`, started 2026-07-28 11:38:43, sampled ~2026-07-29 15:05 (~**27.4 h**).
+Binary `/opt/latproc/iod/iod_sdo` mtime 2026-07-28 10:35.
+
+| Metric | ~27 h sample |
+|--------|----------------|
+| RSS / VSZ | **~138 MiB** / ~1.53 GiB |
+| Main `[heap]` | ~**59 MiB** RSS |
+| Largest worker anon | ~**27 MiB**; several ~7.5 MiB arenas |
+| `SHOW HEALTH` | LOAD BUSY ~110–125 loops/s, THRASH none |
+
+This restart is **healthier on RSS** than the historical day climb to ~334 MiB,
+but it is **not** a validation of `b985908f` / `31fceba5`: build objects for
+`Expression.cpp`, `PredicateAction.cpp`, and `value.cpp` predate those commits
+(still 2026-07-26). Live binary includes idle-CPU, channels, and
+turnOn/pending-out work through `7e062d0c`.
+
 **Interpretation:**
 
-1. Idle ITEM DEFAULT / scalar ownership fixes are effective (overnight flat).
-2. Remaining growth is **live application retention** under production JSON/HTTP
-   load, plus worker-thread arena high-water from per-request `pthread_create`.
-3. Further work does **not** require the plant: Linux VM + warehouse CW + HTTP
-   fixtures is enough (thread-pool WEBREQUEST, Result lifecycle, apply
+1. Idle ITEM DEFAULT / scalar ownership fixes were effective when deployed
+   (historical overnight flat on PID `3342133`).
+2. Remaining production growth risk is **live application retention** under
+   JSON/HTTP load, plus worker-thread arena high-water from per-request
+   `pthread_create`.
+3. Further ownership work does **not** require the plant: Linux VM + warehouse
+   CW + HTTP fixtures is enough (thread-pool WEBREQUEST, Result lifecycle, apply
    Duplicate). Methodology: playbook in `IOD_WEBREQUEST_REPRODUCTION_PLAYBOOK.md`.
 
 ## Fixing and testing rules
@@ -365,8 +389,10 @@ not as a completed leak fix.
 | Issue | Fix commit | Status |
 |-------|------------|--------|
 | `IOUpdate` mask `delete[]` ownership | `6eaac1b8` | Fixed in tree; ownership still explicit via `owns_mask_` |
-| JSON ITEM DEFAULT / null `apply()` leak; PutSubExpr full clone | `b985908f` | Fixed in tree + unit test; plant deploy as staged binary if not yet live |
+| JSON ITEM DEFAULT / null `apply()` leak; PutSubExpr full clone | `b985908f` | Fixed in tree + unit test; **not linked into live PID `127846` binary** (rebuild+restart required) |
+| `Value::getFromJSON` scalar clone free | `31fceba5` | Fixed in tree + unit test; **not linked into live binary** (rebuild+restart required) |
 
-Until plant slopes confirm B under busy HMI/JSON load, treat B as a **candidate
-fix** per the completion criteria above if the service has not yet been
-restarted onto that binary.
+Until a process is running a binary that includes B/C **and** plant slopes
+confirm under busy HMI/JSON load, treat B and C as **candidate fixes** per the
+completion criteria above — do not infer success from the current ~138 MiB RSS
+alone.

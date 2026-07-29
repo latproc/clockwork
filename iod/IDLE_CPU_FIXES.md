@@ -326,8 +326,11 @@ Approximate before → after on the original idle work (pre–out-service refine
 Remaining process CPU is largely **real bus work**: ethercat thread, domain
 `processAll` absorb (~200/s at 5 ms pull), ecat timer — not empty-queue thrash.
 
-Under HMI/sampler activity, `SHOW HEALTH` may still show **LOAD BUSY ~30–60
-loops/s**; re-measure quiet vs auto after channel clients settle.
+Under HMI/sampler activity, `SHOW HEALTH` may still show elevated **LOAD BUSY**.
+On 2C-120 / 2GRAB PID `127846` (~27 h uptime, 2026-07-29), live samples were
+**~110–125 loops/s** with THRASH none while core panels were active. Earlier
+quieter windows on this plant have shown **~30–60 loops/s**; re-measure quiet
+vs auto after channel clients settle.
 
 ---
 
