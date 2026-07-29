@@ -23,6 +23,7 @@
 #include "MessagingInterface.h"
 #include "cJSON.h"
 #include <assert.h>
+#include <boost/thread.hpp>
 #include <exception>
 #include <iostream>
 #include <map>
@@ -103,13 +104,16 @@ void ConnectionManager::abort() {
 class SubscriptionManagerInternals : public ConnectionManagerInternals {
 
   public:
-    SubscriptionManagerInternals() : sent_request(false), send_time(0) {}
+    SubscriptionManagerInternals()
+        : sent_request(false), send_time(0), last_setup_recreate_time(0) {}
 
     ~SubscriptionManagerInternals() {}
     // helpers for connection resume
     bool sent_request;
     uint64_t send_time;
+    uint64_t last_setup_recreate_time;
     static const uint64_t channel_request_timeout = 3000000;
+    static const uint64_t setup_recreate_min_interval = 2000000; // 2s
     static std::list<SubscriptionManager*> all;
 };
 
@@ -122,7 +126,7 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
       setup_port(setup_port_num), authority(0),
       subscriber_(*MessagingInterface::getContext(), (protocol == eCLOCKWORK) ? ZMQ_SUB : ZMQ_PAIR),
       sender_(0), subscriber_port(remote_port), monit_subs(subscriber_), monit_pubs(0),
-      monit_setup(0), setup_(0), _setup_status(e_startup), sub_status_(ss_init) {
+      monit_setup(0), setup_(0), _setup_status(e_startup), sub_status_(ss_init), setup_monitor_thread(0) {
     internals = new SubscriptionManagerInternals();
     SubscriptionManagerInternals::all.push_back(this);
     state_start = microsecs();
@@ -147,6 +151,17 @@ SubscriptionManager::SubscriptionManager(const char *chname, ProtocolType proto,
 }
 
 SubscriptionManager::~SubscriptionManager() {
+    if (setup_monitor_thread) {
+        if (monit_setup) {
+            monit_setup->abort();
+        }
+        if (setup_monitor_thread->joinable()) {
+            setup_monitor_thread->join();
+        }
+        delete setup_monitor_thread;
+        setup_monitor_thread = 0;
+    }
+
     std::cout << "SubscriptionManagers: " << SubscriptionManagerInternals::all.size() << std::endl;
     auto iter = SubscriptionManagerInternals::all.begin();
     while (iter != SubscriptionManagerInternals::all.end()) {
@@ -182,9 +197,17 @@ void SubscriptionManager::init() {
     }
     boost::thread subscriber_monitor(boost::ref(monit_subs));
     if (isClient()) {
-        boost::thread setup_monitor(boost::ref(*monit_setup));
+        if (setup_monitor_thread) {
+            if (setup_monitor_thread->joinable()) {
+                setup_monitor_thread->join();
+            }
+            delete setup_monitor_thread;
+            setup_monitor_thread = 0;
+        }
+        setup_monitor_thread = new boost::thread(boost::ref(*monit_setup));
     }
     run_status = e_waiting_cmd;
+    cmd_request_start = 0;
 }
 
 int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
@@ -205,6 +228,125 @@ int SubscriptionManager::configurePoll(zmq::pollitem_t *items) {
     return ++idx;
 }
 
+void SubscriptionManager::resetChannelRequestState(bool recreate_setup_socket) {
+    assert(isClient());
+    SubscriptionManagerInternals *smi = dynamic_cast<SubscriptionManagerInternals *>(internals);
+    if (!smi) {
+        return;
+    }
+
+    // Drain a late reply so a plain REQ can send again when possible.
+    if (setup_ && !recreate_setup_socket) {
+        try {
+            zmq::message_t late;
+            while (setup().recv(&late, ZMQ_DONTWAIT)) {
+                FileLogger fl(program_name);
+                fl.f() << channel_name << " drained late CHANNEL reply (" << late.size()
+                       << " bytes)\n"
+                       << std::flush;
+            }
+        }
+        catch (const zmq::error_t &) {
+            // ignore — socket may already be mid-error; recreate path below
+            recreate_setup_socket = true;
+        }
+    }
+
+    smi->sent_request = false;
+    smi->send_time = 0;
+
+    if (!recreate_setup_socket) {
+        return;
+    }
+
+    // Rate-limit full socket teardown/rebuild (join+new thread is expensive).
+    {
+        const uint64_t now = microsecs();
+        if (smi->last_setup_recreate_time &&
+            now - smi->last_setup_recreate_time <
+                SubscriptionManagerInternals::setup_recreate_min_interval) {
+            return;
+        }
+        smi->last_setup_recreate_time = now;
+    }
+
+    // ZMQ REQ is half-open until a reply arrives; after timeout/EFSM the only
+    // reliable recovery is a new socket + reconnect (monitor must follow).
+    {
+        FileLogger fl(program_name);
+        fl.f() << channel_name << " recreating setup REQ socket for CHANNEL recovery\n"
+               << std::flush;
+    }
+    try {
+        // Capture endpoint before tearing down the monitor/socket.
+        std::string endpoint;
+        if (monit_setup) {
+            endpoint = monit_setup->endPoint();
+        }
+        if (endpoint.empty() && !subscriber_host.empty() && setup_port > 0) {
+            char url[100];
+            snprintf(url, 100, "tcp://%s:%d", subscriber_host.c_str(), setup_port);
+            endpoint = url;
+        }
+
+        // Stop monitor thread BEFORE deleting the socket it references.
+        // Otherwise zmq::monitor_t::check_event asserts (humid exit 134).
+        SingleConnectionMonitor *old_monitor = monit_setup;
+        if (old_monitor) {
+            old_monitor->abort();
+        }
+        if (setup_monitor_thread) {
+            if (setup_monitor_thread->joinable()) {
+                setup_monitor_thread->join();
+            }
+            delete setup_monitor_thread;
+            setup_monitor_thread = 0;
+        }
+
+        int linger = 0;
+        if (setup_) {
+            try {
+                setup_->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+            }
+            catch (const zmq::error_t &) {
+            }
+            delete setup_;
+            setup_ = 0;
+        }
+
+        setup_ = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+        monit_setup = new SingleConnectionMonitor(*setup_);
+        if (old_monitor) {
+            // Keep humid disconnect/connect responders on the new monitor.
+            monit_setup->transferRespondersFrom(*old_monitor);
+            delete old_monitor;
+            old_monitor = 0;
+        }
+        setup_monitor_thread = new boost::thread(boost::ref(*monit_setup));
+
+        current_channel = "";
+        if (!endpoint.empty()) {
+            int counter = 50;
+            while (counter-- > 0 && !monit_setup->active()) {
+                usleep(1000);
+            }
+            setup().connect(endpoint.c_str());
+            monit_setup->setEndPoint(endpoint.c_str());
+            setSetupStatus(SubscriptionManager::e_waiting_connect);
+        }
+        else {
+            setSetupStatus(SubscriptionManager::e_startup);
+        }
+    }
+    catch (const zmq::error_t &ex) {
+        FileLogger fl(program_name);
+        fl.f() << channel_name << " setup REQ recreate failed: " << zmq_strerror(zmq_errno())
+               << "\n"
+               << std::flush;
+        setSetupStatus(SubscriptionManager::e_error);
+    }
+}
+
 bool SubscriptionManager::requestChannel() {
     SubscriptionManagerInternals *smi = dynamic_cast<SubscriptionManagerInternals *>(internals);
     size_t len = 0;
@@ -214,34 +356,47 @@ bool SubscriptionManager::requestChannel() {
          setupStatus() == SubscriptionManager::e_connected) &&
         !monit_setup->disconnected()) {
         int error_count = 0;
-        if (!smi->sent_request ||
-            smi->send_time - now > SubscriptionManagerInternals::channel_request_timeout) {
-            try {
-                zmq::message_t m;
-                if (!setup().recv(&m, ZMQ_DONTWAIT)) {
-                    if (smi->sent_request) {
+        // Elapsed time is now - send_time (not send_time - now: that underflows
+        // to ~2^64 when the request is in the past and floods "waited: 18446…").
+        const bool request_timed_out =
+            smi->sent_request &&
+            (now - smi->send_time > SubscriptionManagerInternals::channel_request_timeout);
+        if (!smi->sent_request || request_timed_out) {
+            if (request_timed_out) {
+                FileLogger fl(program_name);
+                fl.f() << channel_name
+                       << " response timed out; waited: " << (now - smi->send_time) << "\n"
+                       << std::flush;
+                // Clear stuck REQ: drain if possible, else new socket, then resend.
+                resetChannelRequestState(true);
+            }
+            else {
+                // First attempt (or after a clean reset): discard any unexpected
+                // buffered traffic without treating it as a timeout.
+                try {
+                    zmq::message_t m;
+                    if (setup().recv(&m, ZMQ_DONTWAIT)) {
+                        long mlen = m.size();
+                        const char *data = static_cast<const char *>(m.data());
+                        std::string unexpected(data, data + mlen);
                         FileLogger fl(program_name);
-                        fl.f() << channel_name
-                               << " response timed out; waited: " << (smi->send_time - now) << "\n"
+                        fl.f() << channel_name << " got unexpected: " << unexpected << "\n"
                                << std::flush;
-                        return false;
                     }
                 }
-                else {
-                    long len = m.size();
-                    char *buf = new char(len + 1);
-                    buf[len] = 0;
-                    FileLogger fl(program_name);
-                    fl.f() << channel_name << " got unexpected: " << buf << "\n" << std::flush;
-                }
-            }
-            catch (const zmq::error_t &ex) {
-                {
+                catch (const zmq::error_t &ex) {
                     FileLogger fl(program_name);
                     fl.f() << channel_name << " exception " << zmq_errno() << " "
                            << zmq_strerror(zmq_errno()) << " checking for setup data\n"
                            << std::flush;
                 }
+            }
+
+            // After timeout recovery, setup may still be reconnecting.
+            if (monit_setup->disconnected() ||
+                (setupStatus() != SubscriptionManager::e_waiting_connect &&
+                 setupStatus() != SubscriptionManager::e_connected)) {
+                return false;
             }
 
             DBG_CHANNELS << "Requesting channel " << channel_name
@@ -252,7 +407,7 @@ bool SubscriptionManager::requestChannel() {
                 safeSend(setup(), channel_setup.c_str(), channel_setup.size());
                 setSetupStatus(SubscriptionManager::e_waiting_setup);
                 smi->sent_request = true;
-                smi->send_time = now;
+                smi->send_time = microsecs();
             }
             catch (const zmq::error_t &ex) {
                 ++error_count;
@@ -263,19 +418,17 @@ bool SubscriptionManager::requestChannel() {
                            << std::flush;
                 }
                 if (zmq_errno() == ETIMEDOUT) {
-                    // TBD. need propery recovery from this...
-                    //exit(zmq_errno());
-                    smi->sent_request = false;
+                    resetChannelRequestState(true);
                     return false;
                 }
                 if (zmq_errno() == EFSM /*EFSM*/ || STATE_ERROR == zmq_strerror(zmq_errno())) {
                     {
                         FileLogger fl(program_name);
-                        fl.f() << channel_name << " attempting recovery requesting channels\n"
+                        fl.f() << channel_name
+                               << " EFSM on CHANNEL send — recreating setup REQ\n"
                                << std::flush;
                     }
-                    zmq::message_t m;
-                    setup().recv(&m, ZMQ_DONTWAIT);
+                    resetChannelRequestState(true);
                     return false;
                 }
             }
@@ -477,6 +630,17 @@ void SubscriptionManager::setSetupStatus(Status new_status) {
         FileLogger fl(program_name);
         fl.f() << "setup status " << _setup_status << " -> " << new_status << "\n" << std::flush;
         state_start = microsecs();
+        // Leaving a mid-CHANNEL request without a reply: clear REQ bookkeeping so
+        // the next connect cycle can send again (socket recreate only when needed).
+        if (new_status == e_startup || new_status == e_disconnected || new_status == e_error ||
+            new_status == e_waiting_connect) {
+            SubscriptionManagerInternals *smi =
+                dynamic_cast<SubscriptionManagerInternals *>(internals);
+            if (smi && smi->sent_request) {
+                smi->sent_request = false;
+                smi->send_time = 0;
+            }
+        }
         _setup_status = new_status;
     }
 }
@@ -884,6 +1048,10 @@ bool SubscriptionManager::checkConnections() {
                        << ". aborting\n";
             }
             usleep(5);
+            // Full REQ recovery: long-lived wait_setup with no reply is the sticky case.
+            if (setupStatus() == e_waiting_setup || setupStatus() == e_waiting_connect) {
+                resetChannelRequestState(true);
+            }
             if (setupStatus() == e_error) {
                 SubscriptionManager::Status next_status =
                     monit_setup->disconnected() ? e_startup : e_connected;
@@ -895,12 +1063,29 @@ bool SubscriptionManager::checkConnections() {
         }
 #endif
         if (monit_setup->disconnected() && monit_subs.disconnected()) {
+            resetChannelRequestState(false);
             return false;
         }
     }
     if (monit_setup->disconnected()) {
         FileLogger fl(program_name);
         fl.f() << "SubscriptionManager disconnected from server clockwork\n";
+        // TCP drop leaves REQ half-open until the socket is replaced.
+        // Only recreate once when leaving a "had a session" state. While we are
+        // already in e_waiting_connect / e_startup after a recreate, the monitor
+        // still reports disconnected until TCP comes back — recreating every
+        // poll (~50ms) storms sockets and can strand humid.
+        const Status st = setupStatus();
+        if (st == e_done || st == e_waiting_setup || st == e_connected || st == e_error ||
+            st == e_waiting_subscriber || st == e_settingup_subscriber) {
+            resetChannelRequestState(true);
+        }
+        else {
+            resetChannelRequestState(false);
+            if (st != e_waiting_connect && st != e_startup) {
+                setSetupStatus(e_startup);
+            }
+        }
         usleep(100);
         return false;
     }
@@ -1012,19 +1197,42 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
     // Here we process an incoming message that we may need to forward on and
     // collect a response for.  If the message is forwarded we change state to
     // e_waiting_response and otherwise we send a nak back to the server and
-    // stay in e_waiting_cmd
+    // stay in e_waiting_cmd.
+    //
+    // ZMQ REQ/REP contract: once we have received on the inproc REP (cmd), we
+    // MUST reply before the next recv. Leaving that half-open freezes every
+    // peer (device_connector MatchFunction / ConnectionThread) until process
+    // restart. Always reply; never let setup().send exceptions skip the reply.
     if (run_status == e_waiting_cmd && items[command_item].revents & ZMQ_POLLIN) {
         if (safeRecv(cmd, &buf, &msglen, false, 0)) {
             DBG_CHANNELS << " got cmd: " << buf << " of len: " << msglen << " from main thread\n";
+            bool need_reply = true;
             // if we are a client, pass commands through the setup socket to the other end
             // of the channel.
             if (isClient()) {
                 if (monit_setup && !monit_setup->disconnected()) {
                     if (protocol != eCHANNEL) {
                         if (setupStatus() == e_done) {
-                            //{FileLogger fl(program_name); fl.f() << "received " <<buf<< "to pass on and get response\n"<<std::flush; }
-                            setup().send(buf, msglen);
-                            run_status = e_waiting_response;
+                            try {
+                                setup().send(buf, msglen);
+                                run_status = e_waiting_response;
+                                cmd_request_start = microsecs();
+                                need_reply = false; // reply after remote response
+                            }
+                            catch (const zmq::error_t &ex) {
+                                FileLogger fl(program_name);
+                                fl.f() << channel_name
+                                       << " setup send failed (" << zmq_strerror(zmq_errno())
+                                       << "); recovering REQ and nacking cmd\n"
+                                       << std::flush;
+                                resetChannelRequestState(true);
+                                try {
+                                    safeSend(cmd, "failed", 6);
+                                }
+                                catch (...) {
+                                }
+                                need_reply = false;
+                            }
                         }
                         else {
                             {
@@ -1033,7 +1241,12 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
                                        << " but the channel is not completely setup yet\n"
                                        << std::flush;
                             }
-                            safeSend(cmd, "failed", 6);
+                            try {
+                                safeSend(cmd, "failed", 6);
+                            }
+                            catch (...) {
+                            }
+                            need_reply = false;
                         }
                     }
                     else {
@@ -1043,35 +1256,75 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
                                    << std::flush;
                         }
                         DBG_CHANNELS << channel_url << " forwarding message to subscriber\n";
-                        subscriber().send(buf, msglen);
-                        safeSend(cmd, "sent", 4);
+                        try {
+                            subscriber().send(buf, msglen);
+                            safeSend(cmd, "sent", 4);
+                        }
+                        catch (const zmq::error_t &) {
+                            try {
+                                safeSend(cmd, "failed", 6);
+                            }
+                            catch (...) {
+                            }
+                        }
+                        need_reply = false;
                     }
                 }
                 else {
-                    safeSend(cmd, "failed", 6);
+                    try {
+                        safeSend(cmd, "failed", 6);
+                    }
+                    catch (...) {
+                    }
+                    need_reply = false;
                 }
             }
             else if (!monit_subs.disconnected()) {
                 DBG_CHANNELS << " forwarding message " << buf << " to subscriber\n";
-                subscriber().send(buf, strlen(buf));
-                if (protocol == eCLOCKWORK) { // require a response
-                    {
-                        FileLogger fl(program_name);
-                        fl.f() << "forwarding " << buf << " to client and waiting response\n"
-                               << std::flush;
+                try {
+                    subscriber().send(buf, strlen(buf));
+                    if (protocol == eCLOCKWORK) { // require a response
+                        {
+                            FileLogger fl(program_name);
+                            fl.f() << "forwarding " << buf << " to client and waiting response\n"
+                                   << std::flush;
+                        }
+                        run_status = e_waiting_response;
+                        cmd_request_start = microsecs();
+                        need_reply = false;
                     }
-                    run_status = e_waiting_response;
+                    else {
+                        {
+                            FileLogger fl(program_name);
+                            fl.f() << "forwarding " << buf << " to client\n" << std::flush;
+                        }
+                        safeSend(cmd, "sent", 4);
+                        need_reply = false;
+                    }
                 }
-                else {
-                    {
-                        FileLogger fl(program_name);
-                        fl.f() << "forwarding " << buf << " to client\n" << std::flush;
+                catch (const zmq::error_t &) {
+                    try {
+                        safeSend(cmd, "failed", 6);
                     }
-                    safeSend(cmd, "sent", 4);
+                    catch (...) {
+                    }
+                    need_reply = false;
                 }
             }
             else {
-                safeSend(cmd, "failed", 6);
+                try {
+                    safeSend(cmd, "failed", 6);
+                }
+                catch (...) {
+                }
+                need_reply = false;
+            }
+            if (need_reply) {
+                try {
+                    safeSend(cmd, "failed", 6);
+                }
+                catch (...) {
+                }
             }
             delete[] buf;
         }
@@ -1081,29 +1334,44 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
         assert(false); // is this ever called?
         cmd.send("ack", 3);
         run_status = e_waiting_cmd;
+        cmd_request_start = 0;
         return true;
     }
     else if (isClient()) {
         if (run_status == e_waiting_response && monit_setup && monit_setup->disconnected()) {
             const char *msg = "disconnected, attempting reconnect";
-            cmd.send(msg, strlen(msg));
+            try {
+                cmd.send(msg, strlen(msg));
+            }
+            catch (...) {
+            }
             run_status = e_waiting_cmd;
+            cmd_request_start = 0;
+            // TCP drop leaves the setup REQ half-open; recreate so the next
+            // PROPERTY/DATA can send again without EFSM.
+            resetChannelRequestState(true);
+        }
+        else if (run_status == e_waiting_response && cmd_request_start &&
+                 (microsecs() - cmd_request_start) > cmd_response_timeout_us) {
+            {
+                FileLogger fl(program_name);
+                fl.f() << channel_name
+                       << " cmd response timed out after "
+                       << (microsecs() - cmd_request_start)
+                       << "us; nacking inproc and recovering setup REQ\n"
+                       << std::flush;
+            }
+            try {
+                safeSend(cmd, "timeout", 7);
+            }
+            catch (...) {
+            }
+            run_status = e_waiting_cmd;
+            cmd_request_start = 0;
+            resetChannelRequestState(true);
         }
         else if (items[0].revents & ZMQ_POLLIN) {
             if (run_status == e_waiting_response) {
-#if 0
-                {
-                    FileLogger fl(program_name);
-                    if (isClient())
-                    {
-                        fl.f() << "incoming response from setup channel\n";
-                    }
-                    else
-                    {
-                        fl.f() << "incoming response from subscriber\n";
-                    }
-                }
-#endif
                 DBG_CHANNELS << "incoming response\n";
 
                 // note that items[0].socket is the correct socket to use. do we really
@@ -1112,14 +1380,19 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
                                                  : safeRecv(subscriber(), &buf, &msglen, false, 0);
                 if (got_response) {
                     DBG_CHANNELS << " forwarding response " << buf << "\n";
-                    if (msglen) {
-                        cmd.send(buf, msglen);
+                    try {
+                        if (msglen) {
+                            cmd.send(buf, msglen);
+                        }
+                        else {
+                            cmd.send("", 0);
+                        }
                     }
-                    else {
-                        cmd.send("", 0);
+                    catch (...) {
                     }
                     delete[] buf;
                     run_status = e_waiting_cmd;
+                    cmd_request_start = 0;
                 }
             }
             else if (items[0].revents & ZMQ_POLLIN) {
@@ -1135,7 +1408,6 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
                     fl.f()
                         << "incoming response from setup channel not already caught. run_status: "
                         << run_status << "\n";
-                    //assert(false);
                 }
                 delete[] buf;
             }
@@ -1143,3 +1415,4 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
     }
     return true;
 }
+

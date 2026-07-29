@@ -62,42 +62,41 @@ void SocketMonitor::operator()() {
 #else
     pthread_setname_np(pthread_self(), thread_name);
 #endif
-    int exception_count = 0;
-    while (!aborted) {
-        try {
-            monitor(sock, monitor_socket_name.c_str());
-            exception_count = 0;
-        }
-        catch (const zmq::error_t &io) {
-            NB_MSG << "ZMQ error " << errno << ": " << zmq_strerror(errno)
-                   << " in socket monitor\n";
-            if (errno == 88) {
-                exit(0);
+    // Do NOT use monitor_t::monitor(): it loops forever and ignores abort/MONITOR_STOPPED,
+    // so join() hangs and a later check_event can assert (humid exit 134).
+    try {
+        init(sock, monitor_socket_name.c_str());
+        while (!aborted) {
+            // Finite poll so abort is observed even if the control event is lost.
+            if (!check_event(200)) {
+                if (aborted) {
+                    break;
+                }
+                // timeout with no event — keep waiting
+                continue;
             }
-            //if (errno != EAGAIN && errno != EINTR)
-            // monitoring a socket that has been removed. exit and rely on restart code (TBD)
-            //  exit(2);
-            ++exception_count;
-            if (exception_count > 5) {
-                exit(EXIT_FAILURE);
-            }
-            usleep(100);
-        }
-        catch (const std::exception &ex) {
-            NB_MSG << "unknown exception: " << ex.what() << " monitoring a socket\n";
-            ++exception_count;
-            if (exception_count > 5) {
-                exit(EXIT_FAILURE);
-            }
-            usleep(100);
         }
     }
+    catch (const zmq::error_t &io) {
+        NB_MSG << "ZMQ error " << errno << ": " << zmq_strerror(errno)
+               << " in socket monitor\n";
+    }
+    catch (const std::exception &ex) {
+        NB_MSG << "unknown exception: " << ex.what() << " monitoring a socket\n";
+    }
+    active_ = false;
 }
 
 void SocketMonitor::abort() {
-    zmq::monitor_t::abort();
+    // Set aborted first so the monitor loop will not re-enter check_event after STOPPED.
     aborted = true;
     active_ = false;
+    try {
+        zmq::monitor_t::abort();
+    }
+    catch (...) {
+        // best-effort
+    }
 }
 
 bool SocketMonitor::active() {
@@ -190,3 +189,9 @@ void SocketMonitor::removeResponder(uint16_t event, EventResponder *responder) {
         }
     }
 }
+
+void SocketMonitor::transferRespondersFrom(SocketMonitor &other) {
+    responders = std::move(other.responders);
+    other.responders.clear();
+}
+

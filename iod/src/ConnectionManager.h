@@ -29,6 +29,7 @@
 #include "value.h"
 #include <boost/thread/recursive_mutex.hpp>
 #include <map>
+#include <boost/thread.hpp>
 #include <pthread.h>
 #include <set>
 #include <sstream>
@@ -212,6 +213,10 @@ class SubscriptionManager : public ConnectionManager {
 
     bool requestChannel();
 
+    // After CHANNEL setup timeout/disconnect: clear sent_request and recover
+    // the ZMQ REQ FSM (drain late reply or recreate the setup socket).
+    void resetChannelRequestState(bool recreate_setup_socket);
+
     void configureSetupConnection(const char *host, int port);
 
     bool setupConnections();
@@ -236,6 +241,10 @@ class SubscriptionManager : public ConnectionManager {
     void setSetupStatus(Status new_status);
     SubStatus subscriberStatus();
     uint64_t state_start;
+    // When run_status == e_waiting_response: wall time of the forwarded cmd.
+    // Used to abort stuck REQ/REP cycles if the remote never replies.
+    uint64_t cmd_request_start;
+    static const uint64_t cmd_response_timeout_us = 5000000ULL; // 5s
     RunStatus run_status;
     std::string current_channel;
     std::string subscriber_host;
@@ -262,6 +271,8 @@ class SubscriptionManager : public ConnectionManager {
     zmq::socket_t *setup_;
     Status _setup_status;
     SubStatus sub_status_;
+    // Owned monitor thread for setup REQ; join before deleting monit_setup.
+    boost::thread *setup_monitor_thread;
 };
 
 #endif
