@@ -1,6 +1,6 @@
 # Open work plan (iod / Clockwork)
 
-**Updated:** 2026-07-28  
+**Updated:** 2026-07-29  
 **This machine / branch:** `2G-120` · `prod-experimental-mqtt-fix` (legacy `iod` / `iod_sdo`)  
 **Related:** `feature/iod-elc-kernel-transport` (elc — dual-domain, analog emit, plant C/D)
 
@@ -19,7 +19,9 @@ and cross-branch port work do not get lost.
 | Legacy turnOn/turnOff + bus-rate out service + SetState turning_* | `7e062d0c` |
 | Channel client: timeout underflow, REQ reset, handshake thrash | `388b9ee4` … `dda16ce0` |
 | cJSON ITEM DEFAULT + PutSubExpr ownership | `b985908f` (see `MEMORY_LEAK_INVESTIGATION.md`) |
+| cJSON `Value::getFromJSON` scalar clone free | `31fceba5` (built Release; deploy when restart allows) |
 | IOUpdate mask ownership | `6eaac1b8` |
+| Overnight flat MEMSNAPSHOT after ITEM fix | PID 3342133 22.7 h — idle paths OK; day growth open |
 
 Details and measurement: `iod/IDLE_CPU_FIXES.md`, `iod/MEMORY_LEAK_INVESTIGATION.md`.
 
@@ -84,23 +86,42 @@ channel pre-start — data port from CHANNEL reply.
 | Item | Status |
 |------|--------|
 | IOUpdate mask `owns_mask_` | Done (`6eaac1b8`) |
-| JSON ITEM DEFAULT + PutSubExpr | Done in tree (`b985908f`); plant slope confirm after deploy |
-| Methodology + traces | `MEMORY_LEAK_INVESTIGATION.md` + `sampling/iod-memory/` |
+| JSON ITEM DEFAULT + PutSubExpr | Done (`b985908f`); **night flat on plant** |
+| `Value::getFromJSON` scalar clones | Done in tree (`31fceba5`); deploy on next restart |
+| Production-day live cJSON + WEBREQUEST arenas | **Open** — offline VM work |
+| Methodology + plant evidence | `MEMORY_LEAK_INVESTIGATION.md`, `llm-rules/cw_issues/IOD_WEBREQUEST_*` |
 
-**Local staged binaries on 2G-120 (not necessarily live service):**  
+**Plant evidence (do not re-prove idle on controller):**
+
+- PID `3342133` ~22.7 h: cjson/malloc **flat overnight**; day climb to ~1.8M
+  nodes / ~311 MiB in_use / RSS ~334 MiB.
+- Main heap mapping flat; worker arenas + live cJSON drive production growth.
+
+**Local staged binaries on 2G-120:**  
 `iod_sdo.prev-memfix-*`, `iod_sdo.staged-json-ownership-fix` — confirm
 `svstat` / running path before treating as production.
 
+**Offline next (no EtherCAT / no 2G4C required):**
+
+1. Thread pool or same-thread free for `exec_web_request.c` workers.
+2. CW: clear large `result` / `curl.Result` after field extract (warehouse LPC).
+3. Optional: `apply()` via `cJSON_Duplicate` instead of Print+Parse.
+4. Catalog poll rate review (`P_BaleCatalogForAssignment`).
+
 ---
 
-## Suggested next sequence (mqtt-fix / 2G-120)
+## Suggested next sequence
 
 ```
-1  Confirm which iod_sdo binary the service runs (json + turnOn fixes)
-2  Post-deploy MEMSNAPSHOT / memory.csv slope under HMI JSON load
-3  SHOW HEALTH quiet vs auto after channel clients settled
-4  Optional: server bind/exit(1) harden if port clashes appear
-5  elc-only plant residuals only if working that branch/site
+Plant (only when restarting anyway)
+1  Deploy Release with 31fceba5 if not already; re-enable DEBUG_MEMSNAPSHOT
+2  Do not chase overnight drip — already flat after b985908f
+
+Offline / other machine (preferred for remaining memory work)
+3  Reproduce catalog WEBREQUEST load on Linux VM
+4  Implement WEBREQUEST thread pool + Result ownership tests
+5  Warehouse LPC Result clear / poll reduce as separate CW change
+6  Optional: SHOW HEALTH quiet vs auto after channel clients settled
 ```
 
 ---

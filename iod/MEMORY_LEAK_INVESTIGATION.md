@@ -273,6 +273,44 @@ Related earlier ownership work on the same branch (not a substitute for B):
 wrap in `Value`, confirm no live node remains after scope exit when DEFAULT would
 have been taken.
 
+### Example C — `Value::getFromJSON` scalar clone leak
+
+**Commit:** `31fceba5` Fix cJSON leak in Value::getFromJSON for scalar fields  
+**Tests:** `iod/tests/test_json_ownership.cpp` (`ValueGetFromJSONScalarDoesNotLeak`)
+
+```cpp
+// Bug: clone then assign_value for number/string/null/bool dropped the clone.
+res = assign_value(clone_json(::getFromJSON(json, key)));
+
+// Fix: ownership through Value(cJSON*) (frees non-object trees after convert).
+return Value(clone_json(::getFromJSON(json, key)));
+```
+
+`get_value(cJSON *)` remains a **borrow** API (does not free). Callers that own
+a new tree from `apply` / `Parse` / `clone_json` must use `Value(cJSON *)`.
+
+### Example D — production-activity live cJSON (still open)
+
+**Evidence:** 2G4C-120 PID `3342133`, ~22.7 h, 2026-07-28/29 (see
+`llm-rules/cw_issues/IOD_WEBREQUEST_MEMORY_GROWTH_20260721.md`).
+
+| Condition | cjson / malloc_in_use |
+|-----------|----------------------|
+| Night / idle many hours | **Flat** (449281 / 143 MiB for ~12 h) |
+| Morning–day production | Climbed to **~1.8M nodes / ~311 MiB** in_use |
+| Main `[heap]` mapping | ~74 MiB flat |
+| Worker anon arenas | Grew with WEBREQUEST traffic |
+| Free / releasable | Stayed small (~4 MiB / tens of KiB) |
+
+**Interpretation:**
+
+1. Idle ITEM DEFAULT / scalar ownership fixes are effective (overnight flat).
+2. Remaining growth is **live application retention** under production JSON/HTTP
+   load, plus worker-thread arena high-water from per-request `pthread_create`.
+3. Further work does **not** require the plant: Linux VM + warehouse CW + HTTP
+   fixtures is enough (thread-pool WEBREQUEST, Result lifecycle, apply
+   Duplicate). Methodology: playbook in `IOD_WEBREQUEST_REPRODUCTION_PLAYBOOK.md`.
+
 ## Fixing and testing rules
 
 1. Make the smallest correction that expresses the real ownership contract.
