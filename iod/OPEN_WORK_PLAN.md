@@ -149,16 +149,18 @@ deploy.
 ## Suggested next sequence
 
 ```
-Plant (only when restarting anyway)
-1  Rebuild Release so b985908f + 31fceba5 + WEBREQUEST pool / apply-clone are linked
-2  Deploy new iod_sdo; confirm new PID + binary mtime
-3  Optionally enable /tmp/iod-verbose + DEBUG_MEMSNAPSHOT for a bounded window
-4  Do not treat current ~138 MiB as proof of the JSON/WEBREQUEST fixes — not live yet
+Plant (approved restart window)
+1  Pull prod-experimental-mqtt-fix tip (includes 9106aee5 + 31fceba5 + b985908f)
+2  Build Release iod/cw/iod_sdo AND rebuild web_request.so.1.0
+3  Stage binaries with named rollback (iod_sdo.prev-*, web_request.so.prev-*)
+4  Deploy; confirm new PID + binary mtime; re-enable DEBUG_MEMSNAPSHOT
+5  Do not treat current ~138 MiB RSS as proof — JSON/WEBREQUEST fixes not live yet
+6  Compare production-day cjson/RSS to 2026-07-28/29 baseline
 
-Offline / other machine (preferred for remaining memory work)
-5  Linux VM load matrix (10k sequential, concurrency, RSS plateau)
-6  Catalog poll rate / assignment dialog request frequency
-7  Optional: SHOW HEALTH quiet vs auto after channel clients settled
+Offline residual
+7  Linux VM playbook load matrix (glibc arenas)
+8  Catalog poll rate / P_BaleCatalogForAssignment review (CW/SVN)
+9  Optional: SHOW HEALTH quiet vs auto after channel clients settled
 ```
 
 ---
