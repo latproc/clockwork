@@ -14,24 +14,61 @@
 #include "stdio.h"
 #include "assert.h"
 #include <pthread.h>
+#include <stdatomic.h>
+#include <strings.h>
+
+/*
+ * WEBREQUEST plugin
+ *
+ * Each Start enqueues work on a fixed worker pool (default 4 threads).
+ * Workers stay alive so libcurl/TLS allocations reuse the same arenas
+ * instead of creating a short-lived pthread per request (the production
+ * RSS growth pattern on glibc).
+ *
+ * done/abort are atomic; the control path never races plain ints across
+ * threads. Completion still joins no per-request thread — the pool owns
+ * the threads for process life.
+ */
+
+#ifndef WEBREQUEST_POOL_SIZE_DEFAULT
+#define WEBREQUEST_POOL_SIZE_DEFAULT 4
+#endif
 
 struct WebRequestData {
-    pthread_t thread;
-    int running;
-    int done;
-    long http_code;
+    /* Set by control thread before enqueue; read by worker. */
     char *request;
     char *post_data;
     char *result;
     char *errors;
     const int64_t *status;
     int trust_host_certificate;
-    /* Optional: Content-Type header value */
     char *content_type;
-    /* NEW: Optional HTTP method override (e.g., PATCH/PUT/DELETE/HEAD/GET/POST) */
     char *method;
-    int abort;
+
+    /* Cross-thread flags (control thread + worker). */
+    atomic_int done;
+    atomic_int abort;
+
+    /* Control-thread only. */
+    int running;
+    long http_code;
 };
+
+/* ---- fixed worker pool ------------------------------------------------ */
+
+struct PoolJob {
+    struct WebRequestData *data;
+    struct PoolJob *next;
+};
+
+static pthread_once_t pool_once = PTHREAD_ONCE_INIT;
+static pthread_mutex_t pool_mu = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t pool_cv = PTHREAD_COND_INITIALIZER;
+static struct PoolJob *pool_head = NULL;
+static struct PoolJob *pool_tail = NULL;
+static int pool_started = 0;
+static int pool_size = WEBREQUEST_POOL_SIZE_DEFAULT;
+static pthread_t *pool_threads = NULL;
 
 static pthread_once_t curl_once = PTHREAD_ONCE_INIT;
 static int curl_initialized = 0;
@@ -48,16 +85,16 @@ static void curl_global_init_once(void) {
 
 static size_t write_cb(void *contents, size_t size, size_t nmemb, void *userp) {
     size_t realsize = size * nmemb;
-    struct WebRequestData *data = (struct WebRequestData*)userp;
-    if (data->abort) {
+    struct WebRequestData *data = (struct WebRequestData *)userp;
+    if (atomic_load_explicit(&data->abort, memory_order_relaxed)) {
         return 0;
     }
     size_t old_len = data->result ? strlen(data->result) : 0;
     char *new_buf = 0;
     if (data->result) {
-        new_buf = (char*)realloc(data->result, old_len + realsize + 1);
+        new_buf = (char *)realloc(data->result, old_len + realsize + 1);
     } else {
-        new_buf = (char*)malloc(realsize + 1);
+        new_buf = (char *)malloc(realsize + 1);
     }
     if (!new_buf) {
         return 0;
@@ -72,9 +109,7 @@ static int xferinfo_cb(void *clientp,
                        curl_off_t dltotal, curl_off_t dlnow,
                        curl_off_t ultotal, curl_off_t ulnow) {
     struct WebRequestData *data = (struct WebRequestData *)clientp;
-    if (data && data->abort) {
-        printf("aborting\n");
-        /* Returning non-zero tells libcurl to abort the transfer. */
+    if (data && atomic_load_explicit(&data->abort, memory_order_relaxed)) {
         return 1;
     }
     (void)dltotal;
@@ -88,8 +123,7 @@ static int progress_cb(void *clientp,
                        double dltotal, double dlnow,
                        double ultotal, double ulnow) {
     struct WebRequestData *data = (struct WebRequestData *)clientp;
-    if (data && data->abort) {
-        printf("aborting (progress)\n");
+    if (data && atomic_load_explicit(&data->abort, memory_order_relaxed)) {
         return 1;
     }
     (void)dltotal;
@@ -99,16 +133,25 @@ static int progress_cb(void *clientp,
     return 0;
 }
 
-static void *worker(void *arg) {
-    struct WebRequestData *data = (struct WebRequestData*)arg;
+/* Per-worker easy handle: reuse reduces TLS/session setup and allocator noise. */
+static __thread CURL *tls_curl = NULL;
 
+/* Run one HTTP request. Allocates response on this worker thread. */
+static void perform_request(struct WebRequestData *data) {
     pthread_once(&curl_once, curl_global_init_once);
 
-    CURL *curl = curl_easy_init();
+    if (!tls_curl) {
+        tls_curl = curl_easy_init();
+    } else {
+        curl_easy_reset(tls_curl);
+    }
+    CURL *curl = tls_curl;
     if (!curl) {
-        if (!data->errors) data->errors = debug_strdup("curl_easy_init failed", "errors");
-        data->done = 1;
-        return NULL;
+        if (!data->errors) {
+            data->errors = debug_strdup("curl_easy_init failed", "errors");
+        }
+        atomic_store_explicit(&data->done, 1, memory_order_release);
+        return;
     }
 
     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, data);
@@ -117,7 +160,6 @@ static void *worker(void *arg) {
     curl_easy_setopt(curl, CURLOPT_PROGRESSFUNCTION, progress_cb);
     curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 
-    /* Optional headers list (for Content-Type or others later) */
     struct curl_slist *headers = NULL;
 
     curl_easy_setopt(curl, CURLOPT_URL, data->request);
@@ -132,11 +174,10 @@ static void *worker(void *arg) {
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
     }
 
-    /* Set Content-Type if provided */
     if (data->content_type && *data->content_type) {
         const char *prefix = "Content-Type: ";
         size_t need = strlen(prefix) + strlen(data->content_type) + 1;
-        char *ct_header = (char*)malloc(need);
+        char *ct_header = (char *)malloc(need);
         if (ct_header) {
             memcpy(ct_header, prefix, strlen(prefix));
             memcpy(ct_header + strlen(prefix), data->content_type, strlen(data->content_type) + 1);
@@ -152,10 +193,8 @@ static void *worker(void *arg) {
         }
     }
 
-    /* Determine HTTP method: default behavior vs override */
     const char *method = (data->method && *data->method) ? data->method : NULL;
     if (method) {
-        /* Case-insensitive comparisons for convenience */
         if (strcasecmp(method, "GET") == 0) {
             curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
         } else if (strcasecmp(method, "POST") == 0) {
@@ -164,42 +203,113 @@ static void *worker(void *arg) {
             curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
             curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "HEAD");
         } else {
-            /* PATCH, PUT, DELETE, OPTIONS, etc. */
             curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, method);
         }
     }
 
-    /* Attach body if provided.
-       - Default (no method override): this will become POST if PostData is present.
-       - With override:
-           * POST: we also set CURLOPT_POST (above), so this is a POST with body.
-           * PATCH/PUT/DELETE/etc: we set CUSTOMREQUEST above; POSTFIELDS here supplies the body.
-           * HEAD: ignore any PostData. */
     if (data->post_data && *data->post_data) {
         if (!method) {
-            /* preserve original default: body => POST */
             curl_easy_setopt(curl, CURLOPT_POST, 1L);
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data->post_data);
         } else if (strcasecmp(method, "HEAD") == 0) {
-            /* HEAD must not have a body; do nothing */
+            /* no body */
         } else {
-            /* For POST, PATCH, PUT, DELETE, etc., send body */
             curl_easy_setopt(curl, CURLOPT_POSTFIELDS, data->post_data);
         }
     }
 
     CURLcode res = curl_easy_perform(curl);
     if (res != CURLE_OK) {
-        if (!data->errors) data->errors = debug_strdup(curl_easy_strerror(res), "errors");
+        if (!data->errors) {
+            data->errors = debug_strdup(curl_easy_strerror(res), "errors");
+        }
     }
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &data->http_code);
 
-    if (headers) curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
+    if (headers) {
+        curl_slist_free_all(headers);
+    }
+    /* Keep tls_curl for the next job on this worker; only reset next time. */
 
-    data->done = 1;
+    atomic_store_explicit(&data->done, 1, memory_order_release);
+}
+
+static void *pool_worker(void *arg) {
+    (void)arg;
+    for (;;) {
+        struct PoolJob *job = NULL;
+
+        pthread_mutex_lock(&pool_mu);
+        while (pool_head == NULL) {
+            pthread_cond_wait(&pool_cv, &pool_mu);
+        }
+        job = pool_head;
+        pool_head = job->next;
+        if (pool_head == NULL) {
+            pool_tail = NULL;
+        }
+        pthread_mutex_unlock(&pool_mu);
+
+        if (job->data) {
+            perform_request(job->data);
+        }
+        free(job);
+    }
     return NULL;
 }
+
+static void pool_init_once(void) {
+    const char *env = getenv("WEBREQUEST_POOL_SIZE");
+    if (env && *env) {
+        int n = atoi(env);
+        if (n >= 1 && n <= 32) {
+            pool_size = n;
+        }
+    }
+
+    pool_threads = (pthread_t *)calloc((size_t)pool_size, sizeof(pthread_t));
+    if (!pool_threads) {
+        pool_size = 0;
+        return;
+    }
+
+    for (int i = 0; i < pool_size; ++i) {
+        int rc = pthread_create(&pool_threads[i], NULL, pool_worker, NULL);
+        if (rc != 0) {
+            /* Keep whatever threads started; reduce size so we do not join dead slots. */
+            pool_size = i;
+            break;
+        }
+    }
+    pool_started = (pool_size > 0);
+}
+
+static int enqueue_request(struct WebRequestData *data) {
+    pthread_once(&pool_once, pool_init_once);
+    if (!pool_started) {
+        return -1;
+    }
+
+    struct PoolJob *job = (struct PoolJob *)malloc(sizeof(struct PoolJob));
+    if (!job) {
+        return -1;
+    }
+    job->data = data;
+    job->next = NULL;
+
+    pthread_mutex_lock(&pool_mu);
+    if (pool_tail) {
+        pool_tail->next = job;
+    } else {
+        pool_head = job;
+    }
+    pool_tail = job;
+    pthread_cond_signal(&pool_cv);
+    pthread_mutex_unlock(&pool_mu);
+    return 0;
+}
+
+/* ---- plugin entry ----------------------------------------------------- */
 
 int exec_web_request(void *scope) {
     struct WebRequestData *data = (struct WebRequestData *)getInstanceData(scope);
@@ -207,8 +317,10 @@ int exec_web_request(void *scope) {
     did_alloc("state");
 
     if (!data) {
-        data = (struct WebRequestData*)debug_malloc(sizeof(struct WebRequestData), "WebRequestData");
+        data = (struct WebRequestData *)debug_malloc(sizeof(struct WebRequestData), "WebRequestData");
         memset(data, 0, sizeof(*data));
+        atomic_init(&data->done, 0);
+        atomic_init(&data->abort, 0);
         setInstanceData(scope, data);
 
         if (!getIntValue(scope, "Status", &data->status)) {
@@ -241,27 +353,30 @@ int exec_web_request(void *scope) {
         }
         data->request = req;
 
-        /* Optional POST body */
         char *post_data = getStringValue(scope, "PostData");
-        if (post_data) { did_alloc("post_data"); }
+        if (post_data) {
+            did_alloc("post_data");
+        }
         if (post_data && *post_data && strcmp(post_data, "null") != 0) {
             data->post_data = post_data;
         } else if (post_data) {
             debug_free(post_data, "post_data");
         }
 
-        /* Optional Content-Type */
         char *content_type = getStringValue(scope, "ContentType");
-        if (content_type) { did_alloc("content_type"); }
+        if (content_type) {
+            did_alloc("content_type");
+        }
         if (content_type && *content_type && strcmp(content_type, "null") != 0) {
             data->content_type = content_type;
         } else if (content_type) {
             debug_free(content_type, "content_type");
         }
 
-        /* NEW: Optional Method override */
         char *method = getStringValue(scope, "Method");
-        if (method) { did_alloc("method"); }
+        if (method) {
+            did_alloc("method");
+        }
         if (method && *method && strcmp(method, "null") != 0) {
             data->method = method;
         } else if (method) {
@@ -271,14 +386,16 @@ int exec_web_request(void *scope) {
         data->trust_host_certificate = getBoolValue(scope, "TrustHostCert");
 
         data->running = 1;
-        data->done = 0;
-        data->abort = 0;
+        data->http_code = 0;
+        atomic_store_explicit(&data->done, 0, memory_order_relaxed);
+        atomic_store_explicit(&data->abort, 0, memory_order_relaxed);
 
-        if (!changeState(scope, "Running")) goto done_cleanup;
+        if (!changeState(scope, "Running")) {
+            goto done_cleanup;
+        }
 
-        int rc = pthread_create(&data->thread, NULL, worker, data);
-        if (rc != 0) {
-            setStringValue(scope, "Errors", "pthread_create failed");
+        if (enqueue_request(data) != 0) {
+            setStringValue(scope, "Errors", "webrequest worker pool unavailable");
             changeState(scope, "Error");
             goto done_cleanup;
         }
@@ -286,13 +403,12 @@ int exec_web_request(void *scope) {
         return PLUGIN_COMPLETED;
     }
     else if (current && strcmp(current, "Running") == 0 && data->running) {
-        if (!data->done) {
+        if (!atomic_load_explicit(&data->done, memory_order_acquire)) {
             debug_free(current, "current");
             return PLUGIN_COMPLETED;
         }
 
-        pthread_join(data->thread, NULL);
-
+        /* Worker finished; no pthread_join — pool threads are long-lived. */
         setIntValue(scope, "Status", (int64_t)data->http_code);
         if (data->errors) {
             setStringValue(scope, "Errors", data->errors);
@@ -300,34 +416,52 @@ int exec_web_request(void *scope) {
         }
         if (data->result) {
             setJsonValue(scope, "Result", data->result ? data->result : "");
-            if (!data->errors) { changeState(scope, "Done"); }
+            if (!data->errors) {
+                changeState(scope, "Done");
+            }
+        } else if (!data->errors) {
+            /* Empty body success (e.g. 204) — still complete. */
+            setJsonValue(scope, "Result", "");
+            changeState(scope, "Done");
         }
 
     done_cleanup:
-        if (data->request)      { debug_free(data->request, "Request"); data->request = 0; }
-        if (data->post_data)    { debug_free(data->post_data, "post_data"); data->post_data = 0; }
-        if (data->content_type) { debug_free(data->content_type, "content_type"); data->content_type = 0; }
-        if (data->method)       { debug_free(data->method, "method"); data->method = 0; }
-        if (data->result)       { free(data->result); data->result = 0; }
-        if (data->errors)       { free(data->errors); data->errors = 0; }
+        if (data->request) {
+            debug_free(data->request, "Request");
+            data->request = 0;
+        }
+        if (data->post_data) {
+            debug_free(data->post_data, "post_data");
+            data->post_data = 0;
+        }
+        if (data->content_type) {
+            debug_free(data->content_type, "content_type");
+            data->content_type = 0;
+        }
+        if (data->method) {
+            debug_free(data->method, "method");
+            data->method = 0;
+        }
+        if (data->result) {
+            free(data->result);
+            data->result = 0;
+        }
+        if (data->errors) {
+            free(data->errors);
+            data->errors = 0;
+        }
         setInstanceData(scope, 0);
         debug_free(data, "WebRequestData");
     }
-    else if (data && data->running && (!current
-                                   || (strcmp(current, "Running") != 0 && strcmp(current, "Start") != 0))) {
-        /* Cancellation path: thread is still running, but the state is no longer "Running".
-           This happens when a Clockwork command (e.g., stop) moves the machine back to Idle. */
-        if (!data->abort) {
-            data->abort = 1;
-        }
-        if (!data->done) {
-            /* Wait for the worker to notice the abort and finish. */
+    else if (data && data->running &&
+             (!current ||
+              (strcmp(current, "Running") != 0 && strcmp(current, "Start") != 0))) {
+        /* Cancellation: forced out of Running (e.g. stop/reset). */
+        atomic_store_explicit(&data->abort, 1, memory_order_relaxed);
+        if (!atomic_load_explicit(&data->done, memory_order_acquire)) {
             debug_free(current, "current");
             return PLUGIN_COMPLETED;
         }
-        /* Thread is finished, join and clean up, but do not update Result/Status/Errors
-           or change the state (Clockwork has already set it, typically to Idle). */
-        pthread_join(data->thread, NULL);
         setIntValue(scope, "Status", (int64_t)0L);
         setStringValue(scope, "Errors", "aborted");
         goto done_cleanup;

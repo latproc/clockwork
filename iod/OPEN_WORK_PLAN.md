@@ -88,7 +88,7 @@ channel pre-start — data port from CHANNEL reply.
 | IOUpdate mask `owns_mask_` | Done (`6eaac1b8`) |
 | JSON ITEM DEFAULT + PutSubExpr | Done (`b985908f`); **night flat on plant** |
 | `Value::getFromJSON` scalar clones | Done in tree (`31fceba5`); deploy on next restart |
-| Production-day live cJSON + WEBREQUEST arenas | **Open** — offline VM work |
+| Production-day live cJSON + WEBREQUEST arenas | **In progress** — offline fixes below |
 | Methodology + plant evidence | `MEMORY_LEAK_INVESTIGATION.md`, `llm-rules/cw_issues/IOD_WEBREQUEST_*` |
 
 **Plant evidence (do not re-prove idle on controller):**
@@ -101,12 +101,25 @@ channel pre-start — data port from CHANNEL reply.
 `iod_sdo.prev-memfix-*`, `iod_sdo.staged-json-ownership-fix` — confirm
 `svstat` / running path before treating as production.
 
-**Offline next (no EtherCAT / no 2G4C required):**
+**Offline progress (2026-07-29, macOS warehouse sim + unit tests):**
 
-1. Thread pool or same-thread free for `exec_web_request.c` workers.
-2. CW: clear large `result` / `curl.Result` after field extract (warehouse LPC).
-3. Optional: `apply()` via `cJSON_Duplicate` instead of Print+Parse.
-4. Catalog poll rate review (`P_BaleCatalogForAssignment`).
+1. **Done** — `exec_web_request.c`: fixed worker pool (default 4, `WEBREQUEST_POOL_SIZE`),
+   atomic `done`/`abort`, per-worker easy-handle reuse. Unit tests:
+   basic / POST / 50× repeated (`test_exec_web_request`).
+2. **Done (LPC)** — clear `curl.Result` after `result := curl.Result` in
+   warehouse `lib/api/samplingline_api.lpc` (and jemalong/rfid in CW sim).
+3. **Done** — `apply()` uses `clone_json` / `cJSON_Duplicate` instead of
+   Print+Parse (`json_expression.cpp`); ownership tests extended.
+4. **Done (side fix)** — float `Value::operator%=` used `other.iValue` (often 0)
+   → SIGFPE; now uses `::trunc(other.fValue)`. Generic, not macOS-only.
+5. **Open** — catalog poll rate review (`P_BaleCatalogForAssignment`); Linux
+   glibc arena plateau proof; plant deploy of this binary set.
+
+**Offline still open:**
+
+1. Linux VM load matrix per playbook (10k sequential, concurrency, RSS plateau).
+2. Catalog poll rate / assignment dialog request frequency.
+3. Plant deploy + MEMSNAPSHOT under production day load.
 
 ---
 

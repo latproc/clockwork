@@ -1,9 +1,11 @@
-WebRequest MACHINE {
+WEBREQUEST MACHINE {
     OPTION Request "";     # URL
     OPTION Status 0;       # HTTP status or errno
     OPTION Result "";      # Response body
     OPTION Errors "";      # Errors / diagnostics
     OPTION PostData "";    # POST data
+    OPTION ContentType NULL;
+    OPTION Method NULL;
 
     OPTION TrustHostCert FALSE; # Whether to trust host certificate
 
@@ -15,11 +17,10 @@ WebRequest MACHINE {
     Done STATE;
     Idle INITIAL;
 
-    COMMAND start WITHIN Error { SET SELF TO Start; }
-    COMMAND start WITHIN Done  { SET SELF TO Start; }
-    COMMAND start WITHIN Idle  { SET SELF TO Start; }
-    COMMAND stop WITHIN Running { SET SELF TO Idle; }
-    COMMAND reset { Request := ""; Result := ""; SET SELF TO Idle; }
+    COMMAND start WITHIN Error { Status := 0; Result := ""; Errors := ""; SET SELF TO Start; }
+    COMMAND start WITHIN Done  { Status := 0; Result := ""; Errors := ""; SET SELF TO Start; }
+    COMMAND start WITHIN Idle  { Status := 0; Result := ""; Errors := ""; SET SELF TO Start; }
+    COMMAND reset { Status := 0; Request := ""; Result := ""; Errors := ""; PostData := ""; SET SELF TO Idle; }
 }
 
 %BEGIN_PLUGIN

@@ -72,6 +72,7 @@ class WebRequestTests {
         scope_->setStateMachine(machine_class_);
         tests_.push_back(TestCase([this]() { return test_basic_request(); }));
         tests_.push_back(TestCase([this]() { return test_post_request(); }));
+        tests_.push_back(TestCase([this]() { return test_repeated_requests(); }));
     }
     ~WebRequestTests() { delete scope_; }
     std::list<TestCase> tests() { return tests_; }
@@ -175,6 +176,35 @@ class WebRequestTests {
         EXPECT_TRUE(result.asString() == R"({"hello":true})");
         EXPECT_TRUE(debug_mallocs_remaining() == 0);
         delete req;
+        PASS;
+    }
+
+    // Worker-pool / ownership regression: many sequential completions must not
+    // leave debug_malloc outstanding or fail to reach Done.
+    TestResult test_repeated_requests() {
+        const int N = 50;
+        for (int i = 0; i < N; ++i) {
+            MachineInstance *req = create_web_request_machine();
+            req->idle();
+            changeState(req, "Start");
+            exec_web_request((void *)req);
+            int spins = 0;
+            while (req->getCurrentStateVal() != nullptr && spins < 500) {
+                req->idle();
+                exec_web_request((void *)req);
+                usleep(5000);
+                Value s = *req->getCurrentStateVal();
+                if (s == "Done" || s == "Error") {
+                    break;
+                }
+                ++spins;
+            }
+            Value state = *req->getCurrentStateVal();
+            EXPECT_TRUE(state == "Done");
+            EXPECT_TRUE(req->getValue("Status") == 200);
+            delete req;
+        }
+        EXPECT_TRUE(debug_mallocs_remaining() == 0);
         PASS;
     }
 };

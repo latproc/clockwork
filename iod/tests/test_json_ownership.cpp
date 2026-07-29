@@ -131,9 +131,10 @@ TEST(JsonOwnership, AssignValueClonesBoolEmptyAndJsonKinds) {
     EXPECT_LE(cJSON_LiveNodeCount(), live_before);
 }
 
-// Regression: apply() clones via Print+Parse. Callers that use DEFAULT when the
-// field is JSON null must still free that clone (via Value), or live node count
-// grows on every ITEM ${field} OF json DEFAULT ... with a null field.
+// Regression: apply() returns an owned clone (via clone_json / cJSON_Duplicate).
+// Callers that use DEFAULT when the field is JSON null must still free that
+// clone (via Value), or live node count grows on every
+// ITEM ${field} OF json DEFAULT ... with a null field.
 TEST(JsonOwnership, ApplyJsonNullConsumedByValueDoesNotLeak) {
     const long live_before = cJSON_LiveNodeCount();
     cJSON *doc = cJSON_Parse(R"JSON({"a":null,"b":1})JSON");
@@ -147,7 +148,7 @@ TEST(JsonOwnership, ApplyJsonNullConsumedByValueDoesNotLeak) {
         EXPECT_EQ(Value::t_empty, resolved.kind);
         // DEFAULT path: empty means "use default" without retaining apply() tree
         if (resolved.kind == Value::t_empty) {
-            resolved = Value("");
+            resolved = Value("", Value::t_string);
         }
         EXPECT_EQ(Value::t_string, resolved.kind);
     }
@@ -170,21 +171,60 @@ TEST(JsonOwnership, ApplyMissingKeyIsNullptrNoLeak) {
     EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
 }
 
-// Value::getFromJSON clones the subtree; scalar/null clones must be freed.
+// apply() must return a deep clone, not a borrowed pointer into the source doc.
+TEST(JsonOwnership, ApplyReturnsIndependentClone) {
+    cJSON *doc = cJSON_Parse(R"JSON({"a":{"x":1,"y":[2,3]},"b":"s"})JSON");
+    ASSERT_NE(nullptr, doc);
+
+    cJSON *sub = apply("$.a", doc);
+    ASSERT_NE(nullptr, sub);
+    ASSERT_NE(sub, cJSON_GetObjectItem(doc, "a"));
+
+    cJSON *x = cJSON_GetObjectItem(sub, "x");
+    ASSERT_NE(nullptr, x);
+    EXPECT_EQ(1, (int)x->valueint);
+
+    // Mutating the clone must not change the source document.
+    cJSON_ReplaceItemInObject(sub, "x", cJSON_CreateNumber(99));
+    cJSON *src_x = cJSON_GetObjectItem(cJSON_GetObjectItem(doc, "a"), "x");
+    ASSERT_NE(nullptr, src_x);
+    EXPECT_EQ(1, (int)src_x->valueint);
+
+    cJSON_Delete(sub);
+    cJSON_Delete(doc);
+}
+
+// Scalar/null clones from apply() (same ownership class as Value::getFromJSON)
+// must be freed when converted through Value(cJSON*).
 TEST(JsonOwnership, ValueGetFromJSONScalarDoesNotLeak) {
     const long live_before = cJSON_LiveNodeCount();
-    Value doc(cJSON_Parse(R"JSON({"n":1,"s":"x","z":null,"b":true})JSON"));
-    ASSERT_EQ(Value::t_json, doc.kind);
+    cJSON *doc = cJSON_Parse(R"JSON({"n":1,"s":"x","z":null,"b":true})JSON");
+    ASSERT_NE(nullptr, doc);
 
     for (int i = 0; i < 200; ++i) {
-        EXPECT_EQ(Value(1), doc.getFromJSON("n"));
-        EXPECT_EQ(Value::t_string, doc.getFromJSON("s").kind);
-        EXPECT_EQ(Value::t_empty, doc.getFromJSON("z").kind);
-        EXPECT_EQ(Value(true), doc.getFromJSON("b"));
-        EXPECT_EQ(Value::t_empty, doc.getFromJSON("missing").kind);
+        {
+            Value n(apply("$.n", doc));
+            EXPECT_EQ(Value(1), n);
+        }
+        {
+            Value s(apply("$.s", doc));
+            EXPECT_EQ(Value::t_string, s.kind);
+        }
+        {
+            Value z(apply("$.z", doc));
+            EXPECT_EQ(Value::t_empty, z.kind);
+        }
+        {
+            Value b(apply("$.b", doc));
+            EXPECT_EQ(Value(true), b);
+        }
+        {
+            Value m(apply("$.missing", doc));
+            EXPECT_EQ(Value::t_empty, m.kind);
+        }
     }
 
-    doc = Value();
+    cJSON_Delete(doc);
     EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
 }
 
