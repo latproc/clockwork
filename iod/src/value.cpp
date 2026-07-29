@@ -1402,15 +1402,20 @@ Value &Value::operator%=(const Value &other) {
             iValue = iValue % other.iValue;
         }
         break;
-    case t_float:
-        if (other.fValue == 0.0) {
+    case t_float: {
+        // Same-kind float path must use other.fValue as the divisor.
+        // Using other.iValue here is wrong (often 0) and raises SIGFPE on idiv.
+        // Qualify ::trunc — Value has a trunc() method that would otherwise bind.
+        const int64_t divisor = (int64_t)::trunc(other.fValue);
+        if (divisor == 0) {
             iValue = 0;
         }
         else {
-            iValue = ((int64_t)fValue) % other.iValue;
+            iValue = ((int64_t)::trunc(fValue)) % divisor;
         }
         kind = t_integer; // modulus returns an integer result
         break;
+    }
     case t_bool:
         bValue ^= other.bValue;
     default:;

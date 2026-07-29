@@ -105,7 +105,7 @@ channel pre-start — data port from CHANNEL reply.
 | IOUpdate mask `owns_mask_` | Done (`6eaac1b8`) |
 | JSON ITEM DEFAULT + PutSubExpr | **In tree** (`b985908f`); **not** in live PID `127846` binary |
 | `Value::getFromJSON` scalar clones | **In tree** (`31fceba5`); **not** in live binary |
-| Production-day live cJSON + WEBREQUEST arenas | **Open** — offline VM work preferred |
+| Production-day live cJSON + WEBREQUEST arenas | **In progress** — offline fixes below; plant deploy pending |
 | Methodology + plant evidence | `MEMORY_LEAK_INVESTIGATION.md`, `llm-rules/cw_issues/IOD_WEBREQUEST_*` |
 
 **Plant evidence:**
@@ -124,12 +124,25 @@ channel pre-start — data port from CHANNEL reply.
 name). Confirm `svstat` / `readlink /proc/$(pgrep -x iod_main)/exe` after any
 deploy.
 
-**Offline next (no EtherCAT / no 2G4C required):**
+**Offline progress (2026-07-29, macOS warehouse sim + unit tests):**
 
-1. Thread pool or same-thread free for `exec_web_request.c` workers.
-2. CW: clear large `result` / `curl.Result` after field extract (warehouse LPC).
-3. Optional: `apply()` via `cJSON_Duplicate` instead of Print+Parse.
-4. Catalog poll rate review (`P_BaleCatalogForAssignment`).
+1. **Done** — `exec_web_request.c`: fixed worker pool (default 4, `WEBREQUEST_POOL_SIZE`),
+   atomic `done`/`abort`, per-worker easy-handle reuse. Unit tests:
+   basic / POST / 50× repeated (`test_exec_web_request`).
+2. **Done (LPC)** — clear `curl.Result` after `result := curl.Result` in
+   warehouse `lib/api/samplingline_api.lpc` (and jemalong/rfid in CW sim).
+3. **Done** — `apply()` uses `clone_json` / `cJSON_Duplicate` instead of
+   Print+Parse (`json_expression.cpp`); ownership tests extended.
+4. **Done (side fix)** — float `Value::operator%=` used `other.iValue` (often 0)
+   → SIGFPE; now uses `::trunc(other.fValue)`. Generic, not macOS-only.
+5. **Open** — catalog poll rate review (`P_BaleCatalogForAssignment`); Linux
+   glibc arena plateau proof; plant deploy of this binary set.
+
+**Offline still open:**
+
+1. Linux VM load matrix per playbook (10k sequential, concurrency, RSS plateau).
+2. Catalog poll rate / assignment dialog request frequency.
+3. Plant deploy + MEMSNAPSHOT under production day load.
 
 ---
 
@@ -137,14 +150,14 @@ deploy.
 
 ```
 Plant (only when restarting anyway)
-1  Rebuild Release so b985908f + 31fceba5 are linked; deploy new iod_sdo; confirm new PID
-2  Optionally enable /tmp/iod-verbose + DEBUG_MEMSNAPSHOT for a bounded window
-3  Do not treat current ~138 MiB as proof of the JSON fixes — those commits are not live yet
+1  Rebuild Release so b985908f + 31fceba5 + WEBREQUEST pool / apply-clone are linked
+2  Deploy new iod_sdo; confirm new PID + binary mtime
+3  Optionally enable /tmp/iod-verbose + DEBUG_MEMSNAPSHOT for a bounded window
+4  Do not treat current ~138 MiB as proof of the JSON/WEBREQUEST fixes — not live yet
 
 Offline / other machine (preferred for remaining memory work)
-4  Reproduce catalog WEBREQUEST load on Linux VM
-5  Implement WEBREQUEST thread pool + Result ownership tests
-6  Warehouse LPC Result clear / poll reduce as separate CW change
+5  Linux VM load matrix (10k sequential, concurrency, RSS plateau)
+6  Catalog poll rate / assignment dialog request frequency
 7  Optional: SHOW HEALTH quiet vs auto after channel clients settled
 ```
 

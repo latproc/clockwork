@@ -8,6 +8,7 @@
 #include <symboltable.h>
 #include <MachineInstance.h>
 #include <MessageLog.h>
+#include <value.h>
 
 namespace {
 
@@ -193,15 +194,14 @@ void show_json_error(const std::string & err, const std::string &str, cJSON *jso
 
 } // namespace
 
+// apply() must return a newly owned tree (or nullptr). Callers wrap the
+// result in Value(cJSON*) / free it. Prefer clone_json (cJSON_Duplicate)
+// over Print+Parse: same ownership, less CPU and allocator churn under
+// heavy ITEM ... OF json traffic.
 cJSON *apply(const std::string &str, cJSON *json) {
     try {
         cJSON *result = follow_json_expr_path(str, json, boost::none).value;
-        if (result) {
-            auto result_Str = cJSON_Print(result);
-            result = cJSON_Parse(result_Str);
-            free(result_Str);
-        }
-        return result;
+        return result ? clone_json(result) : nullptr;
     }
     catch (const std::runtime_error &err) {
         show_json_error(err.what(), str, json);
@@ -212,12 +212,7 @@ cJSON *apply(const std::string &str, cJSON *json) {
 cJSON *apply(const std::string &str, cJSON *json, SymbolTable* symbols) {
     try {
         cJSON *result = follow_json_expr_path(str, json, symbols).value;
-        if (result) {
-            auto result_str = cJSON_Print(result);
-            result = cJSON_Parse(result_str);
-            free(result_str);
-        }
-        return result;
+        return result ? clone_json(result) : nullptr;
     }
     catch (const std::runtime_error &err) {
         show_json_error(err.what(), str, json);
@@ -228,12 +223,7 @@ cJSON *apply(const std::string &str, cJSON *json, SymbolTable* symbols) {
 cJSON *apply(const std::string &str, cJSON *json, MachineInstance* context) {
     try {
         cJSON *result = follow_json_expr_path(str, json, boost::none, context).value;
-        if (result) {
-            auto result_str = cJSON_Print(result);
-            result = cJSON_Parse(result_str);
-            free(result_str);
-        }
-        return result;
+        return result ? clone_json(result) : nullptr;
     }
     catch (const std::runtime_error &err) {
         show_json_error(err.what(), str, json, context);
