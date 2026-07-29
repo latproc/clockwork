@@ -1,10 +1,66 @@
 #include "modbus_helpers.h"
+#include <MessagingInterface.h>
+#include <iostream>
 #include <modbus.h>
 #include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <string>
+#include <value.h>
+
+void setSocketLinger0(zmq::socket_t &sock) {
+    int linger = 0;
+    try {
+        sock.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+    }
+    catch (const zmq::error_t &) {
+    }
+}
+
+bool sendWithDeadline(zmq::socket_t &sock, const std::string &msg, std::string &response,
+                      int64_t timeout_ms) {
+    try {
+        safeSend(sock, msg.c_str(), msg.size());
+    }
+    catch (const zmq::error_t &) {
+        std::cerr << "modbus REQ send failed: " << zmq_strerror(zmq_errno()) << "\n";
+        return false;
+    }
+
+    const uint64_t deadline = microsecs() + (uint64_t)timeout_ms * 1000ULL;
+    while (microsecs() < deadline) {
+        int64_t remain_ms = (int64_t)((deadline - microsecs()) / 1000ULL);
+        if (remain_ms < 1) {
+            remain_ms = 1;
+        }
+        if (remain_ms > 200) {
+            remain_ms = 200;
+        }
+        try {
+            zmq::pollitem_t items[] = {{(void *)sock, 0, ZMQ_POLLIN, 0}};
+            int n = zmq::poll(items, 1, (long)remain_ms);
+            if (n > 0 && (items[0].revents & ZMQ_POLLIN)) {
+                char *buf = nullptr;
+                size_t len = 0;
+                if (safeRecv(sock, &buf, &len, false, 0)) {
+                    response = buf ? buf : "";
+                    delete[] buf;
+                    return true;
+                }
+            }
+        }
+        catch (const zmq::error_t &) {
+            if (zmq_errno() == EINTR) {
+                continue;
+            }
+            std::cerr << "modbus REQ recv failed: " << zmq_strerror(zmq_errno()) << "\n";
+            return false;
+        }
+    }
+    std::cerr << "modbus REQ timed out after " << timeout_ms << "ms\n";
+    return false;
+}
 
 std::string show_modbus_error(int rc) {
     std::stringstream result;
