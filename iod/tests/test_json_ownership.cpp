@@ -170,4 +170,22 @@ TEST(JsonOwnership, ApplyMissingKeyIsNullptrNoLeak) {
     EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
 }
 
+// Value::getFromJSON clones the subtree; scalar/null clones must be freed.
+TEST(JsonOwnership, ValueGetFromJSONScalarDoesNotLeak) {
+    const long live_before = cJSON_LiveNodeCount();
+    Value doc(cJSON_Parse(R"JSON({"n":1,"s":"x","z":null,"b":true})JSON"));
+    ASSERT_EQ(Value::t_json, doc.kind);
+
+    for (int i = 0; i < 200; ++i) {
+        EXPECT_EQ(Value(1), doc.getFromJSON("n"));
+        EXPECT_EQ(Value::t_string, doc.getFromJSON("s").kind);
+        EXPECT_EQ(Value::t_empty, doc.getFromJSON("z").kind);
+        EXPECT_EQ(Value(true), doc.getFromJSON("b"));
+        EXPECT_EQ(Value::t_empty, doc.getFromJSON("missing").kind);
+    }
+
+    doc = Value();
+    EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
+}
+
 } // namespace

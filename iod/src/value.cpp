@@ -1917,11 +1917,13 @@ cJSON *clone_json(const cJSON *json) {
     return json ? cJSON_Duplicate(json) : nullptr;
 }
 
+// Borrowing view: does not take ownership of json. Prefer Value(cJSON*) when
+// the caller owns a newly allocated tree (apply/Parse/clone) and wants free-on-scalar.
 Value get_value(cJSON *json) { return assign_value(json); }
 
 Value Value::getFromJSON(const std::string &key) {
-    Value res;
-    if (kind != t_json || !json) { return res; }
-    res = assign_value(clone_json(::getFromJSON(json, key)));
-    return res;
+    if (kind != t_json || !json) { return Value(); }
+    // clone_json allocates; Value(cJSON*) takes ownership and frees scalars/nulls
+    // after conversion. Using assign_value alone leaked those clones.
+    return Value(clone_json(::getFromJSON(json, key)));
 }
