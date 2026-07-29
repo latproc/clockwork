@@ -16,12 +16,14 @@ endif
 
 # This branch: iod-elc (kernel elc) + cw + support tools. Legacy iod/iod_sdo off.
 # Override: make release CMAKE_EXTRA='-DBUILD_LEGACY_IOD=ON'
-# Default release builds only iod-elc (fast iterate). Full tree:
-#   make release RELEASE_TARGETS=all
+# Default release builds/installs iod-elc plus the support clients that share
+# cw_client (ZMQ channel stack). Fast iod-only iterate:
+#   make release-install RELEASE_TARGETS=iod-elc
 # Prefer /usr/local (API 0.18+ install) then /opt/elc.
 CMAKE_ELC_FLAGS ?= -DBUILD_IOD_ELC=ON -DBUILD_LEGACY_IOD=OFF -DCMAKE_PREFIX_PATH=/usr/local\;/opt/elc
 export PKG_CONFIG_PATH := /usr/local/lib/pkgconfig:/opt/elc/lib/pkgconfig:$(PKG_CONFIG_PATH)
-RELEASE_TARGETS ?= iod-elc
+# Matches CMake install(TARGETS ...) for non-legacy binaries (not iod/iod_sdo).
+RELEASE_TARGETS ?= iod-elc cw dbd iosh iocmd device_connector modbusd persistd
 
 all:
 	[ -d "build" ] || mkdir build
@@ -37,9 +39,11 @@ release:
 		$(MAKE) -C build/Release $(JOBS) $(RELEASE_TARGETS); \
 	fi
 
-# Install Release binary into iod/ (project root). Safe while iod is running:
+# Install Release binaries into iod/ (project root). Safe while iod is running:
 # write to a temp name then rename over the live path (avoids ETXTBSY on open
 # inode). Running process keeps the old image until svc -k / restart.
+# RELEASE_TARGETS=all uses CMake install (same destination). Named targets are
+# copied one-by-one so a subset rebuild still lands next to the live tree.
 release-install: release
 	@if [ "$(RELEASE_TARGETS)" = "all" ]; then \
 		$(MAKE) -C build/Release $(JOBS) install; \
@@ -51,7 +55,15 @@ release-install: release
 			tmp="./.$$t.new.$$$$"; \
 			cp -a "$$src" "$$tmp" && mv -f "$$tmp" "./$$t"; \
 			ls -la "./$$t"; \
-			echo "  (running iod still uses old text until: svc -k /etc/service/iod)"; \
+			case "$$t" in \
+				iod-elc|iod|iod_sdo|cw|cw_ecat|dbd|persistd|modbusd|device_connector) \
+					if [ -d "/etc/service/$$t" ] || [ -d "/service/$$t" ]; then \
+						echo "  live process keeps old image until: svc -k /etc/service/$$t"; \
+					else \
+						echo "  daemon: restart if already running (atomic replace; no ETXTBSY)"; \
+					fi ;; \
+				*) ;; \
+			esac; \
 		done; \
 	fi
 
