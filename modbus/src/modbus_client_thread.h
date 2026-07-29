@@ -54,6 +54,11 @@ class ModbusClientThread {
     zmq::socket_t *cmd_interface;
     const char *iod_cmd_socket_name;
 
+    // Recreate inproc REQ after timeout/EFSM; finite-timeout send to iod.
+    void recreateCmdSocket();
+    bool sendToIod(const std::string &msg, std::string &response);
+    bool sendCommand(const std::string &cmd, const std::list<Value> &params);
+
     std::list<std::pair<int, bool>> bit_changes;
     void requestUpdate(int addr, bool which);
 

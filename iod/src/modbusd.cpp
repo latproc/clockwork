@@ -65,6 +65,65 @@ static boost::condition_variable_any cond;
 
 const char *local_commands = "inproc://local_cmds";
 
+// Finite total wait for inproc REQ→REP→SubscriptionManager. sendMessage(timeout=0)
+// never actually times out (safeRecv with block=true loops forever).
+static const int64_t IOD_CMD_TIMEOUT_MS = 3000;
+
+static void setSocketLinger0(zmq::socket_t &sock) {
+    int linger = 0;
+    try {
+        sock.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+    }
+    catch (const zmq::error_t &) {
+    }
+}
+
+// Send on a ZMQ_REQ and wait up to timeout_ms for the reply. On timeout or
+// EFSM the socket is unusable until recreated — caller must replace it.
+static bool sendWithDeadline(zmq::socket_t &sock, const std::string &msg, std::string &response,
+                             int64_t timeout_ms) {
+    try {
+        safeSend(sock, msg.c_str(), msg.size());
+    }
+    catch (const zmq::error_t &) {
+        std::cerr << "modbusd REQ send failed: " << zmq_strerror(zmq_errno()) << "\n";
+        return false;
+    }
+
+    const uint64_t deadline = microsecs() + (uint64_t)timeout_ms * 1000ULL;
+    while (microsecs() < deadline) {
+        int64_t remain_ms = (int64_t)((deadline - microsecs()) / 1000ULL);
+        if (remain_ms < 1) {
+            remain_ms = 1;
+        }
+        if (remain_ms > 200) {
+            remain_ms = 200;
+        }
+        try {
+            zmq::pollitem_t items[] = {{(void *)sock, 0, ZMQ_POLLIN, 0}};
+            int n = zmq::poll(items, 1, (long)remain_ms);
+            if (n > 0 && (items[0].revents & ZMQ_POLLIN)) {
+                char *buf = nullptr;
+                size_t len = 0;
+                if (safeRecv(sock, &buf, &len, false, 0)) {
+                    response = buf ? buf : "";
+                    delete[] buf;
+                    return true;
+                }
+            }
+        }
+        catch (const zmq::error_t &) {
+            if (zmq_errno() == EINTR) {
+                continue;
+            }
+            std::cerr << "modbusd REQ recv failed: " << zmq_strerror(zmq_errno()) << "\n";
+            return false;
+        }
+    }
+    std::cerr << "modbusd REQ timed out after " << timeout_ms << "ms\n";
+    return false;
+}
+
 enum ProgramState { s_initialising, s_running, s_finished } program_state = s_initialising;
 
 int debug = 0;
@@ -254,11 +313,45 @@ std::string getIODSyncCommand(int group, int addr, unsigned int new_value);
 
 struct ModbusServerThread {
 
+    void recreateCmdSocket() {
+        if (cmd_interface) {
+            setSocketLinger0(*cmd_interface);
+            delete cmd_interface;
+            cmd_interface = 0;
+        }
+        try {
+            cmd_interface = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+            setSocketLinger0(*cmd_interface);
+            cmd_interface->connect(local_commands);
+        }
+        catch (const zmq::error_t &) {
+            std::cerr << "modbusd failed to create inproc REQ: " << zmq_strerror(zmq_errno())
+                      << "\n";
+            delete cmd_interface;
+            cmd_interface = 0;
+        }
+    }
+
+    // Finite-timeout send; recreate after any failure so the next coil/register
+    // update can try again without needing a process restart.
+    bool sendToIod(const std::string &msg, std::string &response) {
+        if (!cmd_interface) {
+            recreateCmdSocket();
+        }
+        if (!cmd_interface) {
+            return false;
+        }
+        if (sendWithDeadline(*cmd_interface, msg, response, IOD_CMD_TIMEOUT_MS)) {
+            return true;
+        }
+        recreateCmdSocket();
+        return false;
+    }
+
     void operator()() {
         std::cout << "------------------ Modbus Server Thread Started -----------------\n"
                   << std::flush;
-        cmd_interface = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
-        cmd_interface->connect(local_commands);
+        recreateCmdSocket();
 
         int function_code_offset = 0; //modbus_get_header_length(modbus_context);
 
@@ -568,13 +661,10 @@ struct ModbusServerThread {
                             while (iter != iod_sync_commands.end()) {
                                 std::string cmd = *iter++;
                                 std::string response;
-                                int32_t cmd_timeout = 0;
-                                if (!sendMessage(cmd, *cmd_interface, response, cmd_timeout)) {
+                                if (!sendToIod(cmd, response)) {
                                     FileLogger fl(program_name);
                                     fl.f() << "Message send of " << cmd << " failed\n";
                                 }
-                                //char *res = sendIODMessage(cmd);
-                                //if (res) free(res);
                             }
                             iod_sync_commands.clear();
                         }
@@ -583,13 +673,10 @@ struct ModbusServerThread {
                                 std::string cmd(getIODSyncCommand(
                                     0, addr + 1, (query_backup[function_code_offset + 3]) ? 1 : 0));
                                 std::string response;
-                                int32_t cmd_timeout = 0;
-                                if (!sendMessage(cmd, *cmd_interface, response, cmd_timeout)) {
+                                if (!sendToIod(cmd, response)) {
                                     FileLogger fl(program_name);
                                     fl.f() << "Message send of " << cmd << " failed\n";
                                 }
-                                //char *res = sendIOD(0, addr+1, (query_backup[function_code_offset + 3]) ? 1 : 0);
-                                //if (res) free(res);
                                 if (DEBUG_BASIC)
                                     std::cout << timestamp << " Updating coil " << addr
                                               << " from connection " << conn
@@ -603,8 +690,7 @@ struct ModbusServerThread {
                             std::string res(getIODSyncCommand(4, addr + 1,
                                                               modbus_mapping->tab_registers[addr]));
                             std::string response;
-                            int32_t cmd_timeout = 0;
-                            if (!sendMessage(res, *cmd_interface, response, cmd_timeout)) {
+                            if (!sendToIod(res, response)) {
                                 FileLogger fl(program_name);
                                 fl.f() << "Message send of " << res << " failed\n";
                             }
@@ -645,6 +731,11 @@ struct ModbusServerThread {
         FD_ZERO(&connections);
     }
     ~ModbusServerThread() {
+        if (cmd_interface) {
+            setSocketLinger0(*cmd_interface);
+            delete cmd_interface;
+            cmd_interface = 0;
+        }
         if (modbus_mapping) {
             modbus_mapping_free(modbus_mapping);
         }
@@ -1004,6 +1095,7 @@ int main(int argc, const char *argv[]) {
 
     // the local command channel accepts commands from the modbus thread and relays them to iod.
     zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
+    setSocketLinger0(iosh_cmd);
     iosh_cmd.bind(local_commands);
 
     SubscriptionManager subscription_manager("MODBUS_CHANNEL", eCLOCKWORK, "localhost", 5555);

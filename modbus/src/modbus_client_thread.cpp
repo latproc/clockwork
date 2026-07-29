@@ -248,11 +248,70 @@ modbus_t *ModbusClientThread::openConnection() {
     return ctx;
 }
 
+void ModbusClientThread::recreateCmdSocket() {
+    if (cmd_interface) {
+        setSocketLinger0(*cmd_interface);
+        delete cmd_interface;
+        cmd_interface = 0;
+    }
+    if (!iod_cmd_socket_name) {
+        return;
+    }
+    try {
+        cmd_interface = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+        setSocketLinger0(*cmd_interface);
+        cmd_interface->connect(iod_cmd_socket_name);
+    }
+    catch (const zmq::error_t &) {
+        std::cerr << "mbmon ModbusClientThread failed to create inproc REQ: "
+                  << zmq_strerror(zmq_errno()) << "\n";
+        delete cmd_interface;
+        cmd_interface = 0;
+    }
+}
+
+bool ModbusClientThread::sendToIod(const std::string &msg, std::string &response) {
+    if (!cmd_interface) {
+        recreateCmdSocket();
+    }
+    if (!cmd_interface) {
+        return false;
+    }
+    if (sendWithDeadline(*cmd_interface, msg, response, IOD_CMD_TIMEOUT_MS)) {
+        return true;
+    }
+    recreateCmdSocket();
+    return false;
+}
+
+bool ModbusClientThread::sendCommand(const std::string &cmd, const std::list<Value> &params) {
+    if (params.empty()) {
+        return false;
+    }
+    std::string msg = MessageEncoding::encodeCommand(cmd, params);
+    if (options.verbose) {
+        std::cerr << " sending: " << msg << "\n";
+    }
+    std::string response;
+    if (!sendToIod(msg, response)) {
+        return false;
+    }
+    if (options.verbose && !response.empty()) {
+        std::cerr << response << "\n";
+    }
+    return true;
+}
+
 ModbusClientThread::~ModbusClientThread() {
     free(tab_rp_bits);
     free(tab_ro_bits);
     free(tab_rq_registers);
     free(tab_rw_rq_registers);
+    if (cmd_interface) {
+        setSocketLinger0(*cmd_interface);
+        delete cmd_interface;
+        cmd_interface = 0;
+    }
     if (ctx) {
         modbus_close(ctx);
         modbus_free(ctx);
@@ -402,10 +461,7 @@ int ModbusClientThread::setRegisters(int addr, uint16_t *val, unsigned int n) {
 }
 
 void ModbusClientThread::operator()() {
-    if (iod_cmd_socket_name) {
-        cmd_interface = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
-        cmd_interface->connect(iod_cmd_socket_name);
-    }
+    recreateCmdSocket();
 
     while (!finished) {
         if (!connected) {
@@ -537,7 +593,7 @@ bool ModbusClientThread::collect_selected_updates(
         return false;
     }
     sendChanges(result.changes, dest, options, [&](ModbusMonitor *mm, bool which) {
-        sendStateUpdate(cmd_interface, mm, which);
+        sendStateUpdate(this, mm, which);
     });
     return true;
 }
@@ -554,6 +610,6 @@ bool ModbusClientThread::collect_selected_updates(
         return false;
     }
     sendChanges(result.changes, dest, options,
-                   [&](ModbusMonitor *mm) { sendPropertyUpdate(cmd_interface, mm); });
+                   [&](ModbusMonitor *mm) { sendPropertyUpdate(this, mm); });
     return true;
 }

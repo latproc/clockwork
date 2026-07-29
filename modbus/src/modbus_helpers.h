@@ -5,6 +5,8 @@
 #include <iomanip>
 #include <ostream>
 #include <set>
+#include <string>
+#include <zmq.hpp>
 
 // Modbus errors are based on MODBUS_ENOBASE. Display the standard error string
 // if the code is less than MODBUS_ENOBASE, the modbus error string if the code
@@ -68,6 +70,14 @@ struct ModbusSettings {
 int getSettings(const char *str, SerialSettings &settings);
 
 bool isPrintable(const char *str);
+
+// ZMQ REQ helpers shared by mbmon and ModbusClientThread. Half-open REQ after
+// timeout/EFSM cannot send again until the socket is recreated.
+constexpr int64_t IOD_CMD_TIMEOUT_MS = 3000;
+void setSocketLinger0(zmq::socket_t &sock);
+// Returns true only when a reply was received. Caller must recreate sock on false.
+bool sendWithDeadline(zmq::socket_t &sock, const std::string &msg, std::string &response,
+                      int64_t timeout_ms = IOD_CMD_TIMEOUT_MS);
 
 #if 0
 class ModbusService {

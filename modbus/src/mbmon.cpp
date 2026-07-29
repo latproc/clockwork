@@ -45,31 +45,28 @@ Options options;
 
 /* Clockwork interface */
 
-void sendMessage(zmq::socket_t &socket, const std::string &message) {
-    safeSend(socket, message.c_str(), message.size());
-}
-
-std::list<Value> params;
+// One-shot REQ with deadline. Returns malloc'd reply or nullptr.
+// Caller owns the socket lifecycle (no recreate).
 char *send_command(zmq::socket_t &sock, const std::string &cmd, const std::list<Value> &params) {
     if (params.size() == 0)
         return 0;
     std::string msg = MessageEncoding::encodeCommand(cmd, params);
     if (options.verbose)
         std::cerr << " sending: " << msg << "\n";
-    sendMessage(sock, msg);
-    zmq::message_t reply;
-    if (sock.recv(&reply)) {
-        auto size = reply.size();
-        char *data = (char *)malloc(size + 1);
-        memcpy(data, reply.data(), size);
-        data[size] = 0;
-
-        return data;
+    std::string response;
+    if (!sendWithDeadline(sock, msg, response, IOD_CMD_TIMEOUT_MS)) {
+        return 0;
     }
-    return 0;
+    char *data = (char *)malloc(response.size() + 1);
+    if (!data) {
+        return 0;
+    }
+    memcpy(data, response.c_str(), response.size());
+    data[response.size()] = 0;
+    return data;
 }
 
-void process_command(zmq::socket_t &sock,const std::string &cmd, const std::list<Value> &params) {
+void process_command(zmq::socket_t &sock, const std::string &cmd, const std::list<Value> &params) {
     char *data = send_command(sock, cmd, params);
     if (data) {
         if (options.verbose)
@@ -80,6 +77,7 @@ void process_command(zmq::socket_t &sock,const std::string &cmd, const std::list
 
 void sendStatus(const char *s) {
     zmq::socket_t sock(*MessagingInterface::getContext(), ZMQ_REQ);
+    setSocketLinger0(sock);
     sock.connect("tcp://localhost:5555");
 
     {
@@ -128,7 +126,10 @@ std::map<unsigned int, UserData *> ro_bits;
 std::map<unsigned int, UserData *> inputs;
 //std::map<int, UserData *> registers;
 
-void sendStateUpdate(zmq::socket_t *sock, ModbusMonitor *mm, bool which) {
+void sendStateUpdate(ModbusClientThread *client, ModbusMonitor *mm, bool which) {
+    if (!client) {
+        return;
+    }
     std::list<Value> cmd;
     cmd.push_back(Value{mm->name()});
     cmd.push_back(Value{"TO"});
@@ -136,10 +137,13 @@ void sendStateUpdate(zmq::socket_t *sock, ModbusMonitor *mm, bool which) {
         cmd.push_back(Value{"on"});
     else
         cmd.push_back(Value{"off"});
-    process_command(*sock, "SET", cmd);
+    client->sendCommand("SET", cmd);
 }
 
-void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
+void sendPropertyUpdate(ModbusClientThread *client, ModbusMonitor *mm) {
+    if (!client) {
+        return;
+    }
     std::list<Value> cmd;
     int16_t value = 0;
     char buf[100];
@@ -186,7 +190,7 @@ void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm) {
     else {
         cmd.push_back(Value{0}); // TBD
     }
-    process_command(*sock, "PROPERTY", cmd);
+    client->sendCommand("PROPERTY", cmd);
 }
 
 ModbusClientThread *mb = 0;
@@ -395,9 +399,8 @@ int main(int argc, const char *argv[]) {
     }
     else {
 
-        int linger = 0; // do not wait at socket close time
         zmq::socket_t iod(*MessagingInterface::getContext(), ZMQ_REQ);
-        iod.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+        setSocketLinger0(iod);
         iod.connect("tcp://localhost:5555");
 
         std::list<Value> cmd;
@@ -477,6 +480,7 @@ int main(int argc, const char *argv[]) {
     const char *local_commands = "inproc://local_cmds";
 
     zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
+    setSocketLinger0(iosh_cmd);
     iosh_cmd.bind(local_commands);
 
     SubscriptionManager subscription_manager(chn_instance_name.c_str(), eCLOCKWORK, "localhost",

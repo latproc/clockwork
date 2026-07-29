@@ -15,5 +15,6 @@ void sendChanges(std::set<ModbusMonitor *> &changes, uint16_t *buffer_addr,
                     std::function<void(ModbusMonitor *)> send_property_update);
 
 void sendStatus(const char *s);
-void sendStateUpdate(zmq::socket_t *sock, ModbusMonitor *mm, bool which);
-void sendPropertyUpdate(zmq::socket_t *sock, ModbusMonitor *mm);
+class ModbusClientThread;
+void sendStateUpdate(ModbusClientThread *client, ModbusMonitor *mm, bool which);
+void sendPropertyUpdate(ModbusClientThread *client, ModbusMonitor *mm);
