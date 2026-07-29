@@ -8,8 +8,9 @@ must identify memory that remains owned after its legitimate lifetime, prove the
 responsible call path, make the smallest safe ownership correction, and verify the
 result under a comparable workload.
 
-**Updated:** 2026-07-28  
+**Updated:** 2026-07-29  
 **Branch:** `prod-experimental-mqtt-fix`  
+**Recent fix commit:** `9106aee5` (WEBREQUEST pool, apply clone, float `%=`)  
 **Sampling tree:** `/opt/latproc/sampling/iod-memory/` (monitor CSV + bpf traces)
 
 ## Safety rules for a live machine
@@ -289,7 +290,7 @@ return Value(clone_json(::getFromJSON(json, key)));
 `get_value(cJSON *)` remains a **borrow** API (does not free). Callers that own
 a new tree from `apply` / `Parse` / `clone_json` must use `Value(cJSON *)`.
 
-### Example D — production-activity live cJSON (still open)
+### Example D — production-activity live cJSON (plant open; offline fixes landed)
 
 **Evidence:** 2G4C-120 PID `3342133`, ~22.7 h, 2026-07-28/29 (see
 `llm-rules/cw_issues/IOD_WEBREQUEST_MEMORY_GROWTH_20260721.md`).
@@ -302,14 +303,89 @@ a new tree from `apply` / `Parse` / `clone_json` must use `Value(cJSON *)`.
 | Worker anon arenas | Grew with WEBREQUEST traffic |
 | Free / releasable | Stayed small (~4 MiB / tens of KiB) |
 
-**Interpretation:**
+**Interpretation (as of plant long-run):**
 
 1. Idle ITEM DEFAULT / scalar ownership fixes are effective (overnight flat).
-2. Remaining growth is **live application retention** under production JSON/HTTP
+2. Remaining growth was **live application retention** under production JSON/HTTP
    load, plus worker-thread arena high-water from per-request `pthread_create`.
-3. Further work does **not** require the plant: Linux VM + warehouse CW + HTTP
-   fixtures is enough (thread-pool WEBREQUEST, Result lifecycle, apply
-   Duplicate). Methodology: playbook in `IOD_WEBREQUEST_REPRODUCTION_PLAYBOOK.md`.
+3. Offline code changes for (2) are in tree as of `9106aee5` (Examples E–G).
+   **Plant day-growth is not re-measured yet** — treat plant slope as open until
+   a staged deploy + production-day MEMSNAPSHOT comparison.
+
+### Example E — WEBREQUEST thread-per-request → fixed worker pool
+
+**Commit:** `9106aee5`  
+**File:** `iod/src/exec_web_request.c` (built into `web_request.so` via plugin include)
+
+Previous design:
+
+```text
+CW SEND start
+  pthread_create(worker) per request
+  worker: curl_easy_init → perform → curl_easy_cleanup → done=1
+  control: pthread_join → setJsonValue(Result) → free body
+```
+
+Problems:
+
+- short-lived threads → glibc **per-thread arenas** high-water under catalog load;
+- plain `int done` / `int abort` shared across threads (data race).
+
+Current design:
+
+```text
+CW SEND start
+  enqueue job on fixed pool (default 4 workers; env WEBREQUEST_POOL_SIZE)
+  worker (long-lived): reuse thread-local CURL easy handle (curl_easy_reset)
+  atomic_int done / abort
+  control: poll done (no per-request join) → setJsonValue → free body
+```
+
+**Tests:** `iod/tests/test_exec_web_request` — basic GET, POST, 50× repeated.
+
+**Offline stress (macOS warehouse sim, 2026-07-29):** ~876 catalog-sized HTTP
+completions in 90 s (~9.7/s), last_status 200, **thread count flat at 12**,
+RSS +~464 KiB then plateau. Does **not** prove Linux glibc arena behaviour.
+
+**Deploy note:** plant must rebuild and install **`web_request.so.1.0`** as well
+as `iod`/`cw`/`iod_sdo`; the plugin compiles `exec_web_request.c` into the .so.
+
+### Example F — `apply()` Print+Parse → `clone_json`
+
+**Commit:** `9106aee5`  
+**File:** `iod/src/json_expression.cpp`
+
+`apply()` must return a newly owned tree. It previously did
+`cJSON_Print` + `cJSON_Parse` (CPU + allocator churn). It now uses
+`clone_json` / `cJSON_Duplicate` (same ownership contract, less cost).
+
+**Tests:** `test_json_ownership` (`ApplyJsonNull…`, `ApplyReturnsIndependentClone`,
+scalar apply path).
+
+### Example G — float `Value::operator%=` SIGFPE
+
+**Commit:** `9106aee5`  
+**File:** `iod/src/value.cpp`
+
+Same-kind float modulus checked `other.fValue == 0` but divided by
+`other.iValue` (often 0) → **`SIGFPE` / exit 136** (seen on macOS warehouse
+sim startup). Fix: divisor is `(int64_t)::trunc(other.fValue)`. **Generic**
+logic bug, not macOS-specific.
+
+### CW LPC (not in this git repo)
+
+Warehouse API machines should clear the WEBREQUEST working copy after handoff:
+
+```lpc
+ENTER done {
+  result := curl.Result;
+  curl.Result := "";
+}
+```
+
+Implemented offline under warehouse `lib/api/samplingline_api.lpc` (and related
+API LPC). That lives in **SVN** project trees, not the iod git tree. Reduces
+live JSON working set when `result` is the consumer-owned copy.
 
 ## Fixing and testing rules
 
@@ -365,7 +441,15 @@ not as a completed leak fix.
 | Issue | Fix commit | Status |
 |-------|------------|--------|
 | `IOUpdate` mask `delete[]` ownership | `6eaac1b8` | Fixed in tree; ownership still explicit via `owns_mask_` |
-| JSON ITEM DEFAULT / null `apply()` leak; PutSubExpr full clone | `b985908f` | Fixed in tree + unit test; plant deploy as staged binary if not yet live |
+| JSON ITEM DEFAULT / null `apply()` leak; PutSubExpr full clone | `b985908f` | Fixed in tree + unit test; **night flat on plant** long-run |
+| `Value::getFromJSON` scalar clone free | `31fceba5` | Fixed in tree; deploy with Release binary |
+| WEBREQUEST worker pool + atomic done/abort + easy reuse | `9106aee5` | Fixed in tree + unit/stress offline; **plant day RSS not re-proven** |
+| `apply()` via `clone_json` not Print+Parse | `9106aee5` | Fixed in tree + unit tests |
+| Float `Value::operator%=` divisor (SIGFPE) | `9106aee5` | Fixed in tree; generic |
+
+Until plant production-day slopes confirm WEBREQUEST/arena + live cJSON under
+busy HTTP load, treat day-growth remediation as a **candidate** per the
+completion criteria above.
 
 Until plant slopes confirm B under busy HMI/JSON load, treat B as a **candidate
 fix** per the completion criteria above if the service has not yet been

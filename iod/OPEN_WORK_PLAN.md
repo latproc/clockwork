@@ -126,15 +126,17 @@ channel pre-start — data port from CHANNEL reply.
 ## Suggested next sequence
 
 ```
-Plant (only when restarting anyway)
-1  Deploy Release with 31fceba5 if not already; re-enable DEBUG_MEMSNAPSHOT
-2  Do not chase overnight drip — already flat after b985908f
+Plant (approved restart window)
+1  Pull prod-experimental-mqtt-fix tip (includes 9106aee5 + 31fceba5)
+2  Build Release iod/cw/iod_sdo AND rebuild web_request.so.1.0
+3  Stage binaries with named rollback (iod_sdo.prev-*, web_request.so.prev-*)
+4  Deploy; re-enable DEBUG_MEMSNAPSHOT; keep memory_monitor on
+5  Compare production-day cjson/RSS to 2026-07-28/29 baseline
 
-Offline / other machine (preferred for remaining memory work)
-3  Reproduce catalog WEBREQUEST load on Linux VM
-4  Implement WEBREQUEST thread pool + Result ownership tests
-5  Warehouse LPC Result clear / poll reduce as separate CW change
-6  Optional: SHOW HEALTH quiet vs auto after channel clients settled
+Offline residual
+6  Linux VM playbook load matrix (glibc arenas)
+7  Catalog poll rate / P_BaleCatalogForAssignment review (CW/SVN)
+8  Optional: SHOW HEALTH quiet vs auto after channel clients settled
 ```
 
 ---
