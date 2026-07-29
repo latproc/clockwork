@@ -566,6 +566,66 @@ static struct timeval last_send;
 static std::string last_message;
 
 static const char *iod_connection = "inproc://iod_interface";
+// Finite total wait for inproc REQ→REP→setup. sendMessage(timeout=0) never
+// actually times out (safeRecv with block=true loops forever), which freezes
+// the connection thread when the processing path is stuck mid-reply.
+static const int64_t IOD_CMD_TIMEOUT_MS = 3000;
+
+static void setSocketLinger0(zmq::socket_t &sock) {
+    int linger = 0;
+    try {
+        sock.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+    }
+    catch (const zmq::error_t &) {
+    }
+}
+
+// Send on a ZMQ_REQ and wait up to timeout_ms for the reply. On timeout or
+// EFSM the socket is unusable until recreated — caller must replace it.
+// Returns true only when a reply was received.
+static bool sendWithDeadline(zmq::socket_t &sock, const std::string &msg, std::string &response,
+                             int64_t timeout_ms) {
+    try {
+        safeSend(sock, msg.c_str(), msg.size());
+    }
+    catch (const zmq::error_t &ex) {
+        std::cerr << "device_connector REQ send failed: " << zmq_strerror(zmq_errno()) << "\n";
+        return false;
+    }
+
+    const uint64_t deadline = microsecs() + (uint64_t)timeout_ms * 1000ULL;
+    while (microsecs() < deadline) {
+        int64_t remain_ms = (int64_t)((deadline - microsecs()) / 1000ULL);
+        if (remain_ms < 1) {
+            remain_ms = 1;
+        }
+        if (remain_ms > 200) {
+            remain_ms = 200; // poll slice so we can observe deadline promptly
+        }
+        try {
+            zmq::pollitem_t items[] = {{(void *)sock, 0, ZMQ_POLLIN, 0}};
+            int n = zmq::poll(items, 1, (long)remain_ms);
+            if (n > 0 && (items[0].revents & ZMQ_POLLIN)) {
+                char *buf = nullptr;
+                size_t len = 0;
+                if (safeRecv(sock, &buf, &len, false, 0)) {
+                    response = buf ? buf : "";
+                    delete[] buf;
+                    return true;
+                }
+            }
+        }
+        catch (const zmq::error_t &) {
+            if (zmq_errno() == EINTR) {
+                continue;
+            }
+            std::cerr << "device_connector REQ recv failed: " << zmq_strerror(zmq_errno()) << "\n";
+            return false;
+        }
+    }
+    std::cerr << "device_connector REQ timed out after " << timeout_ms << "ms\n";
+    return false;
+}
 
 struct MatchFunction {
     static MatchFunction *instance() {
@@ -606,8 +666,7 @@ struct MatchFunction {
                             if (debug) {
                                 std::cout << "sending: " << msg << "\n" << std::flush;
                             }
-                            if (sendMessage(msg.c_str(), MatchFunction::instance()->iod_interface,
-                                            response)) {
+                            if (instance()->sendToIod(msg, response)) {
                                 last_message = msg;
                                 last_send.tv_sec = now.tv_sec;
                                 last_send.tv_usec = now.tv_usec;
@@ -637,7 +696,7 @@ struct MatchFunction {
                         if (debug) {
                             std::cout << "sending: " << cmd << "\n" << std::flush;
                         }
-                        if (sendMessage(cmd.c_str(), MatchFunction::instance()->iod_interface, response)) {
+                        if (instance()->sendToIod(cmd, response)) {
                             last_message = res;
                             last_send.tv_sec = now.tv_sec;
                             last_send.tv_usec = now.tv_usec;
@@ -649,16 +708,52 @@ struct MatchFunction {
         return 0;
     }
 
+    // Finite-timeout send; recreate the inproc REQ after any failure so the
+    // next match can try again without needing a full process restart.
+    bool sendToIod(const std::string &msg, std::string &response) {
+        if (!iod_interface) {
+            recreateIodSocket();
+        }
+        if (!iod_interface) {
+            return false;
+        }
+        if (sendWithDeadline(*iod_interface, msg, response, IOD_CMD_TIMEOUT_MS)) {
+            return true;
+        }
+        recreateIodSocket();
+        return false;
+    }
+
   protected:
     static MatchFunction *instance_;
     std::list<Value> params;
     std::string result;
 
   private:
-    MatchFunction() : iod_interface(*MessagingInterface::getContext(), ZMQ_REQ) {
-        iod_interface.connect(iod_connection);
+    MatchFunction() : iod_interface(0) { recreateIodSocket(); }
+    ~MatchFunction() {
+        delete iod_interface;
+        iod_interface = 0;
     }
-    zmq::socket_t iod_interface;
+    void recreateIodSocket() {
+        if (iod_interface) {
+            setSocketLinger0(*iod_interface);
+            delete iod_interface;
+            iod_interface = 0;
+        }
+        try {
+            iod_interface = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+            setSocketLinger0(*iod_interface);
+            iod_interface->connect(iod_connection);
+        }
+        catch (const zmq::error_t &) {
+            std::cerr << "device_connector MatchFunction failed to create inproc REQ: "
+                      << zmq_strerror(zmq_errno()) << "\n";
+            delete iod_interface;
+            iod_interface = 0;
+        }
+    }
+    zmq::socket_t *iod_interface;
     MatchFunction(const MatchFunction &);
     MatchFunction &operator=(const MatchFunction &);
 };
@@ -957,15 +1052,36 @@ struct ConnectionThread {
     }
 
     ConnectionThread()
-        : done(false), is_shutdown(false), connection(-1),
-          cmd_interface(*MessagingInterface::getContext(), ZMQ_REQ), msg_buffer(0) {
+        : done(false), is_shutdown(false), connection(-1), cmd_interface(0), msg_buffer(0) {
         assert(Options::instance()->valid());
         msg_buffer = new char[ANET_ERR_LEN];
         gettimeofday(&last_active, 0);
         last_property_update.tv_sec = 0;
         last_property_update.tv_usec = 0;
         last_status = DeviceStatus::e_unknown;
-        cmd_interface.connect(iod_connection);
+        recreateCmdSocket();
+    }
+    ~ConnectionThread() {
+        delete cmd_interface;
+        cmd_interface = 0;
+    }
+    void recreateCmdSocket() {
+        if (cmd_interface) {
+            setSocketLinger0(*cmd_interface);
+            delete cmd_interface;
+            cmd_interface = 0;
+        }
+        try {
+            cmd_interface = new zmq::socket_t(*MessagingInterface::getContext(), ZMQ_REQ);
+            setSocketLinger0(*cmd_interface);
+            cmd_interface->connect(iod_connection);
+        }
+        catch (const zmq::error_t &) {
+            std::cerr << "device_connector ConnectionThread failed to create inproc REQ: "
+                      << zmq_strerror(zmq_errno()) << "\n";
+            delete cmd_interface;
+            cmd_interface = 0;
+        }
     }
 
     bool stopped() { return is_shutdown; }
@@ -1012,7 +1128,16 @@ struct ConnectionThread {
                 Value{stringFromDeviceStatus(DeviceStatus::instance()->current())});
             std::string response;
             if (!cmd_str.empty()) {
-                sent = sendMessage(cmd_str.c_str(), cmd_interface, response);
+                if (!cmd_interface) {
+                    recreateCmdSocket();
+                }
+                if (cmd_interface) {
+                    sent = sendWithDeadline(*cmd_interface, cmd_str, response, IOD_CMD_TIMEOUT_MS);
+                    if (!sent) {
+                        // Timed out or EFSM: recreate so the next status update can send.
+                        recreateCmdSocket();
+                    }
+                }
             }
             //            sent = iod_interface.setProperty(Options::instance()->name(),
             //                                            "status", stringFromDeviceStatus(DeviceStatus::instance()->current()));
@@ -1032,7 +1157,7 @@ struct ConnectionThread {
     bool is_shutdown;
     int listener;
     int connection;
-    zmq::socket_t cmd_interface;
+    zmq::socket_t *cmd_interface;
     std::string last_msg;
     char *msg_buffer;
     struct timeval last_active;
@@ -1352,6 +1477,7 @@ int main(int argc, const char *argv[]) {
         }
 
         zmq::socket_t cmd(*MessagingInterface::getContext(), ZMQ_REP);
+        setSocketLinger0(cmd);
         cmd.bind(iod_connection);
         usleep(5000);
 
