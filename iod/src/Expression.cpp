@@ -1100,10 +1100,13 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     if (o.op == opGetSubExpr) {
         assert(rhs.kind == Value::t_json);
         assert(b.json_expression);
+        // apply() returns a new tree (or nullptr). Always hand it to Value so
+        // scalar/null nodes are freed; skipping Value on DEFAULT leaked nodes.
         cJSON *sub_expr = apply(b.json_expression.value(), rhs.json, m);
-        if (sub_expr && sub_expr->type != cJSON_NULL) {
+        Value resolved(sub_expr);
+        if (resolved.kind != Value::t_empty) {
             MessageLog::instance()->add("resolved sub expression");
-            m->setValue(stack_iter->node->sValue,Value(sub_expr));
+            m->setValue(stack_iter->node->sValue, resolved);
         }
         else if (b.default_value) {
             MessageLog::instance()->add("using default");
@@ -1125,11 +1128,12 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
     if (o.op == opPutSubExpr) {
         assert(lhs.kind == Value::t_json);
         assert(a.json_expression);
+        // Mutate in place; keep lhs.json valid if assign() replaces the root.
         cJSON *update = assign(a.json_expression.value(), lhs.json, rhs);
-        auto update_str = cJSON_PrintUnformatted(update);
-        update = cJSON_Parse(update_str);
-        free(update_str);
-        m->setValue(a.node->sValue, Value(update));
+        if (update != lhs.json) {
+            lhs.json = update;
+        }
+        m->setValue(a.node->sValue, lhs);
     }
     switch (o.op) {
     case opGetSubExpr:

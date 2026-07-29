@@ -2,8 +2,9 @@
 
 **Branch:** `prod-experimental-mqtt-fix`  
 **Binary:** legacy EtherCAT path `iod_sdo` (main thread renames to `iod_main`)  
-**Date:** 2026-07-26  
-**Status:** Deployed and measured on plant; see commits that introduce each change.
+**Date:** 2026-07-28  
+**Status:** Deployed and measured on plant; later commits refine out-service and
+SetState under the quiet path — see §4.4–4.5 and commits below.
 
 This document records why processing CPU was high with empty runnable queues,
 what was wrong, what each fix does, latency trade-offs, how to measure, and what
@@ -44,6 +45,10 @@ and only wake for real EtherCAT digital edges, commands, or paced TIMER work.
 4. **Diagnostics** are opt-in (`DEBUG DEBUG_PROCSNAP on`) so production logs
    stay quiet by default.
 
+5. **Pending outputs must complete under quiet pacing.** Softstart / SetState
+   on digitals and multi-bit outs must not hang because absorb windows or
+   over-aggressive pending clear discarded real work.
+
 ---
 
 ## 3. Root causes (ordered by impact)
@@ -64,9 +69,9 @@ and only wake for real EtherCAT digital edges, commands, or paced TIMER work.
 
 Effect on processing:
 
-- Outer path treated dirty outs as work every quiet pace (~5 ms) → `brk_out` ~160/s.
-- Each cycle did an ECAT_OUT REQ/REP handshake → ~2 outer loops per out service
-  → ~330 loops/s with empty machine work.
+- Outer path treated dirty outs as work every quiet pace → `brk_out` thrash.
+- Each cycle did an ECAT_OUT REQ/REP handshake → many outer loops with empty
+  machine work.
 
 ### 3.2 Idle work tiers too coarse
 
@@ -103,11 +108,31 @@ Post-loop `usleep` delayed the next poll window and could hold off EtherCAT /
 timer / command servicing. Idle rate-limiting must use interruptible `zmq_poll`
 only.
 
+### 3.6 Legacy turnOn / turnOff + quiet out-service (follow-up)
+
+**Files:** `IOComponent.cpp`, `ProcessingThread.cpp`, `SetStateAction.cpp`  
+**Commit:** `7e062d0c` (2026-07-28)
+
+After idle pacing landed, a second class of hang appeared under quiet EC:
+
+1. **`last_event` after `markChange()`** — `markChange()` only writes the
+   process-image bit when `last_event` is `e_on`/`e_off`. Setting the event
+   *after* left mask dirty but data still 0 → SetState stayed Running as
+   `turning_on` while the bus never got the bit.
+2. **`clearPendingOutputUpdates()` when `getUpdates()` returned null** — discarded
+   real pending digitals/analogs still waiting for a successful mask build /
+   domain echo (softstart stuck `starting`).
+3. **Out-service pace tied to quiet pull (≥5 ms)** — pending outs waited behind
+   analog quiet absorb; multi-bit/softstart outs completed too slowly.
+4. **SetState waited for domain echo only** — on TX-only digitals, intermediate
+   `turning_on`/`turning_off` must count as commanded match so CW POINT state
+   advances immediately.
+
 ---
 
 ## 4. Changes by area
 
-Commits are intentionally small; this section maps theme → behaviour.
+Commits are intentionally small; this section maps theme → **current** behaviour.
 
 ### 4.1 EtherCAT → Clockwork feed (`ecat_thread.cpp`)
 
@@ -117,7 +142,7 @@ Commits are intentionally small; this section maps theme → behaviour.
   (`domainHasDigitalChange`). POINT / 1-bit (non-`regular_poll`) edges
   **collect+push immediately** (~1 bus period while powered).
 - **Analog paced:** ANALOG/COUNTER on `regular_polls` do **not** force a push.
-  They use `pull_due` from `get_polling_time()` (quiet ~5 ms) so LIST/PID/plugins
+  They use `pull_due` from `get_polling_time()` (quiet **5 ms**) so LIST/PID/plugins
   are not free-run at 1 kHz on dither. dig_shadow advances only on push so the
   next collect still sees the full analog delta (latest wins).
 - Keep-alive still forces a rare full push.
@@ -129,8 +154,11 @@ Commits are intentionally small; this section maps theme → behaviour.
 
 - Before signalling CW that scheduled work is ready, enforce **≥ 2×
   `SYSTEM.CYCLE_DELAY`** since the last signal (`get_cycle_time()`, live —
-  not a hard-coded 2 ms; was 10 ms). POINTSSTARTUP sets bus to 1000 µs (on)
-  / 2000 µs (off) so the floor is 2 ms / 4 ms respectively.
+  not a hard-coded 2 ms; earlier experiments used 10 ms then 2 ms fixed).
+  POINTSSTARTUP sets bus to 1000 µs (on) / 2000 µs (off) so the floor is
+  2 ms / 4 ms respectively.
+- Wait to an absolute deadline in short sleep chunks so `Scheduler::add()`
+  interrupts cannot defeat the floor.
 - Stable/exec recheck in `ProcessingThread` uses the same **2× CYCLE_DELAY**.
 - When the batch runs, all ready TIMER items still drain in `e_running`.
 - Digital IO does **not** use this path.
@@ -154,13 +182,18 @@ size.
 - Remove `usleep(1)` under KEEPSTATS after empty poll.
 - Comment documents: rate-limit only via interruptible `zmq_poll`.
 
-### 4.4 Pending output clear (`IOComponent.cpp`)
+### 4.4 Pending output clear + legacy turnOn/turnOff (`IOComponent.cpp`)
 
 - Do **not** early-return from `processAll` when there are no input updates;
   always run pending-out cleanup when `updates_sent`.
 - Set `pending_value` in `Output::turnOn` / `turnOff` so
   `pending_value == address.value` can clear digitals after send.
 - Keep `outputs_waiting` in sync under the same lock.
+- **Legacy ecrt:** set `last_event = e_on` / `e_off` **before** `markChange()` so
+  the update image actually receives the bit (`7e062d0c`).
+- **Kernel path (`USE_KERNEL_ETHERCAT`):** apply shadow immediately; do not leave
+  digitals in `updatedComponentsOut` (nothing would clear them without domain
+  echo).
 
 ### 4.5 Processing wait loop (`ProcessingThread.cpp`)
 
@@ -170,9 +203,9 @@ size.
 |------|---------|---------------------|
 | `io_urgent` | Global pending events or `io_work_queue` | Busy EC pull; short wait |
 | `machine_urgent` | Mail or per-machine pending events | Short wait; full outer path |
-| `exec_only_waiting` | `executingCommand` only (e.g. waiting SetState) | Paced ~10 ms like stable |
-| `stable_pending` | Stable-state re-queue only | Paced ~10 ms |
-| `updatesWaiting` | Output shadow dirty | Paced ≥ 5 ms out service; not “urgent” |
+| `exec_only_waiting` | `executingCommand` only (e.g. waiting SetState) | Paced 2× CYCLE_DELAY like stable |
+| `stable_pending` | Stable-state re-queue only | Paced 2× CYCLE_DELAY |
+| `updatesWaiting` | Output shadow dirty | Service every **bus period** (min 1 ms); not “urgent” for EC pull |
 
 **In-wait EC absorb**
 
@@ -183,18 +216,41 @@ size.
   when no machine work remains.
 - Drain client time-sync (`CMD_ITEM`) without forcing outer loops.
 - ECAT_OUT mid-update still forces outer path; idle clears revents.
+- Pending outs break out of absorb at **bus cadence** (not quiet-pull cadence)
+  so softstart is not held behind 5 ms analog quiet.
 
-**Quiet EC pull**
+**Quiet EC pull (analog / process-data delivery)**
 
-- When **not** `io_urgent`: `set_polling_time` to **10 ms** (or max with cycle).
+- When **not** `io_urgent`: `set_polling_time` to **max(busy_pull, 5000 µs)** →
+  typically **5 ms** quiet.
 - When `io_urgent`: restore busy pull (`cycle_delay`, min 100 µs).
-- Max added digital lag while quiet ≈ one quiet pull window (~10 ms) until the
-  edge is observed and busy pull is restored.
+- Max added digital observation lag while quiet ≈ one quiet pull window
+  (**~5 ms**) until the edge is observed and busy pull is restored.
+  Digital ASAP push in `ecat_thread` still pushes edges every bus cycle once
+  the domain is collected.
 
-**Outputs**
+**Outputs (legacy path)**
 
-- Pace outer out-service; if operational and `getUpdates()` builds nothing,
-  `clearPendingOutputUpdates()` so stale entries cannot spin forever.
+- Pace outer out-service at **`get_cycle_time()`** (min 1 ms), **not** quiet
+  pull (5 ms).
+- **Do not** call `clearPendingOutputUpdates()` when `getUpdates()` returns null
+  on the legacy path — that discarded real pending turnOn/setValue and left
+  SetState Running forever.
+- Kernel builds: after a successful update send, `clearPendingOutputUpdates()`
+  is still valid (shadow applied immediately).
+- Pending outs clear when `processAll` sees `updates_sent && pending_value ==
+  address.value`, or when a later `getUpdates()` succeeds.
+
+**SetStateAction (digital POINT)**
+
+- After `turnOn`/`turnOff`, treat intermediate `turning_on` / `turning_off` as
+  commanded match so CW POINT completes immediately (softstart not blocked on
+  domain echo for TX-only bits).
+
+**Plugins while quiet**
+
+- Service plugins **in-wait** at ≥10 ms when fully idle so plugins do not force
+  ~100 full outer loops/s.
 
 **PROCSNAP (opt-in)**
 
@@ -220,6 +276,12 @@ printf 'DEBUG DEBUG_PROCSNAP off;\n' | /opt/latproc/iod/iosh
 rm -f /tmp/iod-verbose
 ```
 
+Also useful:
+
+```bash
+printf 'SHOW HEALTH;\nSHOW PROCSNAP;\nSHOW CYCLING;\n' | /opt/latproc/iod/iosh
+```
+
 ---
 
 ## 5. Analogs vs digitals (latency and effectiveness)
@@ -234,35 +296,38 @@ rm -f /tmp/iod-verbose
 
 - Does **not** buffer a history of old values.
 - Reduces how often properties / `IOTIME` advance in Clockwork when idle.
-- At **10 ms**, typical plant analogs (oil temp, pressure, bus voltage, motor
+- At **5 ms**, typical plant analogs (oil temp, pressure, bus voltage, motor
   current) remain effective for monitoring, CLOCKING, and soft thresholds.
 - **Do not** stretch further without checking any analog used as a fast trip.
 
 **What it does not damage**
 
 - Correctness of the last sample applied.
-- Digital edge handling (separate, event-driven, busy pull restore).
+- Digital edge handling (separate, event-driven, dig-ASAP push + busy pull restore).
 
 Further analog-only options (not done unless requested): longer quiet pull
-(e.g. 20 ms); push only on digital change + keep-alive (larger analog lag).
+(e.g. 10–20 ms); push only on digital change + keep-alive (larger analog lag).
 
 ---
 
 ## 6. Measured results (plant, settled idle)
 
-Approximate before → after on this work:
+Approximate before → after on the original idle work (pre–out-service refine):
 
 | Metric | Before | After |
 |--------|--------|-------|
 | loops/s | ~330–480 | ~10–15 |
-| `brk_out` | ~160/s | ~0 |
-| `outN` / `hw` | stuck / spinning | `0` / `op` |
+| `brk_out` | ~160/s | ~0 when no pending outs |
+| `outN` / `hw` | stuck / spinning | `0` / `op` when quiet |
 | `iod processing` (short sample) | ~40%+ | ~9% |
 | Process total (short sample) | ~50–60%+ | ~25–30% |
 | Scheduler thread | hot | ~0.3% |
 
 Remaining process CPU is largely **real bus work**: ethercat thread, domain
-`processAll` absorb (~90/s at 10 ms pull), ecat timer — not empty-queue thrash.
+`processAll` absorb (~200/s at 5 ms pull), ecat timer — not empty-queue thrash.
+
+Under HMI/sampler activity, `SHOW HEALTH` may still show **LOAD BUSY ~30–60
+loops/s**; re-measure quiet vs auto after channel clients settle.
 
 ---
 
@@ -286,15 +351,30 @@ Deploy note: stop service before replacing the binary to avoid `ETXTBSY`.
 
 | File | Role |
 |------|------|
-| `iod/src/ecat_thread.cpp` | Keep-alive; pull_due; push only on change/keepalive |
+| `iod/src/ecat_thread.cpp` | Keep-alive; pull_due; dig ASAP; push only on change/keepalive |
 | `iod/src/Scheduler.cpp` | 2× SYSTEM.CYCLE_DELAY inter-signal floor |
 | `iod/src/wait_for_work.cpp` | Remove KEEPSTATS `usleep` |
-| `iod/src/IOComponent.cpp` | Pending-out clear; `pending_value` on turnOn/Off |
-| `iod/src/ProcessingThread.cpp` | Urgency tiers; in-wait absorb; quiet pull; PROCSNAP |
+| `iod/src/IOComponent.cpp` | Pending-out clear; `pending_value`; last_event before markChange |
+| `iod/src/ProcessingThread.cpp` | Urgency tiers; in-wait absorb; quiet 5 ms pull; bus-rate out service |
+| `iod/src/SetStateAction.cpp` | Accept turning_on/off as commanded match |
+
+Key commits (mqtt-fix lineage, oldest → newest on this theme):
+
+| Commit | Theme |
+|--------|--------|
+| `42a46460` | ecat: throttle CW domain push when idle |
+| `16965333` | scheduler: floor CW wakes at 10 ms (superseded) |
+| `15886ac5` | no usleep after empty poll |
+| `97c399a8` | clear pending outs without input changes |
+| `a9017630` | urgency tiers + in-wait absorb |
+| `53fd85dd` / dig-ASAP series | digital edges every cycle; pace analog-only |
+| `fd2a1f97` / `be7aa2cf` | sched/stable floor → 2× CYCLE_DELAY |
+| `989240af` | 5 ms analog quiet pull; stable pace alignment |
+| `7e062d0c` | last_event order; no null-getUpdates clear; bus-rate outs; SetState |
 
 Related plant/config work from the same effort (may already be committed
 elsewhere): LIST `propagate_member_checks`, TIMER AND short-circuit, iod.sh
-verbose switch — not all are in the uncommitted patch set above.
+verbose switch — not all are in the patch set above.
 
 ---
 
@@ -305,21 +385,25 @@ verbose switch — not all are in the uncommitted patch set above.
 3. Enable PROCSNAP briefly; confirm `outN=0`, `hw=op`, low `brk_out`,
    `loops/s` low, `absorb` dominating over breaks when idle.
 4. Exercise digital IO; confirm edges still processed promptly.
-5. Spot-check analogs (oil temp, pressure) still update on HMI / CLOCKING.
-6. Disable PROCSNAP / verbose when done.
+5. Exercise softstart / multi-bit outputs; confirm SetState completes (not stuck
+   `turning_on` / `starting`).
+6. Spot-check analogs (oil temp, pressure) still update on HMI / CLOCKING.
+7. Disable PROCSNAP / verbose when done.
 
 ---
 
 ## 10. Residual risks / follow-ups
 
-1. Quiet pull **10 ms** adds up to ~10 ms digital observation lag while idle
+1. Quiet pull **5 ms** adds up to ~5 ms digital observation lag while idle
    until the first edge restores busy pull — acceptable for this plant if
-   verified on critical sensors.
-2. Waiting SetState that never completes (e.g. output echo `turning_on`) still
-   costs paced rechecks; plant logic may need separate investigation.
+   verified on critical sensors. Dig ASAP push still delivers edges every bus
+   cycle once collected.
+2. Waiting SetState that never completes for non-IO reasons still costs paced
+   rechecks; plant logic may need separate investigation.
 3. Further CPU reduction: analog-only domain push suppression or longer quiet
    pull — document trade-offs before enabling.
-4. Commit series should land on the production branch after plant sign-off.
+4. Under HMI/sampler load, re-measure quiet vs auto after channel clients are
+   stable (see channel handshake fixes on this branch).
 
 ---
 

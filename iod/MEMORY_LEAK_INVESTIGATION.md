@@ -8,6 +8,10 @@ must identify memory that remains owned after its legitimate lifetime, prove the
 responsible call path, make the smallest safe ownership correction, and verify the
 result under a comparable workload.
 
+**Updated:** 2026-07-28  
+**Branch:** `prod-experimental-mqtt-fix`  
+**Sampling tree:** `/opt/latproc/sampling/iod-memory/` (monitor CSV + bpf traces)
+
 ## Safety rules for a live machine
 
 1. Start with read-only observation. Do not restart `iod`, replace a binary, change
@@ -53,7 +57,7 @@ confirm suspicious growth with private/anonymous memory and allocator statistics
 ### 2. Decide whether growth is retention or allocator behaviour
 
 `mallinfo2()` snapshots are emitted by the instrumented processing thread as
-`MEMSNAPSHOT` records. Important fields are:
+`MEMSNAPSHOT` records (opt-in: `DEBUG DEBUG_MEMSNAPSHOT on`). Important fields are:
 
 - `malloc_in_use_kb`: bytes currently allocated to the application;
 - `malloc_free_kb`: free bytes retained inside allocator arenas;
@@ -65,6 +69,14 @@ If RSS rises but `malloc_in_use_kb` is flat, fragmentation, allocator caching, s
 memory, or non-heap mappings may be responsible. If `malloc_in_use_kb` and
 private/anonymous memory rise together, live allocations are being retained and an
 ownership trace is justified.
+
+Enable briefly:
+
+```bash
+printf 'DEBUG DEBUG_MEMSNAPSHOT on;\n' | /opt/latproc/iod/iosh
+# stderr / verbose log lines start with MEMSNAPSHOT
+printf 'DEBUG DEBUG_MEMSNAPSHOT off;\n' | /opt/latproc/iod/iosh
+```
 
 ### 3. Rule out known accumulating containers
 
@@ -96,12 +108,19 @@ as:
 - `Value`;
 - `CStringHolder`;
 - `DynamicValueBase`;
-- cJSON nodes.
+- cJSON nodes (`cJSON_New_Item` / `cJSON_Delete` / create helpers).
 
 Constructor and destructor counts should be compared over the same interval.
 Cumulative counts alone can be misleading because objects may legitimately remain
 live at the end of a sample. Prefer an outstanding count or allow a drain period
 before interpreting a difference as a leak.
+
+Traces collected under this investigation (examples under
+`sampling/iod-memory/`):
+
+- `bpf-malloc-drain-*.txt` — sampled malloc with free drain
+- `bpf-cjson-create-stacks-*.txt` / `bpf-cjson-lifetime-*.txt` — cJSON create stacks
+- `bpf-value-lifecycle-*.txt`, `bpf-complete-lifecycle-*.txt`
 
 ### 5. Trace allocation lifetimes, not allocation volume
 
@@ -170,7 +189,11 @@ For each suspected allocation, answer:
 If a wrapper can carry either owned or borrowed memory, ownership must be explicit.
 Do not unconditionally free the pointer unless every producer transfers ownership.
 
-## Example found during this investigation
+## Examples found during this investigation
+
+### Example A — EtherCAT update mask ownership (`IOUpdate`)
+
+**Commit:** `6eaac1b8` Fix EtherCAT update mask ownership
 
 `IOComponent::getUpdates()` created a fresh EtherCAT output mask with:
 
@@ -187,12 +210,106 @@ The allocation-lifetime trace attributed retained allocations to
 `IOComponent::getUpdates()` and the measured retained rate closely matched the
 process's allocator growth. The correction makes mask ownership explicit:
 
-- dynamically generated update masks are owned and released with `delete[]`;
-- the shared default mask remains borrowed and is not released by `IOUpdate`.
+- dynamically generated update masks are owned and released with `delete[]`
+  (`setMask(mask, true)` → `owns_mask_`);
+- the shared default mask remains borrowed and is not released by `IOUpdate`
+  (`setMask(default_mask)` → `owns_mask_ == false`).
 
 This illustrates why both tracing and source-level ownership analysis are required.
 The allocation site identified the path, while the two producer functions explained
 why the destructor had originally avoided freeing the pointer.
+
+**Current code (still correct):**
+
+```cpp
+// getUpdates
+res->setMask(mask, true);   // owned
+
+// getDefaults
+res->setMask(default_mask); // borrowed; destructor must not delete[]
+
+IOUpdate::~IOUpdate() {
+    if (owns_mask_) {
+        delete[] mask_;
+    }
+}
+```
+
+### Example B — cJSON trees from JSON ITEM / DEFAULT and PutSubExpr
+
+**Commit:** `b985908f` Fix cJSON leaks on JSON ITEM DEFAULT and PutSubExpr copies  
+**Tests:** `iod/tests/test_json_ownership.cpp` (incl. null-field DEFAULT regression)
+
+`json_expression::apply()` always allocates a new cJSON tree (or returns
+`nullptr`). Callers that branch on JSON null and take a DEFAULT without handing the
+tree to `Value` leaked one node (or tree) on every evaluation of:
+
+```text
+ITEM ${field} OF some_json DEFAULT ...
+```
+
+when `field` was JSON `null`. Live cJSON node counts and cJSON create stacks rose
+with plant JSON traffic (HMI / channels / recipes).
+
+**Ownership rules that fixed it:**
+
+1. **Always construct `Value` from `apply()`'s result** so scalar and null nodes are
+   freed after conversion; empty `Value` means “use DEFAULT” without retaining the
+   clone.
+2. **`PutSubExpr` / predicate JSON assign:** mutate in place. Do **not**
+   `cJSON_Print` + `cJSON_Parse` a full document clone after `assign()` — that
+   doubled peak memory and is unnecessary once the tree is already updated. Keep
+   the local `lhs.json` pointer in sync if `assign()` replaces the root.
+
+Related earlier ownership work on the same branch (not a substitute for B):
+
+| Commit | Theme |
+|--------|--------|
+| `d2f86252` / `844fa06d` | `assign` / `assign_take` ownership API |
+| `37f7e75f` | JSON ownership unit tests |
+| `4b126e1e` | null JSON value guards |
+
+**Regression test idea (already in tree):** call `apply()` on a null field path,
+wrap in `Value`, confirm no live node remains after scope exit when DEFAULT would
+have been taken.
+
+### Example C — `Value::getFromJSON` scalar clone leak
+
+**Commit:** `31fceba5` Fix cJSON leak in Value::getFromJSON for scalar fields  
+**Tests:** `iod/tests/test_json_ownership.cpp` (`ValueGetFromJSONScalarDoesNotLeak`)
+
+```cpp
+// Bug: clone then assign_value for number/string/null/bool dropped the clone.
+res = assign_value(clone_json(::getFromJSON(json, key)));
+
+// Fix: ownership through Value(cJSON*) (frees non-object trees after convert).
+return Value(clone_json(::getFromJSON(json, key)));
+```
+
+`get_value(cJSON *)` remains a **borrow** API (does not free). Callers that own
+a new tree from `apply` / `Parse` / `clone_json` must use `Value(cJSON *)`.
+
+### Example D — production-activity live cJSON (still open)
+
+**Evidence:** 2G4C-120 PID `3342133`, ~22.7 h, 2026-07-28/29 (see
+`llm-rules/cw_issues/IOD_WEBREQUEST_MEMORY_GROWTH_20260721.md`).
+
+| Condition | cjson / malloc_in_use |
+|-----------|----------------------|
+| Night / idle many hours | **Flat** (449281 / 143 MiB for ~12 h) |
+| Morning–day production | Climbed to **~1.8M nodes / ~311 MiB** in_use |
+| Main `[heap]` mapping | ~74 MiB flat |
+| Worker anon arenas | Grew with WEBREQUEST traffic |
+| Free / releasable | Stayed small (~4 MiB / tens of KiB) |
+
+**Interpretation:**
+
+1. Idle ITEM DEFAULT / scalar ownership fixes are effective (overnight flat).
+2. Remaining growth is **live application retention** under production JSON/HTTP
+   load, plus worker-thread arena high-water from per-request `pthread_create`.
+3. Further work does **not** require the plant: Linux VM + warehouse CW + HTTP
+   fixtures is enough (thread-pool WEBREQUEST, Result lifecycle, apply
+   Duplicate). Methodology: playbook in `IOD_WEBREQUEST_REPRODUCTION_PLAYBOOK.md`.
 
 ## Fixing and testing rules
 
@@ -200,12 +317,14 @@ why the destructor had originally avoided freeing the pointer.
 2. Avoid unrelated cleanup while diagnosing a production leak.
 3. Run `git diff --check`.
 4. Build the same configuration used in production, not only a debug or ASAN build.
-5. Run focused unit tests and the relevant existing regression tests.
+5. Run focused unit tests and the relevant existing regression tests
+   (`test_json_ownership`, safety/ownership suite).
 6. Use ASAN/LSAN where the environment permits it. If LeakSanitizer cannot operate
    because the process is under `ptrace`, record that limitation rather than
    interpreting the tool failure as a product failure.
 7. Do not overwrite or remove the previous production binary.
 8. Deploy under a distinct filename so the active executable is unambiguous.
+   Local practice on plant: `iod_sdo.prev-memfix-*`, `iod_sdo.staged-json-ownership-fix`.
 
 ## Post-deployment validation
 
@@ -223,6 +342,8 @@ After deploying:
    be attributed independently.
 7. Validate again during a busy machine period because leaks tied to messages,
    state transitions, JSON handling, or EtherCAT updates may scale with activity.
+8. For JSON fixes specifically: watch MEMSNAPSHOT live cJSON node count and
+   HMI/channel traffic paths that evaluate `ITEM ... DEFAULT` heavily.
 
 ## Completion criteria
 
@@ -238,3 +359,14 @@ A leak is considered resolved only when:
 
 Until all of these are true, report the result as an improvement or a candidate fix,
 not as a completed leak fix.
+
+## Known fixed leaks (summary)
+
+| Issue | Fix commit | Status |
+|-------|------------|--------|
+| `IOUpdate` mask `delete[]` ownership | `6eaac1b8` | Fixed in tree; ownership still explicit via `owns_mask_` |
+| JSON ITEM DEFAULT / null `apply()` leak; PutSubExpr full clone | `b985908f` | Fixed in tree + unit test; plant deploy as staged binary if not yet live |
+
+Until plant slopes confirm B under busy HMI/JSON load, treat B as a **candidate
+fix** per the completion criteria above if the service has not yet been
+restarted onto that binary.
