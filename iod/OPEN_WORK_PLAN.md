@@ -132,6 +132,48 @@ without process restart. **No panel channel pre-start** — data port comes from
 
 ---
 
+## Track F — Memory / JSON ownership (mqtt-fix)
+
+| Item | Status |
+|------|--------|
+| IOUpdate mask `owns_mask_` | Done (`6eaac1b8`) |
+| JSON ITEM DEFAULT + PutSubExpr | Done (`b985908f`); **night flat on plant** |
+| `Value::getFromJSON` scalar clones | Done in tree (`31fceba5`); deploy on next restart |
+| Production-day live cJSON + WEBREQUEST arenas | **In progress** — offline fixes below |
+| Methodology + plant evidence | `MEMORY_LEAK_INVESTIGATION.md`, `llm-rules/cw_issues/IOD_WEBREQUEST_*` |
+
+**Plant evidence (do not re-prove idle on controller):**
+
+- PID `3342133` ~22.7 h: cjson/malloc **flat overnight**; day climb to ~1.8M
+  nodes / ~311 MiB in_use / RSS ~334 MiB.
+- Main heap mapping flat; worker arenas + live cJSON drive production growth.
+
+**Local staged binaries on 2G-120:**  
+`iod_sdo.prev-memfix-*`, `iod_sdo.staged-json-ownership-fix` — confirm
+`svstat` / running path before treating as production.
+
+**Offline progress (2026-07-29, macOS warehouse sim + unit tests):**
+
+1. **Done** — `exec_web_request.c`: fixed worker pool (default 4, `WEBREQUEST_POOL_SIZE`),
+   atomic `done`/`abort`, per-worker easy-handle reuse. Unit tests:
+   basic / POST / 50× repeated (`test_exec_web_request`).
+2. **Done (LPC)** — clear `curl.Result` after `result := curl.Result` in
+   warehouse `lib/api/samplingline_api.lpc` (and jemalong/rfid in CW sim).
+3. **Done** — `apply()` uses `clone_json` / `cJSON_Duplicate` instead of
+   Print+Parse (`json_expression.cpp`); ownership tests extended.
+4. **Done (side fix)** — float `Value::operator%=` used `other.iValue` (often 0)
+   → SIGFPE; now uses `::trunc(other.fValue)`. Generic, not macOS-only.
+5. **Open** — catalog poll rate review (`P_BaleCatalogForAssignment`); Linux
+   glibc arena plateau proof; plant deploy of this binary set.
+
+**Offline still open:**
+
+1. Linux VM load matrix per playbook (10k sequential, concurrency, RSS plateau).
+2. Catalog poll rate / assignment dialog request frequency.
+3. Plant deploy + MEMSNAPSHOT under production day load.
+
+---
+
 ## Suggested next sequence
 
 ```
