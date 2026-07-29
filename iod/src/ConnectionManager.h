@@ -241,6 +241,10 @@ class SubscriptionManager : public ConnectionManager {
     void setSetupStatus(Status new_status);
     SubStatus subscriberStatus();
     uint64_t state_start;
+    // When run_status == e_waiting_response: wall time of the forwarded cmd.
+    // Used to abort stuck REQ/REP cycles if the remote never replies.
+    uint64_t cmd_request_start;
+    static const uint64_t cmd_response_timeout_us = 5000000ULL; // 5s
     RunStatus run_status;
     std::string current_channel;
     std::string subscriber_host;
