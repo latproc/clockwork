@@ -198,11 +198,11 @@ Extended line fields:
 - `absorb`, `brk_dig`, `brk_out`, `brk_exec`, `brk_oth`
 - `oth[1..7]` ZMQ index wake counts (1=CMD, 2=SCHEDULER, 3=ECAT_OUT, …)
 
-Enable:
+Enable (runtime — **no** `svc -t` with current `iod-elc.sh` stream filter):
 
 ```bash
 touch /tmp/iod-verbose   # or: echo 3600 > /tmp/iod-verbose
-# after iod up:
+# or: /opt/latproc/scripts/iod_verbose.sh on 3600
 printf 'DEBUG DEBUG_PROCSNAP on;\n' | /opt/latproc/iod/iosh
 tail -f /tmp/iod.log | grep PROCSNAP
 ```
@@ -211,8 +211,11 @@ Disable:
 
 ```bash
 printf 'DEBUG DEBUG_PROCSNAP off;\n' | /opt/latproc/iod/iosh
-rm -f /tmp/iod-verbose
+rm -f /tmp/iod-verbose   # or: /opt/latproc/scripts/iod_verbose.sh off
 ```
+
+TTL is re-checked while iod runs (~2s); expired switch is removed automatically.
+See `/opt/latproc/TRANSPORT.md`.
 
 ---
 
@@ -331,6 +334,35 @@ verbose switch — not all are in the uncommitted patch set above.
 | `oth[3]` | ECAT_OUT ZMQ wakes |
 | `outN` | `updatesWaiting()` size |
 | `hw` | `pre` / `init` / `op` hardware state |
+
+---
+
+## Kernel elc path: optional offline slaves + HW init thrash (2026-07-30)
+
+**Symptom (1G2C dual-domain, 5 servos offline):** `loops/s≈315`, `brk_out≈loops`,
+`absorb=0`, while `updatedComponentsOut` empty. gdb: `hardware_state=s_hardware_init`,
+`machine_is_ready=false`, `ECInterface::operational()=false` (34 modules, 29 online).
+
+**Cause:** `machine_is_ready` required full-bus `c_operational()` (every configured
+slave OP). Offline optional domain slaves blocked `processAll` and the path that
+promotes IO to `s_operational`. Wait loop treated `!= s_operational` as continuous
+`brk_out` (~1–2 ms).
+
+**Fix (`ProcessingThread.cpp`, USE_KERNEL_ETHERCAT only):**
+
+1. `machine_is_ready` when master **active + link** (not all-slaves OP).
+2. `kernelPromoteIoOperational()` — install process mask, set HW operational
+   without DEFAULT_DATA ZMQ / all-slaves OP.
+3. `brk_out` only when `updatesWaiting()` (not solely HW init).
+4. Pure exec-wait (stuck ERROR/SetState) paced at **50 ms** so offline modules
+   do not force ~250 outer loops/s. Digital/mail/EC wakes still ASAP.
+
+**Measured after deploy:** `loops/s≈20–22`, `brk_out=0`, `absorb≈2k/s`, HW
+operational, EC 4 kHz Operation. Rollback: `iod-elc.prev-idle-hwfix-*`.
+
+**Safety:** Bus becoming good still sets `active`/link/module OP and ControlSystem
+state machine as before. Input bit/value changes still go EC → processAll →
+`brk_dig` / handleChange without the exec-wait pace.
 
 ---
 
