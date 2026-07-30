@@ -139,31 +139,40 @@ Service run script (daemontools):
 
   `/etc/service/iod/run` → `code/config/scripts/iod-elc.sh`
 
-Default is **quiet**: iod stdout/stderr go to `/dev/null` so ECDOMAIN /
-PROCSNAP / similar noise does not fill the disk.
+Default is **quiet** for the verbose file: a stream filter still tees stdout/
+stderr to supervise `readproctitle` and always captures `MEMSNAPSHOT*` lines
+to `/opt/latproc/sampling/iod-memory/memsnapshot.log`. Full ECDOMAIN /
+PROCSNAP file logging is opt-in via `/tmp/iod-verbose`.
 
-### Opt-in verbose log (auto-off)
+### Opt-in verbose log (runtime, auto-off by TTL)
+
+**No `svc -t` / restart required** to enable or disable after the stream filter
+is running (filter is started with iod; one deploy restart installs it).
 
 | Action | How |
 |--------|-----|
-| Enable (≤1 h default TTL) | `touch /tmp/iod-verbose` then `svc -t /etc/service/iod` |
-| Custom TTL (seconds) | `echo 1800 > /tmp/iod-verbose` then `svc -t …` |
-| Disable | `rm -f /tmp/iod-verbose` then `svc -t /etc/service/iod` |
+| Enable (≤1 h default TTL) | `touch /tmp/iod-verbose` **or** `iod_verbose.sh on` |
+| Custom TTL (seconds) | `echo 1800 > /tmp/iod-verbose` **or** `iod_verbose.sh on 1800` |
+| Renew mtime / TTL | `touch /tmp/iod-verbose` **or** `iod_verbose.sh renew [ttl]` |
+| Disable | `rm -f /tmp/iod-verbose` **or** `iod_verbose.sh off` |
+| Status | `iod_verbose.sh status` |
 | One-shot CLI | run `iod-elc.sh -v` (not under svc) |
 
 Log file (when on): `/tmp/iod.log` (override with `IOD_LOG_FILE` or `IOD_LOG=`).
+Helper: `/opt/latproc/scripts/iod_verbose.sh`.
 
 Guards against filling the system:
 
-1. **Default off** — no switch → no file logging.
-2. **TTL** — if the switch file is older than its TTL (file content = seconds,
-   or `IOD_LOG_TTL_SEC`, default **3600**), the switch is **removed** and the
-   boot stays quiet.
+1. **Default off** — no switch → no verbose file (MEMSNAPSHOT still captured).
+2. **TTL** — filter re-checks switch every ~2s; if mtime age ≥ TTL (file content
+   = seconds, or `IOD_LOG_TTL_SEC`, default **3600**), switch is **removed** and
+   verbose file logging stops (iod keeps running).
 3. **Size cap** — if the log is ≥ **50 MiB** (`IOD_LOG_MAX_BYTES`), it is
-   rotated to `iod.log.1` before append.
+   rotated to `iod.log.1`.
 
 Env overrides: `IOD_VERBOSE_SWITCH`, `IOD_LOG_FILE`, `IOD_LOG`,
-`IOD_LOG_MAX_BYTES`, `IOD_LOG_TTL_SEC`.
+`IOD_LOG_MAX_BYTES`, `IOD_LOG_TTL_SEC`, `IOD_VERBOSE_POLL_SEC`,
+`IOD_STREAM_FIFO`, `IOD_MEMSNAPSHOT_LOG`.
 
 Binary preference in the script: `/opt/latproc/iod/iod-elc`, else
 `iod/build-elc/iod-elc`. Topology: `iod/configs/elc_topology.conf` (or
