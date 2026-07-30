@@ -112,6 +112,22 @@ FIND_PACKAGE(ZeroMQ REQUIRED)
 
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR} ${ZeroMQ_INCLUDE_DIR})
 
+# json_expression.cpp uses boost::context::fiber (Boost.Context >= 1.61).
+# FIND_PACKAGE can report the context *library* while the matching -dev headers
+# are missing (common on thin Ubuntu panel images). Fail early with a fix hint.
+include(CheckIncludeFileCXX)
+set(CMAKE_REQUIRED_INCLUDES ${Boost_INCLUDE_DIR})
+unset(HAVE_BOOST_CONTEXT_FIBER CACHE)
+check_include_file_cxx("boost/context/fiber.hpp" HAVE_BOOST_CONTEXT_FIBER)
+if (NOT HAVE_BOOST_CONTEXT_FIBER)
+  message(FATAL_ERROR
+    "boost/context/fiber.hpp not found (needed by cw_client json_expression).\n"
+    "  Boost include dir: ${Boost_INCLUDE_DIR}\n"
+    "  On Ubuntu/Debian install matching headers, e.g.:\n"
+    "    apt-get install -y libboost-context-dev\n"
+    "  or for Bionic Boost 1.65: libboost-context1.65-dev")
+endif()
+
 set(HEADER_FILES
 	${CLOCKWORK_DIR}/cw_client.h
 	${CLOCKWORK_DIR}/MessagingInterface.h
