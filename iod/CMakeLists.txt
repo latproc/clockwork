@@ -117,29 +117,18 @@ configure_file (
 
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/cmake/Modules/")
-FIND_PACKAGE(Boost COMPONENTS thread program_options filesystem chrono date_time context REQUIRED)
+# Prefer context when present (full iod process/scheduler). Not required for
+# cw_client / humid: json path evaluation no longer uses boost::context::fiber.
+FIND_PACKAGE(Boost COMPONENTS thread program_options filesystem chrono date_time context)
+if (NOT Boost_FOUND)
+  FIND_PACKAGE(Boost COMPONENTS thread program_options filesystem chrono date_time REQUIRED)
+endif()
 FIND_PACKAGE(Mosquitto)
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
 FIND_PACKAGE(ZeroMQ REQUIRED)
 
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR} ${ZeroMQ_INCLUDE_DIR})
-
-# json_expression.cpp uses boost::context::fiber (Boost.Context >= 1.61).
-# FIND_PACKAGE can report the context *library* while the matching -dev headers
-# are missing (common on thin Ubuntu panel images). Fail early with a fix hint.
-include(CheckIncludeFileCXX)
-set(CMAKE_REQUIRED_INCLUDES ${Boost_INCLUDE_DIR})
-unset(HAVE_BOOST_CONTEXT_FIBER CACHE)
-check_include_file_cxx("boost/context/fiber.hpp" HAVE_BOOST_CONTEXT_FIBER)
-if (NOT HAVE_BOOST_CONTEXT_FIBER)
-  message(FATAL_ERROR
-    "boost/context/fiber.hpp not found (needed by cw_client json_expression).\n"
-    "  Boost include dir: ${Boost_INCLUDE_DIR}\n"
-    "  On Ubuntu/Debian install matching headers, e.g.:\n"
-    "    apt-get install -y libboost-context-dev\n"
-    "  or for Bionic Boost 1.65: libboost-context1.65-dev")
-endif()
 
 set(HEADER_FILES
 	${CLOCKWORK_DIR}/cw_client.h
@@ -165,11 +154,12 @@ set(HEADER_FILES
 	${CLOCKWORK_DIR}/Receiver.h
     ${CLOCKWORK_DIR}/json_expr_parser.h
     ${CLOCKWORK_DIR}/json_expression.h
-    ${CLOCKWORK_DIR}/process.h
     ${CLOCKWORK_DIR}/ThreadSafeQueue.h
     ${CLOCKWORK_DIR}/ThreadSafeList.h
     )
 
+# process.cpp uses boost::context::fiber (scheduler helpers) — keep it out of
+# cw_client so humid panels on Bionic Boost 1.65 can build the client.
 add_library (cw_client
 	${CLOCKWORK_DIR}/cw_client_api.cpp
 	${CLOCKWORK_DIR}/MessagingInterface.cpp
@@ -194,7 +184,6 @@ add_library (cw_client
 	${CLOCKWORK_DIR}/watchdog.cpp
     ${CLOCKWORK_DIR}/json_expr_parser.cpp
     ${CLOCKWORK_DIR}/json_expression.cpp
-    ${CLOCKWORK_DIR}/process.cpp
 	${HEADER_FILES}
 )
 target_include_directories(cw_client PUBLIC

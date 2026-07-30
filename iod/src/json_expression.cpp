@@ -1,10 +1,11 @@
 #include "json_expr_parser.h"
-#include <boost/context/fiber.hpp>
 #include <boost/optional.hpp>
 #include "cJSON.h"
 #include <iostream>
+#include <sstream>
 #include <json_expression.h>
 #include <string>
+#include <vector>
 #include <symboltable.h>
 #include <MachineInstance.h>
 #include <MessageLog.h>
@@ -19,45 +20,40 @@ struct PathResult {
     explicit PathResult(cJSON *value_ = nullptr) : parent(nullptr), value(value_) {}
 };
 
+// Token event from the JSON path parser. Collect all tokens first, then walk
+// the path — avoids boost::context::fiber (not available on Ubuntu Bionic's
+// Boost 1.65 packages). Processing does not feed back into the parser, so
+// batching is equivalent to the old coroutine interleaving.
+struct PathToken {
+    Parser::TokenType kind;
+    std::string token;
+    size_t index;
+};
+
 PathResult follow_json_expr_path(const std::string &str,
                 cJSON *json,
                 boost::optional<SymbolTable*> symbols = boost::none,
                 boost::optional<MachineInstance*> context = boost::none) {
-    namespace ctx = boost::context;
-
     Parser::StringInputStream is(str);
-    std::string token;
-    size_t index = 0;
-    Parser::TokenType kind = Parser::TokenType::expr;
-    bool done = false;
-    // execute parser in new fiber and process tokens in the main function
-    ctx::fiber source{[&is, &token, &index, &kind, &done](ctx::fiber &&sink) {
-        Parser p(
-            is,
-            [&sink, &token, &kind](char token_, Parser::TokenType token_type) {
-                token = token_;
-                kind = token_type;
-                sink = std::move(sink).resume();
-            },
-            [&sink, &index, &kind](size_t index_, Parser::TokenType token_type) {
-                index = index_;
-                kind = token_type;
-                sink = std::move(sink).resume();
-            },
-            [&sink, &token, &kind](std::string token_, Parser::TokenType token_type) {
-                token = token_;
-                kind = token_type;
-                sink = std::move(sink).resume();
-            });
-        p.run();
-        done = true;
-        return std::move(sink); // resume the main fiber
-    }};
+    std::vector<PathToken> tokens;
+    Parser p(
+        is,
+        [&tokens](char token_, Parser::TokenType token_type) {
+            tokens.push_back(PathToken{token_type, std::string(1, token_), 0});
+        },
+        [&tokens](size_t index_, Parser::TokenType token_type) {
+            tokens.push_back(PathToken{token_type, std::string(), index_});
+        },
+        [&tokens](std::string token_, Parser::TokenType token_type) {
+            tokens.push_back(PathToken{token_type, std::move(token_), 0});
+        });
+    p.run();
 
-    source = std::move(source).resume();
     PathResult result(json);
-
-    while (!done) {
+    for (const PathToken &ev : tokens) {
+        const Parser::TokenType kind = ev.kind;
+        const std::string &token = ev.token;
+        const size_t index = ev.index;
         switch (kind) {
         case Parser::TokenType::root:
             break;
@@ -95,7 +91,7 @@ PathResult follow_json_expr_path(const std::string &str,
             if (result.value && result.value->type == cJSON_Array) {
                 result.parent = result.value;
                 result.key.reset();
-                result.index = index;
+                result.index = static_cast<int>(index);
                 result.value = cJSON_GetArrayItem(result.parent, *result.index);
             }
             else {
@@ -140,7 +136,7 @@ PathResult follow_json_expr_path(const std::string &str,
                 result.key.reset();
                 int64_t index = 8;
                 if (symbol.asInteger(index)) {
-                    result.index = index;
+                    result.index = static_cast<int>(index);
                 }
                 else {
                     std::stringstream ss;
@@ -172,7 +168,6 @@ PathResult follow_json_expr_path(const std::string &str,
             throw std::runtime_error(ss.str());
             }
         }
-        source = std::move(source).resume(); // resume the parser
     }
     return result;
 }
