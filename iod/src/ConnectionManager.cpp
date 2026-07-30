@@ -542,6 +542,12 @@ void SubscriptionManager::configureSetupConnection(const char *host, int port) {
     setup_port = port;
 }
 
+void SubscriptionManager::addSetupResponder(uint16_t event, EventResponder *responder) {
+    if (monit_setup) {
+        monit_setup->addResponder(event, responder);
+    }
+}
+
 static char *setup_url = 0;
 bool SubscriptionManager::setupConnections() {
     char url[100];
