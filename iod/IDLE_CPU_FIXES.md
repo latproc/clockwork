@@ -364,6 +364,20 @@ operational, EC 4 kHz Operation. Rollback: `iod-elc.prev-idle-hwfix-*`.
 state machine as before. Input bit/value changes still go EC → processAll →
 `brk_dig` / handleChange without the exec-wait pace.
 
+### Not the legacy ecrt bug — dual-branch ports
+
+| | This branch (`iod-elc` / kernel) | `prod-experimental-mqtt-fix` (`iod_sdo` / ecrt) |
+|--|--------------------------------|--------------------------------------------------|
+| Typical quiet thrash | HW stuck init when optional domain slaves offline | Pending outs stuck (`updatesWaiting`) — fixed earlier on mqtt-fix |
+| This ready/promote fix | **Elc-only** — keep here | **Do not port** kernel `active+link` / `kernelPromoteIoOperational` |
+| Optional general port | Exec-wait 50 ms pace (above item 4) | Port only if ERROR modules burn loops; usually not needed at ~10–15/s |
+
+Mirror note on mqtt-fix: `IDLE_CPU_FIXES.md` §12 (`86db124d`). Agent port rules:
+`iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md`.
+
+**Agent rule:** general fixes ↔ both branches; bus-specific stay put. Commit
+style: `Port of <hash> from <branch>: …`.
+
 ---
 
 ## Kernel elc path: CiA402 inputs must not be reapply targets (2026-07-28)
