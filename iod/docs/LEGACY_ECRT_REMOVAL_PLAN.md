@@ -42,6 +42,41 @@ Rough dual-path surface today: **~70** `#ifdef USE_KERNEL_ETHERCAT` sites, conce
 
 ---
 
+## Current interim workflow (dual branch + agent ports)
+
+Until the fleet is elc-only, maintain **two long-lived branches** rather than one tree full of forever-ifdefs for every feature:
+
+| Branch (examples) | Product | Bus |
+|-------------------|---------|-----|
+| Legacy / mqtt-fix (e.g. `prod-experimental-mqtt-fix`) | `iod` / `iod_sdo` | IgH **ecrt** userland only |
+| This branch (`feature/iod-elc-kernel-transport`) | `iod-elc` | Kernel **elc** only (stubs, no real ecrt) |
+
+**General fixes** (ownership, JSON/cJSON, WEBREQUEST, channels, thrash/PROCSNAP/HEALTH, Scheduler floors that are not bus-specific, pure CW, client/ZMQ) are landed on **one** branch first, then agents **port the patch** to the other.
+
+**Path-specific fixes** stay on one branch only:
+
+| Keep on legacy only | Keep on elc only |
+|---------------------|------------------|
+| ecrt domain queue/send, DEFAULT_DATA process-image TX | Kernel shadow apply, multi-domain WC firewall |
+| Pending-out clear tied to process-image echo | `kernelPromoteIoOperational`, active+link ready |
+| | `ecrt_stubs_elc`, topology/recipe elc tools |
+
+### Agent port rules (for “move the patch between branches”)
+
+1. **Classify** the change: *general* (port both) vs *bus-specific* (do not port blindly).
+2. **Prefer cherry-pick** of a small commit; if conflict is only `#ifdef USE_KERNEL_ETHERCAT` / file layout, resolve for the **target** backend and drop the other arm.
+3. **Do not** reintroduce dual-path ifdefs on the legacy branch “for future elc” or on elc “for future ecrt” when porting — each branch should stay single-backend where possible.
+4. **Verify on target:**
+   - Legacy: build `iod_sdo`, idle PROCSNAP if processing change, no EtherCAT regression.
+   - Elc: build `iod-elc`, idle PROCSNAP (`brk_out`/`absorb`), multi-domain still sane if domain2 down.
+5. **Record** in commit message: `Port of <hash> from <branch>: <one line>` and any intentional elc/legacy delta.
+6. **Memory / WEBREQUEST / cJSON** class fixes are almost always general — port both ways the same week.
+7. **ProcessingThread wait / IO ready / Output::turnOn** — re-read both; often needs a **semantic** port, not a literal diff.
+
+This dual-branch port model is **better than one mega-branch with permanent dual ifdefs** for general work; removal plan Phases 3–4 still apply when legacy plants are gone.
+
+---
+
 ## Preconditions (gate)
 
 1. **Fleet inventory:** each plant → binary (`iod_sdo` vs `iod-elc`), kernel module, domain count, known offline-slave policy.
