@@ -694,18 +694,26 @@ target_link_libraries(device_connector cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRA
 add_executable(persistd src/persistd.cpp src/PersistentStore.cpp )
 target_link_libraries(persistd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
-add_executable(modbusd src/modbusd.cpp )
-target_link_libraries(modbusd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+# modbusd/dbd need libmodbus. HMI panels often only build cw_client and do not
+# install libmodbus-dev; do not fail configure for that case.
+set(CLOCKWORK_RUNTIME_TARGETS cw iosh iocmd device_connector persistd)
+if (MODBUS_FOUND)
+  add_executable(modbusd src/modbusd.cpp )
+  target_link_libraries(modbusd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
-add_executable(dbd src/dbd.cpp )
-target_link_libraries(dbd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+  add_executable(dbd src/dbd.cpp )
+  target_link_libraries(dbd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+  list(APPEND CLOCKWORK_RUNTIME_TARGETS modbusd dbd)
+else()
+  message(STATUS "libmodbus not found: skipping modbusd and dbd (cw_client still builds)")
+endif()
 
 if (RUN_TESTS)
 enable_testing()
 add_subdirectory(tests)
 endif()
 
-install(TARGETS cw dbd iosh iocmd device_connector modbusd persistd RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
+install(TARGETS ${CLOCKWORK_RUNTIME_TARGETS} RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 if(USE_SOEM)
 	install(TARGETS cw_ecat RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
 endif()
