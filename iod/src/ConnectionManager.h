@@ -218,6 +218,8 @@ class SubscriptionManager : public ConnectionManager {
     void resetChannelRequestState(bool recreate_setup_socket);
 
     void configureSetupConnection(const char *host, int port);
+    // Register setup-socket monitor callbacks without exposing monit_setup layout.
+    void addSetupResponder(uint16_t event, EventResponder *responder);
 
     bool setupConnections();
     bool checkConnections(); // test whether setup and subscriber channels are connected

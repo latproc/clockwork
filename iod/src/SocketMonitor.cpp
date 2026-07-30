@@ -28,6 +28,9 @@
 #include <iostream>
 #include <map>
 #include <math.h>
+#include <type_traits>
+#include <unistd.h>
+#include <utility>
 #include <zmq.hpp>
 #ifdef DYNAMIC_VALUES
 #include "dynamic_value.h"
@@ -40,6 +43,73 @@
 #include "anet.h"
 #include "options.h"
 #include "symboltable.h"
+
+namespace {
+
+// Newer cppzmq provides init()+check_event() so the monitor thread can observe
+// abort(). Older panel headers only offer blocking monitor(). Detect at compile
+// time so one source builds on both.
+template <typename T> class has_zmq_monitor_check_event {
+    template <typename U>
+    static auto test(int) -> decltype(std::declval<U &>().check_event(0), std::true_type());
+    template <typename> static std::false_type test(...);
+
+  public:
+    static const bool value = decltype(test<T>(0))::value;
+};
+
+template <typename Monitor>
+void run_monitor_loop(Monitor &mon, zmq::socket_t &sock, const std::string &name, bool &aborted,
+                      std::true_type) {
+    // Prefer the abortable init/check_event loop when the installed cppzmq
+    // provides it. monitor() ignores abort/MONITOR_STOPPED on those headers and
+    // can leave join() hanging or trip a later check_event assert (humid exit 134).
+    mon.init(sock, name.c_str());
+    while (!aborted) {
+        if (!mon.check_event(200)) {
+            if (aborted) {
+                break;
+            }
+            // timeout with no event — keep waiting
+            continue;
+        }
+    }
+}
+
+template <typename Monitor>
+void run_monitor_loop(Monitor &mon, zmq::socket_t &sock, const std::string &name, bool &aborted,
+                      std::false_type) {
+    // Legacy cppzmq (production Ubuntu 18.04 panels): only monitor() is available.
+    int exception_count = 0;
+    while (!aborted) {
+        try {
+            mon.monitor(sock, name.c_str());
+            exception_count = 0;
+        }
+        catch (const zmq::error_t &io) {
+            NB_MSG << "ZMQ error " << errno << ": " << zmq_strerror(errno)
+                   << " in socket monitor\n";
+            if (errno == 88) {
+                exit(0);
+            }
+            ++exception_count;
+            if (exception_count > 5) {
+                exit(EXIT_FAILURE);
+            }
+            usleep(100);
+        }
+        catch (const std::exception &ex) {
+            NB_MSG << "unknown exception: " << ex.what() << " monitoring a socket\n";
+            ++exception_count;
+            if (exception_count > 5) {
+                exit(EXIT_FAILURE);
+            }
+            usleep(100);
+        }
+    }
+}
+
+} // namespace
 
 static std::string constructSocketName() {
     static int sequence = 0;
@@ -62,20 +132,10 @@ void SocketMonitor::operator()() {
 #else
     pthread_setname_np(pthread_self(), thread_name);
 #endif
-    // Do NOT use monitor_t::monitor(): it loops forever and ignores abort/MONITOR_STOPPED,
-    // so join() hangs and a later check_event can assert (humid exit 134).
     try {
-        init(sock, monitor_socket_name.c_str());
-        while (!aborted) {
-            // Finite poll so abort is observed even if the control event is lost.
-            if (!check_event(200)) {
-                if (aborted) {
-                    break;
-                }
-                // timeout with no event — keep waiting
-                continue;
-            }
-        }
+        run_monitor_loop(
+            *this, sock, monitor_socket_name, aborted,
+            std::integral_constant<bool, has_zmq_monitor_check_event<zmq::monitor_t>::value>());
     }
     catch (const zmq::error_t &io) {
         NB_MSG << "ZMQ error " << errno << ": " << zmq_strerror(errno)
@@ -88,11 +148,13 @@ void SocketMonitor::operator()() {
 }
 
 void SocketMonitor::abort() {
-    // Set aborted first so the monitor loop will not re-enter check_event after STOPPED.
+    // Set aborted first so the modern check_event loop will not re-enter after STOPPED.
     aborted = true;
     active_ = false;
     try {
+#ifdef ZMQ_EVENT_MONITOR_STOPPED
         zmq::monitor_t::abort();
+#endif
     }
     catch (...) {
         // best-effort

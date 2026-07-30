@@ -678,8 +678,9 @@ target_link_libraries(cmdline_parser "readline")
 endif()
 
 add_executable(iosh src/iosh.cpp)
+# macOS Homebrew readline/zmq path; use compat helper so CMake 3.10 panels still configure.
 if (EXISTS "/opt/homebrew/lib")
-target_link_directories(iosh PRIVATE "/opt/homebrew/lib")
+  target_link_directories_compat(iosh "/opt/homebrew/lib")
 endif()
 target_link_libraries(iosh cmdline_parser cw_client "readline" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 target_compile_definitions(iosh PRIVATE USE_READLINE )
