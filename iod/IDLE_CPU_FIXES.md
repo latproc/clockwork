@@ -373,10 +373,12 @@ state machine as before. Input bit/value changes still go EC → processAll →
 | Optional general port | Exec-wait 50 ms pace (above item 4) | Port only if ERROR modules burn loops; usually not needed at ~10–15/s |
 
 Mirror note on mqtt-fix: `IDLE_CPU_FIXES.md` §12 (`86db124d`). Agent port rules:
-`iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md`.
+`iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md`, `iod/docs/BRANCHES.md` (three lines A/B/C).
 
-**Agent rule:** general fixes ↔ both branches; bus-specific stay put. Commit
-style: `Port of <hash> from <branch>: …`.
+**Agent rule:** `scope: iod-core` ↔ A (`prod-experimental-mqtt-fix`) and B
+(this elc line); `scope: bus-elc` / `scope: bus-legacy` stay put; client ZMQ on
+**C** (`prod-client-zmq-fix`). Commit style: `scope: …` plus
+`Port of <hash> from <branch>: …`.
 
 ---
 

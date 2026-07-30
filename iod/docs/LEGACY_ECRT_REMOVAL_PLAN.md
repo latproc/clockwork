@@ -42,38 +42,50 @@ Rough dual-path surface today: **~70** `#ifdef USE_KERNEL_ETHERCAT` sites, conce
 
 ---
 
-## Current interim workflow (dual branch + agent ports)
+## Current interim workflow (three long-lived lines + agent ports)
 
-Until the fleet is elc-only, maintain **two long-lived branches** rather than one tree full of forever-ifdefs for every feature:
+Until the fleet is elc-only for **plant iod**, maintain **three long-lived branches**
+rather than one tree full of forever-ifdefs. Partial sync only: function diverges
+by product; shared surfaces (JSON, channels, client ZMQ) stay ported.
 
-| Branch (examples) | Product | Bus |
-|-------------------|---------|-----|
-| Legacy / mqtt-fix (e.g. `prod-experimental-mqtt-fix`) | `iod` / `iod_sdo` | IgH **ecrt** userland only |
-| This branch (`feature/iod-elc-kernel-transport`) | `iod-elc` | Kernel **elc** only (stubs, no real ecrt) |
+| Line | Branch | Product / consumers | Owns (canonical home) |
+|------|--------|---------------------|------------------------|
+| **A — Prod legacy** | `prod-experimental-mqtt-fix` | Plant `iod` / `iod_sdo` (ecrt) | ecrt idle/pending-out; mqtt-fix plant deploys; Track F memory on live 2G4C |
+| **B — Elc / kernel** | `feature/iod-elc-kernel-transport` | Plant `iod-elc` | multi-domain, shadow apply, promote, topology, dig ASAP on kernel PD |
+| **C — Client / ZMQ** | `prod-client-zmq-fix` (cut from **A**) | `humid`, `modbusd`, `dbd`, `persistd`, `device_connector`, panel/tooling linking **cw_client** / channel setup | Channel handshake, timeout/REQ recreate, ConnectionManager, portable socket monitors, thin-client CMake (no full EtherCAT) |
 
-**General fixes** (ownership, JSON/cJSON, WEBREQUEST, channels, thrash/PROCSNAP/HEALTH, Scheduler floors that are not bus-specific, pure CW, client/ZMQ) are landed on **one** branch first, then agents **port the patch** to the other.
+**Historical:** `humid-zmq-client-fix` holds older REQ-hang history. Do **not** use it as a sync base; treat as archive. Prefer C for new client work.
 
-**Path-specific fixes** stay on one branch only:
+Also see: `iod/docs/BRANCHES.md` (port matrix + commit scopes).
 
-| Keep on legacy only | Keep on elc only |
-|---------------------|------------------|
-| ecrt domain queue/send, DEFAULT_DATA process-image TX | Kernel shadow apply, multi-domain WC firewall |
-| Pending-out clear tied to process-image echo | `kernelPromoteIoOperational`, active+link ready |
-| | `ecrt_stubs_elc`, topology/recipe elc tools |
+### Port matrix (what moves where)
 
-### Agent port rules (for “move the patch between branches”)
+| Scope tag | Meaning | Land first | Port to |
+|-----------|---------|------------|---------|
+| `scope: bus-legacy` | ecrt domain queue/send, DEFAULT_DATA TX, pending-out clear tied to process-image echo | **A** | nowhere (or note “N/A elc”) |
+| `scope: bus-elc` | kernel shadow, multi-domain WC firewall, `kernelPromoteIoOperational`, active+link ready, `ecrt_stubs_elc`, topology/recipe elc tools | **B** | nowhere (or note “N/A legacy”) |
+| `scope: iod-core` | ownership, JSON/cJSON, WEBREQUEST, thrash/PROCSNAP/HEALTH, non-bus Scheduler floors, pure iod processing shared by both plant binaries | **A or B** (prefer A if proven on 2C-120) | the other of A/B same week |
+| `scope: client-zmq` | channel client setup REQ, ConnectionManager, humid/modbusd/dbd/persistd ZMQ, cw_client API/build without ecat | **C** | A and B when monorepo sources overlap (`Channel.*`, `ConnectionManager.*`, `cw_client*`, client CMake) so plant trees do not ship stale client surfaces |
 
-1. **Classify** the change: *general* (port both) vs *bus-specific* (do not port blindly).
+**Not full merges** of A↔B↔C tips. Prefer small cherry-picks; divergence is large.
+
+### Agent port rules
+
+1. **Classify** every change with a **scope tag** (above) before coding.
 2. **Prefer cherry-pick** of a small commit; if conflict is only `#ifdef USE_KERNEL_ETHERCAT` / file layout, resolve for the **target** backend and drop the other arm.
-3. **Do not** reintroduce dual-path ifdefs on the legacy branch “for future elc” or on elc “for future ecrt” when porting — each branch should stay single-backend where possible.
+3. **Do not** reintroduce dual-path ifdefs on A “for future elc” or on B “for future ecrt” when porting — each plant branch stays single-backend where possible.
 4. **Verify on target:**
-   - Legacy: build `iod_sdo`, idle PROCSNAP if processing change, no EtherCAT regression.
-   - Elc: build `iod-elc`, idle PROCSNAP (`brk_out`/`absorb`), multi-domain still sane if domain2 down.
-5. **Record** in commit message: `Port of <hash> from <branch>: <one line>` and any intentional elc/legacy delta.
-6. **Memory / WEBREQUEST / cJSON** class fixes are almost always general — port both ways the same week.
-7. **ProcessingThread wait / IO ready / Output::turnOn** — re-read both; often needs a **semantic** port, not a literal diff.
+   - **A:** build `iod_sdo`, idle PROCSNAP if processing change, no EtherCAT regression.
+   - **B:** build `iod-elc`, idle PROCSNAP (`brk_out`/`absorb`), multi-domain still sane if domain2 down.
+   - **C:** build client targets used in the change (`humid`, `modbusd`, `dbd`, `persistd`, `cw_client` / tests) without requiring a full plant EtherCAT stack when possible.
+5. **Commit message style:**
+   - Scope: `scope: client-zmq|iod-core|bus-elc|bus-legacy` on the subject or first body line.
+   - Ports: `Port of <hash> from <branch>: <one line>` plus any intentional A/B/C delta.
+6. **Memory / WEBREQUEST / cJSON** → almost always `scope: iod-core` — port A↔B the same week.
+7. **ProcessingThread wait / IO ready / Output::turnOn** — re-read A and B; often a **semantic** port, not a literal diff.
+8. **Track E channel/HMI** → `scope: client-zmq` on **C** first; redeploy **client** binaries; port overlapping sources to A/B. Server sticky-REQ is usually not the plant bug.
 
-This dual-branch port model is **better than one mega-branch with permanent dual ifdefs** for general work; removal plan Phases 3–4 still apply when legacy plants are gone.
+This three-line model is **better than one mega-branch with permanent dual ifdefs** for plant backends, and keeps client ZMQ from being a side effect of A or B only. Removal plan Phases 3–4 still apply when legacy ecrt plants are gone; **C survives** after A dies (clients always exist).
 
 ---
 
@@ -96,6 +108,8 @@ This dual-branch port model is **better than one mega-branch with permanent dual
 
 - Mark `iod_sdo` / ecrt as **maintenance-only** in `TRANSPORT.md` / `OPEN_WORK_PLAN.md`.
 - New features default to elc; dual-path PRs need explicit “both paths tested” or “legacy N/A”.
+- Keep the **three-line** port model (A/B plant + C clients) in `BRANCHES.md` until
+  A is retired; client line C does not go away with ecrt removal.
 - Inventory plants (spreadsheet or `cw_issues` note).
 
 ### Phase 1 — Shrink ifdef surface without deleting ecrt (1–2 weeks)

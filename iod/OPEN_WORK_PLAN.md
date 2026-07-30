@@ -1,11 +1,13 @@
 # Open work plan (iod / Clockwork)
 
-**Updated:** 2026-07-27 (Stage 4 elc + CW domain isolation proven)  
-**Branch:** `feature/iod-elc-kernel-transport` (elc tip includes channel client recovery)  
-**Also:** `prod-experimental-mqtt-fix` (legacy iod/iod_sdo)
+**Updated:** 2026-07-31 (three-line branch model + Track E → client trunk)  
+**Branch:** `feature/iod-elc-kernel-transport` (line **B** — iod-elc / kernel)  
+**Also:** `prod-experimental-mqtt-fix` (line **A** — legacy iod/iod_sdo) ·  
+`prod-client-zmq-fix` (line **C** — cw_client / humid / modbusd / dbd / persistd)
 
 Multi-session context for thrash/PROCSNAP, idle CPU, analog emit, plant LPC, and
-channel/HMI client recovery.
+channel/HMI client recovery. Branch port rules: `iod/docs/BRANCHES.md`,
+`iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md`.
 
 ---
 
@@ -104,27 +106,37 @@ Regenerate lists only via `./machine/scripts/update_LIST.sh` (do not hand-edit `
 
 ## Track E — Channel clients / HMI (CW2CW-relevant)
 
+### Canonical line
+
+**Land new client/ZMQ work on `prod-client-zmq-fix` (line C)** with
+`scope: client-zmq`. Port overlapping sources to A and B; redeploy **client**
+binaries (humid, etc.). Do not treat plant iod server sticky-REQ as the default
+root cause. See `iod/docs/BRANCHES.md`.
+
 ### Intent
 
 Clients (humid, persistd, dbd, modbusd, remote CW) reconnect CHANNEL setup
 without process restart. **No panel channel pre-start** — data port comes from
 `CHANNEL` reply (fixed preferred port or `uniquePort()`).
 
-### Done
+### Done (on B tip; mirror/port to C and A as needed)
 
-| Item | Commit |
-|------|--------|
+| Item | Commit (elc / B) |
+|------|------------------|
 | Timeout elapsed-time underflow | `adf01887` |
 | Reset `sent_request` + recreate setup REQ after timeout/EFSM/disconnect | `c2ac663e` |
+
+(A has a longer channel series: `388b9ee4` … `dda16ce0` — C was cut from A tip.)
 
 ### Still open / ops
 
 | Item | Notes |
 |------|--------|
-| **Redeploy humid** (Core/Grab) with tree that includes `c2ac663e`+ | Otherwise HMI keeps sticky REQ until kill/restart |
-| **HMI CHANNELMONITOR kill** | Intentional last-resort (`killall humid`) while client was broken; after fixed humid, keep as safety net or lengthen `killTime` |
-| **Optional server harden** | On bind `EADDRINUSE`: try `uniquePort()` / return error — **do not `exit(1)`**. Resolve **7902 clash** `MODBUS_CHANNEL` vs `PANEL_CORE` if both used |
-| **CW2CW other projects** | Same client library; deploy `c2ac663e` on **clients**. Server sticky-REQ is not the issue |
+| **New channel client fixes** | Develop on **C**; commit `scope: client-zmq`; port A/B monorepo overlap |
+| **Redeploy humid** (Core/Grab) from **C** (or A/B after port) with client fix tip | Sticky REQ until kill if old client |
+| **HMI CHANNELMONITOR kill** | Last-resort (`killall humid`); after fixed humid, keep as safety net or lengthen `killTime` |
+| **Optional server harden** | On bind `EADDRINUSE`: try `uniquePort()` / return error — **do not `exit(1)`**. Resolve **7902 clash** if both `MODBUS_CHANNEL` and `PANEL_CORE` used |
+| **CW2CW other projects** | Same client library; deploy fixed **clients**. Server sticky-REQ is not the issue |
 
 ### Not planned
 

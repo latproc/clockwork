@@ -16,6 +16,15 @@ Docs (in source tree):
   /opt/etherlab-cyclic-kmod/docs/process-image-exchange.md
   /opt/etherlab-cyclic-kmod/docs/iod-session-handoff.md
 
+Git lines (plant iod vs clients — not bus load params):
+
+  iod/docs/BRANCHES.md
+  iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md
+
+  A  prod-experimental-mqtt-fix          → iod_sdo (legacy ecrt)
+  B  feature/iod-elc-kernel-transport     → iod-elc (this plant path)
+  C  prod-client-zmq-fix                  → humid/modbusd/dbd/persistd cw_client
+
 module=elc_ethercat  
 device=/dev/elc_ethercat0  
 library=libelcethercat  
