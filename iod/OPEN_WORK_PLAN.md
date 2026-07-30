@@ -1,11 +1,13 @@
 # Open work plan (iod / Clockwork)
 
-**Updated:** 2026-07-29  
-**This machine / branch:** `2C-120` (hostname) · plant class `2G4C` / process `--name 2GRAB` · `prod-experimental-mqtt-fix` (legacy `iod` / `iod_sdo`)  
-**Related:** `feature/iod-elc-kernel-transport` (elc — dual-domain, analog emit, plant C/D)
+**Updated:** 2026-07-31  
+**Branch:** `prod-client-zmq-fix` (line **C** — cw_client / humid / modbusd / dbd / persistd)  
+**Cut from:** `prod-experimental-mqtt-fix` (line **A**)  
+**Related:** `feature/iod-elc-kernel-transport` (line **B** — iod-elc)
 
-Multi-session context so thrash/PROCSNAP, idle CPU, memory ownership, channels,
-and cross-branch port work do not get lost.
+This line is the **canonical home for Track E** (`scope: client-zmq`). Plant
+memory / ecrt / elc bus work stays on A or B. Port rules: `iod/docs/BRANCHES.md`,
+`iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md`.
 
 ---
 
@@ -78,10 +80,14 @@ outputs enabled — see elc plan if working that site.
 
 ## Track E — Channel clients / HMI (CW2CW)
 
+**Canonical line:** `prod-client-zmq-fix` (**C**). New work: `scope: client-zmq`,
+land on C, port monorepo overlap to A/B, redeploy **client** binaries. See
+`iod/docs/BRANCHES.md`.
+
 **Intent:** Clients reconnect CHANNEL setup without process restart. No panel
 channel pre-start — data port from CHANNEL reply.
 
-### Done on mqtt-fix (this branch tip)
+### Done on A (mqtt-fix tip; C cut from this history)
 
 | Theme | Commits (representative) |
 |-------|---------------------------|
@@ -97,7 +103,8 @@ channel pre-start — data port from CHANNEL reply.
 
 | Item | Notes |
 |------|--------|
-| Deploy channel-fixed binaries to all clients (humid, etc.) | Sticky REQ until kill if old client |
+| New channel client fixes | Develop on **C**; `scope: client-zmq`; port A/B |
+| Deploy channel-fixed binaries to all clients (humid, etc.) from **C** (or A after port) | Sticky REQ until kill if old client |
 | Optional server bind harden | On `EADDRINUSE`: uniquePort / error — **do not exit(1)**; port-clash review if needed |
 | Quiet-load re-measure | After HMI/channel stable (`SHOW HEALTH`) |
 
