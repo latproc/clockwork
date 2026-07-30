@@ -1,4 +1,6 @@
-cmake_minimum_required (VERSION 3.10)
+# 3.5: still present on some older Ubuntu HMI panels (e.g. 16.04 / cmake 3.5.1).
+# Prefer 3.10+ where available; avoid features that require newer CMake unless gated.
+cmake_minimum_required (VERSION 3.5)
 project (Latproc)
 
 set (Latproc_VERSION_MAJOR 0)
@@ -71,7 +73,12 @@ if (USE_ASAN)
     endif()
 endif()
 if (CLOCKWORK_SANITIZER_FLAGS)
-    add_compile_definitions(BOOST_USE_ASAN)
+    # add_compile_definitions needs CMake >= 3.12
+    if (CMAKE_VERSION VERSION_LESS "3.12")
+        add_definitions(-DBOOST_USE_ASAN)
+    else()
+        add_compile_definitions(BOOST_USE_ASAN)
+    endif()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CLOCKWORK_SANITIZER_FLAGS}")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${CLOCKWORK_SANITIZER_FLAGS}")
     set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${CLOCKWORK_SANITIZER_FLAGS}")
