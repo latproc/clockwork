@@ -424,3 +424,32 @@ verbose switch — not all are in the patch set above.
 | `oth[3]` | ECAT_OUT ZMQ wakes |
 | `outN` | `updatesWaiting()` size |
 | `hw` | `pre` / `init` / `op` hardware state |
+
+---
+
+## 12. Related: iod-elc HW-init thrash (2026-07-30) — **not the legacy bug**
+
+On **`feature/iod-elc-kernel-transport`** / `iod-elc` (1G2C dual-domain, five
+servos offline forever), plants saw `loops/s≈315`, `brk_out≈loops`, `absorb=0`
+with **empty** `updatedComponentsOut`. gdb: `hardware_state=s_hardware_init`,
+`machine_is_ready=false` because `ECInterface::operational()` requires **all**
+configured modules OP.
+
+That is a **different** thrash from §3.1 on this branch (pending outs stuck).
+Typical ecrt plants do not run with optional domain slaves offline as a steady
+state, so this elc failure mode is **usually not seen** on `iod_sdo`.
+
+| | This branch (`iod_sdo` / ecrt) | Elc dual-domain thrash |
+|--|-------------------------------|-------------------------|
+| Primary cause | `updatesWaiting()` stuck true | HW never leaves init; `!operational` forces `brk_out` |
+| Quiet target after fix | ~10–15 loops/s | ~20 loops/s with offline servos |
+| Code port from elc? | **Do not** port kernel `active+link` ready / `kernelPromoteIoOperational` | Elc-only |
+| Optional general port | Pure exec-wait 50 ms pace (if ERROR modules burn loops) | Already on elc |
+
+Full write-up and dual-branch agent port rules:
+`feature/iod-elc-kernel-transport` → `iod/IDLE_CPU_FIXES.md` (kernel elc section)
+and `iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md`.
+
+**Agent rule:** when moving patches between `prod-experimental-mqtt-fix` and
+elc, classify **general** vs **bus-specific**; do not reintroduce elc-only ready
+logic into this tree “for symmetry.”
