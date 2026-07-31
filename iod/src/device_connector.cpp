@@ -926,24 +926,43 @@ struct ConnectionThread {
                     int port;
                     char hostip[16]; // dot notation
                     connection = anetAccept(msg_buffer, listener, hostip, &port);
+                    if (connection == ANET_ERR) {
+                        // Common when RLIMIT_NOFILE is hit (EMFILE): listen fd stays
+                        // readable, so select returns immediately. Without a check
+                        // and backoff this spins at 100% CPU calling setsockopt(-1).
+                        std::cerr << msg_buffer << "\n";
+                        connection = -1;
+                        usleep(retry_delay);
+                        if (retry_delay < 1000000) {
+                            retry_delay = (useconds_t)(retry_delay * 1.2);
+                        }
+                        if (retry_delay > 1000000) {
+                            retry_delay = 1000000;
+                        }
+                        continue;
+                    }
 
                     if (anetTcpKeepAlive(msg_buffer, connection) == -1) {
                         std::cerr << msg_buffer << "\n";
                         close(connection);
+                        connection = -1;
                         continue;
                     }
 
                     if (anetTcpNoDelay(msg_buffer, connection) == -1) {
                         std::cerr << msg_buffer << "\n";
                         close(connection);
+                        connection = -1;
                         continue;
                     }
 
                     if (anetNonBlock(msg_buffer, connection) == -1) {
                         std::cerr << msg_buffer << "\n";
                         close(connection);
+                        connection = -1;
                         continue;
                     }
+                    retry_delay = 50000;
                     DeviceStatus::instance()->setStatus(DeviceStatus::e_connected);
                     updateProperty();
                 }
