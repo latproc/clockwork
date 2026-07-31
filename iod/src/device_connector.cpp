@@ -1289,6 +1289,7 @@ class ProcessingThread {
         num_items = idx;
 
         int error_count = 0;
+        useconds_t fail_backoff_us = 500;
         while (!done) {
             struct timeval now;
             gettimeofday(&now, 0);
@@ -1296,12 +1297,36 @@ class ProcessingThread {
                 break;
             }
 
+            // setup()/subscriber() may be recreated after peer (iod) restart.
+            // Refresh poll sockets every loop or we poll freed FDs → ENOTSOCK
+            // storm, multi-core CPU, and multi‑MB/s logs that stall iosh.
+            if (options.watchProperty()) {
+                SubscriptionManager *sm =
+                    dynamic_cast<SubscriptionManager *>(connection_manager);
+                if (sm) {
+                    const int n = sm->configurePoll(items);
+                    items[n].fd = 0;
+                    items[n].socket = (void *)cmd;
+                    items[n].events = ZMQ_POLLERR | ZMQ_POLLIN;
+                    items[n].revents = 0;
+                    num_items = n + 1;
+                    subs_index = (n >= 2) ? 1 : 0;
+                }
+            }
+
             try {
                 if (!connection_manager->checkConnections(items, num_items, cmd)) {
-                    usleep(500);
+                    usleep(fail_backoff_us);
+                    if (fail_backoff_us < 200000) {
+                        fail_backoff_us = (useconds_t)(fail_backoff_us * 1.5);
+                    }
+                    if (fail_backoff_us > 200000) {
+                        fail_backoff_us = 200000;
+                    }
                     continue;
                 }
                 error_count = 0;
+                fail_backoff_us = 500;
             }
             catch (const std::exception &e) {
                 std::cerr << e.what() << "\n";
@@ -1326,6 +1351,10 @@ class ProcessingThread {
                     fl.f() << " too many errors. exiting." << std::flush;
                     sleep(2);
                     exit(0);
+                }
+                usleep(fail_backoff_us);
+                if (fail_backoff_us < 200000) {
+                    fail_backoff_us = (useconds_t)(fail_backoff_us * 1.5);
                 }
                 continue;
             }
