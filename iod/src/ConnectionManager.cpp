@@ -1247,12 +1247,20 @@ bool SubscriptionManager::checkConnections(zmq::pollitem_t items[], int num_item
         }
     }
     catch (const zmq::error_t &zex) {
-        char buf[200];
-        snprintf(buf, 200, "%s %s %d %s %s", channel_name.c_str(), "exception", zmq_errno(),
-                 zmq_strerror(zmq_errno()), "polling connections");
-        FileLogger fl(program_name);
-        fl.f() << buf << "\n";
-        MessageLog::instance()->add(buf);
+        // ENOTSOCK/EFSM after peer restart is common while clients refresh
+        // sockets. Log at most once per second — unrestricted logging here
+        // was multi‑MB/s and pegged device_connector + blocked iosh.
+        static uint64_t last_poll_err_log_us = 0;
+        const uint64_t now_us = microsecs();
+        if (last_poll_err_log_us == 0 || now_us - last_poll_err_log_us >= 1000000) {
+            last_poll_err_log_us = now_us;
+            char buf[200];
+            snprintf(buf, 200, "%s %s %d %s %s", channel_name.c_str(), "exception", zmq_errno(),
+                     zmq_strerror(zmq_errno()), "polling connections");
+            FileLogger fl(program_name);
+            fl.f() << buf << "\n";
+            MessageLog::instance()->add(buf);
+        }
         return false;
     }
     if (rc == 0) {
