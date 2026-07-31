@@ -217,6 +217,14 @@ class SubscriptionManager : public ConnectionManager {
     // the ZMQ REQ FSM (drain late reply or recreate the setup socket).
     void resetChannelRequestState(bool recreate_setup_socket);
 
+    // Parse a CHANNEL grant JSON (port/name/authority) from the setup REQ reply.
+    // Shared by the e_waiting_setup path and late/out-of-order POLLIN handling so a
+    // grant is never drained and ignored after peer restart races.
+    bool applyChannelSetupReply(const char *buf, size_t len);
+
+    // Drop subscriber session state so the next successful CHANNEL grant reconnects.
+    void invalidateSubscriberSession();
+
     void configureSetupConnection(const char *host, int port);
     // Register setup-socket monitor callbacks without exposing monit_setup layout.
     void addSetupResponder(uint16_t event, EventResponder *responder);
