@@ -7,7 +7,7 @@
 #include <Statistics.h>
 #include <algorithm>
 #include <assert.h>
-#include <ecrt.h>
+#include "cw_ethercat_types.h"
 #include <fstream>
 #include <iterator>
 #include <libxml/xmlreader.h>

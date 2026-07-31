@@ -5,8 +5,11 @@
  *   1) Plant machines of class ECSETUPRECIPE (discovered like STARTUP)
  *   2) CLI --setup-recipe / --setup-positions / --setup-domain / --setup-product / --setup-vendor
  *
+ * Sample recipe files ship under etc/recipes/ (e.g. ed3l_velocity_pdo.recipe.in).
+ * Point ECSETUPRECIPE.recipe or --setup-recipe at those paths (or site copies).
+ *
  * No vendor/product hardcoding in iod — plant or CLI supplies path and targets.
- * Domains come from topology; recipes only select which slaves get which SDO batch.
+ * Domains come from topology (etc/elc_topology.conf); recipes only select slaves.
  */
 #ifndef ELC_SETUP_RECIPE_H
 #define ELC_SETUP_RECIPE_H

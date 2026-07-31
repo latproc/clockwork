@@ -294,11 +294,11 @@ const char *elcDefaultTopologyConfigPath() {
     if (env && env[0]) {
         return env;
     }
-    // Prefer plant topology under iod/configs. ELC_TOPOLOGY_CONFIG overrides.
-    // all34_captured_topology.conf is a legacy name (symlink on this plant).
+    // Product sample: etc/elc_topology.conf. Plant sites should set
+    // ELC_TOPOLOGY_CONFIG (e.g. code/config/elc_topology.conf from plant boot).
+    // Transport-tree samples are last-resort demos only.
     static const char *candidates[] = {
-        "/opt/latproc/iod/configs/elc_topology.conf",
-        "/opt/latproc/iod/configs/all34_captured_topology.conf",
+        "/opt/latproc/etc/elc_topology.conf",
         "/opt/etherlab-cyclic-kmod/tools/configs/elc_topology.conf",
         "/opt/etherlab-cyclic-kmod/tools/configs/all34_captured_topology.conf",
         nullptr};
@@ -551,8 +551,14 @@ int elcPopulateModulesFromConfigFile(KernelEthercatBus *bus, const char *path) {
                     c_entries[entry_pos].index = e.index;
                     c_entries[entry_pos].subindex = e.subindex;
                     c_entries[entry_pos].bit_length = e.bit_length;
-                    c_entry_details[entry_pos].name =
-                        "0x" + std::to_string(e.index) + ":" + std::to_string(e.subindex);
+                    // CoE index is always hex in tools/LPC; subindex stays decimal.
+                    {
+                        char coe_name[32];
+                        snprintf(coe_name, sizeof(coe_name), "0x%04X:%u",
+                                 static_cast<unsigned>(e.index),
+                                 static_cast<unsigned>(e.subindex));
+                        c_entry_details[entry_pos].name = coe_name;
+                    }
                     c_entry_details[entry_pos].entry_index = entry_pos;
                     c_entry_details[entry_pos].sm_index = si;
                     c_entry_details[entry_pos].pdo_index = static_cast<unsigned int>(pi);

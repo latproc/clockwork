@@ -47,7 +47,9 @@
 #include <mutex>
 #include <cassert>
 #include <dlfcn.h>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 #include <sys/time.h>
 #include <time.h>
 #include <utility>
@@ -77,6 +79,181 @@ static std::mutex pending_state_change_mutex;
 unsigned int MachineInstance::num_machines_with_work = 1;
 
 unsigned int MachineInstance::total_machines_needing_check = 1;
+
+namespace {
+
+// EtherCAT-bound machine classes whose parameters are module + CoE index[/subindex].
+bool isEtherCATBoundIOType(const std::string &type) {
+    return type == "POINT" || type == "STATUS_FLAG" || type == "ANALOGINPUT" ||
+           type == "ANALOGOUTPUT" || type == "DIGITALVALUE" || type == "COUNTER" ||
+           type == "INPUTBIT" || type == "OUTPUTBIT" || type == "INPUTREGISTER" ||
+           type == "OUTPUTREGISTER";
+}
+
+// Best-effort dig-channel wire label for Beckhoff-style one-object-per-channel
+// terminals (EL18xx/EL28xx/EL20xx). Other brands / packed I/O / drives: skip.
+// Future: ESI/XML product tables can replace this heuristic.
+bool tryBeckhoffDigWireChannel(int64_t index, int64_t subindex, unsigned bitlen,
+                               bool force_digital, int &channel_1based, bool &is_output) {
+    if (subindex != 1) {
+        return false;
+    }
+    if (!force_digital && bitlen != 0 && bitlen != 1) {
+        return false;
+    }
+    if ((index & 0xF) != 0) {
+        return false;
+    }
+    if (index >= 0x6000 && index <= 0x60F0) {
+        channel_1based = static_cast<int>((index - 0x6000) / 0x10) + 1;
+        is_output = false;
+        return true;
+    }
+    if (index >= 0x7000 && index <= 0x70F0) {
+        channel_1based = static_cast<int>((index - 0x7000) / 0x10) + 1;
+        is_output = true;
+        return true;
+    }
+    return false;
+}
+
+// Common multi-field object SI labels (EL31xx-style AI, etc.). Not a wire pin.
+const char *coeSubindexFieldHint(int64_t subindex) {
+    switch (subindex) {
+    case 1:
+        return "SI1 Underrange/Input";
+    case 2:
+        return "SI2 Overrange";
+    case 3:
+        return "SI3 Limit1";
+    case 5:
+        return "SI5 Limit2";
+    case 7:
+        return "SI7 Error";
+    case 17:
+        return "SI17 Value";
+    case 19:
+        return "SI19 Frequency/Period alt";
+    default:
+        return nullptr;
+    }
+}
+
+std::string formatCoEIndex(int64_t index) {
+    std::ostringstream os;
+    os << "0x" << std::uppercase << std::hex << std::setw(4) << std::setfill('0')
+       << (static_cast<unsigned>(index) & 0xffffu);
+    return os.str();
+}
+
+// Returns true if parameters were printed in the EtherCAT-aware form.
+bool describeEtherCATIOParameters(std::ostream &out, MachineInstance *mi) {
+    if (!mi || !isEtherCATBoundIOType(mi->_type) || mi->parameters.empty()) {
+        return false;
+    }
+    // Parameter layout after resolve: [0] formal "module" + real_name = module instance,
+    // [1] object index (int), [2] optional subindex (int), [3+] settings/PDO/etc.
+    if (mi->parameters[0].val.kind != Value::t_symbol) {
+        return false;
+    }
+    int64_t object_index = 0;
+    if (mi->parameters.size() < 2 || !mi->parameters[1].val.asInteger(object_index)) {
+        return false;
+    }
+
+    const std::string module_name =
+        !mi->parameters[0].real_name.empty() ? mi->parameters[0].real_name
+                                            : mi->parameters[0].val.asString();
+
+    out << "  module: " << module_name;
+    if (mi->parameters[0].machine) {
+        out << "  state: " << mi->parameters[0].machine->getCurrent().getName();
+        if (!mi->parameters[0].machine->enabled()) {
+            out << " DISABLED";
+        }
+    }
+    out << "\n";
+
+    int64_t object_subindex = -1;
+    bool has_subindex =
+        mi->parameters.size() >= 3 && mi->parameters[2].val.asInteger(object_subindex);
+
+    out << "  CoE: " << formatCoEIndex(object_index);
+    if (has_subindex) {
+        out << ":" << object_subindex;
+    }
+    out << "\n";
+
+    unsigned bitlen = 0;
+    if (mi->io_interface) {
+        bitlen = mi->io_interface->address.bitlen;
+    }
+
+    const bool digital_type = (mi->_type == "POINT" || mi->_type == "STATUS_FLAG" ||
+                               mi->_type == "INPUTBIT" || mi->_type == "OUTPUTBIT");
+    int ch = 0;
+    bool is_output = false;
+    const int64_t sub_for_wire = has_subindex ? object_subindex : 1;
+    if (tryBeckhoffDigWireChannel(object_index, sub_for_wire, bitlen, digital_type, ch,
+                                  is_output)) {
+        // Only emit wire when this looks like a dig channel (1-bit or dig class).
+        if (digital_type || bitlen == 1) {
+            out << "  wire: " << module_name << " ch" << ch
+                << (is_output ? " (output)" : " (input)") << "\n";
+        }
+    }
+    else if (has_subindex && (object_index & 0xF) == 0 && object_index >= 0x6000 &&
+             object_index <= 0x60F0) {
+        // Channel-group object (AI etc.): show channel + field, not a dig wire pin.
+        const int ai_ch = static_cast<int>((object_index - 0x6000) / 0x10) + 1;
+        const char *field = coeSubindexFieldHint(object_subindex);
+        out << "  field: ch" << ai_ch;
+        if (field) {
+            out << " " << field;
+        }
+        else {
+            out << " SI" << object_subindex;
+        }
+        out << "\n";
+    }
+    else if (has_subindex && (object_index & 0xF) == 0 && object_index >= 0x7000 &&
+             object_index <= 0x70F0 && !digital_type) {
+        const int ao_ch = static_cast<int>((object_index - 0x7000) / 0x10) + 1;
+        out << "  field: ch" << ao_ch << " SI" << object_subindex << "\n";
+    }
+    // else: leave undecoded (drives, packed I/O, vendor OD) — CoE line is enough.
+    // Future: product-code / ESI-XML table can supply names here.
+
+    // Extra parameters (settings machines, optional PDO index, …).
+    for (unsigned int i = 3; i < mi->parameters.size(); ++i) {
+        Value p_i = mi->parameters[i].val;
+        if (p_i.kind == Value::t_symbol) {
+            out << "  parameter " << (i + 1) << " " << p_i.sValue << " ("
+                << mi->parameters[i].real_name << "), state: "
+                << (mi->parameters[i].machine ? mi->parameters[i].machine->getCurrent().getName()
+                                             : "")
+                << (mi->parameters[i].machine && !mi->parameters[i].machine->enabled() ? " DISABLED"
+                                                                                       : "")
+                << "\n";
+        }
+        else {
+            int64_t iv = 0;
+            if (p_i.asInteger(iv) && iv > 0xff) {
+                // Likely another CoE/PDO index — show hex.
+                out << "  parameter " << (i + 1) << " " << formatCoEIndex(iv) << " ("
+                    << mi->parameters[i].real_name << ")\n";
+            }
+            else {
+                out << "  parameter " << (i + 1) << " " << p_i << " (" << mi->parameters[i].real_name
+                    << ")\n";
+            }
+        }
+    }
+    out << "\n";
+    return true;
+}
+
+} // namespace
 
 class MachineEvent {
   public:
@@ -813,22 +990,25 @@ void MachineInstance::describe(std::ostream &out) {
         out << "Locked by: " << locked->getName() << "\n";
     }
     if (parameters.size()) {
-        for (unsigned int i = 0; i < parameters.size(); i++) {
-            Value p_i = parameters[i].val;
-            if (p_i.kind == Value::t_symbol) {
-                out << "  parameter " << (i + 1) << " " << p_i.sValue << " ("
-                    << parameters[i].real_name << "), state: "
-                    << (parameters[i].machine ? parameters[i].machine->getCurrent().getName() : "")
-                    << (parameters[i].machine && !parameters[i].machine->enabled() ? " DISABLED"
-                                                                                   : "")
-                    << "\n";
+        if (!describeEtherCATIOParameters(out, this)) {
+            for (unsigned int i = 0; i < parameters.size(); i++) {
+                Value p_i = parameters[i].val;
+                if (p_i.kind == Value::t_symbol) {
+                    out << "  parameter " << (i + 1) << " " << p_i.sValue << " ("
+                        << parameters[i].real_name << "), state: "
+                        << (parameters[i].machine ? parameters[i].machine->getCurrent().getName()
+                                                 : "")
+                        << (parameters[i].machine && !parameters[i].machine->enabled() ? " DISABLED"
+                                                                                       : "")
+                        << "\n";
+                }
+                else {
+                    out << "  parameter " << (i + 1) << " " << p_i << " (" << parameters[i].real_name
+                        << ")\n";
+                }
             }
-            else {
-                out << "  parameter " << (i + 1) << " " << p_i << " (" << parameters[i].real_name
-                    << ")\n";
-            }
+            out << "\n";
         }
-        out << "\n";
     }
     if (io_interface) {
         out << " io: " << *io_interface << "\n";
@@ -2535,15 +2715,13 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
             if (state_machine && state_machine->name == "ETHERCAT_BUS") {
                 const std::string &ec_state = current_state.getName();
                 if (short_name == "activate") {
-                    // Legacy ecrt path only accepts CONFIG/CONNECTED. Kernel transport
+                    // Also allow INIT/DISCONNECTED so STARTUP SEND activate can run. Kernel transport
                     // may still be INIT/DISCONNECTED when STARTUP SEND activate fires;
                     // allow those too so elc_cycle_activate can run.
                     const bool ok =
                         (ec_state == "CONFIG" || ec_state == "CONNECTED" ||
                          ec_state == "ACTIVE"
-#ifdef USE_KERNEL_ETHERCAT
                          || ec_state == "INIT" || ec_state == "DISCONNECTED"
-#endif
                         );
                     if (ok) {
                         std::cout << "ETHERCAT activate requested (state=" << ec_state << ")\n";
@@ -4666,24 +4844,9 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             if (new_value.asInteger(new_delay) &&
                 state_machine->token_id == ClockworkToken::SYSTEMSETTINGS) {
 #ifndef EC_SIMULATOR
-#ifdef USE_KERNEL_ETHERCAT
                 // iod-elc: lock-at-activate helper (ignore live retune after arm).
                 ECInterface::instance()->applyCyclePeriodUs(
                     static_cast<unsigned long>(new_delay > 0 ? new_delay : 100));
-#elif defined(USE_ETHERCAT)
-                // Legacy iod / iod_sdo: no applyCyclePeriodUs — ecat thread
-                // picks up get_cycle_time() via checkAndUpdateCycleDelay().
-                {
-                    unsigned long period_us =
-                        static_cast<unsigned long>(new_delay > 0 ? new_delay : 100);
-                    if (period_us < 100) {
-                        period_us = 100;
-                    }
-                    set_cycle_time(period_us);
-                    ECInterface::FREQUENCY =
-                        static_cast<unsigned int>(1000000UL / period_us);
-                }
-#endif
 #endif
                 was_changed = true;
             }

@@ -36,9 +36,8 @@ void ProcessData::setProcessData(uint8_t *pd, size_t new_size) {
     process_data = pd;
 #if VERBOSE_DEBUG
     if (process_data) {
-        DBG_ETHERCAT_PACKETS << "ecrt_domain_size: set process data (" << ecrt_domain_size(domain1)
-                             << ") ";
-        display(process_data, ecrt_domain_size(domain1));
+        DBG_ETHERCAT_PACKETS << "set process data size " << new_size << " ";
+        display(process_data, new_size);
         DBG_ETHERCAT_PACKETS << "\n";
     }
 #endif

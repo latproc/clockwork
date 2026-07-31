@@ -23,26 +23,19 @@
 
 #include <sys/types.h>
 
-#ifndef EC_SIMULATOR
-#include <ecrt.h>
-#else
-class ec_sdo_request_t;
-#endif
-
 class ECModule;
 #ifdef USE_SDO
 class SDOEntry {
   public:
     enum Operation { READ, WRITE };
 
-    //  SDOEntry( std::string name, ec_sdo_request_t *);
     SDOEntry(std::string nam, uint16_t index, uint8_t subindex, const uint8_t *data, size_t size,
              uint8_t offset = 0)
 #ifndef EC_SIMULATOR
         ; // implemented in ECInterface.cpp
 #else
         : name(nam), module_(0), index_(0), subindex_(0), offset_(0), data_(0), size_(0),
-          realtime_request(0), sync_done(false), error_count(0) {
+          sync_done(false), error_count(0) {
     }
 #endif
     ~SDOEntry();
@@ -53,8 +46,10 @@ class SDOEntry {
 
     ECModule *getModule();
     void setModule(ECModule *);
-    ec_sdo_request_t *prepareRequest(ECModule *module);
-    ec_sdo_request_t *getRequest();
+    /** Bind to module and allocate local mailbox buffer. */
+    bool prepareRequest(ECModule *module);
+    /** Local CoE value buffer for mailbox I/O. */
+    uint8_t *sdoBuffer();
 
     static void resolveSDOModules();
     static SDOEntry *find(std::string name);
@@ -113,7 +108,6 @@ class SDOEntry {
     uint8_t offset_;
     uint8_t *data_;
     size_t size_;
-    ec_sdo_request_t *realtime_request;
     bool sync_done;           // set value will not change the io until the entre has been synced
     unsigned int error_count; // number of times this request has failed so far
     std::string module_name;

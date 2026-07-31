@@ -485,7 +485,7 @@ int main(int argc, char const *argv[]) {
     }
 
     // SYSTEM.CYCLE_DELAY = EtherCAT period (µs). POLLING_DELAY is Clockwork-only.
-    // applyCyclePeriodUs is iod-elc only (USE_KERNEL_ETHERCAT). Legacy iod/iod_sdo
+    // applyCyclePeriodUs locks bus period at activate on plant iod-elc
     // use set_cycle_time + FREQUENCY; ecat thread observes get_cycle_time().
 #ifndef EC_SIMULATOR
     {
@@ -494,18 +494,7 @@ int main(int argc, char const *argv[]) {
         if (cycle_delay_v && cycle_delay_v->iValue >= 100) {
             delay = cycle_delay_v->iValue;
         }
-#ifdef USE_KERNEL_ETHERCAT
         ECInterface::instance()->applyCyclePeriodUs(static_cast<unsigned long>(delay));
-#elif defined(USE_ETHERCAT)
-        {
-            unsigned long period_us = static_cast<unsigned long>(delay);
-            if (period_us < 100) {
-                period_us = 100;
-            }
-            set_cycle_time(period_us);
-            ECInterface::FREQUENCY = static_cast<unsigned int>(1000000UL / period_us);
-        }
-#endif
     }
 #endif
 

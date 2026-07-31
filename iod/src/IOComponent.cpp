@@ -33,7 +33,7 @@
 #include <strings.h>
 #include <string>
 #ifndef EC_SIMULATOR
-#include <ecrt.h>
+#include "cw_ethercat_types.h"
 #endif
 #include "ProcessingThread.h"
 #include "buffering.c"
@@ -711,19 +711,7 @@ std::ostream &operator<<(std::ostream &out, const IOComponent &ioc) { return ioc
 
 #ifdef EC_SIMULATOR
 unsigned char mem[1000];
-#define EC_READ_BIT(offset, bitpos) ((*offset) & (1 << (bitpos)))
-#define EC_WRITE_BIT(offset, bitpos, val) *(offset) |= (1 << (bitpos))
-#define EC_READ_S8(offset) 0
-#define EC_READ_S16(offset) 0
-#define EC_READ_S32(offset) 0
-#define EC_READ_U8(offset) 0
-#define EC_READ_U16(offset) 0
-#define EC_READ_U32(offset) 0
-#define EC_READ_U64(offset) 0
-#define EC_WRITE_U8(offset, val) 0
-#define EC_WRITE_U16(offset, val) 0
-#define EC_WRITE_U32(offset, val) 0
-#define EC_WRITE_U64(offset, val) 0
+/* Simulator uses the same EC_READ/WRITE macros from cw_ethercat_types.h. */
 #endif
 
 int64_t IOComponent::filter(int64_t val) { return val; }
@@ -1751,11 +1739,9 @@ uint8_t *generateProcessMask(uint8_t *res, size_t len) {
         unsigned int bitpos = ioc->address.io_bitpos;
         offset += bitpos / 8;
         bitpos = bitpos % 8;
-#ifdef USE_KERNEL_ETHERCAT
         if (offset > max) {
             continue;
         }
-#endif
         uint8_t mask = 0x01 << bitpos;
         // set  a bit in the mask for each bit of this value
         for (unsigned int i = 0; i < ioc->address.bitlen; ++i) {
@@ -1932,14 +1918,7 @@ IOUpdate *IOComponent::getDefaults() {
         return 0;
     }
     if (!io_process_data || !process_data_size || !default_data || !default_mask) {
-#ifdef USE_KERNEL_ETHERCAT
         return 0;
-#else
-        assert(io_process_data);
-        assert(process_data_size);
-        assert(default_data);
-        assert(default_mask);
-#endif
     }
     IOUpdate *res = new IOUpdate;
     res->setSize(max_offset - min_offset + 1);
@@ -1986,11 +1965,7 @@ void IOComponent::setupIOMap() {
         if (offset > max_offset) {
             max_offset = offset;
         }
-#ifndef USE_KERNEL_ETHERCAT
-        assert(max_offset < 10000);
-#endif
     }
-#ifdef USE_KERNEL_ETHERCAT
     // If entries are not mapped yet, keep a minimal process map so startup can proceed.
     if (max_offset >= 10000 || processing_queue.empty()) {
         if (max_offset >= 10000) {
@@ -2000,7 +1975,6 @@ void IOComponent::setupIOMap() {
         max_offset = 0;
         min_offset = 0;
     }
-#endif
     if (min_offset > max_offset) {
         min_offset = max_offset;
     }
@@ -2030,11 +2004,9 @@ void IOComponent::setupIOMap() {
         unsigned int offset = ioc->address.io_offset;
         unsigned int bitpos = ioc->address.io_bitpos;
         offset += bitpos / 8;
-#ifdef USE_KERNEL_ETHERCAT
         if (offset > max_offset || offset * 8 + bitpos >= indexed_components->size()) {
             continue;
         }
-#endif
         int bytes = 1;
         for (unsigned int i = 0; i < ioc->address.bitlen; ++i) {
             size_t idx = offset * 8 + bitpos + i;
@@ -2258,23 +2230,13 @@ void Output::turnOn() {
     // Commanded value is authoritative for SetStateAction completion.
     address.value = 1;
     pending_value = 1; // processAll clears when updates_sent && pending==value
-#ifdef USE_KERNEL_ETHERCAT
     // Kernel path writes the output shadow immediately (no process-image echo).
     // Do NOT leave this in updatedComponentsOut / outputs_waiting — nothing
     // clears those without an input-domain change, so updatesWaiting() stayed
     // true forever and forced the processing loop to ~1/POLLING_DELAY forever.
     last_event = e_none;
+#ifndef EC_SIMULATOR
     ECInterface::instance()->applyKernelOutputBit(address.io_offset, address.io_bitpos, true);
-#else
-    // last_event MUST be set before markChange(): markChange only writes the
-    // process-image bit when last_event is e_on/e_off. Setting it after left
-    // update_data unchanged (mask set, data still 0) so SetState stayed Running
-    // forever as "turning_on" while the bus never got the bit.
-    last_event = e_on;
-    updatedComponentsOut.insert(this);
-    updatesSent(false);
-    outputs_waiting = updatedComponentsOut.size();
-    markChange();
 #endif
 }
 
@@ -2282,15 +2244,9 @@ void Output::turnOff() {
     last = microsecs();
     address.value = 0;
     pending_value = 0; // processAll clears when updates_sent && pending==value
-#ifdef USE_KERNEL_ETHERCAT
     last_event = e_none; // see turnOn — getStateString must become "off"
+#ifndef EC_SIMULATOR
     ECInterface::instance()->applyKernelOutputBit(address.io_offset, address.io_bitpos, false);
-#else
-    last_event = e_off;
-    updatedComponentsOut.insert(this);
-    updatesSent(false);
-    outputs_waiting = updatedComponentsOut.size();
-    markChange();
 #endif
 }
 
@@ -2304,16 +2260,10 @@ void IOComponent::setValue(uint32_t new_value) {
         last_event = e_none;
         return;
     }
-#ifdef USE_KERNEL_ETHERCAT
     last_event = e_none;
+#ifndef EC_SIMULATOR
     ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
                                                     address.bitlen, new_value);
-#else
-    last_event = e_change;
-    updatesSent(false);
-    updatedComponentsOut.insert(this);
-    outputs_waiting = updatedComponentsOut.size();
-    markChange();
 #endif
 }
 
@@ -2326,16 +2276,10 @@ void IOComponent::setValue(int32_t new_value) {
         last_event = e_none;
         return;
     }
-#ifdef USE_KERNEL_ETHERCAT
     last_event = e_none;
+#ifndef EC_SIMULATOR
     ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
                                                     address.bitlen, (uint32_t)new_value);
-#else
-    last_event = e_change;
-    updatesSent(false);
-    updatedComponentsOut.insert(this);
-    outputs_waiting = updatedComponentsOut.size();
-    markChange();
 #endif
 }
 
@@ -2348,16 +2292,10 @@ void IOComponent::setValue(uint64_t new_value) {
         last_event = e_none;
         return;
     }
-#ifdef USE_KERNEL_ETHERCAT
     last_event = e_none;
+#ifndef EC_SIMULATOR
     ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
                                                     address.bitlen, (uint32_t)(new_value & 0xffffffffu));
-#else
-    last_event = e_change;
-    updatesSent(false);
-    updatedComponentsOut.insert(this);
-    outputs_waiting = updatedComponentsOut.size();
-    markChange();
 #endif
 }
 
@@ -2370,18 +2308,12 @@ void IOComponent::setValue(int64_t new_value) {
         last_event = e_none;
         return;
     }
-#ifdef USE_KERNEL_ETHERCAT
     last_event = e_none;
+#ifndef EC_SIMULATOR
     ECInterface::instance()->applyKernelOutputValue(address.io_offset, address.io_bitpos,
                                                     address.bitlen,
                                                     (uint32_t)(static_cast<uint64_t>(new_value) &
                                                                0xffffffffu));
-#else
-    last_event = e_change;
-    updatesSent(false);
-    updatedComponentsOut.insert(this);
-    outputs_waiting = updatedComponentsOut.size();
-    markChange();
 #endif
 }
 

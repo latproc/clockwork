@@ -27,32 +27,27 @@
 #include "MachineInstance.h"
 #include "tl/expected.hpp"
 #include "process_data.h"
+#include "cw_ethercat_types.h"
+#include <cstdint>
+#include <memory>
+#include <string>
+
 #ifndef EC_SIMULATOR
 #include "value.h"
-
-#include <ecrt.h>
 #include <map>
 #include <mutex>
 #include <set>
-#include <string>
 #include <time.h>
 #include <vector>
-#include <memory>  // for std::unique_ptr
 
-#ifdef USE_KERNEL_ETHERCAT
-class KernelEthercatBus;
-#include <cstdint>
-#include <vector>
+class KernelEthercatBus; // libelcethercat adapter (plant iod-elc)
+
 /** Register elc domain_config_ids from topology (creates ECDomain_<id> + L_ECDomains). */
 void elcRegisterClockworkDomains(const std::vector<uint32_t> &domain_ids);
-#endif
 
 class MachineInstance;
 
-/*  the entry details structure is used to gather extra data about
-    an entry in a module that the Etherlab master structures doesn't
-    normally give us.
-*/
+/** Extra PDO entry metadata not carried by the ESI sync/pdo tables alone. */
 class EntryDetails {
   public:
     std::string name;
@@ -68,8 +63,6 @@ class ECModule {
   public:
     ECModule();
     ~ECModule();
-    bool ecrtMasterSlaveConfig(ec_master_t *master);
-    bool ecrtSlaveConfigPdos();
     bool online();
     bool operational();
     int state();
@@ -81,7 +74,7 @@ class ECModule {
     void update();
 
   public:
-    ec_slave_config_t *slave_config;
+    ec_slave_config_t *slave_config; // unused on elc (kept null)
     ec_slave_config_state_t slave_config_state;
     uint16_t alias;
     uint16_t position;
@@ -114,35 +107,14 @@ class ECModule {
     MachineInstance *machine_instance;
 };
 
-#else // EC_SIMULATOR
-typedef struct ECMaster {
-    unsigned int reserved;
-    unsigned int config_changed;
-    unsigned int slave_count;
-} ec_master_t;
-typedef struct ECMasterState {
-    unsigned int link_up;
-    unsigned int al_states;
-} ec_master_state_t;
-typedef struct ECDomain {
-} ec_domain_t;
-typedef struct ECDomainState {
-} ec_domain_state_t;
-typedef struct ECSlaveConfig {
-} ec_slave_config_t;
-typedef struct ECSlaveConfigState {
-} ec_slave_config_state_t;
-typedef struct ECPDOEntryReg {
-} ec_pdo_entry_reg_t;
-
-#endif // EC_SIMULATOR
+#endif // !EC_SIMULATOR
 
 class ECInterface {
   public:
     static unsigned int FREQUENCY;
-    /** Kernel/legacy bus period locked at activate (µs). 0 = not yet activated. */
+    /** Bus period locked at activate (µs). 0 = not yet activated. */
     static unsigned long activated_cycle_period_us_;
-    static ec_master_t *master;
+    static ec_master_t *master; // unused on plant elc path (null)
     static uint64_t master_last_checked;  // time the master status was last checked
     static uint64_t master_state_changed; // time a last state change was detected in the master
 
@@ -179,13 +151,11 @@ class ECInterface {
     size_t copyDomainData(uint8_t *dst, size_t dst_len);
     void sendUpdates();
     void updateDomain(uint32_t size, uint8_t *data, uint8_t *mask);
-#ifdef USE_KERNEL_ETHERCAT
     /** Write a digital output bit into the kernel output shadow (turnOn/turnOff). */
     void applyKernelOutputBit(unsigned int io_offset, unsigned int bitpos, bool on);
     /** Write multi-bit/analogue value into the kernel output shadow. */
     void applyKernelOutputValue(unsigned int io_offset, unsigned int bitpos, unsigned int bitlen,
                                 uint32_t value);
-#endif
 
     bool start();
     bool stop();
@@ -217,24 +187,20 @@ class ECInterface {
     bool operational();
     static ECModule *findModule(unsigned int position);
 
-#ifdef USE_KERNEL_ETHERCAT
     bool initialiseKernelTransport();  // open kernel bus for discovery + SDO
     KernelEthercatBus* getKernelBus();
-#endif
 
     uint32_t getReferenceTime();
     void setReferenceTime(uint32_t now);
 #ifdef USE_DC
     uint64_t getApplicationTimeNs() const { return dc_application_time_ns; }
-    /** IOTIME resolution matches legacy ecrt path: application time in µs
+    /** IOTIME resolution: application time in µs
      *  (getApplicationTimeNs() / 1000). */
     uint64_t getApplicationTimeUs() const { return dc_application_time_ns / 1000ULL; }
 #endif
-#ifdef USE_KERNEL_ETHERCAT
     /** Refresh dc_application_time_ns from the kernel cycle DC contract so
-     *  updateClock() / IOTIME use the same µs scale as the legacy ecrt path. */
+     *  updateClock() / IOTIME use application time in µs. */
     void refreshKernelApplicationTime();
-#endif
 
     void report_module_state_change(ECModule *m, int i);
 
@@ -296,7 +262,7 @@ class ECInterface {
     const long *failure_tolerance;
     int failure_count;
 
-#ifdef USE_KERNEL_ETHERCAT
+#ifndef EC_SIMULATOR
     std::unique_ptr<KernelEthercatBus> kernelBus;
 #endif
 };

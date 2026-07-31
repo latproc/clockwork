@@ -1,3 +1,4 @@
+#include "cw_ethercat_types.h"
 /*
     Copyright (C) 2012 Martin Leadbeater, Michael O'Connor
 

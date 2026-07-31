@@ -66,7 +66,7 @@
 #include <stdio.h>
 #ifndef EC_SIMULATOR
 #include "ethercat_xml_parser.h"
-#include <ecrt.h>
+#include "cw_ethercat_types.h"
 #endif
 
 extern boost::mutex thread_protection_mutex;

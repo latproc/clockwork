@@ -39,8 +39,8 @@ nohup.out
 *.sqlite
 *.dat
 
-# local configuration
-iod.conf
+# local configuration (root / iod tree; product sample is etc/iod.conf)
+/iod.conf
 .vscode/
 .idea
 .vim
@@ -71,10 +71,18 @@ iod/.test/
 modbus/build/
 modbus/.test/
 modbus/xcode/
-etc/
 bin/
 iod/stage
 compile_commands.json
+
+# etc/: site runtime noise ignored; product defaults are tracked
+etc/*
+!etc/README.md
+!etc/elc_topology.conf
+!etc/all34_captured_topology.conf
+!etc/iod.conf
+!etc/recipes/
+!etc/recipes/**
 
 #project runtime scraps
 modbus_mappings.bak

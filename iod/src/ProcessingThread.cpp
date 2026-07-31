@@ -80,7 +80,7 @@ extern void handle_io_sampling(uint64_t clock);
 
 #define VERBOSE_DEBUG 0
 
-#ifdef USE_KERNEL_ETHERCAT
+#ifndef EC_SIMULATOR
 /** Install app process mask and mark IO operational without DEFAULT_DATA ZMQ.
  *  Kernel path applies output defaults at activate; optional offline slaves
  *  (e.g. dual-domain servos) must not leave hardware stuck in s_hardware_init
@@ -870,13 +870,12 @@ void ProcessingThread::operator()() {
         machine.idle();
         last_machine_change = machine.lastUpdated();
 
-        // IO process path readiness. Legacy ecrt waits for full-bus
+        // IO process path readiness. Full-bus OP aggregation is not required;
         // c_operational() (every configured slave OP). On kernel/elc, optional
         // offline slaves (servo domain) make that false forever while primary
         // domain is live — which blocked processAll and left HW in init (brk_out
         // thrash). Kernel: active master + link is enough; digital edges and
         // bus-good still flow via EC ZMQ + processAll as modules recover.
-#ifdef USE_KERNEL_ETHERCAT
         {
             const bool io_bus_usable =
                 ECInterface::active && ECInterface::master_state.link_up;
@@ -892,21 +891,6 @@ void ProcessingThread::operator()() {
                 machine_is_ready = false;
             }
         }
-#else
-        // only process io components if the machine is operational
-        if (machine.c_operational()) {
-            if (!machine_is_ready) {
-                DBG_INITIALISATION << "machine is becoming ready\n";
-                machine_is_ready = true;
-            }
-        }
-        else {
-            if (machine_is_ready) {
-                DBG_INITIALISATION << "machine is no longer ready\n";
-                machine_is_ready = false;
-            }
-        }
-#endif
 
 #ifdef KEEPSTATS
         avg_poll_time.start();
@@ -1386,12 +1370,9 @@ void ProcessingThread::operator()() {
                 // (prod-experimental-mqtt-fix 7e062d0c)
                 // Kernel: only real pending outs force brk_out. Stuck
                 // s_hardware_init with empty out queue was ~300 outer loops/s.
-#ifdef USE_KERNEL_ETHERCAT
-                if (IOComponent::updatesWaiting()) {
-#else
-                if (IOComponent::updatesWaiting() ||
-                    IOComponent::getHardwareState() != IOComponent::s_operational) {
-#endif
+// pending outs only (elc)
+                if (IOComponent::updatesWaiting()
+                ) {
                     static uint64_t last_out_service_us = 0;
                     // Service pending outs every bus period (min 1 ms), not 5 ms.
                     unsigned long out_us = get_cycle_time();
@@ -1454,12 +1435,8 @@ void ProcessingThread::operator()() {
             }
             // Outputs: same cadence as bus (min 1 ms). Pending digital/analog
             // outs must not wait behind quiet 5–10 ms absorb.
-#ifdef USE_KERNEL_ETHERCAT
-            if (IOComponent::updatesWaiting()) {
-#else
-            if (IOComponent::updatesWaiting() ||
-                IOComponent::getHardwareState() != IOComponent::s_operational) {
-#endif
+if (IOComponent::updatesWaiting()
+            ) {
                 static uint64_t last_out_wait_us = 0;
                 unsigned long out_us = get_cycle_time();
                 if (out_us < 1000) {
@@ -1864,26 +1841,15 @@ void ProcessingThread::operator()() {
             if (update_state == s_update_idle) {
                 IOUpdate *upd = 0;
                 if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
-#ifdef USE_KERNEL_ETHERCAT
+#ifndef EC_SIMULATOR
                     // Always promote on kernel: do not require DEFAULT_DATA ZMQ
                     // or all-slaves OP. Defaults already applied at activate;
                     // process mask is required for input collect/processAll.
                     kernelPromoteIoOperational();
                     continue;
 #else
-                    DBG_INITIALISATION << "Sending defaults to EtherCAT\n";
-                    upd = IOComponent::getDefaults();
-                    if (!upd) {
-                        assert(upd);
-                    }
-#if VERBOSE_DEBUG
-                    if (upd) {
-                        display(std::cout, upd->data());
-                        std::cout << ":";
-                        display(std::cout, upd->mask());
-                        std::cout << "\n";
-                    }
-#endif
+                    IOComponent::setHardwareState(IOComponent::s_operational);
+                    continue;
 #endif
                 }
                 else {
@@ -1952,11 +1918,9 @@ void ProcessingThread::operator()() {
                     delete upd;
                     update_state = s_update_sent;
                     IOComponent::updatesSent(true);
-#ifdef USE_KERNEL_ETHERCAT
                     // Kernel outputs are applied via the shadow immediately;
                     // drop any leftover pending-out so updatesWaiting() clears.
                     IOComponent::clearPendingOutputUpdates();
-#endif
                 }
                 // Do NOT clearPendingOutputUpdates() when getUpdates() is null:
                 // that discarded real digital/analog pending turnOn/setValue and

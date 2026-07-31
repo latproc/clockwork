@@ -14,22 +14,10 @@ if(CCACHE_FOUND)
     set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ccache)
 endif()
 
-# This branch defaults to the kernel elc_ethercat controller (iod-elc) plus cw
-# and support tools. Legacy EtherLab iod/iod_sdo are opt-in only.
+# This branch (feature/iod-elc-kernel-transport) builds plant iod as iod-elc only.
+# Legacy IgH ecrt iod/iod_sdo live on prod-experimental-mqtt-fix (line A).
 option(BUILD_IOD_ELC "Build iod-elc (libelcethercat kernel transport)" ON)
-option(BUILD_LEGACY_IOD "Build legacy EtherLab iod and iod_sdo" OFF)
 
-if(EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
-  set(USE_ETHERCAT true)
-  set(USE_ETHERCAT_SOURCE true)
-  # By default support EtherLab builds with EoE enabled
-  # this can be overridden in the LocalCMakeLists.txt file
-  set (SUPPORT_EOE true)
-  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DEC_EOE")
-endif()
-
-# iod-elc does not need the EtherLab source tree, but much of the controller
-# code is still gated on USE_ETHERCAT.
 if(BUILD_IOD_ELC)
   set(USE_ETHERCAT true)
 endif()
@@ -489,123 +477,12 @@ target_link_directories_compat(cw_ecat "${CW_ETHERCAT_DIR}")
 target_link_libraries(cw_ecat cw_interpreter cw_client dl ${CW_ETHERCAT_LIB} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 endif()
 
-# EtherLab tool library only needed for legacy iod linked against source tree.
-if(USE_ETHERCAT_SOURCE AND BUILD_LEGACY_IOD)
-if (NOT EXISTS "${PROJECT_SOURCE_DIR}/../ethercat/")
-	message(FATAL_ERROR "BUILD_LEGACY_IOD=ON but cannot find EtherLab source at ${PROJECT_SOURCE_DIR}/../ethercat/")
-endif()
-set (ETHERCAT_DIR ${PROJECT_SOURCE_DIR}/../ethercat)
-set (ectool_extras "")
-if (EXISTS "${ETHERCAT_DIR}/tool/CommandDiag.cpp")
-  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandDiag.cpp")
-endif()
-if (SUPPORT_EOE)
-  if (EXISTS "${ETHERCAT_DIR}/tool/CommandEoeAddIf.cpp")
-    LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandEoeAddIf.cpp")
-  endif()
-  if (EXISTS "${ETHERCAT_DIR}/tool/CommandEoeDelIf.cpp")
-    LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandEoeDelIf.cpp")
-  endif()
-  if (EXISTS "${ETHERCAT_DIR}/tool/CommandEoe.cpp")
-    LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandEoe.cpp")
-  endif()
-  if (EXISTS "${ETHERCAT_DIR}/tool/CommandIp.cpp")
-    LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandIp.cpp")
-  endif()
-endif()
-if (EXISTS "${ETHERCAT_DIR}/tool/CommandPcap.cpp")
-  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandPcap.cpp")
-endif()
-if (EXISTS "${ETHERCAT_DIR}/tool/CommandRegReadWrite.cpp")
-  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandRegReadWrite.cpp")
-endif()
-if (EXISTS "${ETHERCAT_DIR}/tool/CommandReboot.cpp")
-  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandReboot.cpp")
-endif()
-if (EXISTS "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
-  LIST (APPEND ectool_extras "${ETHERCAT_DIR}/tool/CommandCrc.cpp")
-endif()
-add_library (ec_tool
-${ETHERCAT_DIR}/tool/CommandAlias.cpp
-${ETHERCAT_DIR}/tool/CommandConfig.cpp
-${ETHERCAT_DIR}/tool/Command.cpp
-${ETHERCAT_DIR}/tool/CommandCStruct.cpp
-${ETHERCAT_DIR}/tool/CommandData.cpp
-${ETHERCAT_DIR}/tool/CommandDebug.cpp
-${ETHERCAT_DIR}/tool/CommandDomains.cpp
-${ETHERCAT_DIR}/tool/CommandDownload.cpp
-${ETHERCAT_DIR}/tool/CommandFoeRead.cpp
-${ETHERCAT_DIR}/tool/CommandFoeWrite.cpp
-${ETHERCAT_DIR}/tool/CommandGraph.cpp
-${ectool_extras}
-${ETHERCAT_DIR}/tool/CommandMaster.cpp
-${ETHERCAT_DIR}/tool/CommandPdos.cpp
-${ETHERCAT_DIR}/tool/CommandRegRead.cpp
-${ETHERCAT_DIR}/tool/CommandRegWrite.cpp
-${ETHERCAT_DIR}/tool/CommandRescan.cpp
-${ETHERCAT_DIR}/tool/CommandSdos.cpp
-${ETHERCAT_DIR}/tool/CommandSiiRead.cpp
-${ETHERCAT_DIR}/tool/CommandSiiWrite.cpp
-${ETHERCAT_DIR}/tool/CommandSlaves.cpp
-${ETHERCAT_DIR}/tool/CommandSoeRead.cpp
-${ETHERCAT_DIR}/tool/CommandSoeWrite.cpp
-${ETHERCAT_DIR}/tool/CommandStates.cpp
-${ETHERCAT_DIR}/tool/CommandUpload.cpp
-${ETHERCAT_DIR}/tool/CommandVersion.cpp
-${ETHERCAT_DIR}/tool/CommandXml.cpp
-${ETHERCAT_DIR}/tool/DataTypeHandler.cpp
-${ETHERCAT_DIR}/tool/FoeCommand.cpp
-${ETHERCAT_DIR}/tool/MasterDevice.cpp
-${ETHERCAT_DIR}/tool/NumberListParser.cpp
-${ETHERCAT_DIR}/tool/SdoCommand.cpp
-${ETHERCAT_DIR}/tool/sii_crc.cpp
-${ExtraECToolFiles}
-../ec_tool/SoeCommand.cpp
-../ec_tool/tool_main.cpp
-)
-INCLUDE_DIRECTORIES(${ETHERCAT_DIR})
-INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/tool)
-INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/include)
-INCLUDE_DIRECTORIES(${ETHERCAT_DIR}/master)
-LINK_DIRECTORIES(${ETHERCAT_DIR}/lib/.libs)
-endif() # USE_ETHERCAT_SOURCE AND BUILD_LEGACY_IOD
-
 INCLUDE_DIRECTORIES(${LIBXML2_INCLUDE_DIR})
 LINK_DIRECTORIES("LIBXML2_LIBRARIES")
 
-if(BUILD_LEGACY_IOD)
-add_executable(iod src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
-	src/EtherCATEntrySelector.cpp src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
-)
-
-set_target_properties (iod PROPERTIES COMPILE_DEFINITIONS "USE_ETHERCAT;KEEP_STATS;USE_DC" )
-if(USE_ETHERCAT_SOURCE)
-target_link_libraries(iod cw_client ec_tool ethercat dl
-        ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl)
-else()
-target_link_libraries(iod cw_client ethercat dl
-        ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl)
-endif()
-install(TARGETS iod RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
-
-add_executable(iod_sdo src/iod.cpp src/ecat_thread.cpp src/EtherCATSetup.cpp
-	src/EtherCATEntrySelector.cpp src/ethercat_xml_parser.cpp ${Clockwork_SRCS}
-)
-target_compile_definitions(iod_sdo PRIVATE USE_ETHERCAT=1 USE_SDO=1 USE_DC=1 )
-if(USE_ETHERCAT_SOURCE)
-target_link_libraries(iod_sdo cw_client ec_tool ethercat dl
-        ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl)
-else()
-target_link_libraries(iod_sdo cw_client ethercat dl
-        ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl)
-endif()
-install(TARGETS iod_sdo RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
-message(STATUS "Building legacy EtherLab iod and iod_sdo (BUILD_LEGACY_IOD=ON)")
-endif() # BUILD_LEGACY_IOD
-
-# Kernel transport controller (default on this branch).
+# Kernel transport controller (only plant iod on this branch).
 if(BUILD_IOD_ELC)
-  # Prefer make install-lib → /usr/local; fall back to legacy /opt/elc.
+  # Prefer make install-lib → /usr/local; fall back to /opt/elc.
   list(APPEND CMAKE_PREFIX_PATH "/usr/local" "/opt/elc")
   if(DEFINED ENV{PKG_CONFIG_PATH} AND NOT "$ENV{PKG_CONFIG_PATH}" STREQUAL "")
     set(ENV{PKG_CONFIG_PATH} "/usr/local/lib/pkgconfig:/opt/elc/lib/pkgconfig:$ENV{PKG_CONFIG_PATH}")
@@ -616,40 +493,39 @@ if(BUILD_IOD_ELC)
   pkg_check_modules(ELC REQUIRED elcethercat)
   include_directories(${ELC_INCLUDE_DIRS})
 
-  add_executable(iod-elc 
-    src/iod.cpp 
-    src/ecat_thread.cpp 
-    src/EtherCATSetup.cpp 
-    src/EtherCATEntrySelector.cpp 
-    src/ethercat_xml_parser.cpp 
+  add_executable(iod-elc
+    src/iod.cpp
+    src/ecat_thread.cpp
+    src/EtherCATSetup.cpp
+    src/EtherCATEntrySelector.cpp
+    src/ethercat_xml_parser.cpp
     src/KernelEthercatBus.cpp
     src/ElcConfigFile.cpp
     src/ElcSetupRecipe.cpp
-    src/ecrt_stubs_elc.cpp
     ${Clockwork_SRCS}
   )
-  target_compile_definitions(iod-elc PRIVATE 
-    USE_ETHERCAT=1 
-    KEEP_STATS 
-    USE_DC 
-    USE_KERNEL_ETHERCAT 
+  # Plant iod: kernel elc transport only.
+  target_compile_definitions(iod-elc PRIVATE
+    USE_ETHERCAT=1
+    KEEP_STATS
+    USE_DC
+    USE_KERNEL_ETHERCAT=1
     USE_SDO=1
   )
-  # Link dirs: pkg-config path first, then common install prefixes.
   foreach(_elc_libdir ${ELC_LIBRARY_DIRS} /usr/local/lib /opt/elc/lib)
     if(_elc_libdir)
       target_link_directories_compat(iod-elc "${_elc_libdir}")
     endif()
   endforeach()
-  target_link_libraries(iod-elc 
-    cw_client 
-    ${ELC_LIBRARIES} 
+  target_link_libraries(iod-elc
+    cw_client
+    ${ELC_LIBRARIES}
     dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl
   )
   install(TARGETS iod-elc RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
   message(STATUS "Building iod-elc with libelcethercat (${ELC_VERSION}) include=${ELC_INCLUDE_DIRS}")
-elseif(NOT BUILD_LEGACY_IOD)
-  message(WARNING "Neither BUILD_IOD_ELC nor BUILD_LEGACY_IOD is enabled; no iod binary will be built")
+else()
+  message(WARNING "BUILD_IOD_ELC is OFF; no plant iod binary will be built on this branch")
 endif()
 
 endif() # USE_ETHERCAT

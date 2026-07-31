@@ -5,7 +5,7 @@
 #include <Statistics.h>
 #include <algorithm>
 #include <assert.h>
-#include <ecrt.h>
+#include "cw_ethercat_types.h"
 #include <errno.h>
 #include <fstream>
 #include <iostream>
