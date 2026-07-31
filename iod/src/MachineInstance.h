@@ -25,6 +25,7 @@
 #include "ActionList.h"
 #include "ConditionHandler.h"
 #include "Expression.h"
+#include "IODCalcAdjustClock.h"
 #include "MachineClass.h"
 #include "MachineCommandAction.h"
 #include "Message.h"
@@ -392,6 +393,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     static void forceStableStateCheck();
     static void forceIdleCheck();
+    // Dispatch IODCALCADJUSTCLOCK groups whose monotonic cadence is due.
+    // Called once from the regular EtherCAT input sampling path.
+    static void dispatchIODCalcAdjust(uint64_t now_us);
     static bool workToDo();
     static std::list<Package *> &pendingEvents();
     static std::set<MachineInstance *> &pluginMachines();
@@ -428,6 +432,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     State saved_state; // save state before error
     Value current_state_val;
     bool is_active; // is this machine active or passive?
+    IODCalcAdjustClock iod_calc_adjust_clock;
     Value current_value_holder;
     std::stringstream ss;                // saves recreating string stream for temporary use
     uint64_t last_state_evaluation_time; // dynamic value check against this before recalculating

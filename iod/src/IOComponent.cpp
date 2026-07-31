@@ -128,6 +128,9 @@ void handle_io_sampling(uint64_t io_clock) {
             ioc->filter(ioc->address.value);
         }
     }
+    // Periodic control is distinct from ANALOGINPUT/COUNTER change emits.
+    // One IOD-monotonic tick dispatches every due IODCALCADJUSTCLOCK group.
+    MachineInstance::dispatchIODCalcAdjust(now);
 }
 
 void IOComponent::publishSampleTime(uint64_t sample_clock, bool publish_raw, int64_t raw) {

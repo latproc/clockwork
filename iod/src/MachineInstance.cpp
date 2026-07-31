@@ -2409,6 +2409,51 @@ void MachineInstance::notifyClockedUpdateConsumers() {
     }
 }
 
+void MachineInstance::dispatchIODCalcAdjust(uint64_t now_us) {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
+
+    for (MachineInstance *clock : all_machines) {
+        if (!clock || clock->_type != "IODCALCADJUSTCLOCK") {
+            continue;
+        }
+
+        MachineInstance *settings = clock->lookup("Settings");
+        MachineInstance *enable = clock->lookup("Enable");
+        MachineInstance *list = clock->lookup("List");
+        if (!settings || !list) {
+            continue;
+        }
+
+        uint64_t rate_ms = 1000;
+        const Value &configured_rate = settings->getValue("rate");
+        if (configured_rate.kind == Value::t_integer && configured_rate.iValue > 0) {
+            rate_ms = static_cast<uint64_t>(configured_rate.iValue);
+        }
+        std::string command_name("calcAdjust");
+        const Value &configured_command = settings->getValue("command");
+        if (configured_command.kind == Value::t_string && !configured_command.sValue.empty()) {
+            command_name = configured_command.sValue;
+        }
+
+        // The CW state makes the configuration's gate visible to DESCRIBE.
+        // Retain the direct Enable test as a fail-closed guard while a state
+        // transition is queued or Enable becomes disabled.
+        bool enabled = strcmp(clock->getCurrentStateString(), "on") == 0;
+        enabled = enabled && enable && enable->enabled();
+        if (enabled) {
+            const char *state = enable->getCurrentStateString();
+            enabled = state && strcasecmp(state, "off") != 0 && strcasecmp(state, "false") != 0;
+        }
+
+        if (!clock->iod_calc_adjust_clock.due(now_us, rate_ms, enabled)) {
+            continue;
+        }
+        DBG_MESSAGING << clock->getName() << " iod " << command_name << " -> "
+                      << list->getName() << " rate=" << rate_ms << "ms\n";
+        clock->sendMessageToReceiver(command_name.c_str(), list, false);
+    }
+}
+
 void MachineInstance::notifyDependents(Message &msg) {
     std::set<MachineInstance *>::iterator dep_iter = depends.begin();
     while (dep_iter != depends.end()) {

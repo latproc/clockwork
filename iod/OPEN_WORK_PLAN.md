@@ -55,6 +55,22 @@ activity; re-measure quiet vs auto after channel/HMI settle if CPU still matters
 
 ## Track C — Analog / COUNTER emit (iod owns sampling)
 
+### Receive-update and periodic-control contract
+
+`ANALOGINPUT` and `COUNTER` run through iod's regular input poll.  Every sample updates
+their `IOTIME`; `throttle` controls filter advancement.  An allowed input emits once at
+startup, on filtered/raw engineering-window change, and at `safety_emit`.  The emit publishes
+raw `VALUE` (and `Position` for COUNTER) plus scaled `ENG` and queues `update` only for enabled,
+direct dependants that declare `RECEIVE update`.  An already-pending update is coalesced.
+
+This selective receive update is deliberately not a periodic control scheduler.  Controllers
+that require a common fixed cadence use `IODCALCADJUSTCLOCK`: iod checks each configured group
+on every input poll and, on the first poll at or after its monotonic-clock `Settings.rate`
+boundary, sends `Settings.command` (default `calcAdjust`) to the group's `List` while its
+local state is `on` (`Enable` is on). The rate and command are configured per group.
+This replaces `PIDLISTCLOCK`; it leaves analog/counter sampling owned by iod and avoids CW
+state-transition clocks.
+
 ### Intent (end state)
 
 IO path owns sampling, scale (`factor`/`base`/`window`), and publishing
