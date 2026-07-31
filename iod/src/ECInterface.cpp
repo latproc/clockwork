@@ -83,6 +83,10 @@ static bool g_kernel_pub_mask_valid = false;
 static bool g_output_lease_enabled = false;
 static uint32_t g_output_lease_timeout_ms = 0;
 static bool g_output_lease_publish_renew = false;
+// microsecs() of last successful publishOutput while lease is on (publish-renew
+// refill). Quiet output paths must still publish before timeout or the kernel
+// latches CONTROLLER_STALE and drops arm — sampler sees armed 0↔1 thrash.
+static uint64_t g_output_lease_last_publish_us = 0;
 static void enableKernelOutputLeaseAfterActivate();
 // Multi-domain isolation (API 0.12/0.17): each domain_config_id is a WC /
 // validity / arm boundary. N domains → N ECDomain_<id> machines on L_ECDomains.
@@ -1230,6 +1234,7 @@ bool ECInterface::deactivate() {
         g_output_lease_enabled = false;
         g_output_lease_timeout_ms = 0;
         g_output_lease_publish_renew = false;
+        g_output_lease_last_publish_us = 0;
         g_kernel_outputs_armed = false;
         g_output_defaults_after_arm_done = false;
         domain1 = nullptr;
@@ -1814,6 +1819,7 @@ static void enableKernelOutputLeaseAfterActivate() {
     g_output_lease_enabled = true;
     g_output_lease_timeout_ms = timeout_ms;
     g_output_lease_publish_renew = bus->hasOutputLeasePublishRenew();
+    g_output_lease_last_publish_us = 0; // force first keepalive publish soon
     std::cerr << "elc output lease: ON timeout_ms=" << timeout_ms
               << " publish_renew=" << (g_output_lease_publish_renew ? 1 : 0)
               << " (hang = no publish for ~timeout; not POLLING_DELAY)\n";
@@ -2201,8 +2207,10 @@ void ECInterface::sendUpdates() {
         }
 
         // Kernel RT task keeps applying the last published image while armed.
-        // Only publish when the commanded shadow changed, or until a valid
-        // domain still needs arm (e.g. secondary group recovered after drop).
+        // Only publish when the commanded shadow changed, a valid domain still
+        // needs arm, or the output lease needs a publish-renew keepalive.
+        // Without keepalive, quiet paths skip publish → lease expires →
+        // CONTROLLER_STALE → disarm/rearm thrash that glitches outputs.
         bool need_domain_rearm = false;
         if (g_domain_status_ok && kernelBus->hasDomainOutputAuthority()) {
             for (const ElcDomainSlot &slot : g_domains) {
@@ -2212,7 +2220,22 @@ void ECInterface::sendUpdates() {
                 }
             }
         }
-        if (!g_kernel_output_dirty && g_kernel_outputs_armed && !need_domain_rearm) {
+        bool lease_keepalive_due = false;
+        if (g_output_lease_enabled && g_output_lease_publish_renew &&
+            g_output_lease_timeout_ms > 0) {
+            // Half timeout (floor 50 ms): refill well before kernel expiry.
+            uint64_t keep_us =
+                (static_cast<uint64_t>(g_output_lease_timeout_ms) * 1000ULL) / 2ULL;
+            if (keep_us < 50000ULL) {
+                keep_us = 50000ULL;
+            }
+            if (g_output_lease_last_publish_us == 0 ||
+                now - g_output_lease_last_publish_us >= keep_us) {
+                lease_keepalive_due = true;
+            }
+        }
+        if (!g_kernel_output_dirty && g_kernel_outputs_armed && !need_domain_rearm &&
+            !lease_keepalive_due) {
             last_update = now;
             return;
         }
@@ -2246,6 +2269,9 @@ void ECInterface::sendUpdates() {
                                            dsz, &pub);
         if (ret == 0) {
             g_kernel_output_dirty = false;
+            if (g_output_lease_enabled) {
+                g_output_lease_last_publish_us = now;
+            }
             struct elc_io_status st = {};
             const bool got_io = (kernelBus->getIoStatus(&st) == 0);
             const bool link_up = got_io && st.link_up;
