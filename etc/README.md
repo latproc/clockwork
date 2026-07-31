@@ -1,31 +1,34 @@
-# Config defaults (install / site)
+# Product config samples (generic Clockwork)
+
+These are **defaults/samples shipped with the product**, not a plant checkout.
 
 | File / dir | Role |
 |------------|------|
-| `iod.conf` | Debug groups for iod (`-c`) |
-| `elc_topology.conf` | Bus topology (slaves, domains, PDOs). Override with `ELC_TOPOLOGY_CONFIG`. |
-| `all34_captured_topology.conf` | Symlink → `elc_topology.conf` (old name) |
-| `recipes/` | Sample CoE startup listings (servo PDO map, accel, …) for `ECSETUPRECIPE` or `--setup-recipe` |
-| `modbus_addressing.conf` | Optional site symlink for Modbus addressing |
+| `iod.conf` | Sample debug flags for iod (`-c`) |
+| `elc_topology.conf` | **Sample** bus topology for demos / first bring-up |
+| `recipes/` | **Sample** CoE setup listings (e.g. servo PDO map) |
 
-## Quick start (EtherCAT plant)
+## Plant sites
 
-1. Install kernel elc + lib (see `TRANSPORT.md` / `/opt/etherlab-cyclic-kmod`).
-2. Review/edit **`etc/elc_topology.conf`** for your bus (or point `ELC_TOPOLOGY_CONFIG` at a site copy).
-3. Build/install **`iod-elc`** (`iod/build-elc`).
-4. Start with the product helper, passing **your** Clockwork source dirs:
+Put **your** topology and recipes in the **plant tree** (e.g. `code/config/`), and
+point the plant boot script at them:
 
 ```bash
-# from latproc root
-./scripts/iod-elc.sh --name MYCELL \
-  /path/to/your/cw/lib \
-  /path/to/your/cw/config
+export ELC_TOPOLOGY_CONFIG=/opt/latproc/code/config/elc_topology.conf
+# ECSETUPRECIPE.recipe → /opt/latproc/code/config/recipes/….recipe.in
 ```
 
-Optional env: `IOD_PERSIST`, `IOD_MODBUS_MAP`, `IOD_PLUGIN_DIR`, `IOD_STREAM_FILTER=1`.
+This machine’s service run script (`code/config/scripts/iod-elc.sh`) sets
+`ELC_TOPOLOGY_CONFIG` to `code/config/elc_topology.conf` automatically.
 
-5. Servo CoE setup (PDO map in PREOP): either  
-   - Clockwork `ECSETUPRECIPE` with `recipe: "…/etc/recipes/ed3l_velocity_pdo.recipe.in"`, or  
-   - CLI: `iod-elc --setup-recipe etc/recipes/ed3l_velocity_pdo.recipe.in --setup-domain 2 …`
+## Quick start (generic / no plant tree)
 
-Site service units (daemontools/systemd) should call `scripts/iod-elc.sh` with plant paths — plant LPC is not under this product tree.
+```bash
+# 1) elc transport — see TRANSPORT.md
+# 2) build iod-elc under iod/build-elc
+# 3) start with product helper + your CW sources:
+./scripts/iod-elc.sh --name MYCELL /path/to/cw/lib /path/to/cw/config
+# uses etc/elc_topology.conf unless ELC_TOPOLOGY_CONFIG is set
+```
+
+See also `TRANSPORT.md`, `scripts/iod-elc.sh`, `etc/recipes/README.md`.

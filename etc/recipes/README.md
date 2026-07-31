@@ -32,4 +32,8 @@ sequence  position  type  index  subindex  value
    --setup-domain 2
    ```
 
-Copy and edit for your drives; do not hardcode vendor IDs in iod C++.
+**Plant sites:** keep working copies under the plant tree (e.g.
+`code/config/recipes/`) and point `ECSETUPRECIPE` / CLI at those paths.
+`etc/recipes/` is only a product sample.
+
+Do not hardcode vendor IDs in iod C++.

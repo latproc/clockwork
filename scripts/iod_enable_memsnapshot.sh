@@ -9,7 +9,7 @@ fi
 printf 'DEBUG DEBUG_MEMSNAPSHOT on;\n' | "$IOSH"
 MEMLOG="${IOD_MEMSNAPSHOT_LOG:-/opt/latproc/sampling/iod-memory/memsnapshot.log}"
 echo "MEMSNAPSHOT requested (runtime)."
-echo "  After iod restart with updated iod-elc.sh:  tail -f ${MEMLOG}"
+echo "  After iod restart (if site log filter captures MEMSNAPSHOT):  tail -f ${MEMLOG}"
 echo "  (std::cerr; not journalctl unless full verbose is on)"
 echo "Note: once per ~60s after process age >= 5 minutes."
 echo "Also enable persistently: uncomment/enable DEBUG_MEMSNAPSHOT in /opt/latproc/etc/iod.conf"

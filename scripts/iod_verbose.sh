@@ -1,6 +1,7 @@
 #!/bin/bash
 # Runtime toggle for iod verbose file logging (no iod restart).
-# Requires iod-elc.sh stream filter (after one deploy restart that installs it).
+# Requires a site boot wrapper stream filter that honors /tmp/iod-verbose
+# (after one deploy restart that installs the filter, if used).
 #
 # Usage:
 #   iod_verbose.sh on [ttl_seconds]   # default ttl 3600; touch/create /tmp/iod-verbose
