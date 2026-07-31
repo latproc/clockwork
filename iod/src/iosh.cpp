@@ -215,9 +215,17 @@ char *command_generator(const char *text, int state) {
     /* Return the next name which partially matches from the command list. */
     while (iter != commands.end()) {
         const char *name = *iter++;
-        if (strncmp(name, text, len) == 0) {
-            return (strdup(name));
+        if (strncmp(name, text, len) != 0) {
+            continue;
         }
+        // DESCRIBE and DEBUG share "DE". Prefer DESCRIBE for partial prefixes
+        // (e.g. "DE"<tab> -> DESCRIBE). "DEB" still completes to DEBUG only.
+        // Empty text keeps both in the full command list.
+        if (len > 0 && strcmp(name, "DEBUG") == 0 &&
+            strncmp("DESCRIBE", text, len) == 0) {
+            continue;
+        }
+        return (strdup(name));
     }
     rl_attempted_completion_over = 1;
     /* If no names matched, then return NULL. */
@@ -305,12 +313,13 @@ void initialise_machine_names(char *data) {
 }
 
 void initialise_commands() {
+    // DESCRIBE first so tab completion surfaces it above other commands.
+    commands.push_back("DESCRIBE");
     commands.push_back("CHANNELS");
     commands.push_back("CHANNEL");
     commands.push_back("CLEAR");
     commands.push_back("DATA");
     commands.push_back("DEBUG");
-    commands.push_back("DESCRIBE");
     commands.push_back("DISABLE");
     commands.push_back("ENABLE");
     commands.push_back("EC");
@@ -444,6 +453,8 @@ int main(int argc, const char *argv[]) {
 
         // readline completion function
         rl_attempted_completion_function = my_rl_completion;
+        // Keep command list order (DESCRIBE first) instead of alphabetical sort.
+        rl_sort_completion_matches = 0;
         if (!quiet) {
             initialise_machine_names(0);
             check_messages();
