@@ -16,9 +16,11 @@ Trading as Vale Park Software Development
 
 This software provides a high level, finite statemachine-based language 
 called Clockwork that can be used to describe process control systems. 
-Currently, this software only supports one hardware interface; the Beckhoff EtherCat
-system (http://www.beckhoff.de/) through the IgH EtherCAT Master for Linux
-(http://www.etherlab.org/en/ethercat/index.php)
+Hardware I/O on this branch is Beckhoff EtherCAT via the **kernel elc** transport
+(`elc_ethercat` / `libelcethercat` / plant binary **`iod-elc`**). See `TRANSPORT.md`.
+
+Legacy IgH EtherCAT Master userland (`iod_sdo` / ecrt) is maintained on the
+`prod-experimental-mqtt-fix` (and related prod) branch only — not built here.
 
 Below are some instructions to help you build the program please
 see the documentation for details about the language itself.

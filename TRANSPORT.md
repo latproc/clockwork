@@ -21,9 +21,11 @@ Git lines (plant iod vs clients — not bus load params):
   iod/docs/BRANCHES.md
   iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md
 
-  A  prod-experimental-mqtt-fix          → iod_sdo (legacy ecrt)
-  B  feature/iod-elc-kernel-transport     → iod-elc (this plant path)
+  A  prod-experimental-mqtt-fix          → iod_sdo (legacy IgH ecrt; only place ecrt lives)
+  B  feature/iod-elc-kernel-transport     → iod-elc **only** (kernel elc; no iod/iod_sdo build)
   C  prod-client-zmq-fix                  → humid/modbusd/dbd/persistd cw_client
+
+This checkout (B) is the plant path below. For IgH userland `iod_sdo`, use line A.
 
 module=elc_ethercat  
 device=/dev/elc_ethercat0  
@@ -58,8 +60,17 @@ KO=${ELC_KO:-/opt/etherlab-cyclic-kmod/kernel/elc_ethercat.ko}
 insmod "$KO" cycle_cpu=1 cycle_fifo_priority=90
 ```
 
-`iod-elc.sh` prefers **modprobe**, then **insmod** of `ELC_KO` if modprobe fails,
-and reloads (rmmod + load) if priority is still 0 and the module is free.
+**Generic product starter:** `scripts/iod-elc.sh` loads `elc_ethercat` (modprobe,
+then optional `ELC_KO` insmod), optionally reloads if soft-RT, waits for link,
+and execs `iod-elc`. Site LPC dirs / process name / persist path are **env or
+argv**, not hardcoded plant trees.
+
+```sh
+# example (site supplies Clockwork source dirs):
+/opt/latproc/scripts/iod-elc.sh --name MYCELL \
+  /path/to/plant/lib /path/to/plant/config
+# optional: IOD_PERSIST=… IOD_MODBUS_MAP=… IOD_STREAM_FILTER=1 …
+```
 
 **Important:** restarting iod alone does **not** reload the module. If
 `cycle_fifo_priority` is still `0`, the kthread is created soft-RT at every
@@ -67,9 +78,9 @@ and reloads (rmmod + load) if priority is still 0 and the module is free.
 
 Mitigations (in order):
 
-1. `/etc/modprobe.d/elc_ethercat.conf` + `iod-elc.sh` modprobe with RT params;
-   reload if soft-RT while free.
-2. After `cycle_activate`, `iod-elc` promotes `elc_cycle` to SCHED_FIFO 90 / CPU 1
+1. `/etc/modprobe.d/elc_ethercat.conf` + modprobe with RT params (site boot may
+   reload if soft-RT while free).
+2. After `cycle_activate`, **`iod-elc`** promotes `elc_cycle` to SCHED_FIFO 90 / CPU 1
    (`KernelEthercatBus::ensureCycleThreadRealtime`).
 3. Manual: `chrt -f -p 90 $(pgrep -x elc_cycle); taskset -cp 1 $(pgrep -x elc_cycle)`.
 
@@ -142,37 +153,59 @@ Failed snapshot ioctl keeps the previous `domain1_pd` (last known current), neve
 
 Future: optional `CAP_INPUT_HISTORY` for short pulses between CW pulls.
 
-## Service boot and optional verbose log
+## Getting going (minimal)
 
-Service run script (daemontools):
+```sh
+# 1) transport (once)
+cd /opt/etherlab-cyclic-kmod && make dkms-install && make install-lib && make install-tools
+# RT defaults: /etc/modprobe.d/elc_ethercat.conf  (see Module load above)
 
-  `/etc/service/iod/run` → `code/config/scripts/iod-elc.sh`
+# 2) bus map: product sample etc/elc_topology.conf, or plant path via
+#    ELC_TOPOLOGY_CONFIG=/path/to/plant/elc_topology.conf
 
-Default is **quiet** for the verbose file: a stream filter still tees stdout/
-stderr to supervise `readproctitle` and always captures `MEMSNAPSHOT*` lines
-to `/opt/latproc/sampling/iod-memory/memsnapshot.log`. Full ECDOMAIN /
-PROCSNAP file logging is opt-in via `/tmp/iod-verbose`.
+# 3) build iod-elc
+cd /opt/latproc/iod && mkdir -p build-elc && cd build-elc
+cmake .. -DBUILD_IOD_ELC=ON -DCMAKE_BUILD_TYPE=Release && make -j"$(nproc)" iod-elc
+
+# 4) start (pass YOUR Clockwork source dirs)
+/opt/latproc/scripts/iod-elc.sh --name MYCELL /path/to/cw/lib /path/to/cw/config
+```
+
+| Path | Purpose |
+|------|---------|
+| `etc/elc_topology.conf` | **Product sample** topology (`ELC_TOPOLOGY_CONFIG` for plant maps) |
+| `etc/recipes/*.recipe.in` | **Product sample** servo CoE listings (copy/adapt in plant tree) |
+| `etc/iod.conf` | Debug flags (`-c`) |
+| `scripts/iod-elc.sh` | Load module + run `iod-elc` |
+| `etc/README.md` | Short onboarding for this directory |
+
+**Service wrapper:** site-owned (daemontools/systemd) may call `scripts/iod-elc.sh`
+with plant paths. Plant LPC/plugins are **not** part of generic Clockwork.
+
+Stream filter (MEMSNAPSHOT / runtime verbose): set `IOD_STREAM_FILTER=1` or
+pass `-v` / `IOD_LOG=…` to `scripts/iod-elc.sh`. Full ECDOMAIN / PROCSNAP file
+logging is opt-in via `/tmp/iod-verbose` when the filter is running.
 
 ### Opt-in verbose log (runtime, auto-off by TTL)
 
-**No `svc -t` / restart required** to enable or disable after the stream filter
-is running (filter is started with iod; one deploy restart installs it).
+**No `svc -t` / restart required** to enable or disable after a site stream
+filter is running (one deploy restart installs the filter if the site uses it).
 
 | Action | How |
 |--------|-----|
-| Enable (≤1 h default TTL) | `touch /tmp/iod-verbose` **or** `iod_verbose.sh on` |
-| Custom TTL (seconds) | `echo 1800 > /tmp/iod-verbose` **or** `iod_verbose.sh on 1800` |
-| Renew mtime / TTL | `touch /tmp/iod-verbose` **or** `iod_verbose.sh renew [ttl]` |
-| Disable | `rm -f /tmp/iod-verbose` **or** `iod_verbose.sh off` |
-| Status | `iod_verbose.sh status` |
-| One-shot CLI | run `iod-elc.sh -v` (not under svc) |
+| Enable (≤1 h default TTL) | `touch /tmp/iod-verbose` **or** `scripts/iod_verbose.sh on` |
+| Custom TTL (seconds) | `echo 1800 > /tmp/iod-verbose` **or** `scripts/iod_verbose.sh on 1800` |
+| Renew mtime / TTL | `touch /tmp/iod-verbose` **or** `scripts/iod_verbose.sh renew [ttl]` |
+| Disable | `rm -f /tmp/iod-verbose` **or** `scripts/iod_verbose.sh off` |
+| Status | `scripts/iod_verbose.sh status` |
+| One-shot foreground | run `iod-elc` with site logging as needed (not under svc) |
 
 Log file (when on): `/tmp/iod.log` (override with `IOD_LOG_FILE` or `IOD_LOG=`).
 Helper: `/opt/latproc/scripts/iod_verbose.sh`.
 
 Guards against filling the system:
 
-1. **Default off** — no switch → no verbose file (MEMSNAPSHOT still captured).
+1. **Default off** — no switch → no verbose file (MEMSNAPSHOT still captured if filter supports it).
 2. **TTL** — filter re-checks switch every ~2s; if mtime age ≥ TTL (file content
    = seconds, or `IOD_LOG_TTL_SEC`, default **3600**), switch is **removed** and
    verbose file logging stops (iod keeps running).
@@ -183,17 +216,11 @@ Env overrides: `IOD_VERBOSE_SWITCH`, `IOD_LOG_FILE`, `IOD_LOG`,
 `IOD_LOG_MAX_BYTES`, `IOD_LOG_TTL_SEC`, `IOD_VERBOSE_POLL_SEC`,
 `IOD_STREAM_FIFO`, `IOD_MEMSNAPSHOT_LOG`.
 
-Binary preference in the script: `/opt/latproc/iod/iod-elc`, else
-`iod/build-elc/iod-elc`. Topology: `iod/configs/elc_topology.conf` (or
-`ELC_TOPOLOGY_CONFIG`).
-
 ## Open work (task list pointer)
 
-Portable backlog (**slave identity / EL5152 product+revision auto-match +
-override**, **fail-closed startup** if any module mapping errors without an
-explicit override):
-
-  `code/llm-rules/cw_issues/IOD_ELC_OPEN_WORK_20260726.md`
+Backlog for elc plant work is tracked in site notes / issues (not under a
+generic `code/` path in this product tree). See also `iod/OPEN_WORK_PLAN.md`
+on this branch.
 
 **Stage 4 (2026-07-27):** dual-domain servo control power-off is
 **proven at elc and under CW/iod-elc**. elc: domain 2 incomplete, domain 1

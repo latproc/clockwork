@@ -1,53 +1,31 @@
-# Example of EtherCAT setup
-#
-# Part A: building from source
-#
-# This won't work as-is on recent kernels
-#
-# Method
-# ------
-#
-# in the ethercat dir
-git clone git@github.com:ribalda/ethercat.git
-cd ethercat
+# EtherCAT setup notes
 
-./bootstrap
-./configure --prefix=/opt/etherlab --enable-generic --enable-e1000e=no --enable-8139too=no --enable-hrtimer
+## This branch (feature/iod-elc-kernel-transport)
 
-make -j20 && make modules -j20 
-sudo make install
-sudo make modules_install
-sudo depmod -a
+Plant controller binary: **`iod-elc`** with kernel module **`elc_ethercat`**.
 
-# cd to clockwork
+Generic guidance (repo):
 
-ln -s $ETHERCAT_DIR ./ethercat
-scripts/prepare_ec_tool ethercat
-MY_ETHERNET_DEVICE=enp5s0
-sudo scripts/ethercat.sh start $MY_ETHERNET_DEVICE
-sudo scripts/ethercat.sh stop $MY_ETHERNET_DEVICE
+- **`etc/README.md`** — quick start for config layout
+- `TRANSPORT.md` — elc install, RT params, rates
+- `scripts/iod-elc.sh` — load `elc_ethercat`, run `iod-elc`
+- `etc/elc_topology.conf` — default topology (`ELC_TOPOLOGY_CONFIG` overrides)
+- `etc/recipes/` — sample servo CoE setup listings
+- `/opt/etherlab-cyclic-kmod` — transport source (DKMS, library, tools)
 
-# Part B: using debian packages
-#
-# install precompiled ethercat library
-sudo dpkg -i ethercat-lib/*.deb
+Site-specific LPC, plugins, and service units live in **your plant tree**. Point
+`scripts/iod-elc.sh` at those paths via argv/env.
 
-# removing precompiled library
-sudo dpkg -r libethercat libethercat-dbg libethercat-dev ethercat-master ethercat-dkms
+```bash
+./scripts/iod-elc.sh --name MYCELL /path/to/plant/lib /path/to/plant/config
+```
 
-# configure netplan
-#   cat /etc/netplan/01-network-manager-all.yaml :
-------------------
-# Let NetworkManager manage all devices on this system
-network:
-  version: 2
-  #renderer: NetworkManager
-  ethernets:
-    enp5s0:
-      {}
-    enp6s0:
-      dhcp4: true
-      dhcp6: true
-      optional: true
-------------------
+Do **not** use IgH `ec_master` / `scripts/ethercat.sh` for iod on this branch
+(`scripts/ethercat.sh` and `scripts/etherlab.sh` only print that message).
 
+## Legacy IgH userland (other branches only)
+
+`iod_sdo` / ecrt lives on **`prod-experimental-mqtt-fix`** (and related prod lines).
+Those checkouts may still use IgH master packages or `../ethercat/` source.
+
+See also: `iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md`.

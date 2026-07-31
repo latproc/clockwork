@@ -1,9 +1,10 @@
 # Open work plan (iod / Clockwork)
 
 **Updated:** 2026-07-31 (three-line branch model + Track E → client trunk)  
-**Branch:** `feature/iod-elc-kernel-transport` (line **B** — iod-elc / kernel)  
-**Also:** `prod-experimental-mqtt-fix` (line **A** — legacy iod/iod_sdo) ·  
-`prod-client-zmq-fix` (line **C** — cw_client / humid / modbusd / dbd / persistd)
+**Branch:** `feature/iod-elc-kernel-transport` (line **B** — **iod-elc only**, no ecrt)  
+**Also:** `prod-experimental-mqtt-fix` (line **A** — legacy `iod_sdo` / IgH ecrt) ·  
+`prod-client-zmq-fix` (line **C** — cw_client / humid / modbusd / dbd / persistd)  
+Bus cleanup: `iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md` (B stripped of dual-path ecrt).
 
 Multi-session context for thrash/PROCSNAP, idle CPU, analog emit, plant LPC, and
 channel/HMI client recovery. Branch port rules: `iod/docs/BRANCHES.md`,

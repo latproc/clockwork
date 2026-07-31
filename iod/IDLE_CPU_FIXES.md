@@ -198,7 +198,7 @@ Extended line fields:
 - `absorb`, `brk_dig`, `brk_out`, `brk_exec`, `brk_oth`
 - `oth[1..7]` ZMQ index wake counts (1=CMD, 2=SCHEDULER, 3=ECAT_OUT, …)
 
-Enable (runtime — **no** `svc -t` with current `iod-elc.sh` stream filter):
+Enable (runtime — **no** `svc -t` when a site stream filter honors `/tmp/iod-verbose`):
 
 ```bash
 touch /tmp/iod-verbose   # or: echo 3600 > /tmp/iod-verbose

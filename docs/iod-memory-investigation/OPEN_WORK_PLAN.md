@@ -1,13 +1,11 @@
 # Open work plan (iod / Clockwork)
 
-**Updated:** 2026-07-31  
-**This machine / branch:** `2C-120` (hostname) · plant class `2G4C` / process `--name 2GRAB` · `prod-experimental-mqtt-fix` (line **A** — legacy `iod` / `iod_sdo`)  
-**Related:** `feature/iod-elc-kernel-transport` (line **B** — elc dual-domain, analog emit, plant C/D) ·  
-`prod-client-zmq-fix` (line **C** — channel/ZMQ clients; cut from A)
+**Updated:** 2026-07-29  
+**This machine / branch:** `2C-120` (hostname) · plant class `2G4C` / process `--name 2GRAB` · `prod-experimental-mqtt-fix` (legacy `iod` / `iod_sdo`)  
+**Related:** `feature/iod-elc-kernel-transport` (elc — dual-domain, analog emit, plant C/D)
 
 Multi-session context so thrash/PROCSNAP, idle CPU, memory ownership, channels,
-and cross-branch port work do not get lost. Port rules: `iod/docs/BRANCHES.md`,
-`iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md`.
+and cross-branch port work do not get lost.
 
 ---
 
@@ -44,9 +42,8 @@ Earlier long-run MEMSNAPSHOT evidence (PID `3342133`, ~22.7 h, day climb to ~1.8
 | IOUpdate mask ownership | `6eaac1b8` |
 | Prior overnight flat MEMSNAPSHOT after ITEM fix | PID `3342133` 22.7 h — idle paths OK |
 
-Details and measurement: `iod/IDLE_CPU_FIXES.md`, `iod/MEMORY_LEAK_INVESTIGATION.md`.
-Plant-local issue notes (if present on this machine) are under the site tree, not
-the generic Clockwork product.
+Details and measurement: `iod/IDLE_CPU_FIXES.md`, `iod/MEMORY_LEAK_INVESTIGATION.md`,
+Plant-local issue notes (if any) live under the site tree, not generic Clockwork.
 
 ---
 
@@ -81,14 +78,10 @@ outputs enabled — see elc plan if working that site.
 
 ## Track E — Channel clients / HMI (CW2CW)
 
-**Canonical line:** `prod-client-zmq-fix` (**C**). New work: `scope: client-zmq`,
-land on C, port monorepo overlap to A/B, redeploy **client** binaries. See
-`iod/docs/BRANCHES.md`.
-
 **Intent:** Clients reconnect CHANNEL setup without process restart. No panel
 channel pre-start — data port from CHANNEL reply.
 
-### Done on A (mqtt-fix tip; C cut from this history)
+### Done on mqtt-fix (this branch tip)
 
 | Theme | Commits (representative) |
 |-------|---------------------------|
@@ -104,8 +97,7 @@ channel pre-start — data port from CHANNEL reply.
 
 | Item | Notes |
 |------|--------|
-| New channel client fixes | Develop on **C**; `scope: client-zmq`; port A/B |
-| Deploy channel-fixed binaries to all clients (humid, etc.) from **C** (or A after port) | Sticky REQ until kill if old client |
+| Deploy channel-fixed binaries to all clients (humid, etc.) | Sticky REQ until kill if old client |
 | Optional server bind harden | On `EADDRINUSE`: uniquePort / error — **do not exit(1)**; port-clash review if needed |
 | Quiet-load re-measure | After HMI/channel stable (`SHOW HEALTH`) |
 
