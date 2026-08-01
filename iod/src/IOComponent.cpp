@@ -1270,37 +1270,39 @@ int64_t AnalogueInput::filter(int64_t raw) {
         config->last_time = now_us;
     }
 
-    // Silent property publish every poll (no PROPERTY_CHANGE / no dependant wake).
-    // Dependant command fan-out only on owner notify_period (COMMANDCLOCK-style).
+    // Silent property publish when filtered raw moves (IOTIME already every sample).
+    // Dependant command: max rate notify_period, only on change (or first emit).
     const int64_t raw_val = static_cast<int64_t>(config->last_sent);
     const bool allowed = emitAllowed(config->emit_guard, config->emit_flag);
+    const bool raw_moved =
+        !config->startup_emitted || raw_val != config->last_emitted_raw || filter_due;
 
-    for (MachineInstance *o : owners) {
-        if (!o) {
-            continue;
+    if (raw_moved) {
+        for (MachineInstance *o : owners) {
+            if (!o) {
+                continue;
+            }
+            double factor = 1.0, base = 0.0, window = 0.0;
+            readScaleOptions(o, factor, base, window);
+            const double eng = engFromRaw(raw_val, factor, base);
+            o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
+            o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
+            o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
+            if (*config->calc_stddev) {
+                o->properties.add("stddev", bufferStddev(config->positions, 5),
+                                  SymbolTable::ST_REPLACE);
+            }
+            if (*config->calc_dt) {
+                o->properties.add("Velocity", config->speed * config->speed_scale,
+                                  SymbolTable::ST_REPLACE);
+            }
+            if (*config->calc_d2t) {
+                o->properties.add("Acceleration", config->accel * config->accel_scale,
+                                  SymbolTable::ST_REPLACE);
+            }
         }
-        double factor = 1.0, base = 0.0, window = 0.0;
-        readScaleOptions(o, factor, base, window);
-        const double eng = engFromRaw(raw_val, factor, base);
-        o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
-        o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
-        o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
-        if (*config->calc_stddev) {
-            o->properties.add("stddev", bufferStddev(config->positions, 5),
-                              SymbolTable::ST_REPLACE);
-        }
-        if (*config->calc_dt) {
-            o->properties.add("Velocity", config->speed * config->speed_scale,
-                              SymbolTable::ST_REPLACE);
-        }
-        if (*config->calc_d2t) {
-            o->properties.add("Acceleration", config->accel * config->accel_scale,
-                              SymbolTable::ST_REPLACE);
-        }
-
     }
 
-    // Max rate = notify_period; only SEND when value changed (or first emit).
     MachineInstance *notify_owner = owners.empty() ? nullptr : owners.front();
     const uint64_t period_ms = ownerNotifyPeriodMs(notify_owner);
     if (config->notify_clock.due(now_us, period_ms, allowed)) {
@@ -1552,22 +1554,26 @@ int64_t Counter::filter(int64_t val) {
 
     const int64_t raw_val = internals->last_sent;
     const bool allowed = emitAllowed(internals->emit_guard, internals->emit_flag);
+    // Property write when raw moves or filter advanced (Velocity may update on filter tick).
+    const bool raw_moved =
+        !internals->startup_emitted || raw_val != internals->last_emitted_raw || filter_due;
 
-    // Silent property publish every poll.
-    for (MachineInstance *o : owners) {
-        if (!o) {
-            continue;
+    if (raw_moved) {
+        for (MachineInstance *o : owners) {
+            if (!o) {
+                continue;
+            }
+            double factor = 1.0, base = 0.0, window = 0.0;
+            readScaleOptions(o, factor, base, window);
+            const double eng = engFromRaw(raw_val, factor, base);
+            o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
+            o->properties.add("Position", raw_val, SymbolTable::ST_REPLACE);
+            o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
+            o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
+                              SymbolTable::ST_REPLACE);
+            o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
+                              SymbolTable::ST_REPLACE);
         }
-        double factor = 1.0, base = 0.0, window = 0.0;
-        readScaleOptions(o, factor, base, window);
-        const double eng = engFromRaw(raw_val, factor, base);
-        o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
-        o->properties.add("Position", raw_val, SymbolTable::ST_REPLACE);
-        o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
-        o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
-                          SymbolTable::ST_REPLACE);
-        o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
-                          SymbolTable::ST_REPLACE);
     }
 
     MachineInstance *notify_owner = owners.empty() ? nullptr : owners.front();
@@ -1593,6 +1599,12 @@ int64_t Counter::filter(int64_t val) {
             internals->last_emit_us = now_us;
             internals->startup_emitted = true;
         }
+    }
+    // Track last silent property raw even when no command was sent (skip redundant writes).
+    if (raw_moved && !notifyValueChanged(owners, raw_val, internals->last_emitted_raw,
+                                         internals->last_emitted_eng, true)) {
+        // Value within window: still remember raw so we do not rewrite every filter tick.
+        // last_emitted_raw is only for notify hysteresis; use last_sent equality via raw_moved.
     }
     return raw_val;
 }
