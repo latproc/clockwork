@@ -477,12 +477,19 @@ void ModbusClientThread::operator()() {
             if (ctx) {
                 connected = true;
                 update_status = true;
+                // Clear change caches so the first poll after (re)connect republishes
+                // current discrete/register state to clockwork (see BufferMonitor::refresh).
+                refresh();
             }
         }
         else {
             performUpdates();
             if (update_status) {
                 sendStatus("initialising");
+                // Status leaves "active" here → INPUTBITs forced off in clockwork.
+                // Refresh again so this cycle's collect republishes true device state
+                // when we return to active (not only edges vs the pre-disconnect cache).
+                refresh();
             }
             if (!collect_selected_updates(robits_monitor, 1, tab_ro_bits, mc.monitors,
                                           "modbus_read_input_bits", modbus_read_input_bits)) {

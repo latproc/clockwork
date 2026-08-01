@@ -195,23 +195,56 @@ void sendPropertyUpdate(ModbusClientThread *client, ModbusMonitor *mm) {
 
 ModbusClientThread *mb = 0;
 
+// Soft-reconnect state. ZMQ_EVENT_DISCONNECTED often does not fire on iod
+// restart (zombie TCP / long outage), so recovery is driven from the main
+// loop via checkConnections + forceFullReconnect. Supervise exit is a
+// last-resort fallback if soft reconnect stalls (same class of issue as humid).
+static bool need_refresh = false;
+static bool reported_iod_down = false;
+
 class SetupDisconnectMonitor : public EventResponder {
   public:
     void operator()(const zmq_event_t &event_, const char *addr_) {
+        if (iod_connected || !reported_iod_down) {
+            std::cerr << "iod disconnected event (" << (addr_ ? addr_ : "?") << ")\n";
+            FileLogger fl(program_name);
+            fl.f() << "iod disconnected event (" << (addr_ ? addr_ : "?") << ")\n";
+        }
         iod_connected = false;
-        exit(0);
+        need_refresh = true;
+        // Do not exit(0) here. Immediate exit only helped when the event fired;
+        // long outages need in-process forceFullReconnect, and a mid-outage
+        // restart storm is worse than a controlled main-loop recovery.
     }
 };
-
-static bool need_refresh = false;
 
 class SetupConnectMonitor : public EventResponder {
   public:
     void operator()(const zmq_event_t &event_, const char *addr_) {
         iod_connected = true;
         need_refresh = true;
+        std::cerr << "iod connected event (" << (addr_ ? addr_ : "?") << ")\n";
+        FileLogger fl(program_name);
+        fl.f() << "iod connected event (" << (addr_ ? addr_ : "?") << ")\n";
     }
 };
+
+// After CHANNEL is back (e_done), republish Status and all monitored I/O so
+// clockwork INPUTBITs cannot stay forced-off from the disconnect window.
+static void resyncAfterIodLinkUp(const char *why) {
+    std::cerr << "iod link up — resync (" << (why ? why : "") << ")\n";
+    {
+        FileLogger fl(program_name);
+        fl.f() << "iod link up — resync (" << (why ? why : "") << ")\n";
+    }
+    iod_connected = true;
+    need_refresh = false;
+    reported_iod_down = false;
+    update_status = true;
+    if (mb) {
+        mb->refresh();
+    }
+}
 
 void loadRemoteConfiguration(zmq::socket_t &iod, std::string &chn_instance_name, PLCInterface &plc,
                              MonitorConfiguration &mc) {
@@ -483,12 +516,20 @@ int main(int argc, const char *argv[]) {
     setSocketLinger0(iosh_cmd);
     iosh_cmd.bind(local_commands);
 
-    SubscriptionManager subscription_manager(chn_instance_name.c_str(), eCLOCKWORK, "localhost",
+    // Use the channel *definition* name (e.g. MODBUS_RTU_CHANNEL), not the
+    // instance from the first grant (MODBUS_RTU_CHANNEL_7701). After iod restarts
+    // the instance is gone; CHANNEL must re-create from the definition (same as
+    // humid/persistd). REFRESH above still uses the instance name for mappings.
+    SubscriptionManager subscription_manager(options.channelName(), eCLOCKWORK, "localhost",
                                              5555);
     SetupDisconnectMonitor disconnect_responder;
     SetupConnectMonitor connect_responder;
+    // Watch both setup (5555) and subscriber (CHANNEL port). iod restart often
+    // kills the dynamic SUB first; setup-only monitoring missed that path.
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
+    subscription_manager.monit_subs.addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
+    subscription_manager.monit_subs.addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
     subscription_manager.setupConnections();
 
     ModbusClientThread modbus_interface(*ms, mc, options, update_status, local_commands);
@@ -503,6 +544,13 @@ int main(int argc, const char *argv[]) {
 
     int exception_count = 0;
     int error_count = 0;
+    bool link_up = false;
+    int iod_down_streak = 0;
+    // Soft reconnect every few seconds while down; supervise restart if still
+    // stranded after a long outage (zombie REQ/SUB sessions, humid-class bug).
+    const int iod_force_reconnect_every = 3;  // seconds (matches usleep below)
+    const int iod_exit_after_seconds = 90;    // long enough for iod boot + CHANNEL
+
     while (program_state != s_finished) {
 
         zmq::pollitem_t items[] = {{subscription_manager.setup(), 0, ZMQ_POLLIN, 0},
@@ -510,14 +558,55 @@ int main(int argc, const char *argv[]) {
                                    {iosh_cmd, 0, ZMQ_POLLIN, 0}};
         try {
             if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) {
-                if (options.verbose)
-                    std::cerr << "no connection to iod\n";
+                if (link_up || !reported_iod_down) {
+                    std::cerr << "no connection to iod — reconnecting\n";
+                    FileLogger fl(program_name);
+                    fl.f() << "no connection to iod — reconnecting\n";
+                    sendStatus("disconnected");
+                    update_status = true;
+                    reported_iod_down = true;
+                }
+                link_up = false;
+                iod_connected = false;
+                need_refresh = true;
+                ++iod_down_streak;
+
+                // checkConnections already forceFullReconnects on many paths;
+                // also poke on a timer so long outages / zombie e_done sessions
+                // cannot sit forever without re-CHANNEL.
+                if (iod_down_streak == 1 ||
+                    (iod_down_streak % iod_force_reconnect_every) == 0) {
+                    subscription_manager.forceFullReconnect("mbmon iod link down");
+                }
+
+                if (iod_down_streak >= iod_exit_after_seconds) {
+                    std::cerr << "iod reconnect stalled for " << iod_down_streak
+                              << "s; exiting for supervise restart\n";
+                    FileLogger fl(program_name);
+                    fl.f() << "iod reconnect stalled for " << iod_down_streak
+                           << "s; exiting for supervise restart\n";
+                    sendStatus("disconnected");
+                    exit(0);
+                }
+
                 usleep(1000000);
                 exception_count = 0;
                 continue;
             }
 
             exception_count = 0;
+            iod_down_streak = 0;
+
+            // Full CHANNEL session required before treating the link as up.
+            if (subscription_manager.setupStatus() != SubscriptionManager::e_done) {
+                usleep(50000);
+                continue;
+            }
+
+            if (!link_up || need_refresh) {
+                resyncAfterIodLinkUp(link_up ? "need_refresh" : "link restored");
+                link_up = true;
+            }
         }
         catch (const std::exception &ex) {
             std::cerr << "polling connections: " << ex.what() << "\n";
@@ -525,10 +614,14 @@ int main(int argc, const char *argv[]) {
                 FileLogger fl(program_name);
                 fl.f() << "exception when polling connections " << ex.what() << "\n";
             }
+            link_up = false;
+            need_refresh = true;
             if (++exception_count <= 5 && program_state != s_finished) {
+                subscription_manager.forceFullReconnect("mbmon poll exception");
                 usleep(400000);
                 continue;
             }
+            // Hard failure — let supervise restart a clean process.
             exit(0);
         }
 
@@ -543,13 +636,22 @@ int main(int argc, const char *argv[]) {
                 usleep(50);
                 continue;
             }
-            if (errno == EFSM)
-                exit(1);
-            if (errno == ENOTSOCK)
-                exit(1);
+            // Stranded SUB after peer death: prefer soft reconnect over hard exit.
             std::cerr << "subscriber recv: " << zmq_strerror(zmq_errno()) << "\n";
-            if (++error_count > 5)
-                exit(1);
+            {
+                FileLogger fl(program_name);
+                fl.f() << "subscriber recv error: " << zmq_strerror(zmq_errno()) << "\n";
+            }
+            link_up = false;
+            need_refresh = true;
+            iod_connected = false;
+            sendStatus("disconnected");
+            update_status = true;
+            subscription_manager.forceFullReconnect("mbmon subscriber recv error");
+            if (++error_count > 5) {
+                exit(0); // supervise restart
+            }
+            usleep(200000);
             continue;
         }
         error_count = 0;
