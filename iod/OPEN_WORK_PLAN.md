@@ -65,11 +65,12 @@ raw `VALUE` (and `Position` for COUNTER) plus scaled `ENG` and queues `update` o
 direct dependants that declare `RECEIVE update`.  An already-pending update is coalesced.
 
 IO publish vs control clocks: every poll iod refreshes IA/COUNTER `IOTIME`/`VALUE`/`ENG`
-silently. Dependant **messages** use owner `notify_period` + `command` (default `"update"`),
-only to machines that declare that command. Controllers use `COMMANDCLOCK` (`notify_period` +
-`command` default `calcAdjust`, `Guard`) and list the clock as a parameter; they read IA
-properties inside `calcAdjust` and do not need `RECEIVE update`. Replaces `PIDLISTCLOCK` /
-soft-clock AI lists; sampling stays iod-owned.
+silently. Dependant **messages** use owner `notify_period` (max rate) + `command` (default
+`"update"`), only when the value has **changed** (eng `window` / raw) or on first emit, and
+only to machines that declare that command. Controllers use `COMMANDCLOCK` (fixed
+`notify_period` + `command` default `calcAdjust`, `Guard`) and list the clock as a parameter;
+they read IA properties inside `calcAdjust` and do not need `RECEIVE update`. Replaces
+`PIDLISTCLOCK` / soft-clock AI lists; sampling stays iod-owned.
 
 ### Intent (end state)
 

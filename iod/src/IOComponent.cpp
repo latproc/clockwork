@@ -739,7 +739,8 @@ uint64_t filterPeriodUs(const int64_t *throttle_ms) {
     return periodUsFromMs(throttle_ms, 100, 1, 5000);
 }
 
-// Owner notify_period (ms) for dependant command fan-out. Default 100.
+// Owner notify_period (ms): max rate for dependant command fan-out. Default 100.
+// Actual sends also require a value change (or first startup emit) — see notifyIfDue.
 uint64_t ownerNotifyPeriodMs(MachineInstance *o) {
     if (!o) {
         return 100;
@@ -843,6 +844,40 @@ void readScaleOptions(MachineInstance *m, double &factor, double &base, double &
 
 double engFromRaw(int64_t raw, double factor, double base) {
     return static_cast<double>(raw) * factor + base;
+}
+
+// First emit, or eng/raw moved past owner window (max-rate limited by notify_period).
+bool notifyValueChanged(const std::list<MachineInstance *> &owners, int64_t raw_val,
+                        int64_t last_raw, double last_eng, bool startup_done) {
+    if (!startup_done) {
+        return true;
+    }
+    if (owners.empty()) {
+        return raw_val != last_raw;
+    }
+    for (MachineInstance *o : owners) {
+        if (!o) {
+            continue;
+        }
+        double factor = 1.0, base = 0.0, window = 0.0;
+        readScaleOptions(o, factor, base, window);
+        const double eng = engFromRaw(raw_val, factor, base);
+        if (window <= 0.0) {
+            if (raw_val != last_raw) {
+                return true;
+            }
+        }
+        else {
+            double deng = eng - last_eng;
+            if (deng < 0) {
+                deng = -deng;
+            }
+            if (deng > window) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 } // namespace
 
@@ -1265,22 +1300,30 @@ int64_t AnalogueInput::filter(int64_t raw) {
 
     }
 
-    // One cadence for the IO component; period/command from first owner (typical: one).
+    // Max rate = notify_period; only SEND when value changed (or first emit).
     MachineInstance *notify_owner = owners.empty() ? nullptr : owners.front();
     const uint64_t period_ms = ownerNotifyPeriodMs(notify_owner);
     if (config->notify_clock.due(now_us, period_ms, allowed)) {
-        const char *cmd = ownerCommandName(notify_owner, "update");
-        for (MachineInstance *o : owners) {
-            if (!o) {
-                continue;
+        if (notifyValueChanged(owners, raw_val, config->last_emitted_raw,
+                               config->last_emitted_eng, config->startup_emitted)) {
+            const char *cmd = ownerCommandName(notify_owner, "update");
+            double eng_for_track = static_cast<double>(raw_val);
+            for (MachineInstance *o : owners) {
+                if (!o) {
+                    continue;
+                }
+                double factor = 1.0, base = 0.0, window = 0.0;
+                readScaleOptions(o, factor, base, window);
+                eng_for_track = engFromRaw(raw_val, factor, base);
+                DBG_MESSAGING << o->getName() << " iod " << cmd
+                              << " notify_period=" << period_ms << "ms (change)\n";
+                o->notifyCommandConsumers(cmd);
             }
-            DBG_MESSAGING << o->getName() << " iod " << cmd
-                          << " notify_period=" << period_ms << "ms\n";
-            o->notifyCommandConsumers(cmd);
+            config->last_emitted_raw = raw_val;
+            config->last_emitted_eng = eng_for_track;
+            config->last_emit_us = now_us;
+            config->startup_emitted = true;
         }
-        config->last_emitted_raw = raw_val;
-        config->last_emit_us = now_us;
-        config->startup_emitted = true;
     }
     return raw_val;
 }
@@ -1530,18 +1573,26 @@ int64_t Counter::filter(int64_t val) {
     MachineInstance *notify_owner = owners.empty() ? nullptr : owners.front();
     const uint64_t period_ms = ownerNotifyPeriodMs(notify_owner);
     if (internals->notify_clock.due(now_us, period_ms, allowed)) {
-        const char *cmd = ownerCommandName(notify_owner, "update");
-        for (MachineInstance *o : owners) {
-            if (!o) {
-                continue;
+        if (notifyValueChanged(owners, raw_val, internals->last_emitted_raw,
+                               internals->last_emitted_eng, internals->startup_emitted)) {
+            const char *cmd = ownerCommandName(notify_owner, "update");
+            double eng_for_track = static_cast<double>(raw_val);
+            for (MachineInstance *o : owners) {
+                if (!o) {
+                    continue;
+                }
+                double factor = 1.0, base = 0.0, window = 0.0;
+                readScaleOptions(o, factor, base, window);
+                eng_for_track = engFromRaw(raw_val, factor, base);
+                DBG_MESSAGING << o->getName() << " iod " << cmd
+                              << " notify_period=" << period_ms << "ms (change)\n";
+                o->notifyCommandConsumers(cmd);
             }
-            DBG_MESSAGING << o->getName() << " iod " << cmd
-                          << " notify_period=" << period_ms << "ms\n";
-            o->notifyCommandConsumers(cmd);
+            internals->last_emitted_raw = raw_val;
+            internals->last_emitted_eng = eng_for_track;
+            internals->last_emit_us = now_us;
+            internals->startup_emitted = true;
         }
-        internals->last_emitted_raw = raw_val;
-        internals->last_emit_us = now_us;
-        internals->startup_emitted = true;
     }
     return raw_val;
 }
