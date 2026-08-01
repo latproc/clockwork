@@ -24,7 +24,18 @@ template <class T> class BufferMonitor {
           initial_read(true), options(global_options) {}
     ~BufferMonitor() {}
 
-    void refresh() { initial_read = true; }
+    // Force the next check() to republish every monitored value (same effect as a
+    // cold start of mbmon). Required after reconnect: clockwork INPUTBIT forces
+    // off on PLC.disconnected_enter / Status!=active, but mbmon only published
+    // edges vs cmp_data, so unchanged 1-bits never re-synced and stayed off.
+    void refresh() {
+        initial_read = true;
+        if (buflen && cmp_data) {
+            memset(cmp_data, 0, buflen * sizeof(T));
+            if (last_data)
+                memset(last_data, 0, buflen * sizeof(T));
+        }
+    }
 
     void setMaskBits(int start, int num) {
         if (!dbg_mask)
@@ -64,9 +75,12 @@ template <class T> class BufferMonitor {
             }
             T *p = upd_data, *q = cmp_data; //, *msk = dbg_mask;
             // note: masks are not currently used but we retain this functionality for future
+            // On initial_read/refresh, report every monitored address so iod is resynced
+            // even when the device value matches our previous cache (e.g. still 1 after
+            // clockwork forced the INPUTBIT off during Status initialising/disconnect).
             for (size_t ii = 0; ii < size; ++ii) {
                 ModbusMonitor *mm;
-                if (*q != *p) {
+                if (initial_read || *q != *p) {
                     //if (options.verbose) std::cout << "change at " << (base_address + (q-cmp_data) ) << "\n";
                     mm = ModbusMonitor::lookupAddress(base_address + (q - cmp_data));
                     if (mm) {
