@@ -2570,67 +2570,64 @@ void MachineInstance::notifyDependents() {
     }
 }
 
-void MachineInstance::notifyClockedUpdateConsumers() {
-    // Only machines that declare RECEIVE update (CLOCKEDANALOGINPUT / CLOCKEDCOUTER*).
+void MachineInstance::notifyCommandConsumers(const char *command_name) {
+    // Only dependants that declare the command (RECEIVE/COMMAND handlers).
     // Same interest filter idea as CHANNEL "MONITORS MACHINES LINKED TO …".
-    static Message update_msg("update");
+    if (!command_name || !*command_name) {
+        command_name = "update";
+    }
+    Message command_msg(command_name);
     for (MachineInstance *dep : depends) {
         if (!dep || dep == this || !dep->enabled()) {
             continue;
         }
-        if (dep->receives_functions.find(update_msg) == dep->receives_functions.end()) {
+        if (dep->receives_functions.find(command_msg) == dep->receives_functions.end()) {
             continue;
         }
-        if (dep->hasPending(update_msg)) {
+        if (dep->hasPending(command_msg)) {
             continue; // do not flood mail queue
         }
-        DBG_M_MESSAGING << _name << " clocked update -> " << dep->getName() << "\n";
-        sendMessageToReceiver(update_msg, dep, false);
+        DBG_M_MESSAGING << _name << " " << command_name << " -> " << dep->getName() << "\n";
+        sendMessageToReceiver(command_msg, dep, false);
     }
 }
 
-void MachineInstance::dispatchIODCalcAdjust(uint64_t now_us) {
+void MachineInstance::dispatchCommandClocks(uint64_t now_us) {
     std::unique_lock<std::mutex> lock(global_lists_mutex);
 
     for (MachineInstance *clock : all_machines) {
-        if (!clock || clock->_type != "IODCALCADJUSTCLOCK") {
+        if (!clock || clock->_type != "COMMANDCLOCK") {
             continue;
         }
 
-        MachineInstance *settings = clock->lookup("Settings");
-        MachineInstance *enable = clock->lookup("Enable");
-        MachineInstance *list = clock->lookup("List");
-        if (!settings || !list) {
-            continue;
-        }
-
-        uint64_t rate_ms = 1000;
-        const Value &configured_rate = settings->getValue("rate");
-        if (configured_rate.kind == Value::t_integer && configured_rate.iValue > 0) {
-            rate_ms = static_cast<uint64_t>(configured_rate.iValue);
+        uint64_t period_ms = 1000;
+        const Value &configured_period = clock->getValue("notify_period");
+        if (configured_period.kind == Value::t_integer && configured_period.iValue > 0) {
+            period_ms = static_cast<uint64_t>(configured_period.iValue);
         }
         std::string command_name("calcAdjust");
-        const Value &configured_command = settings->getValue("command");
+        const Value &configured_command = clock->getValue("command");
         if (configured_command.kind == Value::t_string && !configured_command.sValue.empty()) {
             command_name = configured_command.sValue;
         }
 
-        // The CW state makes the configuration's gate visible to DESCRIBE.
-        // Retain the direct Enable test as a fail-closed guard while a state
-        // transition is queued or Enable becomes disabled.
+        // Local CW state is visible to DESCRIBE; also fail-closed on Guard while a
+        // transition is queued or Guard becomes disabled/off/false.
+        MachineInstance *guard = clock->lookup("Guard");
         bool enabled = strcmp(clock->getCurrentStateString(), "on") == 0;
-        enabled = enabled && enable && enable->enabled();
+        enabled = enabled && guard && guard->enabled();
         if (enabled) {
-            const char *state = enable->getCurrentStateString();
+            const char *state = guard->getCurrentStateString();
             enabled = state && strcasecmp(state, "off") != 0 && strcasecmp(state, "false") != 0;
         }
 
-        if (!clock->iod_calc_adjust_clock.due(now_us, rate_ms, enabled)) {
+        if (!clock->command_clock.due(now_us, period_ms, enabled)) {
             continue;
         }
-        DBG_MESSAGING << clock->getName() << " iod " << command_name << " -> "
-                      << list->getName() << " rate=" << rate_ms << "ms\n";
-        clock->sendMessageToReceiver(command_name.c_str(), list, false);
+
+        DBG_MESSAGING << clock->getName() << " iod " << command_name
+                      << " notify_period=" << period_ms << "ms\n";
+        clock->notifyCommandConsumers(command_name.c_str());
     }
 }
 

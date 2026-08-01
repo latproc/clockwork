@@ -111,6 +111,7 @@ iod/cw_ecat
 iod/modbusd
 iod/iod
 iod/iod_sdo
+iod/iod-elc
 iod/persistd
 iod/iosh
 iod/device_connector

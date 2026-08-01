@@ -64,13 +64,12 @@ startup, on filtered/raw engineering-window change, and at `safety_emit`.  The e
 raw `VALUE` (and `Position` for COUNTER) plus scaled `ENG` and queues `update` only for enabled,
 direct dependants that declare `RECEIVE update`.  An already-pending update is coalesced.
 
-This selective receive update is deliberately not a periodic control scheduler.  Controllers
-that require a common fixed cadence use `IODCALCADJUSTCLOCK`: iod checks each configured group
-on every input poll and, on the first poll at or after its monotonic-clock `Settings.rate`
-boundary, sends `Settings.command` (default `calcAdjust`) to the group's `List` while its
-local state is `on` (`Enable` is on). The rate and command are configured per group.
-This replaces `PIDLISTCLOCK`; it leaves analog/counter sampling owned by iod and avoids CW
-state-transition clocks.
+IO publish vs control clocks: every poll iod refreshes IA/COUNTER `IOTIME`/`VALUE`/`ENG`
+silently. Dependant **messages** use owner `notify_period` + `command` (default `"update"`),
+only to machines that declare that command. Controllers use `COMMANDCLOCK` (`notify_period` +
+`command` default `calcAdjust`, `Guard`) and list the clock as a parameter; they read IA
+properties inside `calcAdjust` and do not need `RECEIVE update`. Replaces `PIDLISTCLOCK` /
+soft-clock AI lists; sampling stays iod-owned.
 
 ### Intent (end state)
 

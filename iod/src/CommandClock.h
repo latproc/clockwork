@@ -1,14 +1,14 @@
-#ifndef IOD_CALC_ADJUST_CLOCK_H
-#define IOD_CALC_ADJUST_CLOCK_H
+#ifndef COMMAND_CLOCK_H
+#define COMMAND_CLOCK_H
 
 #include <cstdint>
 
 /*
- * Monotonic, phase-aligned cadence for an IODCALCADJUSTCLOCK group.
+ * Monotonic, phase-aligned cadence for a COMMANDCLOCK instance.
  * A disabled group records the current slot and waits for the next boundary
  * after it is enabled; it never catches up missed commands in a burst.
  */
-class IODCalcAdjustClock {
+class CommandClock {
   public:
     bool due(uint64_t now_us, uint64_t period_ms, bool enabled) {
         if (period_ms == 0) {

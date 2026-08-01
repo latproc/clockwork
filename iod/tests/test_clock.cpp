@@ -3,7 +3,7 @@
 #include <unistd.h>
 
 #include "clock.cpp"
-#include "IODCalcAdjustClock.h"
+#include "CommandClock.h"
 
 TEST(ClockTest, CanGetClock) {
     uint64_t t1 = Clock::clock();
@@ -12,8 +12,8 @@ TEST(ClockTest, CanGetClock) {
     EXPECT_TRUE(t2 > t1);
 }
 
-TEST(IODCalcAdjustClockTest, DispatchesOnceOnEachMonotonicBoundary) {
-    IODCalcAdjustClock clock;
+TEST(CommandClockTest, DispatchesOnceOnEachMonotonicBoundary) {
+    CommandClock clock;
 
     EXPECT_FALSE(clock.due(25'000, 50, true));   // arm in the 0-49 ms slot
     EXPECT_FALSE(clock.due(49'999, 50, true));
@@ -22,8 +22,8 @@ TEST(IODCalcAdjustClockTest, DispatchesOnceOnEachMonotonicBoundary) {
     EXPECT_TRUE(clock.due(100'000, 50, true));
 }
 
-TEST(IODCalcAdjustClockTest, DisabledGroupsWaitForTheNextBoundary) {
-    IODCalcAdjustClock clock;
+TEST(CommandClockTest, DisabledGroupsWaitForTheNextBoundary) {
+    CommandClock clock;
 
     EXPECT_FALSE(clock.due(1'000, 100, false));
     EXPECT_FALSE(clock.due(99'999, 100, true));

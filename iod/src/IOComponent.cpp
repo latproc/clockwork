@@ -19,6 +19,7 @@
 */
 
 #include "IOComponent.h"
+#include "CommandClock.h"
 #include "DebugExtra.h"
 #include "ECInterface.h"
 #include "Logger.h"
@@ -129,8 +130,8 @@ void handle_io_sampling(uint64_t io_clock) {
         }
     }
     // Periodic control is distinct from ANALOGINPUT/COUNTER change emits.
-    // One IOD-monotonic tick dispatches every due IODCALCADJUSTCLOCK group.
-    MachineInstance::dispatchIODCalcAdjust(now);
+    // One IOD-monotonic tick dispatches every due COMMANDCLOCK instance.
+    MachineInstance::dispatchCommandClocks(now);
 }
 
 void IOComponent::publishSampleTime(uint64_t sample_clock, bool publish_raw, int64_t raw) {
@@ -733,14 +734,60 @@ uint64_t periodUsFromMs(const int64_t *ms_prop, int64_t default_ms, int64_t min_
     return static_cast<uint64_t>(ms) * 1000ULL;
 }
 
-// Filter / change-detect tick (throttle or rate). Default 100 ms (CLOCKING rate:100).
+// Filter advance tick (throttle; legacy rate alias on settings). Default 100 ms.
 uint64_t filterPeriodUs(const int64_t *throttle_ms) {
     return periodUsFromMs(throttle_ms, 100, 1, 5000);
 }
 
-// Safety keepalive emit even when VALUE is unchanged. Default 1000 ms.
-uint64_t safetyEmitPeriodUs(const int64_t *safety_ms) {
-    return periodUsFromMs(safety_ms, 1000, 50, 60000);
+// Owner notify_period (ms) for dependant command fan-out. Default 100.
+uint64_t ownerNotifyPeriodMs(MachineInstance *o) {
+    if (!o) {
+        return 100;
+    }
+    const Value &v = o->getValue("notify_period");
+    if (v.kind == Value::t_integer && v.iValue > 0) {
+        return static_cast<uint64_t>(v.iValue);
+    }
+    return 100;
+}
+
+const char *ownerCommandName(MachineInstance *o, const char *default_cmd) {
+    if (!o) {
+        return default_cmd;
+    }
+    const Value &v = o->getValue("command");
+    if (v.kind == Value::t_string && !v.sValue.empty()) {
+        return v.sValue.c_str();
+    }
+    return default_cmd;
+}
+
+// Apply plant OPTION signed:1 on owner to IOAddress (ESI may leave is_signed false).
+void applyOwnerSignedFlag(MachineInstance *m, IOAddress &addr) {
+    if (!m) {
+        return;
+    }
+    const Value &s = m->getValue("signed");
+    if (s.kind == Value::t_integer && s.iValue != 0) {
+        addr.is_signed = true;
+    }
+}
+
+// Sign-extend multi-bit wire value when address is marked signed.
+int64_t signExtendWireValue(int64_t val, unsigned int bitlen, bool is_signed) {
+    if (!is_signed) {
+        return val;
+    }
+    if (bitlen == 8) {
+        return static_cast<int64_t>(static_cast<int8_t>(val & 0xff));
+    }
+    if (bitlen == 16) {
+        return static_cast<int64_t>(static_cast<int16_t>(val & 0xffff));
+    }
+    if (bitlen == 32) {
+        return static_cast<int64_t>(static_cast<int32_t>(val & 0xffffffffu));
+    }
+    return val;
 }
 
 // Guard / flag like M_ClockedAnalogInputs + G_CoreE24:
@@ -841,10 +888,11 @@ class InputFilterSettings {
     ButterworthFilter *input_bwf;
     ButterworthFilter *vel_bwf;
     ButterworthFilter *accel_bwf;
-    const int64_t *throttle;     // ms filter/change period (alias: rate)
-    const int64_t *safety_emit;  // ms safety keepalive emit (default 1000)
+    const int64_t *throttle;     // ms filter advance period (alias: rate on settings)
+    const int64_t *safety_emit;  // legacy; not used for notify schedule
     const int64_t *emit_flag;    // optional 0/1 flag (emit / enable)
     MachineInstance *emit_guard; // optional on/off|true/false machine (e.g. G_CoreE24)
+    CommandClock notify_clock;   // dependant command cadence (owner notify_period)
 
     InputFilterSettings()
         : property_changed(true), positions(0), last_sent(0.0), prev_sent(0.0), last_time(0),
@@ -1134,6 +1182,7 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
     else {
         std::cout << "Warning: analog input " << m->getName() << " has no filter settings\n";
     }
+    applyOwnerSignedFlag(m, address);
 }
 
 int64_t AnalogueInput::filter(int64_t raw) {
@@ -1144,17 +1193,14 @@ int64_t AnalogueInput::filter(int64_t raw) {
     // Period gates use wall clock (microsecs). Do not mix with EC sample
     // read_time / application clock — different epochs make filter always-due.
     const uint64_t filter_us = filterPeriodUs(config->throttle);
-    const uint64_t safety_us = safetyEmitPeriodUs(config->safety_emit);
     const uint64_t now_us = microsecs();
     const bool filter_due =
         (config->last_time == 0) || (now_us - config->last_time >= filter_us);
 
-    bool value_changed = false;
     if (filter_due) {
         if (config->property_changed) {
             config->property_changed = false;
         }
-        const int64_t prev_sent = static_cast<int64_t>(config->last_sent);
 
         // Filter + tolerance (setup standard). Only advance last_sent past tol.
         addSample(config->positions, (long)read_time, (double)raw);
@@ -1187,27 +1233,13 @@ int64_t AnalogueInput::filter(int64_t raw) {
         }
         config->update(read_time);
         config->last_time = now_us;
-        value_changed = (static_cast<int64_t>(config->last_sent) != prev_sent);
     }
 
-    // CW property publish policy (owner only — do NOT notifyDependents).
-    //
-    // DIGITALVALUE-style notifyDependents woke every IA dependent and pinned
-    // the plant. Instead: publish owner properties, then
-    // notifyClockedUpdateConsumers() — SEND "update" only to machines that
-    // declare RECEIVE update (CLOCKEDANALOGINPUT / CLOCKEDCOUTER*). Plant
-    // L_ClockedAnalogInputs + M_ClockedAnalogInputs remain a rate/guard poke.
-    // Plugins bind live int pointers on IA (VALUE/raw).
-    //
-    // Publish schedule:
-    //  1) once at startup
-    //  2) filtered raw change + eng window (factor/base/window on owner)
-    //  3) safety keepalive at safety_emit
-    // Gated by emit flag / guard (on|off|true|false), like G_CoreE24.
+    // Silent property publish every poll (no PROPERTY_CHANGE / no dependant wake).
+    // Dependant command fan-out only on owner notify_period (COMMANDCLOCK-style).
     const int64_t raw_val = static_cast<int64_t>(config->last_sent);
     const bool allowed = emitAllowed(config->emit_guard, config->emit_flag);
 
-    bool any_change = false;
     for (MachineInstance *o : owners) {
         if (!o) {
             continue;
@@ -1215,50 +1247,7 @@ int64_t AnalogueInput::filter(int64_t raw) {
         double factor = 1.0, base = 0.0, window = 0.0;
         readScaleOptions(o, factor, base, window);
         const double eng = engFromRaw(raw_val, factor, base);
-        double deng = eng - config->last_emitted_eng;
-        if (deng < 0) {
-            deng = -deng;
-        }
-        const bool past_window =
-            (window <= 0.0)
-                ? (raw_val != config->last_emitted_raw)
-                : (deng > window);
-        if (past_window) {
-            any_change = true;
-            break;
-        }
-    }
-    if (owners.empty() && value_changed) {
-        any_change = (raw_val != config->last_emitted_raw);
-    }
-
-    const bool need_startup = allowed && !config->startup_emitted;
-    const bool need_change = allowed && any_change;
-    const bool need_safety =
-        allowed && config->startup_emitted &&
-        (config->last_emit_us == 0 || now_us - config->last_emit_us >= safety_us);
-    if (!need_startup && !need_change && !need_safety) {
-        return raw_val;
-    }
-
-    // VALUE = integer filtered raw (plugins). Optional ENG for scaled consumers
-    // that read IA directly. No activate/notifyDependents — keeps fan-out off.
-    double first_eng = static_cast<double>(raw_val);
-    bool first = true;
-    for (MachineInstance *o : owners) {
-        if (!o) {
-            continue;
-        }
-        double factor = 1.0, base = 0.0, window = 0.0;
-        readScaleOptions(o, factor, base, window);
-        const double eng = engFromRaw(raw_val, factor, base);
-        if (first) {
-            first_eng = eng;
-            first = false;
-        }
         o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
-        // Always publish ENG so CW consumers can use eng units without a soft-clock.
-        // VALUE stays integer raw for plugins.
         o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
         if (*config->calc_stddev) {
@@ -1273,13 +1262,26 @@ int64_t AnalogueInput::filter(int64_t raw) {
             o->properties.add("Acceleration", config->accel * config->accel_scale,
                               SymbolTable::ST_REPLACE);
         }
-        // Careful: only A_*/CLOCKED* with RECEIVE update (not whole depends tree).
-        o->notifyClockedUpdateConsumers();
+
     }
-    config->last_emitted_raw = raw_val;
-    config->last_emitted_eng = first_eng;
-    config->last_emit_us = now_us;
-    config->startup_emitted = true;
+
+    // One cadence for the IO component; period/command from first owner (typical: one).
+    MachineInstance *notify_owner = owners.empty() ? nullptr : owners.front();
+    const uint64_t period_ms = ownerNotifyPeriodMs(notify_owner);
+    if (config->notify_clock.due(now_us, period_ms, allowed)) {
+        const char *cmd = ownerCommandName(notify_owner, "update");
+        for (MachineInstance *o : owners) {
+            if (!o) {
+                continue;
+            }
+            DBG_MESSAGING << o->getName() << " iod " << cmd
+                          << " notify_period=" << period_ms << "ms\n";
+            o->notifyCommandConsumers(cmd);
+        }
+        config->last_emitted_raw = raw_val;
+        config->last_emit_us = now_us;
+        config->startup_emitted = true;
+    }
     return raw_val;
 }
 
@@ -1296,10 +1298,11 @@ class CounterInternals {
         *position_history;          // the amount of position history to use in determining movement
     const int64_t *speed_tolerance; // the tolerance used in determining movement
     const int64_t *input_scale;     // input readings are divided by this amount
-    const int64_t *throttle;        // ms filter/change period
-    const int64_t *safety_emit;     // ms safety keepalive
+    const int64_t *throttle;        // ms filter advance (owner throttle; rate = legacy alias)
+    const int64_t *safety_emit;     // legacy; not used for notify schedule
     const int64_t *emit_flag;       // 0/1 enable
     MachineInstance *emit_guard;    // on/off|true/false guard
+    CommandClock notify_clock;      // dependant command cadence (owner notify_period)
     int64_t last_sent;  // filtered position (raw counts / scaled input)
     int64_t prev_sent;
     int64_t last_emitted_raw;
@@ -1440,6 +1443,7 @@ void Counter::setupProperties(MachineInstance *m) {
     if (v6.kind == Value::t_integer) {
         internals->input_scale = &v6.iValue;
     }
+    // Filter period: throttle only (legacy rate = throttle alias, not notify_period).
     const Value &th = m->getValue("throttle");
     if (th.kind == Value::t_integer) {
         internals->throttle = &th.iValue;
@@ -1471,6 +1475,7 @@ void Counter::setupProperties(MachineInstance *m) {
     if (guard) {
         internals->emit_guard = guard;
     }
+    applyOwnerSignedFlag(m, address);
 }
 
 int64_t Counter::filter(int64_t val) {
@@ -1478,16 +1483,13 @@ int64_t Counter::filter(int64_t val) {
 
     // Wall-clock periods only (see AnalogueInput::filter).
     const uint64_t filter_us = filterPeriodUs(internals->throttle);
-    const uint64_t safety_us = safetyEmitPeriodUs(internals->safety_emit);
     const uint64_t now_us = microsecs();
     const bool filter_due =
         (internals->last_time == 0) || (now_us - internals->last_time >= filter_us);
 
-    bool value_changed = false;
     if (filter_due) {
         double scaled_val = (double)val / (double)*internals->input_scale;
         addSample(internals->positions, (long)read_time, scaled_val);
-        const int64_t prev_sent = internals->last_sent;
         if (*internals->tolerance > 1) {
             int64_t mean = static_cast<int64_t>(
                 bufferAverage(internals->positions, static_cast<size_t>(*internals->filter_len)) +
@@ -1503,13 +1505,12 @@ int64_t Counter::filter(int64_t val) {
         }
         internals->update(read_time);
         internals->last_time = now_us;
-        value_changed = (internals->last_sent != prev_sent);
     }
 
     const int64_t raw_val = internals->last_sent;
     const bool allowed = emitAllowed(internals->emit_guard, internals->emit_flag);
 
-    bool any_change = false;
+    // Silent property publish every poll.
     for (MachineInstance *o : owners) {
         if (!o) {
             continue;
@@ -1517,59 +1518,31 @@ int64_t Counter::filter(int64_t val) {
         double factor = 1.0, base = 0.0, window = 0.0;
         readScaleOptions(o, factor, base, window);
         const double eng = engFromRaw(raw_val, factor, base);
-        double deng = eng - internals->last_emitted_eng;
-        if (deng < 0) {
-            deng = -deng;
-        }
-        const bool past_window =
-            (window <= 0.0) ? (raw_val != internals->last_emitted_raw) : (deng > window);
-        if (past_window) {
-            any_change = true;
-            break;
-        }
-    }
-    if (owners.empty() && value_changed) {
-        any_change = (raw_val != internals->last_emitted_raw);
-    }
-
-    const bool need_startup = allowed && !internals->startup_emitted;
-    const bool need_change = allowed && any_change;
-    const bool need_safety =
-        allowed && internals->startup_emitted &&
-        (internals->last_emit_us == 0 || now_us - internals->last_emit_us >= safety_us);
-    if (!need_startup && !need_change && !need_safety) {
-        return raw_val;
-    }
-
-    // VALUE/Position integer only; no notifyDependents (same as ANALOGINPUT).
-    // CLOCKEDCOUTER* / rate estimators poll Position on their own schedule.
-    double first_eng = static_cast<double>(raw_val);
-    bool first = true;
-    for (MachineInstance *o : owners) {
-        if (!o) {
-            continue;
-        }
-        double factor = 1.0, base = 0.0, window = 0.0;
-        readScaleOptions(o, factor, base, window);
-        const double eng = engFromRaw(raw_val, factor, base);
-        if (first) {
-            first_eng = eng;
-            first = false;
-        }
         o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
         o->properties.add("Position", raw_val, SymbolTable::ST_REPLACE);
-        // Always publish ENG (scale on COUNTER); VALUE/Position stay integer raw.
         o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
         o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
                           SymbolTable::ST_REPLACE);
         o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
                           SymbolTable::ST_REPLACE);
-        o->notifyClockedUpdateConsumers();
     }
-    internals->last_emitted_raw = raw_val;
-    internals->last_emitted_eng = first_eng;
-    internals->last_emit_us = now_us;
-    internals->startup_emitted = true;
+
+    MachineInstance *notify_owner = owners.empty() ? nullptr : owners.front();
+    const uint64_t period_ms = ownerNotifyPeriodMs(notify_owner);
+    if (internals->notify_clock.due(now_us, period_ms, allowed)) {
+        const char *cmd = ownerCommandName(notify_owner, "update");
+        for (MachineInstance *o : owners) {
+            if (!o) {
+                continue;
+            }
+            DBG_MESSAGING << o->getName() << " iod " << cmd
+                          << " notify_period=" << period_ms << "ms\n";
+            o->notifyCommandConsumers(cmd);
+        }
+        internals->last_emitted_raw = raw_val;
+        internals->last_emit_us = now_us;
+        internals->startup_emitted = true;
+    }
     return raw_val;
 }
 
@@ -2201,6 +2174,8 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
                 bitpos -= 8;
             }
         }
+        // UDINT wire bits as int32 when owner (signed:1): wrap past 0 → −1, −2, …
+        val = signExtendWireValue(val, address.bitlen, address.is_signed);
         if (regular_polls.count(this)) {
             // Polled multi-bit: always absorb wire value and run filter so machine
             // VALUE/ENG/IOTIME track (ANALOGINPUT/COUNTER/DIGITALVALUE). Skipping
