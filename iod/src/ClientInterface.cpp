@@ -410,7 +410,7 @@ IODCommand *parseCommandString(const char *data) {
     else if (count == 2 && ds == "SHOW" && params[1] == "BUSY") {
         command = new IODCommandBusy;
     }
-    else if ((count == 2 || count == 3) && ds == "SHOW" && params[1] == "CYCLING") {
+    else if ((count >= 2 && count <= 4) && ds == "SHOW" && params[1] == "CYCLING") {
         command = new IODCommandCycling;
     }
     else if (count == 2 && ds == "SHOW" && params[1] == "HEALTH") {
