@@ -6,6 +6,7 @@
 #include "clockwork.h"
 #include <boost/thread.hpp>
 #include <set>
+#include <string>
 #include <zmq.hpp>
 #include <Message.h>
 #include <ThreadSafeQueue.h>
@@ -97,6 +98,9 @@ class ProcessingThread : public ClockworkProcessManager {
         size_t now_mail = 0;
         size_t now_events = 0;
         size_t now_pend_ev = 0;
+        std::string sample_stable;
+        std::string sample_exec;
+        std::string sample_mail;
         // mqtt-fix idle diagnostics (also stored)
         uint64_t absorb = 0;
         uint64_t brk_dig = 0;

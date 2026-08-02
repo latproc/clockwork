@@ -1978,7 +1978,7 @@ void ProcessingThread::operator()() {
                         const bool ml = mi->hasMail();
                         if (st) {
                             ++n_stable;
-                            if (want_detail && sample_stable.size() < 140) {
+                            if (sample_stable.size() < 140) {
                                 if (!sample_stable.empty()) {
                                     sample_stable += ',';
                                 }
@@ -1987,7 +1987,7 @@ void ProcessingThread::operator()() {
                         }
                         if (ex) {
                             ++n_exec;
-                            if (want_detail && sample_exec.size() < 200) {
+                            if (sample_exec.size() < 200) {
                                 if (!sample_exec.empty()) {
                                     sample_exec += ',';
                                 }
@@ -2004,7 +2004,7 @@ void ProcessingThread::operator()() {
                         }
                         if (ml) {
                             ++n_mail;
-                            if (want_detail && sample_mail.size() < 140) {
+                            if (sample_mail.size() < 140) {
                                 if (!sample_mail.empty()) {
                                     sample_mail += ',';
                                 }
@@ -2029,6 +2029,9 @@ void ProcessingThread::operator()() {
                 snap.now_mail = n_mail;
                 snap.now_events = n_events;
                 snap.now_pend_ev = n_pend;
+                snap.sample_stable = sample_stable;
+                snap.sample_exec = sample_exec;
+                snap.sample_mail = sample_mail;
                 snap.absorb = snap_absorb;
                 snap.brk_dig = snap_brk_dig;
                 snap.brk_out = snap_brk_out;

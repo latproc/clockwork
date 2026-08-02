@@ -701,6 +701,9 @@ bool IODCommandProcSnap::run(std::vector<Value> &params) {
        << "  (now=post-drain; zeros normal when idle)\n"
        << "  absorb=" << s.absorb << " brk_dig=" << s.brk_dig << " brk_out=" << s.brk_out
        << " brk_exec=" << s.brk_exec << " brk_oth=" << s.brk_oth << " outN=" << s.out_n << "\n";
+    if (!s.sample_exec.empty()) ss << "  executing: " << s.sample_exec << "\n";
+    if (!s.sample_mail.empty()) ss << "  mail: " << s.sample_mail << "\n";
+    if (!s.sample_stable.empty()) ss << "  stable checks: " << s.sample_stable << "\n";
     result_str = ss.str();
     return true;
 }
