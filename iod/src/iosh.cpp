@@ -157,6 +157,8 @@ std::list<char *> machine_names;
 std::list<const char *> commands;
 char *machine_name_generator(const char *text, int state);
 char *command_generator(const char *text, int state);
+char *show_argument_generator(const char *text, int state);
+char *show_cycling_argument_generator(const char *text, int state);
 
 /*  Attempt to complete on the contents of TEXT.  START and END bound the
     region of rl_line_buffer that contains the word to complete.  TEXT is
@@ -170,6 +172,15 @@ char **my_rl_completion(const char *text, int start, int end) {
 
     if (start == 0) {
         matches = rl_completion_matches(text, command_generator);
+    }
+    else if (strncmp(rl_line_buffer, "SHOW ", 5) == 0) {
+        std::string prefix(rl_line_buffer, start);
+        if (prefix == "SHOW ") {
+            matches = rl_completion_matches(text, show_argument_generator);
+        }
+        else if (prefix == "SHOW CYCLING ") {
+            matches = rl_completion_matches(text, show_cycling_argument_generator);
+        }
     }
     else {
         matches = rl_completion_matches(text, machine_name_generator);
@@ -234,6 +245,36 @@ char *machine_name_generator(const char *text, int state) {
     rl_attempted_completion_over = 1;
     /* If no names matched, then return NULL. */
     return ((char *)NULL);
+}
+
+/* Complete the named SHOW reports.  SHOW still accepts an explicitly typed
+   machine name, but machine names do not belong in this option menu. */
+char *show_argument_generator(const char *text, int state) {
+    static const char *show_arguments[] = {
+        "BUSY", "CYCLING", "HEALTH", "LOAD", "PROCSNAP", "TRIGGERS", nullptr};
+    static size_t option_index;
+    static size_t len;
+
+    if (!state) {
+        option_index = 0;
+        len = strlen(text);
+    }
+    while (show_arguments[option_index]) {
+        const char *name = show_arguments[option_index++];
+        if (strncmp(name, text, len) == 0) {
+            return strdup(name);
+        }
+    }
+    rl_attempted_completion_over = 1;
+    return nullptr;
+}
+
+char *show_cycling_argument_generator(const char *text, int state) {
+    if (!state && strncmp("SLOW", text, strlen(text)) == 0) {
+        return strdup("SLOW");
+    }
+    rl_attempted_completion_over = 1;
+    return nullptr;
 }
 
 void cleanup() {
@@ -304,11 +345,6 @@ void initialise_commands() {
     commands.push_back("SCHEDULER");
     commands.push_back("SEND");
     commands.push_back("SHOW");
-    commands.push_back("SHOW CYCLING");
-    commands.push_back("SHOW HEALTH");
-    commands.push_back("SHOW PROCSNAP");
-    commands.push_back("SHOW LOAD");
-    commands.push_back("SHOW BUSY");
     commands.push_back("SHUTDOWN");
     commands.push_back("SET");
     commands.push_back("TOGGLE");
