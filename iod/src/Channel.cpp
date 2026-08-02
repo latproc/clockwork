@@ -2621,6 +2621,32 @@ void Channel::enableShadows() {
 }
 
 void Channel::disableShadows() {
+    // A disconnected shadow must not retain the last state advertised by its peer.
+    // Restore the interface INITIAL state before disabling it.  Since the channel is
+    // already DISCONNECTED (or stopping), this local reset cannot be echoed upstream.
+    auto resetAndDisable = [this](MachineShadowInstance *ms, uint64_t machine_auth) {
+        MachineClass *machine_class = ms->getStateMachine();
+        const State *initial = machine_class
+                                   ? machine_class->findState(machine_class->initial_state)
+                                   : nullptr;
+        if (initial) {
+            Action::Status status = ms->setState(*initial, machine_auth, false);
+            if (status != Action::Complete) {
+                auto &log = MessageLog::instance()->get_stream();
+                log << "Error: Channel " << channel_name << " could not reset shadow "
+                    << ms->getName() << " to initial state " << initial->getName();
+                MessageLog::instance()->release_stream();
+            }
+        }
+        else {
+            auto &log = MessageLog::instance()->get_stream();
+            log << "Error: Channel " << channel_name << " shadow " << ms->getName()
+                << " has no valid initial state";
+            MessageLog::instance()->release_stream();
+        }
+        ms->disable();
+    };
+
     // disable all machines that are owned by this channel
     std::map<std::string, Value>::const_iterator iter = definition()->updates_names.begin();
     while (iter != definition()->updates_names.end()) {
@@ -2633,7 +2659,7 @@ void Channel::disableShadows() {
                 (definition()->authority == machine_auth)) {
                 DBG_CHANNELS << "Channel " << channel_name << " disabling shadow machine "
                              << ms->getName() << "\n";
-                ms->disable();
+                resetAndDisable(ms, machine_auth);
             }
         }
     }
@@ -2647,7 +2673,7 @@ void Channel::disableShadows() {
             if (authority == machine_auth) {
                 DBG_CHANNELS << "Channel " << channel_name << " disabling shadow machine "
                              << ms->getName() << "\n";
-                ms->disable();
+                resetAndDisable(ms, machine_auth);
             }
         }
     }
