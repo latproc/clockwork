@@ -47,6 +47,65 @@ namespace po = boost::program_options;
 bool done = false;
 zmq::socket_t *cmd_socket = 0;
 
+// PERSISTENT STATUS can be large; still must not block forever if iod is stuck.
+// sendMessage(timeout=0) rewrites poll interval only and loops until a reply.
+static const int64_t PERSIST_CMD_TIMEOUT_MS = 5000;
+
+static void setSocketLinger0(zmq::socket_t &sock) {
+    int linger = 0;
+    try {
+        sock.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+    }
+    catch (const zmq::error_t &) {
+    }
+}
+
+// Send on a ZMQ_REQ and wait up to timeout_ms. On timeout/EFSM the socket is
+// unusable until recreated — caller must recover setup via SubscriptionManager.
+static bool sendWithDeadline(zmq::socket_t &sock, const std::string &msg, std::string &response,
+                             int64_t timeout_ms) {
+    try {
+        safeSend(sock, msg.c_str(), msg.size());
+    }
+    catch (const zmq::error_t &) {
+        std::cerr << "persistd REQ send failed: " << zmq_strerror(zmq_errno()) << "\n";
+        return false;
+    }
+
+    const uint64_t deadline = microsecs() + (uint64_t)timeout_ms * 1000ULL;
+    while (microsecs() < deadline) {
+        int64_t remain_ms = (int64_t)((deadline - microsecs()) / 1000ULL);
+        if (remain_ms < 1) {
+            remain_ms = 1;
+        }
+        if (remain_ms > 200) {
+            remain_ms = 200;
+        }
+        try {
+            zmq::pollitem_t items[] = {{(void *)sock, 0, ZMQ_POLLIN, 0}};
+            int n = zmq::poll(items, 1, (long)remain_ms);
+            if (n > 0 && (items[0].revents & ZMQ_POLLIN)) {
+                char *buf = nullptr;
+                size_t len = 0;
+                if (safeRecv(sock, &buf, &len, false, 0)) {
+                    response = buf ? buf : "";
+                    delete[] buf;
+                    return true;
+                }
+            }
+        }
+        catch (const zmq::error_t &) {
+            if (zmq_errno() == EINTR) {
+                continue;
+            }
+            std::cerr << "persistd REQ recv failed: " << zmq_strerror(zmq_errno()) << "\n";
+            return false;
+        }
+    }
+    std::cerr << "persistd REQ timed out after " << timeout_ms << "ms\n";
+    return false;
+}
+
 static void finish(int sig) {
     struct sigaction sa;
     sa.sa_handler = SIG_DFL;
@@ -157,12 +216,21 @@ bool loadActiveData(PersistentStore &store, const char *initial_settings) {
     }
 }
 
-void CollectPersistentStatus(PersistentStore &store) {
+void CollectPersistentStatus(PersistentStore &store, SubscriptionManager &subscription_manager) {
     std::string initial_settings;
     int tries = 3;
     do {
         std::cout << "-------- Collecting IO Status ---------\n" << std::flush;
-        if (cmd_socket && sendMessage("PERSISTENT STATUS", *cmd_socket, initial_settings)) {
+        // setup() may have been recreated after a prior timeout/EFSM.
+        cmd_socket = &subscription_manager.setup();
+        setSocketLinger0(*cmd_socket);
+
+        bool ok = false;
+        if (cmd_socket) {
+            ok = sendWithDeadline(*cmd_socket, "PERSISTENT STATUS", initial_settings,
+                                  PERSIST_CMD_TIMEOUT_MS);
+        }
+        if (ok) {
             if (strncasecmp(initial_settings.c_str(), "ignored", strlen("ignored")) != 0) {
                 if (loadActiveData(store, initial_settings.c_str())) {
                     store.save();
@@ -174,6 +242,14 @@ void CollectPersistentStatus(PersistentStore &store) {
             }
         }
         else {
+            // Half-open REQ after silent iod: recreate setup so CHANNEL can recover.
+            {
+                FileLogger fl(program_name);
+                fl.f() << "persistd PERSISTENT STATUS failed; recovering setup REQ\n"
+                       << std::flush;
+            }
+            subscription_manager.resetChannelRequestState(true);
+            cmd_socket = &subscription_manager.setup();
             sleep(1);
         }
         if (--tries <= 0) {
@@ -245,7 +321,7 @@ int main(int argc, const char *argv[]) {
         try {
             int rc = zmq::poll(&items[0], 2, 500);
             if (need_refresh) {
-                CollectPersistentStatus(store);
+                CollectPersistentStatus(store, subscription_manager);
                 need_refresh = false;
             }
             if (rc == 0) {
