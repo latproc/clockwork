@@ -587,7 +587,15 @@ bool IODCommandFind::run(std::vector<Value> &params) {
 
 bool IODCommandCycling::run(std::vector<Value> &params) {
     uint64_t short_hold_us = 50000;
-    if (params.size() >= 3) {
+    bool slow_mode = params.size() >= 3 && params[2] == "SLOW";
+    uint64_t slow_window_us = 60000000ULL;
+    if (slow_mode && params.size() >= 4) {
+        int64_t seconds = 0;
+        if (params[3].asInteger(seconds) && seconds > 0) {
+            slow_window_us = static_cast<uint64_t>(seconds) * 1000000ULL;
+        }
+    }
+    else if (params.size() >= 3) {
         int64_t ms = 0;
         if (params[2].asInteger(ms) && ms > 0) {
             short_hold_us = static_cast<uint64_t>(ms) * 1000ULL;
@@ -596,23 +604,62 @@ bool IODCommandCycling::run(std::vector<Value> &params) {
     std::ostringstream ss;
     size_t scanned = 0;
     size_t flagged = 0;
-    ss << "FAST STATE THRASH (on-demand; no CW-loop cost)\n"
-       << "Continuous flip-flop only: almost all of last "
-       << MachineInstance::STATE_HISTORY_SIZE << " holds short (<" << (short_hold_us / 1000)
-       << "ms),\n"
-       << "avg+max short, ring <1s, >=10/s, still thrashing now.\n"
-       << "Ignores long-stable + brief test/update hops.\n\nOffenders:\n";
+    ss << (slow_mode ? "REPEATED STATE CYCLING" : "FAST STATE THRASH")
+       << " (on-demand; no CW-loop cost)\n";
+    if (slow_mode) {
+        ss << "Repeated loops through 2-4 states within " << slow_window_us / 1000000ULL
+           << "s, using up to " << MachineInstance::STATE_HISTORY_SIZE << " completed holds.\n";
+    }
+    else {
+        ss << "Continuous flip-flop only: almost all of last "
+           << MachineInstance::STATE_HISTORY_SIZE << " holds short (<" << short_hold_us / 1000
+           << "ms),\navg+max short, ring <1s, >=10/s, still thrashing now.\n"
+           << "Ignores long-stable + brief test/update hops.\n";
+    }
+    ss << "\nOffenders:\n";
     for (auto iter = MachineInstance::begin(); iter != MachineInstance::end(); ++iter) {
         MachineInstance *m = *iter;
         if (!m) {
             continue;
         }
         ++scanned;
-        if (m->state_history_count < 5) {
+        if (m->state_history_count < (slow_mode ? 4 : 5)) {
             continue;
         }
         MachineInstance::StateThrashInfo t = m->analyseStateThrash(short_hold_us, 5, true);
-        if (!t.thrashing) {
+        bool flagged_here = t.thrashing;
+        std::string slow_path;
+        if (slow_mode) {
+            std::set<std::string> states;
+            std::vector<std::string> sequence;
+            for (size_t i = 0; i < m->state_history_count; ++i) {
+                size_t idx = (m->state_history_head + MachineInstance::STATE_HISTORY_SIZE -
+                              m->state_history_count + i) % MachineInstance::STATE_HISTORY_SIZE;
+                states.insert(m->state_history[idx].state_name);
+                sequence.push_back(m->state_history[idx].state_name);
+                if (i) slow_path += " -> ";
+                slow_path += m->state_history[idx].state_name;
+            }
+            bool repeated_pattern = false;
+            for (size_t period = 2; period <= 4 && period * 2 <= sequence.size(); ++period) {
+                bool matches = true;
+                const size_t first = sequence.size() - period * 2;
+                for (size_t i = first + period; i < sequence.size(); ++i) {
+                    if (sequence[i] != sequence[i - period]) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches) {
+                    repeated_pattern = true;
+                    break;
+                }
+            }
+            flagged_here = t.span_us >= 1000000ULL && t.span_us <= slow_window_us &&
+                           states.size() >= 2 && states.size() <= 4 &&
+                           repeated_pattern && t.current_dwell_us <= slow_window_us;
+        }
+        if (!flagged_here) {
             continue;
         }
         ++flagged;
@@ -621,13 +668,15 @@ bool IODCommandCycling::run(std::vector<Value> &params) {
            << "    short=" << t.short_holds << "/" << t.history_count
            << "  avg=" << t.avg_hold_us << "us  max=" << t.max_hold_us << "us"
            << "  ring=" << t.span_us << "us  ~" << t.transitions_per_sec << "/s\n"
-           << "    path: " << t.path << "\n"
+           << "    path: " << (slow_mode ? slow_path : t.path) << "\n"
            << "    → DESCRIBE " << m->getName() << ";\n";
     }
     if (flagged == 0) {
-        ss << "  (none — no continuous fast thrash)\n";
+        ss << (slow_mode ? "  (none — no repeated small state loops in window)\n"
+                         : "  (none — no continuous fast thrash)\n");
     }
-    ss << "\nscanned " << scanned << ", continuous thrash " << flagged << "\n";
+    ss << "\nscanned " << scanned << ", "
+       << (slow_mode ? "repeated cycling " : "continuous thrash ") << flagged << "\n";
     result_str = ss.str();
     return true;
 }

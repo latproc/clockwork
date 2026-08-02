@@ -83,7 +83,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
         uint64_t entered_at = 0; // microsecond timestamp when state was entered
         uint64_t left_at = 0;    // microsecond timestamp when state was left
     };
-    static constexpr size_t STATE_HISTORY_SIZE = 8;
+    static constexpr size_t STATE_HISTORY_SIZE = 32;
 
     /** Continuous fast thrash only — not long-stable + brief test hop. On-demand. */
     struct StateThrashInfo {
