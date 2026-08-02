@@ -757,13 +757,15 @@ bool IODCommandHealth::run(std::vector<Value> &params) {
     else {
         const uint64_t age_ms =
             (microsecs() > s.at_us) ? (microsecs() - s.at_us) / 1000ULL : 0;
-        const bool busy = (s.exec > 0 || s.mail > 0 || s.stable > 8 || s.runnable > 20);
+        const bool activity = (s.exec > 0 || s.mail > 0 || s.stable > 0 || s.runnable > 0);
+        const bool busy = (s.now_exec > 0 || s.now_mail > 0 || s.now_stable > 8 ||
+                           s.now_runnable > 20);
         const bool stale = age_ms > 3000;
         if (busy || stale) {
             issue = true;
         }
         ss << "status: "
-           << (stale ? "LOAD STALE" : (busy ? "LOAD BUSY" : "LOAD ok"))
+           << (stale ? "LOAD STALE" : (busy ? "LOAD WARN" : (activity ? "LOAD ACTIVE" : "LOAD ok")))
            << " loops/s=" << s.loops_per_sec << " work_loops=" << s.loops_with_work
            << " peak[runnable=" << s.runnable << " stableQ=" << s.stable << " exec=" << s.exec
            << " mail=" << s.mail << " ev=" << s.events << " pendEv=" << s.pend_ev << "]"
