@@ -58,15 +58,20 @@ char *Trigger::getTriggers() {
         auto iter = all_triggers.begin();
         while (iter != all_triggers.end()) {
             Trigger *t = *iter++;
-            ss << t->getName() << " (" << t->refs;
+            const uint64_t now = microsecs();
+            const uint64_t age_ms = (now > t->startTime()) ? (now - t->startTime()) / 1000 : 0;
+            ss << t->getName() << " refs=" << t->refs << " age=" << age_ms << "ms";
             if (!t->_internals->holders.empty()) {
-                ss << ":";
+                ss << " holders=" << t->_internals->holders.size();
                 auto h_iter = t->_internals->holders.begin();
                 while (h_iter != t->_internals->holders.end()) {
-                    ss << *(*h_iter++) << " ";
+                    Action *action = *h_iter++;
+                    MachineInstance *owner = action->getOwner();
+                    ss << " {owner=" << (owner ? owner->getName() : "?")
+                       << " action_age=" << action->age() / 1000 << "ms action=" << *action << "}";
                 }
             }
-            ss << ")\n";
+            ss << "\n";
         }
     }
     if (!ss.str().length()) {
