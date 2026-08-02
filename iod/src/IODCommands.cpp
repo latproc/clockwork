@@ -155,18 +155,24 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
             }
             const State *s = mi->getStateMachine()->findState(state_name.c_str());
             if (!s && mi->isShadow()) {
-                // shadow machines are intended to move to their initial state if the requested state is unknown
-                s = &mi->getStateMachine()->initial_state;
-                auto & log = MessageLog::instance()->get_stream();
-                log << "Error: " << mi->fullName() << "has no state called " << state_name << " and no initial state; ";
-                auto error_msg = MessageLog::instance()->access_stream_message();
-                MessageLog::instance()->release_stream();
-                error_str = error_msg.c_str();
-                return false;
+                // A peer can disappear while its final state snapshot is in flight.  The
+                // shadow contract is fail-safe: an absent/unknown remote state resolves to
+                // the interface's declared INITIAL state, never to "undefined".
+                const State &initial = mi->getStateMachine()->initial_state;
+                s = mi->getStateMachine()->findState(initial);
+                if (s) {
+                    auto &log = MessageLog::instance()->get_stream();
+                    log << "Warning: shadow " << mi->fullName() << " has no state called "
+                        << state_name << "; using initial state " << s->getName();
+                    MessageLog::instance()->release_stream();
+                }
             }
             if (!s) {
                 auto & log = MessageLog::instance()->get_stream();
-                log << "Error: " << mi->fullName() << "has no state called " << state_name;
+                log << "Error: " << mi->fullName() << " has no state called " << state_name;
+                if (mi->isShadow()) {
+                    log << " and has no valid initial state";
+                }
                 auto error_msg = MessageLog::instance()->access_stream_message();
                 MessageLog::instance()->release_stream();
                 error_str = error_msg.c_str();
