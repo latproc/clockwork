@@ -1,10 +1,15 @@
-#This plugin attempts to execute the command set in its Command property
-#when it is in the Start state.
-#While the command is running the machine stays in the Running state until
-#eventually it moved to Error or Done at which time CommandStatus reflects
-#the return result from the command(0 for no error)
+# SYSTEMEXEC — run a shell-style command string via the iod plugin path.
+#
+# CW surface matches GenericLib (plant): options, states, and commands used by
+# generic_bps / generic_panel / generic_channel_monitor / DriveTemp, etc.
+#
+# Implementation: thin wrapper around iod/src/exec_command.c (and helpers).
+# Do not re-embed the full C body here — rebuild the .so after iod changes.
+#
+# While the command is running the machine stays in Running until Done or Error;
+# CommandStatus is 0 on success, otherwise the process exit status / errno.
 
-SystemExec MACHINE {
+SYSTEMEXEC MACHINE {
     OPTION Command "";
     OPTION CommandStatus 0;
     OPTION Result "";
@@ -35,5 +40,7 @@ PLUGIN_EXPORT int check_states(void *scope) {
     return exec_command(scope);
 }
 
-PLUGIN_EXPORT int poll_actions(void *scope) { return PLUGIN_COMPLETED; }
+PLUGIN_EXPORT int poll_actions(void *scope) {
+    return PLUGIN_COMPLETED;
+}
 %END_PLUGIN
