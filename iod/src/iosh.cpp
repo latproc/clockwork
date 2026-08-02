@@ -279,36 +279,6 @@ char *machine_name_generator(const char *text, int state) {
     return ((char *)NULL);
 }
 
-/* Complete the named SHOW reports.  SHOW still accepts an explicitly typed
-   machine name, but machine names do not belong in this option menu. */
-char *show_argument_generator(const char *text, int state) {
-    static const char *show_arguments[] = {
-        "BUSY", "CYCLING", "HEALTH", "LOAD", "PROCSNAP", "TRIGGERS", nullptr};
-    static size_t option_index;
-    static size_t len;
-
-    if (!state) {
-        option_index = 0;
-        len = strlen(text);
-    }
-    while (show_arguments[option_index]) {
-        const char *name = show_arguments[option_index++];
-        if (strncmp(name, text, len) == 0) {
-            return strdup(name);
-        }
-    }
-    rl_attempted_completion_over = 1;
-    return nullptr;
-}
-
-char *show_cycling_argument_generator(const char *text, int state) {
-    if (!state && strncmp("SLOW", text, strlen(text)) == 0) {
-        return strdup("SLOW");
-    }
-    rl_attempted_completion_over = 1;
-    return nullptr;
-}
-
 void cleanup() {
     std::list<char *>::iterator iter = machine_names.begin();
     while (iter != machine_names.end()) {
