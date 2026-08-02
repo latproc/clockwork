@@ -368,6 +368,13 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     virtual void setNeedsCheck();
     Value earliestScheduleTime(const std::list<Predicate *> &predicates);
     uint64_t lastStateEvaluationTime() { return last_state_evaluation_time; }
+    uint64_t lastStateEvaluationAge() const {
+        return (last_state_evaluation_time && microsecs() > last_state_evaluation_time)
+                   ? microsecs() - last_state_evaluation_time : 0;
+    }
+    uint64_t currentStateAge() const {
+        return (start_time && microsecs() > start_time) ? microsecs() - start_time : 0;
+    }
     void updateLastEvaluationTime();
 
     bool queuedForStableStateTest();

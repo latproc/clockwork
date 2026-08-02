@@ -33,5 +33,10 @@ size_t SharedWorkSet::size() {
     return busy_machines.size();
 }
 
+std::vector<MachineInstance *> SharedWorkSet::snapshot() {
+    boost::recursive_mutex::scoped_lock lock(mutex);
+    return std::vector<MachineInstance *>(busy_machines.begin(), busy_machines.end());
+}
+
 std::set<MachineInstance *>::iterator SharedWorkSet::begin() { return busy_machines.begin(); }
 std::set<MachineInstance *>::iterator SharedWorkSet::end() { return busy_machines.end(); }

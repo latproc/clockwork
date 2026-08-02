@@ -35,6 +35,7 @@
 #include "cJSON.h"
 #include "options.h"
 #include <fstream>
+#include <algorithm>
 #include <iostream>
 #include <list>
 #include <sstream>
@@ -538,13 +539,28 @@ bool IODCommandShow::run(std::vector<Value> &params) {
     if (found != machines.end()) {
         MachineInstance *m = (*found).second;
         const Value &val = m->properties.lookup("VALUE");
+        ss << m->getName() << " " << m->_type << " state=" << m->getCurrentStateString();
         if (val != SymbolTable::Null) {
-            ss << m->getName() << " " << m->_type << " " << val
-               << ((m->enabled()) ? "" : " [DISABLED]");
+            ss << " value=" << val;
         }
-        else {
-            ss << m->getName() << " " << m->_type << " " << m->getCurrentStateString()
-               << ((m->enabled()) ? "" : " [DISABLED]");
+        ss << " state_age=";
+        simple_deltat(ss, m->currentStateAge());
+        ss << " enabled=" << (m->enabled() ? "yes" : "no")
+           << " active=" << (m->isActive() ? "yes" : "no");
+        Action *action = m->executingCommand();
+        if (action) {
+            ss << " work=ACTION action_age=";
+            simple_deltat(ss, action->age());
+            ss << " action={" << *action << "}";
+            if (action->getTrigger()) {
+                ss << " blocked_on=" << action->getTrigger()->getName();
+            }
+        }
+        else if (m->queuedForStableStateTest()) {
+            ss << " work=STATE_CHECK";
+        }
+        else if (m->hasMail()) {
+            ss << " work=MAIL";
         }
         result_str = ss.str();
         return true;
@@ -770,28 +786,38 @@ bool IODCommandHealth::run(std::vector<Value> &params) {
 
 bool IODCommandBusy::run(std::vector<Value> &params) {
     std::ostringstream ss;
-    if (!SharedWorkSet::instance()->empty()) {
-        ss << "Busy machines: ";
-        std::set<MachineInstance *>::iterator iter = SharedWorkSet::instance()->begin();
-        const char *delim = "";
-        while (iter != SharedWorkSet::instance()->end()) {
-            MachineInstance *m = *iter++;
-            ss << delim << m->getName();
-            delim = ",";
-        }
-        ss << "\n\n";
-    }
-    uint64_t now = microsecs();
+    const std::vector<MachineInstance *> work = SharedWorkSet::instance()->snapshot();
+    size_t shown = 0;
+    ss << "BUSY/QUEUED MACHINES (scheduler work, not physical motion)\n"
+       << "Machine  Reason  Age  State  Detail  Status\n";
     std::list<MachineInstance *>::iterator iter = MachineInstance::begin();
     while (iter != MachineInstance::end()) {
         MachineInstance *m = *iter++;
-        if (!m->active_actions.empty() || m->executingCommand()) {
-            ss << m->getName() << " " << m->_type << ":" << m->getCurrentStateString() << " "
-               << ((m->isActive()) ? "" : "[INACTIVE] ") << ((m->enabled()) ? "" : "[DISABLED] ");
-            simple_deltat(ss, now - m->lastStateEvaluationTime());
-            ss << "\n";
+        Action *action = m->executingCommand();
+        const bool stable = m->queuedForStableStateTest();
+        const bool mail = m->hasMail();
+        const bool in_work = std::find(work.begin(), work.end(), m) != work.end();
+        if (!action && !stable && !mail && !in_work) continue;
+        ++shown;
+        const char *reason = action ? "ACTION" : (mail ? "MAIL" :
+                             (stable ? "STATE_CHECK" : "WORK"));
+        ss << m->getName() << "  " << reason << "  ";
+        simple_deltat(ss, action ? action->age() :
+                         m->lastStateEvaluationAge());
+        ss << "  " << m->getCurrentStateString() << "  ";
+        if (action) {
+            ss << *action;
+            if (action->getTrigger()) ss << " blocked_on=" << action->getTrigger()->getName();
         }
+        else if (mail) ss << "queued mail";
+        else if (stable) ss << "stable-state evaluation";
+        else ss << "work-set entry";
+        if (!m->enabled()) ss << "  FAULT[DISABLED]";
+        else if (!m->isActive() && action) ss << "  WARN[INACTIVE]";
+        else ss << "  active";
+        ss << "\n";
     }
+    if (!shown) ss << "(none)\n";
     result_str = ss.str();
     return true;
 }

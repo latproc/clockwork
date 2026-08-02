@@ -95,6 +95,7 @@ class Action : public TriggerOwner {
 
     MachineInstance *getOwner() const { return owner; }
     bool started() const;
+    uint64_t age() const { return (start_time && microsecs() > start_time) ? microsecs() - start_time : 0; }
     void start();
     void stop();
     bool aborted() const;
@@ -170,5 +171,4 @@ class TriggeredAction : public Action {
 };
 
 std::ostream &operator<<(std::ostream &out, const Action &);
-
 
