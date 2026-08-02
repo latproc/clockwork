@@ -1,0 +1,14 @@
+# Hosts for scripts/upgrade_prod_fix.sh
+# One host per line. Blank lines and # comments are ignored.
+#
+# Optional per-line fields (whitespace-separated):
+#   HOST [PORT [USER]]
+# If PORT/USER are omitted, script defaults apply (port 2222, user root).
+#
+# Examples:
+#   172.29.51.1
+#   172.29.51.2 2222 root
+#   plant-spare.example 22 deploy
+
+172.29.51.1
+172.29.51.2
