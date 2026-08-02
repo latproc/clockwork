@@ -3,6 +3,7 @@
 
 #include <boost/thread/recursive_mutex.hpp>
 #include <set>
+#include <vector>
 
 class MachineInstance;
 class SharedWorkSet {
@@ -13,6 +14,7 @@ class SharedWorkSet {
     std::set<MachineInstance *>::iterator erase(std::set<MachineInstance *>::iterator &iter);
     bool empty();
     size_t size();
+    std::vector<MachineInstance *> snapshot();
     std::set<MachineInstance *>::iterator begin();
     std::set<MachineInstance *>::iterator end();
     boost::recursive_mutex &getMutex() { return mutex; }
