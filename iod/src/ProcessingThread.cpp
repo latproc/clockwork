@@ -2005,7 +2005,7 @@ if (IOComponent::updatesWaiting()
                         const bool ml = mi->hasMail();
                         if (st) {
                             ++n_stable;
-                            if (want_detail && sample_stable.size() < 140) {
+                            if (sample_stable.size() < 140) {
                                 if (!sample_stable.empty()) {
                                     sample_stable += ',';
                                 }
@@ -2014,7 +2014,7 @@ if (IOComponent::updatesWaiting()
                         }
                         if (ex) {
                             ++n_exec;
-                            if (want_detail && sample_exec.size() < 200) {
+                            if (sample_exec.size() < 200) {
                                 if (!sample_exec.empty()) {
                                     sample_exec += ',';
                                 }
@@ -2031,7 +2031,7 @@ if (IOComponent::updatesWaiting()
                         }
                         if (ml) {
                             ++n_mail;
-                            if (want_detail && sample_mail.size() < 140) {
+                            if (sample_mail.size() < 140) {
                                 if (!sample_mail.empty()) {
                                     sample_mail += ',';
                                 }
@@ -2056,6 +2056,15 @@ if (IOComponent::updatesWaiting()
                 snap.now_mail = n_mail;
                 snap.now_events = n_events;
                 snap.now_pend_ev = n_pend;
+                snap.sample_stable = sample_stable;
+                snap.sample_exec = sample_exec;
+                snap.sample_mail = sample_mail;
+                snap.absorb = snap_absorb;
+                snap.brk_dig = snap_brk_dig;
+                snap.brk_out = snap_brk_out;
+                snap.brk_exec = snap_brk_exec;
+                snap.brk_oth = snap_brk_oth;
+                snap.out_n = IOComponent::updatesWaiting();
                 {
                     boost::mutex::scoped_lock plock(proc_snap_mutex_);
                     snap.runnable = peak_runnable_;
