@@ -1201,11 +1201,14 @@ bool IODCommandHelp::run(std::vector<Value> &params) {
        << "RESUME machine_name\n"
        << "SEND command\n"
        << "SET machine_name TO state_name\n"
-       << "SHOW CYCLING [max_hold_ms]  (fast continuous thrash only; default 50ms)\n"
-       << "SHOW HEALTH  (one-line LOAD+THRASH for operators)\n"
-       << "SHOW PROCSNAP / SHOW LOAD  (last once-per-second processing snapshot)\n"
-       << "SHOW BUSY\n"
        << "SLAVES\n"
+       << "SHOW machine_name  (state, value, age and current work)\n"
+       << "SHOW CYCLING [max_hold_ms]  (fast continuous thrash)\n"
+       << "SHOW CYCLING SLOW [window_seconds]  (repeated slower state loops)\n"
+       << "SHOW HEALTH  (one-line load/activity/thrash)\n"
+       << "SHOW PROCSNAP / SHOW LOAD  (queue snapshot with machine samples)\n"
+       << "SHOW BUSY  (machines with queued work and reasons)\n"
+       << "SHOW TRIGGERS  (live triggers, owners and ages)\n"
        << "TOGGLE output_name\n"
        << "ERRORS [JSON]\n";
     std::string s = ss.str();
@@ -1851,4 +1854,3 @@ bool IODCommandSDO::run(std::vector<Value> &params) {
     }
     }
 */
-
