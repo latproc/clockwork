@@ -374,11 +374,18 @@ bool IODCommandToggle::run(std::vector<Value> &params) {
 
         Output *device = dynamic_cast<Output *>(IOComponent::lookup_device(params[1].asString()));
         if (device) {
+            // Kernel ELC turnOn/turnOff write the output shadow and set
+            // address.value immediately but do not notify POINT owners. Without
+            // setState here, DESCRIBE stays off while the coil is already on
+            // (process-image handleChange also skips on_enter: no value delta).
+            // Match SetStateAction: sync Clockwork STATE after the IO write.
             if (device->isOn()) {
                 device->turnOff();
+                m->setState("off", 0, false);
             }
             else if (device->isOff()) {
                 device->turnOn();
+                m->setState("on", 0, false);
             }
             else {
                 error_str = "device is neither on nor off\n";
