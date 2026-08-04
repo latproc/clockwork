@@ -552,10 +552,22 @@ bool MQTTInterface::stop() {
         return false;
     }
 #endif
+    // force=true: disconnect so the loop thread exits. force=false only
+    // requests a clean stop and can block forever in mosquitto_loop_stop's
+    // pthread_join while loop_forever still sits in pselect — leaving a
+    // half-dead iod (EtherCAT still up, command port :5555 gone, iosh/sampler
+    // hung). Seen on plant 1G2C after process thread exit during bus recovery.
     std::list<MQTTModule *>::iterator iter = modules.begin();
     while (iter != modules.end()) {
         MQTTModule *module = *iter++;
-        mosquitto_loop_stop(module->mosq, false);
+        if (!module || !module->mosq) {
+            continue;
+        }
+        const int rc = mosquitto_loop_stop(module->mosq, true);
+        if (rc != MOSQ_ERR_SUCCESS) {
+            std::cerr << "MQTTInterface::stop loop_stop(force) failed for "
+                      << module->getName() << ": " << mosquitto_strerror(rc) << "\n";
+        }
     }
     return true;
 }

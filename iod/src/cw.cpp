@@ -63,6 +63,7 @@
 #include "symboltable.h"
 #include <libgen.h>
 #include "ThreadSafeQueue.h"
+#include <thread>
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -108,7 +109,9 @@ void load_debug_config() {
     }
 }
 
-void finish(int sig) {
+void finish(int /*sig*/) {
+    // Do not exit() here: that skips MQTT/process teardown and can leave
+    // half-dead peers or stuck mosquitto joins. Main loop exits on program_done.
     struct sigaction sa;
     sa.sa_handler = SIG_DFL;
     sigemptyset(&sa.sa_mask);
@@ -116,7 +119,6 @@ void finish(int sig) {
     sigaction(SIGTERM, &sa, 0);
     sigaction(SIGINT, &sa, 0);
     program_done = true;
-    exit(0);
 }
 
 bool setup_signals() {
@@ -759,13 +761,26 @@ int main(int argc, char const *argv[]) {
 
         then = now;
     }
+    std::cerr << "cw: main loop exited (program_done); starting teardown\n";
+    // Teardown-only watchdog (same as iod-elc): arm only after plant loop ends.
+    // If MQTT/join hang, force exit so callers get a clean death, not a zombie.
+    {
+        std::thread([]() {
+            sleep(8);
+            std::cerr << "cw: shutdown watchdog — teardown still running after 8s; "
+                         "forcing _exit(1)\n";
+            _exit(1);
+        }).detach();
+    }
     try {
         MessagingInterface::abort();
+        // Stop processing first, then join, then MQTT (force=true in stop()).
+        // Old order stopped MQTT first and could hang before process.join().
+        processMonitor.stop();
+        process.join();
         MQTTInterface::instance()->stop();
         Dispatcher::instance()->stop();
         Scheduler::shutdown();
-        processMonitor.stop();
-        process.join();
         stateMonitor->stop();
         monitor.join();
         delete dbg_instance;

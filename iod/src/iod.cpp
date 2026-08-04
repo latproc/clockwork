@@ -72,6 +72,7 @@
 #include <signal.h>
 #include <stdio.h>
 #include "ThreadSafeQueue.h"
+#include <thread>
 
 bool program_done = false;
 bool machine_is_ready = false;
@@ -560,7 +561,21 @@ int main(int argc, char const *argv[]) {
     // do not start a thread, simply run this process directly
     //processMonitor();
     try {
+        // Blocks for plant life. Returns only when processing ends (SIGTERM,
+        // SHUTDOWN LPC/cmd, QUIT). Do NOT arm a teardown watchdog before this —
+        // that kills a healthy iod every N seconds (looks like crash/restart loop).
         process.join();
+        std::cerr << "iod: processing thread exited; starting teardown\n";
+        // Teardown-only watchdog: if MQTT/etc hang after join, force exit so
+        // supervise restarts a full process (no half-dead :5555-gone zombie).
+        {
+            std::thread([]() {
+                sleep(8);
+                std::cerr << "iod: shutdown watchdog — teardown still running after 8s; "
+                             "forcing _exit(1) so supervise can restart a full process\n";
+                _exit(1);
+            }).detach();
+        }
         stateMonitor->stop();
         MQTTInterface::instance()->stop();
         Dispatcher::instance()->stop();
