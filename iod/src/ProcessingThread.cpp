@@ -1784,12 +1784,38 @@ if (IOComponent::updatesWaiting()
                 }
             }
         }
+        // Track how long ecat_out has been waiting for a REP. If activate is
+        // pending and the ecat thread was wedged (e.g. pre-activate SDO hang),
+        // we cannot recover the in-flight REQ without restart — but once ecat
+        // is healthy again a late "ok"/"nack" still clears state. Log slowly.
+        static uint64_t update_sent_since_us = 0;
+        if (update_state == s_update_idle) {
+            update_sent_since_us = 0;
+        }
+        else if (update_sent_since_us == 0) {
+            update_sent_since_us = nowMicrosecs();
+        }
         if (machine.activationRequested()) {
             DBG_MSG << "activation requested, status == e_waiting?: " << (status == e_waiting)
                     << " device list empty?: " << IOComponent::devices.empty()
                     << " update_state == s_update_idle?: " << (update_state == s_update_idle)
                     << "\n";
+            if (update_state != s_update_idle && update_sent_since_us != 0) {
+                const uint64_t stuck_us = nowMicrosecs() - update_sent_since_us;
+                if (stuck_us > 2000000ULL) {
+                    static uint64_t last_stuck_log = 0;
+                    uint64_t t = nowMicrosecs();
+                    if (t - last_stuck_log > 5000000ULL) {
+                        last_stuck_log = t;
+                        std::cerr << "WARNING: activation pending but ecat_out reply stuck for "
+                                  << (stuck_us / 1000ULL)
+                                  << " ms (ecat thread blocked? SDO before activate?)\n";
+                    }
+                }
+            }
         }
+        // Prefer activate over process-data: never send DEFAULT/PROCESS while
+        // activation is requested (would occupy the single REQ slot).
         // send a message to the ethercat thread requesting activation
         // or deactivation of the master
         if (status == e_waiting && !IOComponent::devices.empty() && update_state == s_update_idle &&
@@ -1817,6 +1843,7 @@ if (IOComponent::updatesWaiting()
                     }
                     }
                     update_state = s_update_sent;
+                    update_sent_since_us = nowMicrosecs();
                     break;
                 }
                 catch (const zmq::error_t &err) {
@@ -1833,6 +1860,7 @@ if (IOComponent::updatesWaiting()
             }
         }
         else if (status == e_waiting && machine_is_ready && !IOComponent::devices.empty() &&
+                 !machine.activationRequested() && !machine.deactivationRequested() &&
                  (IOComponent::updatesWaiting() ||
                   IOComponent::getHardwareState() != IOComponent::s_operational)) {
 #ifdef KEEPSTATS
