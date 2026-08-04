@@ -37,8 +37,11 @@ int KernelEthercatBus::open(const char *device_path) {
         return ret;
     }
 
-    // Prefer 0.18 (timeout_ms + publish-renew lease); fall back to 0.16.
-    ret = elc_require_api(handle, 0, 18);
+    // Prefer 0.19 (setup-hold); then 0.18 (lease); then 0.16.
+    ret = elc_require_api(handle, 0, 19);
+    if (ret != 0) {
+        ret = elc_require_api(handle, 0, 18);
+    }
     if (ret != 0) {
         ret = elc_require_api(handle, 0, 16);
     }
@@ -71,6 +74,10 @@ int KernelEthercatBus::open(const char *device_path) {
 #ifdef ELC_CAP_OUTPUT_LEASE_PUBLISH_RENEW
               << " lease_publish_renew="
               << ((capabilities_ & ELC_CAP_OUTPUT_LEASE_PUBLISH_RENEW) ? 1 : 0)
+#endif
+#ifdef ELC_CAP_SETUP_HOLD
+              << " setup_hold="
+              << ((capabilities_ & ELC_CAP_SETUP_HOLD) ? 1 : 0)
 #endif
               << "\n";
     DBG_ETHERCAT << "KernelEthercatBus opened (" << device_path << ")\n";
@@ -156,6 +163,82 @@ int KernelEthercatBus::setupReset() {
         return -EINVAL;
     }
     return elc_setup_reset(handle);
+}
+
+bool KernelEthercatBus::hasSetupHold() const {
+#ifdef ELC_CAP_SETUP_HOLD
+    return handle && (capabilities_ & ELC_CAP_SETUP_HOLD) != 0;
+#else
+    return false;
+#endif
+}
+
+int KernelEthercatBus::setupHoldBeginPosition(uint16_t position, uint8_t target_al,
+                                              uint32_t timeout_ms) {
+#ifndef ELC_CAP_SETUP_HOLD
+    (void)position;
+    (void)target_al;
+    (void)timeout_ms;
+    return -ENOTSUP;
+#else
+    if (!handle) {
+        return -EINVAL;
+    }
+    if (!hasSetupHold()) {
+        return -ENOTSUP;
+    }
+    if (target_al != 2 && target_al != 4) {
+        target_al = 2; // PREOP
+    }
+    struct elc_setup_hold_begin hold = {};
+    elc_init_api_header(&hold, sizeof(hold));
+    hold.scope = ELC_SETUP_HOLD_SCOPE_POSITIONS;
+    hold.position_count = 1;
+    hold.positions[0] = position;
+    hold.target_al = target_al;
+    hold.timeout_ms = timeout_ms; // 0 = module default
+    hold.config_generation = config_generation_;
+    int ret = elc_setup_hold_begin(handle, &hold);
+    if (ret != 0) {
+        std::cerr << "ElcSetupHold: begin pos=" << position << " failed ret=" << ret
+                  << " result=" << hold.result << "\n";
+        return ret;
+    }
+    std::cerr << "ElcSetupHold: begin pos=" << position << " target_al=0x" << std::hex
+              << (unsigned)target_al << std::dec << " held=" << hold.held_count
+              << " timeout_ms=" << hold.applied_timeout_ms << "\n";
+    return 0;
+#endif
+}
+
+int KernelEthercatBus::setupHoldReleasePosition(uint16_t position) {
+#ifndef ELC_CAP_SETUP_HOLD
+    (void)position;
+    return -ENOTSUP;
+#else
+    if (!handle) {
+        return -EINVAL;
+    }
+    if (!hasSetupHold()) {
+        return -ENOTSUP;
+    }
+    struct elc_setup_hold_release rel = {};
+    elc_init_api_header(&rel, sizeof(rel));
+    rel.scope = ELC_SETUP_HOLD_SCOPE_POSITIONS;
+    rel.position_count = 1;
+    rel.positions[0] = position;
+    rel.config_generation = config_generation_;
+    int ret = elc_setup_hold_release(handle, &rel);
+    if (ret != 0) {
+        std::cerr << "ElcSetupHold: release pos=" << position << " failed ret=" << ret
+                  << " result=" << rel.result << "\n";
+        return ret;
+    }
+    std::cerr << "ElcSetupHold: release pos=" << position
+              << " released=" << rel.released_count
+              << " remaining_held=" << rel.remaining_held_count << "\n";
+    return 0;
+#endif
 }
 
 int KernelEthercatBus::sdoUpload(struct elc_sdo_upload *req) {

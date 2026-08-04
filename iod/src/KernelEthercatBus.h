@@ -29,6 +29,17 @@ class KernelEthercatBus {
     int setupApply(struct elc_setup_apply *result);
     int setupReset();
     int sdoUpload(struct elc_sdo_upload *req);
+
+    /**
+     * API 0.19 / ELC_CAP_SETUP_HOLD: inhibit OP for positions so PDO map CoE
+     * can run in PREOP while cyclic stays active. No-ops / returns -ENOTSUP
+     * if the capability is missing.
+     * target_al: 2=PREOP, 4=SAFEOP. timeout_ms 0 = module default (30s).
+     */
+    bool hasSetupHold() const;
+    int setupHoldBeginPosition(uint16_t position, uint8_t target_al = 2,
+                               uint32_t timeout_ms = 0);
+    int setupHoldReleasePosition(uint16_t position);
     /**
      * Runtime CoE download via a one-shot setup batch (same path as elc_sdo write).
      * type is elc_sdo_type (ELC_SDO_U8/U16/U32/…). data_len must match type.
