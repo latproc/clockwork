@@ -15,6 +15,18 @@ Docs (in source tree):
   /opt/etherlab-cyclic-kmod/docs/developer-guide.md
   /opt/etherlab-cyclic-kmod/docs/process-image-exchange.md
   /opt/etherlab-cyclic-kmod/docs/iod-session-handoff.md
+  /opt/etherlab-cyclic-kmod/docs/client-slave-recovery.md
+  /opt/etherlab-cyclic-kmod/docs/recommended-master-lifecycle.md
+
+**PDO map / power-return setup (plant + elc):** Mapping CoE (`0x1600` /
+`0x1C12` / …) must run in **PREOP or SAFEOP**, not OP. iod
+`ElcSetupRecipe` gates reapply (`waiting_preop` while OP). **elc API 0.19**
+adds **setup-hold** (`ELC_CAP_SETUP_HOLD`: begin/release/status, per-domain
+or positions, timeout, fd close) so clients can hold servos in PREOP while
+cyclic stays up — see
+`/opt/etherlab-cyclic-kmod/docs/client-slave-recovery.md` §9 and `docs/uapi.md`.
+Plant iod still needs to **call** hold around reapply when the running module
+reports the capability.
 
 Git lines (plant iod vs clients — not bus load params):
 
