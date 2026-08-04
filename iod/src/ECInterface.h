@@ -150,6 +150,11 @@ class ECInterface {
     /** Copy current domain image into dst (for dig shadow). Returns bytes copied. */
     size_t copyDomainData(uint8_t *dst, size_t dst_len);
     void sendUpdates();
+    /**
+     * Pause ecat userspace get_io_status / publish while mailbox setup SDO or
+     * setup-hold holds the master (avoids multi-minute deadlock with ecat thread).
+     */
+    static void setSetupMailboxExclusive(bool on);
     void updateDomain(uint32_t size, uint8_t *data, uint8_t *mask);
     /** Write a digital output bit into the kernel output shadow (turnOn/turnOff). */
     void applyKernelOutputBit(unsigned int io_offset, unsigned int bitpos, bool on);

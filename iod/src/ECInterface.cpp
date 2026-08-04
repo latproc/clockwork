@@ -28,6 +28,7 @@
 #include "cJSON.h"
 #include "tl/expected.hpp"
 #include <boost/thread/condition.hpp>
+#include <atomic>
 #include <cstddef>
 #include <errno.h>
 #include <fstream>
@@ -55,6 +56,7 @@
 #include "EtherCATSetup.h"
 #include "options.h"
 #include "IOComponent.h"
+#include "elc_ethercat.h"
 #endif
 
 #define VERBOSE_DEBUG 0
@@ -64,6 +66,21 @@ static void display(uint8_t *p, size_t n);
 
 extern Statistics *statistics;
 void signal_handler(int signum);
+
+// While true, pause ecat userspace get_io_status/publish so blocking setup
+// SDO / setup-hold can own the master without multi-minute deadlock.
+static std::atomic<bool> g_setup_mailbox_busy{false};
+
+void ECInterface::setSetupMailboxExclusive(bool on) {
+    g_setup_mailbox_busy.store(on);
+}
+
+namespace {
+struct SetupMailboxGuard {
+    SetupMailboxGuard() { ECInterface::setSetupMailboxExclusive(true); }
+    ~SetupMailboxGuard() { ECInterface::setSetupMailboxExclusive(false); }
+};
+} // namespace
 
 unsigned int ECInterface::FREQUENCY = 2000;
 unsigned long ECInterface::activated_cycle_period_us_ = 0;
@@ -1108,15 +1125,11 @@ void ECInterface::configureModules() {
             std::cerr << "Failed to populate modules from topology " << topo << " (" << ret
                       << ")\n";
         }
-        // Ordered setup recipes: plant ECSETUPRECIPE machines + optional CLI.
-        // No vendor hardcoding — targets from domain_id / positions / product_code.
-        {
-            int r = ElcSetupRecipe::applyAllConfigured(kernelBus.get());
-            if (r != 0) {
-                std::cerr << "WARNING: setup recipe apply failed ret=" << r
-                          << " (check ECSETUPRECIPE / --setup-recipe)\n";
-            }
-        }
+        // Ordered setup recipes: plant ECSETUPRECIPE + optional CLI.
+        // Applied under mailbox exclusive *before* cycle activate (see activate()).
+        // Do not block here: ecat thread is already running; exclusive apply
+        // happens once on the activate path so PREOP CoE completes first.
+        std::cerr << "ElcSetupRecipe: will apply on cycle activate (pre-OP CoE)\n";
         // Ready for STARTUP SEND activate: bus configured, report PREOP via kernel AL.
         master_state.link_up = 1;
         if (!ethercat_status) {
@@ -1299,6 +1312,12 @@ bool ECInterface::applyCyclePeriodUs(unsigned long period_us) {
 
 bool ECInterface::activate() {
     if (kernelBus && kernelBus->isOpen()) {
+        // Already cyclic: further elc_cycle_activate → EBUSY. Treat as success
+        // so STARTUP/ENTER-op re-SEND activate does not spam the ecat path.
+        if (active) {
+            std::cerr << "ECInterface::activate: already active (noop)\n";
+            return true;
+        }
         // Prefer SYSTEM.CYCLE_DELAY (µs) so startup can use 250/500 µs without
         // waiting for a later set_period.
         unsigned long period_us = get_cycle_time();
@@ -1316,6 +1335,10 @@ bool ECInterface::activate() {
         }
         FREQUENCY = period_us > 0 ? static_cast<unsigned int>(1000000UL / period_us) : FREQUENCY;
         set_cycle_time(period_us);
+
+        // Do NOT run blocking SETUP_APPLY here on the ecat thread: CoE to OP
+        // slaves can hang for minutes and freezes ACTIVATE_REQUEST completion.
+        // Cycle activate first; setup-hold reapply runs on the worker after.
 
         // Output hang failsafe deferred until after cycle activate when the
         // kernel supports API 0.18 (configure-while-active + publish refill).
@@ -1455,6 +1478,18 @@ bool ECInterface::activate() {
         // API 0.18: enable hang failsafe after OP is up (configure-while-active).
         // Prefer timeout_ms; publish/arm refill remaining (no renew storm).
         enableKernelOutputLeaseAfterActivate();
+        // Queue plant ECSETUPRECIPE for all matching positions (PDO map, accel,
+        // Pn001). Worker uses setup-hold (0.19) so CoE runs in PREOP without
+        // blocking this thread.
+        {
+            boost::recursive_mutex::scoped_lock lock(modules_mutex);
+            for (ECModule *m : modules) {
+                if (m && ElcSetupRecipe::positionWantsReapply(m->position)) {
+                    ElcSetupRecipe::requestReapply(m->position);
+                }
+            }
+        }
+        ElcSetupRecipe::scheduleProcessPending(kernelBus.get());
         return true;
     }
     return false;
@@ -1934,6 +1969,9 @@ void ECInterface::refreshKernelApplicationTime() {
 }
 
 void ECInterface::receiveState(bool pull_process_image) {
+    if (g_setup_mailbox_busy.load()) {
+        return;
+    }
     static long warned = 0;
     if (kernelBus && kernelBus->isOpen()) {
         if (!initialised) {
@@ -2024,8 +2062,13 @@ void ECInterface::receiveState(bool pull_process_image) {
             }
         }
 #ifdef USE_SDO
-        if (checkSDOInitialisation()) {
-            checkSDOUpdates();
+        // Blocking CoE must not run before cycle activate: ecrt_master_sdo_upload
+        // can hang for minutes with no cyclic PDI, which freezes the ecat thread
+        // so ACTIVATE_REQUEST is never handled (update_state stuck, domains INVALID).
+        if (active) {
+            if (checkSDOInitialisation()) {
+                checkSDOUpdates();
+            }
         }
 #endif
         return;
@@ -2168,6 +2211,9 @@ int ECInterface::collectState() {
 void ECInterface::sendUpdates() {
     static uint64_t last_warning = 0;
     uint64_t now = microsecs();
+    if (g_setup_mailbox_busy.load()) {
+        return;
+    }
     if (kernelBus && kernelBus->isOpen()) {
         if (!initialised || !active || !domain1_pd) {
             return;
@@ -2186,8 +2232,9 @@ void ECInterface::sendUpdates() {
             g_kernel_output_dirty = true;
         }
 
-        // Offline→online: plant ECSETUPRECIPE re-apply + L_SDO recommission.
-        ElcSetupRecipe::processPending(kernelBus.get());
+        // Offline→online re-apply: never block sendUpdates with mailbox SDO.
+        // Worker thread runs processPending (setup-hold + SETUP_APPLY).
+        ElcSetupRecipe::scheduleProcessPending(kernelBus.get());
 
         // API 0.18 publish-renew: successful publishOutput refills remaining —
         // do not ioctl renew every tick. Legacy kernels without that CAP still
@@ -2498,9 +2545,15 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
                  m->slave_config_state.al_state, s.al_state);
         MessageLog::instance()->add(buf);
         std::cout << buf << "\n";
-        // Do not queue recipe on AL edges alone. Cold start already applies
-        // pre-activate; PREOP→OP flaps would re-run mapping CoE in OP and fail.
-        // processPending keeps a queued return-online job until PREOP+/identity.
+#ifdef USE_SDO
+        // Entering PREOP/SAFEOP after cold start: (re)queue setup so PDO map
+        // runs in that window. processPending only applies while AL is
+        // PREOP/SAFEOP — not OP — so OP flaps do not burn failed attempts.
+        if (m->sdo_seen_online && ElcSetupRecipe::positionWantsReapply(m->position) &&
+            (s.al_state == 0x02 || s.al_state == 0x04)) {
+            ElcSetupRecipe::requestReapply(m->position);
+        }
+#endif
     }
     if (s.online != m->slave_config_state.online) {
         snprintf(buf, BUFSIZE, "Slave %d (%s) online %s -> %s (kernel)", i, m->name.c_str(),

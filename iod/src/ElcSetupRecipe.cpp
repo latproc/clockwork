@@ -17,7 +17,9 @@
 #include "value.h"
 
 #include <algorithm>
+#include <atomic>
 #include <cerrno>
+#include <condition_variable>
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -27,6 +29,8 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <thread>
+#include <unistd.h>
 
 namespace ElcSetupRecipe {
 namespace {
@@ -38,25 +42,66 @@ struct PendingReapply {
     uint16_t position = 0;
     uint64_t first_queued_us = 0;
     uint64_t next_try_us = 0;
-    uint64_t ready_since_us = 0; // 0 = not mailbox-ready yet
+    uint64_t ready_since_us = 0; // 0 = not PREOP/SAFEOP ready yet
+    uint64_t last_wait_status_us = 0; // throttle waiting_preop HMI updates
     unsigned attempts = 0;
     int last_ret = 0;
+    bool hold_active = false; // elc setup-hold begun for this position
 };
+
+/** Begin setup-hold once per pending job when CAP available (API 0.19). */
+bool ensureSetupHold(KernelEthercatBus *bus, PendingReapply &p) {
+    if (!bus || !bus->hasSetupHold()) {
+        return false;
+    }
+    if (p.hold_active) {
+        return true;
+    }
+    // Brief exclusive only around the hold ioctl (not the whole wait loop).
+    ECInterface::setSetupMailboxExclusive(true);
+    const int hr = bus->setupHoldBeginPosition(p.position, /*PREOP*/ 2, /*default timeout*/ 0);
+    ECInterface::setSetupMailboxExclusive(false);
+    if (hr == 0) {
+        p.hold_active = true;
+        p.ready_since_us = 0; // wait for PREOP after hold
+        return true;
+    }
+    return false;
+}
+
+void releaseSetupHold(KernelEthercatBus *bus, PendingReapply &p) {
+    if (!bus || !p.hold_active) {
+        return;
+    }
+    ECInterface::setSetupMailboxExclusive(true);
+    bus->setupHoldReleasePosition(p.position);
+    ECInterface::setSetupMailboxExclusive(false);
+    p.hold_active = false;
+}
 
 std::mutex g_pending_mu;
 std::map<uint16_t, PendingReapply> g_pending;
 uint64_t g_last_apply_us = 0;
 
 // Min gap between any re-apply attempts (avoid SDO storm / bus thrash).
-constexpr uint64_t kMinApplyGapUs = 500000; // 500 ms
-// Must stay PREOP+ with real identity this long before first try.
-constexpr uint64_t kReadyHoldUs = 750000; // 750 ms
-// Backoff after failed apply (doubles each fail, capped).
+constexpr uint64_t kMinApplyGapUs = 500000; // 500 ms (PDO window is short)
+// PDO map / mode CoE must run in PREOP or SAFEOP — not OP. Master still
+// promotes slaves to OP while cyclic is active (no elc "hold PREOP" ioctl),
+// so the PREOP window after power return is short. Hold only long enough
+// for identity/mailbox, then apply immediately.
+constexpr uint64_t kReadyHoldUs = 400000; // 400 ms in PREOP/SAFEOP
+// Backoff after a real apply failure (not "still in OP").
 constexpr uint64_t kInitialBackoffUs = 1000000; // 1 s
 constexpr uint64_t kMaxBackoffUs = 8000000;     // 8 s
 constexpr unsigned kMaxAttempts = 40;
 // Give up and leave machine status failed after this age.
-constexpr uint64_t kMaxPendingAgeUs = 300000000ULL; // 5 min
+constexpr uint64_t kMaxPendingAgeUs = 600000000ULL; // 10 min
+
+// AL states (IgH / elc)
+constexpr uint8_t kAlInit = 0x01;
+constexpr uint8_t kAlPreop = 0x02;
+constexpr uint8_t kAlSafeop = 0x04;
+constexpr uint8_t kAlOp = 0x08;
 
 struct RecipeSpec {
     std::string path;
@@ -709,8 +754,8 @@ bool positionWantsReapply(uint16_t position) {
     return false;
 }
 
-/** True when CoE setup batches are likely to work (not INIT / ghost identity). */
-bool slaveMailboxReady(KernelEthercatBus *bus, uint16_t position, std::string *why_not) {
+/** Online + non-zero identity (SII). Mailbox may still be INIT. */
+bool slaveIdentityReady(KernelEthercatBus *bus, uint16_t position, std::string *why_not) {
     ECModule *m = ECInterface::findModule(position);
     if (!m) {
         if (why_not) {
@@ -721,15 +766,6 @@ bool slaveMailboxReady(KernelEthercatBus *bus, uint16_t position, std::string *w
     if (!m->slave_config_state.online) {
         if (why_not) {
             *why_not = "offline";
-        }
-        return false;
-    }
-    const uint8_t al = m->slave_config_state.al_state;
-    // INIT(1) and unknown(0): mailbox often refused (0x0016 invalid mailbox).
-    // PREOP(2), SAFEOP(4), OP(8) are usable for setup SDO.
-    if (al != 0x02 && al != 0x04 && al != 0x08) {
-        if (why_not) {
-            *why_not = "AL not PREOP+ (0x" + std::to_string(al) + ")";
         }
         return false;
     }
@@ -749,6 +785,34 @@ bool slaveMailboxReady(KernelEthercatBus *bus, uint16_t position, std::string *w
         return false;
     }
     return true;
+}
+
+/**
+ * PDO map / SM assignment CoE (0x1C12/0x1600/…) requires PREOP or SAFEOP.
+ * Applying in OP fails or is rejected; do not treat OP as "ready".
+ * (Kernel has no hold-in-PREOP while cyclic is active — catch this window.)
+ */
+bool slaveSetupStateReady(KernelEthercatBus *bus, uint16_t position, std::string *why_not) {
+    if (!slaveIdentityReady(bus, position, why_not)) {
+        return false;
+    }
+    ECModule *m = ECInterface::findModule(position);
+    const uint8_t al = m->slave_config_state.al_state;
+    if (al == kAlPreop || al == kAlSafeop) {
+        return true;
+    }
+    if (why_not) {
+        if (al == kAlOp) {
+            *why_not = "AL OP — hold for PREOP/SAFEOP (PDO map not applied in OP)";
+        }
+        else if (al == kAlInit) {
+            *why_not = "AL INIT (mailbox not ready)";
+        }
+        else {
+            *why_not = "AL not PREOP/SAFEOP (0x" + std::to_string(al) + ")";
+        }
+    }
+    return false;
 }
 
 uint64_t backoffUs(unsigned attempts) {
@@ -793,6 +857,8 @@ void processPending(KernelEthercatBus *bus) {
     if (!bus || !bus->isOpen()) {
         return;
     }
+    // Do NOT hold exclusive for the whole pass — AL/status must keep updating
+    // so we observe PREOP after setup-hold. Exclusive only around mailbox ops.
     const uint64_t now = microsecs();
     if (g_last_apply_us && now - g_last_apply_us < kMinApplyGapUs) {
         return;
@@ -814,23 +880,53 @@ void processPending(KernelEthercatBus *bus) {
                           << " after " << (now - p.first_queued_us) / 1000000ULL
                           << "s attempts=" << p.attempts << " last_ret=" << p.last_ret
                           << "\n";
-                // status updated below without lock if we tracked machine — defer
+                releaseSetupHold(bus, p);
                 it = g_pending.erase(it);
                 continue;
             }
 
             std::string why;
-            if (!slaveMailboxReady(bus, p.position, &why)) {
+            // Prefer API 0.19 setup-hold so OP is inhibited while we wait/apply.
+            ensureSetupHold(bus, p);
+            // Apply when AL is PREOP/SAFEOP, or when setup-hold is active (module
+            // may still report operational/OP briefly after hold begin).
+            const bool al_ok = slaveSetupStateReady(bus, p.position, &why);
+            if (!al_ok && !p.hold_active) {
                 p.ready_since_us = 0;
+                if (now - p.last_wait_status_us >= 2000000ULL) {
+                    p.last_wait_status_us = now;
+                    for (RecipeSpec &spec : allSpecs()) {
+                        if (!spec.reapply || !spec.enabled || !spec.machine) {
+                            continue;
+                        }
+                        if (positionInResolved(spec, p.position, bus)) {
+                            setMachineStatus(spec.machine, "waiting_preop", why.c_str());
+                        }
+                    }
+                }
                 ++it;
                 continue;
             }
             if (p.ready_since_us == 0) {
                 p.ready_since_us = now;
                 std::cerr << "ElcSetupRecipe: pos=" << p.position
-                          << " mailbox-ready; holding " << (kReadyHoldUs / 1000) << "ms\n";
+                          << (al_ok ? " PREOP/SAFEOP ready" : " setup-hold active")
+                          << "; holding " << (kReadyHoldUs / 1000) << "ms then apply\n";
             }
             if (now - p.ready_since_us < kReadyHoldUs) {
+                if (!al_ok && p.hold_active &&
+                    now - p.last_wait_status_us >= 2000000ULL) {
+                    p.last_wait_status_us = now;
+                    for (RecipeSpec &spec : allSpecs()) {
+                        if (!spec.reapply || !spec.enabled || !spec.machine) {
+                            continue;
+                        }
+                        if (positionInResolved(spec, p.position, bus)) {
+                            setMachineStatus(spec.machine, "holding_preop",
+                                             "setup-hold active; applying shortly");
+                        }
+                    }
+                }
                 ++it;
                 continue;
             }
@@ -841,6 +937,7 @@ void processPending(KernelEthercatBus *bus) {
             if (p.attempts >= kMaxAttempts) {
                 std::cerr << "ElcSetupRecipe: reapply max attempts pos=" << p.position
                           << " attempts=" << p.attempts << " last_ret=" << p.last_ret << "\n";
+                releaseSetupHold(bus, p);
                 it = g_pending.erase(it);
                 continue;
             }
@@ -857,10 +954,22 @@ void processPending(KernelEthercatBus *bus) {
         // Leave entry in map until success or final give-up; mark next_try far
         // so we do not double-pick before this call finishes.
         g_pending[chosen.position].next_try_us = now + kMinApplyGapUs;
+        // Sync hold flag from map (ensureSetupHold may have set it under lock).
+        chosen.hold_active = g_pending[chosen.position].hold_active;
     }
 
     g_last_apply_us = now;
     const uint16_t pos = chosen.position;
+
+    // Hold across apply so master does not race us back to OP mid-batch.
+    ensureSetupHold(bus, chosen);
+    {
+        std::lock_guard<std::mutex> lock(g_pending_mu);
+        auto it = g_pending.find(pos);
+        if (it != g_pending.end()) {
+            it->second.hold_active = chosen.hold_active;
+        }
+    }
 
     std::vector<RecipeSpec> specs = allSpecs();
     bool any_recipe = false;
@@ -878,10 +987,14 @@ void processPending(KernelEthercatBus *bus) {
         any_recipe = true;
         if (spec.machine) {
             status_mi = spec.machine;
-            setMachineStatus(spec.machine, "pending", "reapply in progress");
+            setMachineStatus(spec.machine, "pending",
+                             chosen.hold_active ? "reapply under setup-hold"
+                                                : "reapply in progress");
         }
         std::vector<uint16_t> one = {pos};
+        ECInterface::setSetupMailboxExclusive(true);
         int r = applyForPositions(bus, spec.path.c_str(), one);
+        ECInterface::setSetupMailboxExclusive(false);
         last_r = r;
         if (r != 0) {
             all_ok = false;
@@ -896,7 +1009,11 @@ void processPending(KernelEthercatBus *bus) {
         // No recipe owns this position — L_SDO recommission only.
         {
             std::lock_guard<std::mutex> lock(g_pending_mu);
-            g_pending.erase(pos);
+            auto it = g_pending.find(pos);
+            if (it != g_pending.end()) {
+                releaseSetupHold(bus, it->second);
+                g_pending.erase(it);
+            }
         }
 #ifdef USE_SDO
         ECModule *m = ECInterface::findModule(pos);
@@ -909,10 +1026,18 @@ void processPending(KernelEthercatBus *bus) {
 
     if (all_ok) {
         std::cerr << "ElcSetupRecipe: reapply ok pos=" << pos << " attempts="
-                  << (chosen.attempts + 1) << "\n";
+                  << (chosen.attempts + 1)
+                  << (chosen.hold_active ? " (setup-hold)" : "") << "\n";
         {
             std::lock_guard<std::mutex> lock(g_pending_mu);
-            g_pending.erase(pos);
+            auto it = g_pending.find(pos);
+            if (it != g_pending.end()) {
+                releaseSetupHold(bus, it->second);
+                g_pending.erase(it);
+            }
+            else {
+                releaseSetupHold(bus, chosen);
+            }
         }
 #ifdef USE_SDO
         // Defaults after successful PDO/mode recipe only (avoid fighting INIT).
@@ -921,12 +1046,23 @@ void processPending(KernelEthercatBus *bus) {
             SDOEntry::recommissionModule(m, now);
         }
 #endif
-        // Recipe CoE done; re-seed process-image defaults for plant outputs.
-        reapplyOutputDefaults();
+        // After *all* pending reapply positions finish, re-seed process-image
+        // defaults once (accel/decel/torque etc. must not stay 0 on RxPDO-mapped
+        // 0x6083/0x6084 — A.76). Do not call per-position: that thrashes control
+        // words while ClearFault is in flight across multiple servos.
+        bool pending_empty = false;
+        {
+            std::lock_guard<std::mutex> lock(g_pending_mu);
+            pending_empty = g_pending.empty();
+        }
+        if (pending_empty) {
+            std::cerr << "ElcSetupRecipe: all reapply done — reapplyOutputDefaults once\n";
+            reapplyOutputDefaults();
+        }
         return;
     }
 
-    // Failed: schedule retry with backoff; do not run L_SDO until recipe works.
+    // Failed: schedule retry with backoff; keep setup-hold for next PREOP apply.
     const unsigned next_attempt = chosen.attempts + 1;
     const uint64_t delay = backoffUs(next_attempt);
     {
@@ -936,20 +1072,98 @@ void processPending(KernelEthercatBus *bus) {
             it->second.attempts = next_attempt;
             it->second.last_ret = last_r;
             it->second.next_try_us = now + delay;
-            // If AL dropped during apply, require a fresh ready hold.
+            it->second.hold_active = chosen.hold_active;
+            // If left PREOP/SAFEOP, require a fresh ready hold when it returns.
             std::string why;
-            if (!slaveMailboxReady(bus, pos, &why)) {
+            if (!slaveSetupStateReady(bus, pos, &why)) {
                 it->second.ready_since_us = 0;
+            }
+            if (next_attempt >= kMaxAttempts) {
+                releaseSetupHold(bus, it->second);
+                g_pending.erase(it);
             }
         }
     }
     std::cerr << "ElcSetupRecipe: reapply failed pos=" << pos << " ret=" << last_r
               << " attempt=" << next_attempt << " retry_in_ms=" << (delay / 1000) << "\n";
     if (status_mi && next_attempt >= kMaxAttempts) {
-        setMachineStatus(status_mi, "failed", "reapply exhausted retries");
-        std::lock_guard<std::mutex> lock(g_pending_mu);
-        g_pending.erase(pos);
+        setMachineStatus(status_mi, "failed",
+                         "reapply exhausted retries (need PREOP window / mains cycle)");
     }
+}
+
+// ---- Background worker: never block sendUpdates / ecat with mailbox SDO ----
+std::mutex g_worker_mu;
+std::condition_variable g_worker_cv;
+std::atomic<KernelEthercatBus *> g_worker_bus{nullptr};
+std::atomic<bool> g_worker_kick{false};
+std::atomic<bool> g_worker_stop{false};
+std::once_flag g_worker_once;
+std::thread g_worker_thread;
+
+void reapplyWorkerMain() {
+    pthread_setname_np(pthread_self(), "iod setup reapply");
+    std::cerr << "ElcSetupRecipe: reapply worker started (off hot path)\n";
+    while (!g_worker_stop.load()) {
+        {
+            std::unique_lock<std::mutex> lk(g_worker_mu);
+            g_worker_cv.wait_for(lk, std::chrono::milliseconds(200), [] {
+                return g_worker_kick.load() || g_worker_stop.load();
+            });
+            g_worker_kick.store(false);
+        }
+        if (g_worker_stop.load()) {
+            break;
+        }
+        KernelEthercatBus *bus = g_worker_bus.load();
+        if (!bus || !bus->isOpen()) {
+            continue;
+        }
+        // One processPending pass (at most one position apply + holds).
+        // Pause ecat userspace path while we hold the master for mailbox SDO.
+        try {
+            // Signal ECInterface via processPending-side lock: use same busy
+            // flag by calling through a thin pause if needed. Hold is short.
+            processPending(bus);
+        }
+        catch (const std::exception &ex) {
+            std::cerr << "ElcSetupRecipe: worker exception: " << ex.what() << "\n";
+        }
+        catch (...) {
+            std::cerr << "ElcSetupRecipe: worker unknown exception\n";
+        }
+    }
+    std::cerr << "ElcSetupRecipe: reapply worker stopped\n";
+}
+
+void ensureReapplyWorker() {
+    std::call_once(g_worker_once, [] {
+        g_worker_stop.store(false);
+        g_worker_thread = std::thread(reapplyWorkerMain);
+        g_worker_thread.detach();
+    });
+}
+
+void scheduleProcessPending(KernelEthercatBus *bus) {
+    if (!bus) {
+        return;
+    }
+    // Only after cycle activate — pre-activate reapply+hold left domains
+    // status_known=0 and ETHERCAT DISCONNECTED while holds blocked recovery.
+    if (!ECInterface::active) {
+        return;
+    }
+    g_worker_bus.store(bus);
+    // Only wake when there is work (cheap check under pending lock).
+    {
+        std::lock_guard<std::mutex> lock(g_pending_mu);
+        if (g_pending.empty()) {
+            return;
+        }
+    }
+    ensureReapplyWorker();
+    g_worker_kick.store(true);
+    g_worker_cv.notify_one();
 }
 
 } // namespace ElcSetupRecipe

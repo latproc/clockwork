@@ -48,9 +48,15 @@ bool positionWantsReapply(uint16_t position);
 void requestReapply(uint16_t position);
 
 /**
- * Progress pending re-applies: wait until mailbox-ready (PREOP+ and non-zero
- * identity), hold briefly, apply one position per call with gap, re-queue
- * failures with exponential backoff. Safe from ecat userspace loop.
+ * Non-blocking: record bus and wake the reapply worker. Safe from sendUpdates /
+ * ecat RT path. Blocking SETUP_APPLY / setup-hold must not run there.
+ */
+void scheduleProcessPending(KernelEthercatBus *bus);
+
+/**
+ * Blocking progress of pending re-applies (worker thread only).
+ * PDO map CoE requires PREOP or SAFEOP. With ELC_CAP_SETUP_HOLD: hold → apply
+ * → release. Without CAP: wait PREOP window only.
  */
 void processPending(KernelEthercatBus *bus);
 
