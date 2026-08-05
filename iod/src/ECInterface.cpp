@@ -1113,6 +1113,10 @@ void ECInterface::configureModules() {
         // Most Clockwork MODULE entries have no ESI XML; legacy iod filled PDOs via
         // bus scan. Use the captured full-bus topology conf instead.
         const char *topo = elcDefaultTopologyConfigPath();
+        if (!topo) {
+            std::cerr << "Failed to apply ELC topology: ELC_TOPOLOGY_CONFIG is not set\n";
+            return;
+        }
         std::vector<uint32_t> domain_ids;
         int ret = elcApplyConfigFile(kernelBus.get(), topo, &domain_ids);
         if (ret != 0) {

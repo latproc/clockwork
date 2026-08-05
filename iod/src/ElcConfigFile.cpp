@@ -294,20 +294,9 @@ const char *elcDefaultTopologyConfigPath() {
     if (env && env[0]) {
         return env;
     }
-    // Product sample: etc/elc_topology.conf. Plant sites should set
-    // ELC_TOPOLOGY_CONFIG (e.g. code/config/elc_topology.conf from plant boot).
-    // Transport-tree samples are last-resort demos only.
-    static const char *candidates[] = {
-        "/opt/latproc/etc/elc_topology.conf",
-        "/opt/etherlab-cyclic-kmod/tools/configs/elc_topology.conf",
-        "/opt/etherlab-cyclic-kmod/tools/configs/all34_captured_topology.conf",
-        nullptr};
-    for (int i = 0; candidates[i]; ++i) {
-        if (access(candidates[i], R_OK) == 0) {
-            return candidates[i];
-        }
-    }
-    return candidates[0];
+    // No implicit product/demo topology. Every plant or standalone caller
+    // must choose its own topology explicitly.
+    return nullptr;
 }
 
 int elcApplyConfigFile(KernelEthercatBus *bus, const char *path,

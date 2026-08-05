@@ -23,7 +23,7 @@ int elcApplyConfigFile(KernelEthercatBus *bus, const char *path,
 // same file, resolving offsets via elc_get_entry_offset.
 int elcPopulateModulesFromConfigFile(KernelEthercatBus *bus, const char *path);
 
-// Default topology for this machine (34 slaves).
+// Explicit topology selected by the caller; nullptr when unset.
 const char *elcDefaultTopologyConfigPath();
 
 // Positions of slaves assigned to domain_config_id (topology domain_slave lines).

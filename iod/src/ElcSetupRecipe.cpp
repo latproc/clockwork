@@ -419,6 +419,12 @@ bool resolvePositions(KernelEthercatBus *bus, const RecipeSpec &spec,
     }
     else if (spec.domain_id != 0) {
         const char *topo = elcDefaultTopologyConfigPath();
+        if (!topo) {
+            if (err) {
+                *err = "ELC_TOPOLOGY_CONFIG is not set";
+            }
+            return false;
+        }
         int r = elcPositionsForDomain(topo, spec.domain_id, &candidates);
         if (r != 0) {
             if (err) {
@@ -730,7 +736,8 @@ bool positionWantsReapply(uint16_t position) {
         }
         if (s.domain_id != 0) {
             std::vector<uint16_t> pos;
-            if (elcPositionsForDomain(elcDefaultTopologyConfigPath(), s.domain_id, &pos) == 0 &&
+            const char *topo = elcDefaultTopologyConfigPath();
+            if (topo && elcPositionsForDomain(topo, s.domain_id, &pos) == 0 &&
                 std::find(pos.begin(), pos.end(), position) != pos.end()) {
                 // still honor product/vendor if set
                 if (s.product_code == 0 && s.vendor_id == 0) {
