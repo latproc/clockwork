@@ -370,7 +370,9 @@ int main(int argc, const char *argv[]) {
     // that aborts CHANNEL before PERSISTENT STATUS / SUB can finish).
     const int iod_force_reconnect_every = 15; // seconds (matches down-path sleep)
     const int iod_exit_after_seconds = 90;    // long enough for iod boot + CHANNEL
+    const uint64_t not_done_limit_us = 20000000ULL; // safety if CHANNEL stalls
     uint64_t last_zombie_check_us = 0;
+    uint64_t not_done_since_us = 0;
 
     while (!done) {
         zmq::pollitem_t items[] = {
@@ -390,6 +392,9 @@ int main(int argc, const char *argv[]) {
                 link_up = false;
                 need_refresh = true;
                 ++iod_down_streak;
+                if (not_done_since_us == 0) {
+                    not_done_since_us = microsecs();
+                }
 
                 // After a prior live session only: if still down for a while,
                 // force a clean CHANNEL. Never on streak==1 (kills cold start
@@ -420,9 +425,25 @@ int main(int argc, const char *argv[]) {
 
             // Full CHANNEL session required before treating the link as up.
             if (subscription_manager.setupStatus() != SubscriptionManager::e_done) {
+                if (not_done_since_us == 0) {
+                    not_done_since_us = microsecs();
+                }
+                else if (had_session &&
+                         microsecs() - not_done_since_us > not_done_limit_us) {
+                    std::cerr << "persistd: stuck not e_done — full reconnect\n" << std::flush;
+                    {
+                        FileLogger fl(program_name);
+                        fl.f() << "stuck not e_done — full reconnect\n" << std::flush;
+                    }
+                    link_up = false;
+                    need_refresh = true;
+                    subscription_manager.forceFullReconnect("persistd stuck not e_done");
+                    not_done_since_us = microsecs();
+                }
                 usleep(50000);
                 continue;
             }
+            not_done_since_us = 0;
 
             // Zombie recovery: setup TCP may auto-reconnect to a new iod while
             // CHANNEL grant/SUB stay stale and monitors never flip disconnected.
