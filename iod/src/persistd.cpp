@@ -141,9 +141,11 @@ class SetupConnectMonitor : public EventResponder {
   public:
     void operator()(const zmq_event_t &event_, const char *addr_) {
         need_refresh = true;
-        // Reconnect of setup/SUB after a live session means peer (iod) likely
-        // restarted — old CHANNEL port/authority are invalid even if e_done.
-        if (had_session) {
+        // Only force re-CHANNEL if we thought the link was still up (zombie
+        // peer replace). Normal SUB connect after CHANNEL grant always fires
+        // CONNECTED — treating that as must_rechannel loops forceFullReconnect
+        // forever and never collects/saves.
+        if (had_session && link_up) {
             must_rechannel = true;
             link_up = false;
         }
@@ -152,7 +154,8 @@ class SetupConnectMonitor : public EventResponder {
         {
             FileLogger fl(program_name);
             fl.f() << "iod connected event (" << (addr_ ? addr_ : "?")
-                   << ") had_session=" << (had_session ? "1" : "0") << "\n"
+                   << ") had_session=" << (had_session ? "1" : "0")
+                   << " link_up=" << (link_up ? "1" : "0") << "\n"
                    << std::flush;
         }
     }
@@ -163,9 +166,11 @@ class SetupDisconnectMonitor : public EventResponder {
     void operator()(const zmq_event_t &event_, const char *addr_) {
         // Do not exit(0) here. Exit-only recovery fails when the event never
         // fires, and a mid-outage restart storm is worse than soft reconnect.
+        // Do not set must_rechannel: checkConnections already forceFullReconnects
+        // on both-down / peer loss. Re-CHANNEL again on the next e_done would
+        // thrash and skip PERSISTENT STATUS / property save.
         link_up = false;
         need_refresh = true;
-        must_rechannel = true;
         std::cerr << "persistd iod disconnected event (" << (addr_ ? addr_ : "?") << ")\n"
                   << std::flush;
         {
@@ -360,10 +365,11 @@ int main(int argc, const char *argv[]) {
 
     int iod_down_streak = 0;
     int sub_error_count = 0;
-    // Soft reconnect every few seconds while down; supervise restart if still
-    // stranded after a long outage (zombie REQ/SUB sessions).
-    const int iod_force_reconnect_every = 3; // seconds (matches down-path sleep)
-    const int iod_exit_after_seconds = 90;   // long enough for iod boot + CHANNEL
+    // checkConnections already recovers mid-handshake. Only poke a full
+    // reconnect if we stay down a long time (do not thrash every few seconds —
+    // that aborts CHANNEL before PERSISTENT STATUS / SUB can finish).
+    const int iod_force_reconnect_every = 15; // seconds (matches down-path sleep)
+    const int iod_exit_after_seconds = 90;    // long enough for iod boot + CHANNEL
     uint64_t last_zombie_check_us = 0;
 
     while (!done) {
@@ -385,14 +391,11 @@ int main(int argc, const char *argv[]) {
                 need_refresh = true;
                 ++iod_down_streak;
 
-                // checkConnections already forceFullReconnects on many paths;
-                // also poke on a timer so long outages / zombie e_done sessions
-                // cannot sit forever without re-CHANNEL. Skip until we have had
-                // a live session — otherwise streak==1 aborts the first CHANNEL
-                // handshake during cold start.
-                if (had_session &&
-                    (iod_down_streak == 1 ||
-                     (iod_down_streak % iod_force_reconnect_every) == 0)) {
+                // After a prior live session only: if still down for a while,
+                // force a clean CHANNEL. Never on streak==1 (kills cold start
+                // and mid-handshake). Interval must exceed typical CHANNEL time.
+                if (had_session && iod_down_streak > 0 &&
+                    (iod_down_streak % iod_force_reconnect_every) == 0) {
                     subscription_manager.forceFullReconnect("persistd iod link down");
                 }
 
@@ -440,8 +443,10 @@ int main(int argc, const char *argv[]) {
                 }
             }
 
-            // Drop stale CHANNEL/SUB before collecting after peer loss/reconnect.
+            // Drop stale CHANNEL/SUB before collecting after peer loss.
             // PERSISTENT STATUS on setup alone is not enough — SUB must re-bind.
+            // must_rechannel is set on DISCONNECT (and unexpected connect while
+            // link_up); clear it when we actually start a full reconnect.
             if (must_rechannel) {
                 std::cerr << "persistd: peer change — full CHANNEL reconnect\n" << std::flush;
                 {
@@ -461,8 +466,9 @@ int main(int argc, const char *argv[]) {
                 if (!CollectPersistentStatus(store, subscription_manager)) {
                     link_up = false;
                     need_refresh = true;
-                    must_rechannel = true;
-                    subscription_manager.forceFullReconnect("persistd collect failed");
+                    // Do not set must_rechannel here — that restarts CHANNEL
+                    // and can loop if PERSISTENT STATUS is briefly slow.
+                    subscription_manager.resetChannelRequestState(true);
                     usleep(500000);
                     continue;
                 }
