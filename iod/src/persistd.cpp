@@ -128,19 +128,52 @@ bool setup_signals() {
     return true;
 }
 
-// monitor the connection to iod and each time the connection
-// is remade a request is made for the state of persistent
-// objects.
+// Soft-reconnect state. ZMQ_EVENT_DISCONNECTED often does not fire on iod
+// restart (zombie TCP / auto-reconnect of setup only), so recovery is driven
+// from the main loop via checkConnections + forceFullReconnect. Supervise exit
+// is a last-resort fallback if soft reconnect stalls (same pattern as mbmon).
 static bool need_refresh = false;
+static bool link_up = false;
+static bool had_session = false;     // completed CHANNEL + PERSISTENT STATUS once
+static bool must_rechannel = false; // drop stale CHANNEL/SUB before next collect
 
 class SetupConnectMonitor : public EventResponder {
   public:
-    void operator()(const zmq_event_t &event_, const char *addr_) { need_refresh = true; }
+    void operator()(const zmq_event_t &event_, const char *addr_) {
+        need_refresh = true;
+        // Reconnect of setup/SUB after a live session means peer (iod) likely
+        // restarted — old CHANNEL port/authority are invalid even if e_done.
+        if (had_session) {
+            must_rechannel = true;
+            link_up = false;
+        }
+        std::cerr << "persistd iod connected event (" << (addr_ ? addr_ : "?") << ")\n"
+                  << std::flush;
+        {
+            FileLogger fl(program_name);
+            fl.f() << "iod connected event (" << (addr_ ? addr_ : "?")
+                   << ") had_session=" << (had_session ? "1" : "0") << "\n"
+                   << std::flush;
+        }
+    }
 };
 
 class SetupDisconnectMonitor : public EventResponder {
   public:
-    void operator()(const zmq_event_t &event_, const char *addr_) { done = true; }
+    void operator()(const zmq_event_t &event_, const char *addr_) {
+        // Do not exit(0) here. Exit-only recovery fails when the event never
+        // fires, and a mid-outage restart storm is worse than soft reconnect.
+        link_up = false;
+        need_refresh = true;
+        must_rechannel = true;
+        std::cerr << "persistd iod disconnected event (" << (addr_ ? addr_ : "?") << ")\n"
+                  << std::flush;
+        {
+            FileLogger fl(program_name);
+            fl.f() << "iod disconnected event (" << (addr_ ? addr_ : "?") << ")\n"
+                   << std::flush;
+        }
+    }
 };
 
 std::set<std::string> ignored_properties;
@@ -216,7 +249,10 @@ bool loadActiveData(PersistentStore &store, const char *initial_settings) {
     }
 }
 
-void CollectPersistentStatus(PersistentStore &store, SubscriptionManager &subscription_manager) {
+// Returns true if status was collected (or empty/ignored after retries exhausted
+// without hard failure). Returns false if REQ path is broken — caller should
+// forceFullReconnect / back off rather than spinning collect forever.
+bool CollectPersistentStatus(PersistentStore &store, SubscriptionManager &subscription_manager) {
     std::string initial_settings;
     int tries = 3;
     do {
@@ -235,7 +271,7 @@ void CollectPersistentStatus(PersistentStore &store, SubscriptionManager &subscr
                 if (loadActiveData(store, initial_settings.c_str())) {
                     store.save();
                 }
-                break;
+                return true;
             }
             else {
                 sleep(2);
@@ -253,10 +289,15 @@ void CollectPersistentStatus(PersistentStore &store, SubscriptionManager &subscr
             sleep(1);
         }
         if (--tries <= 0) {
-            NB_MSG << "failed to collect status, exiting to reconnect\n";
-            exit(0);
+            std::cerr << "persistd failed to collect status; soft-reconnect\n" << std::flush;
+            {
+                FileLogger fl(program_name);
+                fl.f() << "failed to collect status; soft-reconnect\n" << std::flush;
+            }
+            return false;
         }
     } while (!done);
+    return false;
 }
 
 int main(int argc, const char *argv[]) {
@@ -299,6 +340,10 @@ int main(int argc, const char *argv[]) {
 
     setup_signals();
 
+    // Line-buffer logs so /tmp/persistd.log shows reconnect progress promptly.
+    setvbuf(stdout, nullptr, _IOLBF, 0);
+    setvbuf(stderr, nullptr, _IOLBF, 0);
+
     PersistentStore store("persist.dat");
     //store.load(); // disabled load store since we take it from clockwork now
 
@@ -306,43 +351,189 @@ int main(int argc, const char *argv[]) {
     SetupConnectMonitor connect_responder;
     SetupDisconnectMonitor disconnect_responder;
     cmd_socket = &subscription_manager.setup();
+    // Watch both setup (5555) and subscriber (CHANNEL port). iod restart often
+    // kills the dynamic SUB first; setup-only monitoring missed that path.
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
+    subscription_manager.monit_subs.addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
+    subscription_manager.monit_subs.addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
+
+    int iod_down_streak = 0;
+    int sub_error_count = 0;
+    // Soft reconnect every few seconds while down; supervise restart if still
+    // stranded after a long outage (zombie REQ/SUB sessions).
+    const int iod_force_reconnect_every = 3; // seconds (matches down-path sleep)
+    const int iod_exit_after_seconds = 90;   // long enough for iod boot + CHANNEL
+    uint64_t last_zombie_check_us = 0;
 
     while (!done) {
         zmq::pollitem_t items[] = {
             {(void *)subscription_manager.setup(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0},
             {(void *)subscription_manager.subscriber(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0},
         };
-        if (!subscription_manager.checkConnections()) {
-            usleep(100);
-            continue;
-        }
+
         try {
-            int rc = zmq::poll(&items[0], 2, 500);
-            if (need_refresh) {
-                CollectPersistentStatus(store, subscription_manager);
-                need_refresh = false;
-            }
-            if (rc == 0) {
+            if (!subscription_manager.checkConnections()) {
+                if (link_up) {
+                    std::cerr << "persistd: no connection to iod — reconnecting\n" << std::flush;
+                    {
+                        FileLogger fl(program_name);
+                        fl.f() << "no connection to iod — reconnecting\n" << std::flush;
+                    }
+                }
+                link_up = false;
+                need_refresh = true;
+                ++iod_down_streak;
+
+                // checkConnections already forceFullReconnects on many paths;
+                // also poke on a timer so long outages / zombie e_done sessions
+                // cannot sit forever without re-CHANNEL. Skip until we have had
+                // a live session — otherwise streak==1 aborts the first CHANNEL
+                // handshake during cold start.
+                if (had_session &&
+                    (iod_down_streak == 1 ||
+                     (iod_down_streak % iod_force_reconnect_every) == 0)) {
+                    subscription_manager.forceFullReconnect("persistd iod link down");
+                }
+
+                if (iod_down_streak >= iod_exit_after_seconds) {
+                    std::cerr << "persistd: iod reconnect stalled for " << iod_down_streak
+                              << "s; exiting for supervise restart\n"
+                              << std::flush;
+                    {
+                        FileLogger fl(program_name);
+                        fl.f() << "iod reconnect stalled for " << iod_down_streak
+                               << "s; exiting for supervise restart\n"
+                               << std::flush;
+                    }
+                    exit(0);
+                }
+
+                usleep(1000000);
                 continue;
+            }
+
+            iod_down_streak = 0;
+
+            // Full CHANNEL session required before treating the link as up.
+            if (subscription_manager.setupStatus() != SubscriptionManager::e_done) {
+                usleep(50000);
+                continue;
+            }
+
+            // Zombie recovery: setup TCP may auto-reconnect to a new iod while
+            // CHANNEL grant/SUB stay stale and monitors never flip disconnected.
+            const uint64_t now_us = microsecs();
+            if (had_session &&
+                (now_us - last_zombie_check_us) > 10000000ULL) {
+                last_zombie_check_us = now_us;
+                if (subscription_manager.monit_setup->disconnected() ||
+                    subscription_manager.monit_subs.disconnected()) {
+                    std::cerr << "persistd: monitor shows down while e_done — full reconnect\n"
+                              << std::flush;
+                    link_up = false;
+                    need_refresh = true;
+                    must_rechannel = true;
+                    subscription_manager.forceFullReconnect("persistd monitor down at e_done");
+                    usleep(200000);
+                    continue;
+                }
+            }
+
+            // Drop stale CHANNEL/SUB before collecting after peer loss/reconnect.
+            // PERSISTENT STATUS on setup alone is not enough — SUB must re-bind.
+            if (must_rechannel) {
+                std::cerr << "persistd: peer change — full CHANNEL reconnect\n" << std::flush;
+                {
+                    FileLogger fl(program_name);
+                    fl.f() << "peer change — full CHANNEL reconnect\n" << std::flush;
+                }
+                link_up = false;
+                need_refresh = true;
+                if (subscription_manager.forceFullReconnect("persistd must_rechannel")) {
+                    must_rechannel = false;
+                }
+                usleep(200000);
+                continue;
+            }
+
+            if (!link_up || need_refresh) {
+                if (!CollectPersistentStatus(store, subscription_manager)) {
+                    link_up = false;
+                    need_refresh = true;
+                    must_rechannel = true;
+                    subscription_manager.forceFullReconnect("persistd collect failed");
+                    usleep(500000);
+                    continue;
+                }
+                std::cerr << "persistd: iod link up — store refreshed\n" << std::flush;
+                {
+                    FileLogger fl(program_name);
+                    fl.f() << "iod link up — store refreshed\n" << std::flush;
+                }
+                link_up = true;
+                had_session = true;
+                need_refresh = false;
+                must_rechannel = false;
+                last_zombie_check_us = microsecs();
             }
         }
         catch (const zmq::error_t &e) {
             if (errno == EINTR || errno == EAGAIN) {
                 continue;
             }
+            std::cerr << "persistd connection poll error: " << e.what() << "\n" << std::flush;
+            link_up = false;
+            need_refresh = true;
+            subscription_manager.forceFullReconnect("persistd poll exception");
+            usleep(400000);
+            continue;
+        }
+
+        int rc = 0;
+        try {
+            rc = zmq::poll(&items[0], 2, 500);
+        }
+        catch (const zmq::error_t &e) {
+            if (errno == EINTR || errno == EAGAIN) {
+                continue;
+            }
+            std::cerr << "persistd zmq::poll error: " << e.what() << "\n" << std::flush;
+            link_up = false;
+            need_refresh = true;
+            subscription_manager.forceFullReconnect("persistd zmq::poll exception");
+            usleep(400000);
+            continue;
+        }
+        if (rc == 0) {
+            continue;
         }
         if (!(items[1].revents & ZMQ_POLLIN)) {
             continue;
         }
-        //zmq::message_t update;
+
         char *data = 0;
         size_t len = 0;
         try {
             MessageHeader mh;
             if (!safeRecv(subscription_manager.subscriber(), &data, &len, false, 1, mh)) {
-                std::cout << "failed to receive message\n";
+                // Empty/failed recv: after peer death prefer soft reconnect.
+                if (errno != EAGAIN && errno != EINTR) {
+                    std::cerr << "persistd subscriber recv failed: " << zmq_strerror(zmq_errno())
+                              << "\n"
+                              << std::flush;
+                    link_up = false;
+                    need_refresh = true;
+                    subscription_manager.forceFullReconnect("persistd subscriber recv error");
+                    if (++sub_error_count > 5) {
+                        exit(0); // supervise restart
+                    }
+                    usleep(200000);
+                }
+                if (data != nullptr) {
+                    delete[] data;
+                }
+                continue;
             }
             if (!len) {
                 if (data != nullptr) {
@@ -355,12 +546,20 @@ int main(int argc, const char *argv[]) {
             if (errno == EINTR) {
                 continue;
             }
-            std::cerr << "error: " << e.what() << " receiving data\n";
+            std::cerr << "error: " << e.what() << " receiving data\n" << std::flush;
             if (data != nullptr) {
                 delete[] data;
             }
+            link_up = false;
+            need_refresh = true;
+            subscription_manager.forceFullReconnect("persistd subscriber exception");
+            if (++sub_error_count > 5) {
+                exit(0);
+            }
+            usleep(200000);
             continue;
         }
+        sub_error_count = 0;
 
         if (verbose) {
             std::cout << data << "\n";
@@ -371,7 +570,6 @@ int main(int argc, const char *argv[]) {
             std::list<Value> *param_list = 0;
             if (MessageEncoding::getCommand(data, cmd, &param_list)) {
                 if (cmd == "PROPERTY" && param_list && param_list->size() == 3) {
-                    std::string property;
                     std::list<Value>::const_iterator iter = param_list->begin();
                     Value machine_name = *iter++;
                     Value property_name = *iter++;
