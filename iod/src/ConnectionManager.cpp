@@ -1224,6 +1224,38 @@ bool SubscriptionManager::checkConnections() {
         usleep(50000);
         return false;
     }
+
+    // Mid-CHANNEL handshake while both TCP legs look connected.
+    // Common after iod restart when SUB auto-reconnects to a fixed definition
+    // port (e.g. PERSISTENCE 7901) before the CHANNEL grant is applied: neither
+    // monitor reports disconnected, so the disconnect/timeout branch above never
+    // runs, and a bare "return true" would skip requestChannel() forever — stuck
+    // in e_waiting_setup with no property path (persistd, humid, mbmon).
+    if (setupStatus() == e_waiting_connect || setupStatus() == e_waiting_setup ||
+        setupStatus() == e_settingup_subscriber || setupStatus() == e_waiting_subscriber) {
+        uint64_t state_timeout = 10000000; // 10s mid-handshake
+        if (setupStatus() == e_waiting_connect) {
+            state_timeout = 60000000;
+        }
+        if (state_start && microsecs() - state_start > state_timeout) {
+            {
+                FileLogger fl(program_name);
+                fl.f() << " waiting too long in state " << STATUS_NAMES[setupStatus()]
+                       << " with TCP up — full reconnect\n";
+            }
+            forceFullReconnect("state timeout while TCP up");
+            return false;
+        }
+        // Drive CHANNEL send/recv and SUB bind even though monitors look healthy.
+        setupConnections();
+        if (!current_channel.empty() && !monit_subs.disconnected() && sub_status_ != ss_init) {
+            setSetupStatus(SubscriptionManager::e_done);
+            channel_error_count = 0;
+            return true;
+        }
+        return false;
+    }
+
     // Both TCP paths up is not enough: we must have applied a CHANNEL grant
     // (current_channel set). Otherwise a race after peer restart marks e_done
     // while the CHANNEL JSON was drained/ignored and authority/port are wrong.
