@@ -887,7 +887,8 @@ class InputFilterSettings {
     CircularBuffer *positions;
     double last_sent;    // this is the value to send unless the read value moves away from the mean
     double prev_sent;    // this is previous value of last_sent
-    uint64_t last_time;    // last filter/sample tick (monotonic sample clock)
+    uint64_t last_time;    // last filter pace tick (wall microsecs only)
+    uint64_t velocity_time; // last velocity sample time (EC/app read_time domain)
     uint64_t last_emit_us; // last CW emit (change or safety)
     int64_t last_emitted_raw; // last raw filtered value emitted
     double last_emitted_eng;  // last engineering VALUE emitted (factor/base)
@@ -931,14 +932,14 @@ class InputFilterSettings {
 
     InputFilterSettings()
         : property_changed(true), positions(0), last_sent(0.0), prev_sent(0.0), last_time(0),
-          last_emit_us(0), last_emitted_raw(0), last_emitted_eng(0.0), startup_emitted(false),
-          buffer_len(200), tolerance(&default_tolerance), filter_c_coeff(0), filter_d_coeff(0),
-          filter_len(&default_filter_len), filter_type(0), calc_dt(&default_calc_dt),
-          calc_d2t(&default_calc_d2t), calc_stddev(&default_calc_stddev),
-          position_history(&default_position_history), speed_tolerance(&default_speed_tolerance),
-          speed(0.0), speed_scale(1.0), accel(0.0), accel_scale(1.0), speeds(4), rate_len(4),
-          input_bwf(0), vel_bwf(0), accel_bwf(0), throttle(0), safety_emit(0), emit_flag(0),
-          emit_guard(0) {
+          velocity_time(0), last_emit_us(0), last_emitted_raw(0), last_emitted_eng(0.0),
+          startup_emitted(false), buffer_len(200), tolerance(&default_tolerance),
+          filter_c_coeff(0), filter_d_coeff(0), filter_len(&default_filter_len), filter_type(0),
+          calc_dt(&default_calc_dt), calc_d2t(&default_calc_d2t),
+          calc_stddev(&default_calc_stddev), position_history(&default_position_history),
+          speed_tolerance(&default_speed_tolerance), speed(0.0), speed_scale(1.0), accel(0.0),
+          accel_scale(1.0), speeds(4), rate_len(4), input_bwf(0), vel_bwf(0), accel_bwf(0),
+          throttle(0), safety_emit(0), emit_flag(0), emit_guard(0) {
 
         //double bw_c[] = { 0.000003756838020,0.000011270514059,0.000011270514059,0.000003756838020 };
         //double bw_d[] = { 1.000000000000,-2.937170728450,2.876299723479,-0.939098940325 };
@@ -982,40 +983,30 @@ class InputFilterSettings {
         // replace the raw value the positions buffer with the filtered value
         //std::cout << read_time << " replacing pos: " << getBufferValue(positions, 0) << " with " << last_sent << "\n";
         setBufferValue(positions, last_sent);
-        //if (prev_sent == 0.0) prev_sent = last_sent; TBD wrong?
-        if (last_time == 0) {
-            last_time = read_time;
+        // Velocity uses EC/app read_time only. Never write last_time here — that
+        // field is wall microsecs for filter pacing (mixing epochs stalls filter_due).
+        if (velocity_time == 0) {
+            velocity_time = read_time;
             prev_sent = last_sent;
             speed = 0.0;
             speeds.append(speed);
         }
-        else if ((int64_t)(read_time - last_time) >= ((throttle) ? (*throttle * 1000L) : 10000L)) {
-            double dt = ((double)(read_time - last_time)) / 1000000.0;
-            //speed = (getBufferValue(positions,0) - getBufferValue(positions,1)) / dt;
-            //rate_len = findMovement(positions, 20, *position_history);
-            // if there has been movement in the last N (N=20) readings, calculate speed
-            //if (rate_len < *position_history) {
+        else if ((int64_t)(read_time - velocity_time) >=
+                 ((throttle) ? (*throttle * 1000L) : 10000L)) {
+            double dt = ((double)(read_time - velocity_time)) / 1000000.0;
             if (*calc_dt) {
                 speed = savitsky_golay_filter(positions, smoothing_len, first_derivative_coeff,
                                               FIRST_DERIV_NORM);
                 speed = speed / dt;
-                //speed = vel_bwf->filter(speed);
-                //speed = 1000000.0 * rate(positions, (rate_len<4)? 4 : rate_len);
-                //std::cout << "computed speed " << speed << " at " << getBufferValueAt(positions, 0) << "\n";
-                //}
-                //else speed = 0.0;
                 speeds.append(speed);
             }
             if (*calc_d2t) {
-                //accel = 0.0;
-                //accel = (speeds.get(0) - speeds.get(1)) / dt;
                 accel = savitsky_golay_filter(positions, smoothing_len, second_derivative_coeff,
                                               SECOND_DERIV_NORM);
                 accel = accel / dt;
-                //accel = accel_bwf->filter(accel / dt);
             }
 
-            last_time = read_time;
+            velocity_time = read_time;
             prev_sent = last_sent;
         }
     }
@@ -1074,24 +1065,51 @@ static bool getFloatValue(MachineInstance *scope, const char *name, double &resu
     return false;
 }
 
+// Resolve ANALOGINPUT filter settings machine. Plant forms:
+//   MODULE, index, subindex, Settings
+//   MODULE, index, pdo, subindex, Settings
+// Class formal params are only module/offset/filter_settings — extra CoE
+// fields are still stored on the instance parameter list. Prefer a linked
+// machine that actually exposes filter/throttle over positional guessing.
+static MachineInstance *findAnalogFilterSettings(MachineInstance *m) {
+    if (!m) {
+        return nullptr;
+    }
+    for (int i = static_cast<int>(m->parameters.size()) - 1; i >= 0; --i) {
+        Parameter &p = m->parameters[static_cast<size_t>(i)];
+        MachineInstance *cand = p.machine;
+        if (!cand) {
+            cand = m->lookup(p);
+        }
+        if (!cand) {
+            if (p.val.kind == Value::t_symbol || p.val.kind == Value::t_string) {
+                cand = MachineInstance::find(p.val.sValue.c_str());
+            }
+            if (!cand && !p.real_name.empty()) {
+                cand = MachineInstance::find(p.real_name.c_str());
+            }
+        }
+        if (!cand || cand == m) {
+            continue;
+        }
+        const Value &filt = cand->getValue("filter");
+        const Value &thr = cand->getValue("throttle");
+        const Value &rate = cand->getValue("rate");
+        if (filt.kind == Value::t_integer || thr.kind == Value::t_integer ||
+            rate.kind == Value::t_integer) {
+            return cand;
+        }
+    }
+    // Fleet default name when parameter link is late.
+    MachineInstance *named = MachineInstance::find("S_CoreAnalogInput");
+    if (named) {
+        return named;
+    }
+    return m->lookup("filter_settings");
+}
+
 void AnalogueInput::setupProperties(MachineInstance *m) {
-    MachineInstance *settings = 0;
-    int64_t object_subindex = 0;
-    if (m->parameters.size() >= 4 &&
-        m->parameters[2].val.asInteger(object_subindex)) {
-        size_t settings_param = 3;
-        int64_t pdo_index = 0;
-        if (m->parameters.size() >= 5 &&
-            m->parameters[3].val.asInteger(pdo_index)) {
-            settings_param = 4;
-        }
-        if (m->parameters.size() > settings_param) {
-            settings = m->lookup(m->parameters[settings_param]);
-        }
-    }
-    else {
-        settings = m->lookup("filter_settings");
-    }
+    MachineInstance *settings = findAnalogFilterSettings(m);
     if (settings) {
         double speed_scale = 1.0, accel_scale = 1.0;
         if (getFloatValue(settings, "velocity_scale", speed_scale)) {
@@ -1225,37 +1243,36 @@ int64_t AnalogueInput::filter(int64_t raw) {
         filtered VALUE is unchanged. properties.add does not notify dependents. */
     publishSampleTime(read_time, true, raw);
 
+    // Lazy rebind: setupProperties often runs before Settings machine properties
+    // / parameter links are ready (filter_type stayed null → default average).
+    if (!config->filter_type && !owners.empty() && owners.front()) {
+        setupProperties(owners.front());
+    }
+
     // Period gates use wall clock (microsecs). Do not mix with EC sample
     // read_time / application clock — different epochs make filter always-due.
     const uint64_t filter_us = filterPeriodUs(config->throttle);
     const uint64_t now_us = microsecs();
+    const bool raw_mode = (config->filter_type && *config->filter_type == 0);
+    // filter:0 = wire passthrough every sample (throttle only paces velocity).
+    // Types 1/2 keep throttle + optional tolerance on last_sent.
     const bool filter_due =
-        (config->last_time == 0) || (now_us - config->last_time >= filter_us);
+        raw_mode || (config->last_time == 0) || (now_us - config->last_time >= filter_us);
 
     if (filter_due) {
         if (config->property_changed) {
             config->property_changed = false;
         }
 
-        // Filter + tolerance (setup standard). Only advance last_sent past tol.
         addSample(config->positions, (long)read_time, (double)raw);
         int64_t candidate = static_cast<int64_t>(config->last_sent);
-        if (config->filter_type && *config->filter_type == 0) { // raw
+        if (raw_mode) {
             candidate = raw;
+            config->last_sent = candidate; // no tolerance hold in raw mode
         }
         else if (!config->filter_type || (config->filter_type && *config->filter_type == 1)) {
             candidate = static_cast<int64_t>(
                 bufferAverage(config->positions, static_cast<size_t>(*config->filter_len)) + 0.5f);
-        }
-        else if (config->filter_type && *config->filter_type == 2) {
-            if (config->input_bwf) {
-                candidate = static_cast<int64_t>(config->input_bwf->filter((float)raw) + 0.5);
-            }
-            else {
-                assert(false);
-            }
-        }
-        {
             const int64_t tol =
                 (config->tolerance && *config->tolerance > 0) ? *config->tolerance : 1;
             int64_t delta = candidate - static_cast<int64_t>(config->last_sent);
@@ -1266,8 +1283,30 @@ int64_t AnalogueInput::filter(int64_t raw) {
                 config->last_sent = candidate;
             }
         }
-        config->update(read_time);
-        config->last_time = now_us;
+        else if (config->filter_type && *config->filter_type == 2) {
+            if (config->input_bwf) {
+                candidate = static_cast<int64_t>(config->input_bwf->filter((float)raw) + 0.5);
+            }
+            else {
+                assert(false);
+            }
+            const int64_t tol =
+                (config->tolerance && *config->tolerance > 0) ? *config->tolerance : 1;
+            int64_t delta = candidate - static_cast<int64_t>(config->last_sent);
+            if (delta < 0) {
+                delta = -delta;
+            }
+            if (delta >= tol) {
+                config->last_sent = candidate;
+            }
+        }
+        // Velocity (optional) uses EC/app clock via velocity_time; last_time is wall.
+        const bool pace_due =
+            (config->last_time == 0) || (now_us - config->last_time >= filter_us);
+        if (pace_due) {
+            config->update(read_time);
+            config->last_time = now_us;
+        }
     }
 
     // Silent property publish when filtered raw moves (IOTIME already every sample).
