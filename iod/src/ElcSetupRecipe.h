@@ -55,8 +55,9 @@ void scheduleProcessPending(KernelEthercatBus *bus);
 
 /**
  * Blocking progress of pending re-applies (worker thread only).
- * PDO map CoE requires PREOP or SAFEOP. With ELC_CAP_SETUP_HOLD: hold → apply
- * → release. Without CAP: wait PREOP window only.
+ * Does not setup-hold or SDO-apply while a position is missing/offline
+ * (waiting_device). Once visible: PDO map CoE in PREOP/SAFEOP. With
+ * ELC_CAP_SETUP_HOLD: hold → apply → release. Without CAP: wait PREOP window.
  */
 void processPending(KernelEthercatBus *bus);
 

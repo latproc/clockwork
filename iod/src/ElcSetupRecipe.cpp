@@ -90,12 +90,15 @@ constexpr uint64_t kMinApplyGapUs = 500000; // 500 ms (PDO window is short)
 // so the PREOP window after power return is short. Hold only long enough
 // for identity/mailbox, then apply immediately.
 constexpr uint64_t kReadyHoldUs = 400000; // 400 ms in PREOP/SAFEOP
-// Backoff after a real apply failure (not "still in OP").
+// Backoff after a real apply failure (not "still in OP" / not missing).
 constexpr uint64_t kInitialBackoffUs = 1000000; // 1 s
 constexpr uint64_t kMaxBackoffUs = 8000000;     // 8 s
 constexpr unsigned kMaxAttempts = 40;
-// Give up and leave machine status failed after this age.
+// Give up only after this age while the device *is* visible and apply keeps
+// failing. Time spent missing (mains off) does not count.
 constexpr uint64_t kMaxPendingAgeUs = 600000000ULL; // 10 min
+// HMI/sampler status while waiting (missing vs PREOP) — avoid thrash.
+constexpr uint64_t kWaitStatusIntervalUs = 5000000ULL; // 5 s
 
 // AL states (IgH / elc)
 constexpr uint8_t kAlInit = 0x01;
@@ -761,8 +764,22 @@ bool positionWantsReapply(uint16_t position) {
     return false;
 }
 
-/** Online + non-zero identity (SII). Mailbox may still be INIT. */
-bool slaveIdentityReady(KernelEthercatBus *bus, uint16_t position, std::string *why_not) {
+/**
+ * Device is *visible*: present in the master slave list (elc_list_slaves via
+ * ECInterface::positionOnBus) and configured module has non-zero identity.
+ * Prefer the scanned list over getSlaveInfo/SDO probes on missing positions
+ * (those log "Slave N does not exist" in dmesg).
+ * Mailbox may still be INIT — that is separate from "missing".
+ */
+bool slaveVisible(KernelEthercatBus *bus, uint16_t position, std::string *why_not) {
+    (void)bus;
+    // Master scan list first — does not probe missing ring positions.
+    if (!ECInterface::instance() || !ECInterface::instance()->positionOnBus(position)) {
+        if (why_not) {
+            *why_not = "not on bus (missing from slave list)";
+        }
+        return false;
+    }
     ECModule *m = ECInterface::findModule(position);
     if (!m) {
         if (why_not) {
@@ -776,16 +793,7 @@ bool slaveIdentityReady(KernelEthercatBus *bus, uint16_t position, std::string *
         }
         return false;
     }
-    uint32_t vid = m->vendor_id;
-    uint32_t pid = m->product_code;
-    if (vid == 0 && pid == 0 && bus) {
-        struct elc_slave_info info = {};
-        if (bus->getSlaveInfo(position, &info) == 0) {
-            vid = info.vendor_id;
-            pid = info.product_code;
-        }
-    }
-    if (vid == 0 && pid == 0) {
+    if (m->vendor_id == 0 && m->product_code == 0) {
         if (why_not) {
             *why_not = "identity 0:0 (SII not ready)";
         }
@@ -794,13 +802,23 @@ bool slaveIdentityReady(KernelEthercatBus *bus, uint16_t position, std::string *
     return true;
 }
 
+/** Same as slaveVisible — list membership is the live presence check. */
+bool slaveLiveOnBus(KernelEthercatBus *bus, uint16_t position, std::string *why_not) {
+    return slaveVisible(bus, position, why_not);
+}
+
+/** Online + non-zero identity (SII). Mailbox may still be INIT. */
+bool slaveIdentityReady(KernelEthercatBus *bus, uint16_t position, std::string *why_not) {
+    return slaveVisible(bus, position, why_not);
+}
+
 /**
  * PDO map / SM assignment CoE (0x1C12/0x1600/…) requires PREOP or SAFEOP.
  * Applying in OP fails or is rejected; do not treat OP as "ready".
  * (Kernel has no hold-in-PREOP while cyclic is active — catch this window.)
  */
 bool slaveSetupStateReady(KernelEthercatBus *bus, uint16_t position, std::string *why_not) {
-    if (!slaveIdentityReady(bus, position, why_not)) {
+    if (!slaveVisible(bus, position, why_not)) {
         return false;
     }
     ECModule *m = ECInterface::findModule(position);
@@ -820,6 +838,19 @@ bool slaveSetupStateReady(KernelEthercatBus *bus, uint16_t position, std::string
         }
     }
     return false;
+}
+
+/** Throttled status for all ECSETUPRECIPE machines that own this position. */
+void publishWaitStatus(KernelEthercatBus *bus, uint16_t position, const char *status,
+                       const char *err) {
+    for (RecipeSpec &spec : allSpecs()) {
+        if (!spec.reapply || !spec.enabled || !spec.machine) {
+            continue;
+        }
+        if (positionInResolved(spec, position, bus)) {
+            setMachineStatus(spec.machine, status, err);
+        }
+    }
 }
 
 uint64_t backoffUs(unsigned attempts) {
@@ -882,6 +913,27 @@ void processPending(KernelEthercatBus *bus) {
         // Drop or update readiness for each entry; pick one due attempt.
         for (auto it = g_pending.begin(); it != g_pending.end();) {
             PendingReapply &p = it->second;
+
+            std::string why;
+            // Hard gate: never hold/SDO while the station is missing (mains off).
+            // Do not burn max-age / max-attempts while waiting for visibility.
+            if (!slaveVisible(bus, p.position, &why)) {
+                if (p.hold_active) {
+                    releaseSetupHold(bus, p);
+                }
+                p.ready_since_us = 0;
+                // Pause age clock while missing so long power-off does not give up.
+                p.first_queued_us = now;
+                if (now - p.last_wait_status_us >= kWaitStatusIntervalUs) {
+                    p.last_wait_status_us = now;
+                    publishWaitStatus(bus, p.position, "waiting_device", why.c_str());
+                    std::cerr << "ElcSetupRecipe: pos=" << p.position
+                              << " not visible (" << why << "); hold off reapply\n";
+                }
+                ++it;
+                continue;
+            }
+
             if (now - p.first_queued_us > kMaxPendingAgeUs) {
                 std::cerr << "ElcSetupRecipe: reapply give up pos=" << p.position
                           << " after " << (now - p.first_queued_us) / 1000000ULL
@@ -892,24 +944,18 @@ void processPending(KernelEthercatBus *bus) {
                 continue;
             }
 
-            std::string why;
             // Prefer API 0.19 setup-hold so OP is inhibited while we wait/apply.
+            // Only after the device is visible (above).
             ensureSetupHold(bus, p);
             // Apply when AL is PREOP/SAFEOP, or when setup-hold is active (module
-            // may still report operational/OP briefly after hold begin).
+            // may still report operational/OP briefly after hold begin). Never
+            // when the device is missing — that case returned above.
             const bool al_ok = slaveSetupStateReady(bus, p.position, &why);
             if (!al_ok && !p.hold_active) {
                 p.ready_since_us = 0;
-                if (now - p.last_wait_status_us >= 2000000ULL) {
+                if (now - p.last_wait_status_us >= kWaitStatusIntervalUs) {
                     p.last_wait_status_us = now;
-                    for (RecipeSpec &spec : allSpecs()) {
-                        if (!spec.reapply || !spec.enabled || !spec.machine) {
-                            continue;
-                        }
-                        if (positionInResolved(spec, p.position, bus)) {
-                            setMachineStatus(spec.machine, "waiting_preop", why.c_str());
-                        }
-                    }
+                    publishWaitStatus(bus, p.position, "waiting_preop", why.c_str());
                 }
                 ++it;
                 continue;
@@ -922,17 +968,10 @@ void processPending(KernelEthercatBus *bus) {
             }
             if (now - p.ready_since_us < kReadyHoldUs) {
                 if (!al_ok && p.hold_active &&
-                    now - p.last_wait_status_us >= 2000000ULL) {
+                    now - p.last_wait_status_us >= kWaitStatusIntervalUs) {
                     p.last_wait_status_us = now;
-                    for (RecipeSpec &spec : allSpecs()) {
-                        if (!spec.reapply || !spec.enabled || !spec.machine) {
-                            continue;
-                        }
-                        if (positionInResolved(spec, p.position, bus)) {
-                            setMachineStatus(spec.machine, "holding_preop",
-                                             "setup-hold active; applying shortly");
-                        }
-                    }
+                    publishWaitStatus(bus, p.position, "holding_preop",
+                                      "setup-hold active; applying shortly");
                 }
                 ++it;
                 continue;
@@ -967,6 +1006,30 @@ void processPending(KernelEthercatBus *bus) {
 
     g_last_apply_us = now;
     const uint16_t pos = chosen.position;
+
+    // Live re-check immediately before mailbox work (power can drop mid-queue).
+    {
+        std::string why;
+        if (!slaveLiveOnBus(bus, pos, &why)) {
+            std::lock_guard<std::mutex> lock(g_pending_mu);
+            auto it = g_pending.find(pos);
+            if (it != g_pending.end()) {
+                if (it->second.hold_active) {
+                    releaseSetupHold(bus, it->second);
+                }
+                it->second.ready_since_us = 0;
+                it->second.first_queued_us = now;
+                it->second.next_try_us = now + kMinApplyGapUs;
+                if (now - it->second.last_wait_status_us >= kWaitStatusIntervalUs) {
+                    it->second.last_wait_status_us = now;
+                    publishWaitStatus(bus, pos, "waiting_device", why.c_str());
+                }
+            }
+            std::cerr << "ElcSetupRecipe: pos=" << pos
+                      << " vanished before apply (" << why << "); skip\n";
+            return;
+        }
+    }
 
     // Hold across apply so master does not race us back to OP mid-batch.
     ensureSetupHold(bus, chosen);

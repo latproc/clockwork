@@ -36,6 +36,8 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
+#include <set>
 #include <vector>
 #include <list>
 #include <limits>
@@ -900,6 +902,11 @@ static bool kernelSdoUploadEntry(SDOEntry *entry) {
         !ECInterface::instance()->getKernelBus()->isOpen()) {
         return false;
     }
+    // Never call CoE on a position absent from the master slave list — IgH
+    // logs "Slave N does not exist!" on every such SDO attempt.
+    if (!ECInterface::instance()->positionOnBus(entry->getModule()->position)) {
+        return false;
+    }
     uint8_t type = 0;
     uint16_t len = 0;
     if (!kernelSdoTypeAndLen(entry->getSize(), &type, &len)) {
@@ -934,6 +941,9 @@ static bool kernelSdoUploadEntry(SDOEntry *entry) {
 static bool kernelSdoDownloadEntry(SDOEntry *entry, const Value &val) {
     if (!entry || !entry->getModule() || !ECInterface::instance()->getKernelBus() ||
         !ECInterface::instance()->getKernelBus()->isOpen()) {
+        return false;
+    }
+    if (!ECInterface::instance()->positionOnBus(entry->getModule()->position)) {
         return false;
     }
     uint8_t type = 0;
@@ -1004,6 +1014,15 @@ void ECInterface::checkSDOUpdates() {
         current_update_entry++;
         return;
     }
+    // Station not in master slave list (e.g. servo mains off): skip CoE so
+    // dmesg is not filled with "Slave N does not exist"; retry slowly.
+    ECModule *mod = entry->getModule();
+    if (!mod || !positionOnBus(mod->position)) {
+        entry->requestRead(now, 5000);
+        sdo_not_before = now + 200000; // keep scanning other entries
+        current_update_entry++;
+        return;
+    }
     // Synchronous mailbox upload (one op per call).
     if (kernelSdoUploadEntry(entry)) {
         bool first_read = !entry->ready();
@@ -1060,6 +1079,13 @@ bool ECInterface::checkSDOInitialisation() {
         return true;
     }
     if (!(kernelBus && kernelBus->isOpen())) {
+        return false;
+    }
+    ECModule *init_mod = entry->getModule();
+    if (!init_mod || !positionOnBus(init_mod->position)) {
+        // Missing station: defer init write; do not hit master SDO.
+        sdo_not_before = now + 1000000;
+        current_init_entry++;
         return false;
     }
     entry->setOperation(SDOEntry::WRITE);
@@ -1202,7 +1228,43 @@ std::vector<ec_slave_info_t> ECInterface::listSlaves() {
     return {};
 }
 
-;
+namespace {
+std::mutex g_bus_pos_mu;
+std::set<uint16_t> g_bus_positions;
+uint64_t g_bus_pos_refresh_us = 0;
+constexpr uint64_t kBusPosRefreshUs = 1000000ULL; // 1 s
+bool g_bus_pos_have_snapshot = false;
+} // namespace
+
+bool ECInterface::positionOnBus(uint16_t position) {
+    const uint64_t now = microsecs();
+    {
+        std::lock_guard<std::mutex> lock(g_bus_pos_mu);
+        if (g_bus_pos_have_snapshot && now - g_bus_pos_refresh_us < kBusPosRefreshUs) {
+            return g_bus_positions.count(position) != 0;
+        }
+    }
+
+    // Refresh from master scan list (positions that exist — no per-pos SDO).
+    std::vector<ec_slave_info_t> slaves = listSlaves();
+    std::set<uint16_t> next;
+    for (const ec_slave_info_t &s : slaves) {
+        next.insert(s.position);
+    }
+
+    std::lock_guard<std::mutex> lock(g_bus_pos_mu);
+    // Empty list with a prior non-empty snapshot: keep last set briefly so a
+    // transient scan glitch does not look like "all gone". Still refresh time.
+    if (next.empty() && g_bus_pos_have_snapshot && !g_bus_positions.empty() &&
+        now - g_bus_pos_refresh_us < 5 * kBusPosRefreshUs) {
+        g_bus_pos_refresh_us = now;
+        return g_bus_positions.count(position) != 0;
+    }
+    g_bus_positions.swap(next);
+    g_bus_pos_refresh_us = now;
+    g_bus_pos_have_snapshot = true;
+    return g_bus_positions.count(position) != 0;
+}
 
 void collectEtherCatModules() {
     auto slaves = ECInterface::instance()->listSlaves();

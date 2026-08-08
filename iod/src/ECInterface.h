@@ -173,6 +173,13 @@ class ECInterface {
 
 #ifndef EC_SIMULATOR
     std::vector<ec_slave_info_t> listSlaves();
+    /**
+     * True if this bus position is present in the master's scanned slave list
+     * (elc_list_slaves). Prefer this over probing getSlaveInfo/SDO on missing
+     * stations — those paths log "Slave N does not exist" in dmesg.
+     * Result is cached ~1s.
+     */
+    bool positionOnBus(uint16_t position);
     bool activate();   // attempt to activate the master
     bool deactivate(); // deactivate the master
     /**
