@@ -371,6 +371,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 else if (matched_device && smKey == name) { // Active SM
                     // TBD if no alt sm has been selected, choose the one marked as default
                     enter(in_sm);
+                    attributes.clear();
                     if (xmlTextReaderHasAttributes(reader)) {
                         captureAttribute(reader, "MinSize", attributes);
                         captureAttribute(reader, "MaxSize", attributes);
@@ -378,6 +379,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                         captureAttribute(reader, "StartAddress", attributes);
                         captureAttribute(reader, "ControlByte", attributes);
                         captureAttribute(reader, "Enable", attributes);
+                        captureAttribute(reader, "Watchdog", attributes);
                     }
                 }
                 else {
@@ -488,7 +490,18 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 }
                 si->pdos = pdos;
 
-                si->watchdog_mode = EC_WD_DEFAULT;
+                // Preserve an explicit per-sync-manager ESI watchdog policy.
+                // Missing or unrecognised values retain the legacy default.
+                const std::string watchdog = attributes["Watchdog"];
+                if (watchdog == "0" || watchdog == "Disable" || watchdog == "disable") {
+                    si->watchdog_mode = EC_WD_DISABLE;
+                }
+                else if (watchdog == "1" || watchdog == "Enable" || watchdog == "enable") {
+                    si->watchdog_mode = EC_WD_ENABLE;
+                }
+                else {
+                    si->watchdog_mode = EC_WD_DEFAULT;
+                }
                 enter(in_device);
             }
         }

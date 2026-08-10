@@ -65,6 +65,12 @@ TEST_F(EtherCatXMLTest, FindADevice) {
     EXPECT_EQ(collected_configurations.size(), 1) << "it loads a device";
     if (collected_configurations.size() > 0) {
         std::cout << *collected_configurations[0] << "\n";
+        const ConfigurationDetails &config = collected_configurations[0]->config;
+        ASSERT_GE(config.num_syncs, 4U);
+        EXPECT_EQ(config.c_syncs[2].watchdog_mode, EC_WD_DISABLE)
+            << "it preserves an explicit output sync-manager watchdog disable";
+        EXPECT_EQ(config.c_syncs[3].watchdog_mode, EC_WD_DEFAULT)
+            << "it leaves an unspecified sync-manager watchdog at the default";
     }
 }
 

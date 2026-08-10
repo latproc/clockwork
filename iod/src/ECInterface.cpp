@@ -973,10 +973,10 @@ void ECInterface::configureModules() {
         for (unsigned int i = 0; i < m->sync_count; ++i) {
             int res;
             ec_direction_t dir = m->syncs[i].dir;
-            if (dir == EC_DIR_OUTPUT) {
+            if (dir == EC_DIR_OUTPUT && m->syncs[i].watchdog_mode == EC_WD_DEFAULT) {
                 m->syncs[i].watchdog_mode = EC_WD_ENABLE;
             }
-            else {
+            else if (dir != EC_DIR_OUTPUT) {
                 m->syncs[i].watchdog_mode = EC_WD_DEFAULT;
             }
 

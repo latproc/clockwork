@@ -13,7 +13,7 @@
         <Fmmu Sm="3">Inputs</Fmmu>
         <Sm MinSize="40" MaxSize="100" DefaultSize="100" StartAddress="#x1800" ControlByte="#x26" Enable="1">MBoxOut</Sm>
         <Sm MinSize="40" MaxSize="100" DefaultSize="100" StartAddress="#x1C00" ControlByte="#x22" Enable="1">MBoxIn</Sm>
-        <Sm StartAddress="#x1100" ControlByte="#x64" Enable="1">Outputs</Sm>
+        <Sm StartAddress="#x1100" ControlByte="#x64" Enable="1" Watchdog="0">Outputs</Sm>
         <Sm StartAddress="#x1200" ControlByte="#x20" Enable="1">Inputs</Sm>
         <RxPdo Sm="2">
           <Index>#x1701</Index>
