@@ -371,6 +371,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 else if (matched_device && smKey == name) { // Active SM
                     // TBD if no alt sm has been selected, choose the one marked as default
                     enter(in_sm);
+                    attributes.clear();
                     if (xmlTextReaderHasAttributes(reader)) {
                         captureAttribute(reader, "MinSize", attributes);
                         captureAttribute(reader, "MaxSize", attributes);
@@ -378,6 +379,7 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                         captureAttribute(reader, "StartAddress", attributes);
                         captureAttribute(reader, "ControlByte", attributes);
                         captureAttribute(reader, "Enable", attributes);
+                        captureAttribute(reader, "Watchdog", attributes);
                     }
                 }
                 else {
@@ -488,7 +490,20 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 }
                 si->pdos = pdos;
 
-                si->watchdog_mode = EC_WD_DEFAULT;
+                auto watchdog = attributes.find("Watchdog");
+                if (watchdog != attributes.end() &&
+                    (watchdog->second == "Disable" || watchdog->second == "disable" ||
+                     watchdog->second == "0")) {
+                    si->watchdog_mode = EC_WD_DISABLE;
+                }
+                else if (watchdog != attributes.end() &&
+                         (watchdog->second == "Enable" || watchdog->second == "enable" ||
+                          watchdog->second == "1")) {
+                    si->watchdog_mode = EC_WD_ENABLE;
+                }
+                else {
+                    si->watchdog_mode = EC_WD_DEFAULT;
+                }
                 enter(in_device);
             }
         }
