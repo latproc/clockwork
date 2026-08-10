@@ -490,13 +490,15 @@ void EtherCATXMLParser::processToken(xmlTextReaderPtr reader) {
                 }
                 si->pdos = pdos;
 
-                // Preserve an explicit per-sync-manager ESI watchdog policy.
-                // Missing or unrecognised values retain the legacy default.
-                const std::string watchdog = attributes["Watchdog"];
-                if (watchdog == "0" || watchdog == "Disable" || watchdog == "disable") {
+                auto watchdog = attributes.find("Watchdog");
+                if (watchdog != attributes.end() &&
+                    (watchdog->second == "Disable" || watchdog->second == "disable" ||
+                     watchdog->second == "0")) {
                     si->watchdog_mode = EC_WD_DISABLE;
                 }
-                else if (watchdog == "1" || watchdog == "Enable" || watchdog == "enable") {
+                else if (watchdog != attributes.end() &&
+                         (watchdog->second == "Enable" || watchdog->second == "enable" ||
+                          watchdog->second == "1")) {
                     si->watchdog_mode = EC_WD_ENABLE;
                 }
                 else {

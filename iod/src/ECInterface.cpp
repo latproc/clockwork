@@ -976,9 +976,6 @@ void ECInterface::configureModules() {
             if (dir == EC_DIR_OUTPUT && m->syncs[i].watchdog_mode == EC_WD_DEFAULT) {
                 m->syncs[i].watchdog_mode = EC_WD_ENABLE;
             }
-            else if (dir != EC_DIR_OUTPUT) {
-                m->syncs[i].watchdog_mode = EC_WD_DEFAULT;
-            }
 
             DBG_ETHERCAT_CALLS << "ecrt_config_sync_manager\n";
             res = ecrt_slave_config_sync_manager(m->slave_config, m->syncs[i].index,
@@ -1411,6 +1408,16 @@ bool ECInterface::activate() {
     int res;
     unsigned int pos = 0;
     ec_master_info_t master_info;
+
+    // A SafeOP recovery is deliberately retried by the plant STARTUP machine.
+    // check_master_state() closes the normal output-send gate after the
+    // configured tolerance is exceeded, but the recovery activation must be
+    // able to send the safe/default process image again.  In particular,
+    // EL5152's set-counter RxPDO has an SM watchdog and cannot leave SafeOP
+    // if this gate remains latched off from the preceding fault.
+    all_ok = true;
+    failure_count = 0;
+
     DBG_ETHERCAT_CALLS << "ecrt_master: Activating master with configured slaves : \n";
     res = ecrt_master(ECInterface::master, &master_info);
     while (res >= 0 && pos < master_info.slave_count) {
