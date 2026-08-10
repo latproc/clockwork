@@ -19,6 +19,7 @@
 */
 
 #include "ECInterface.h"
+#include "EtherCATSetup.h"
 #include "IOInterface.h"
 #include "MessageLog.h"
 #include "value.h"
@@ -152,7 +153,7 @@ void setDefaultData(size_t len, uint8_t *data, uint8_t *mask) {
     if (!default_mask) {
         default_mask = new uint8_t[len];
     }
-    memcpy(default_mask, data, len);
+    memcpy(default_mask, mask, len);
 
 #if VERBOSE_DEBUG
     std::cout << "default data: ";
@@ -796,6 +797,14 @@ bool EtherCATThread::getClockworkMessage(zmq::socket_t &out_sock, bool ec_ok) {
     if (packet_type == IOInterface::MessageType::ACTIVATE_REQUEST) {
         std::cout << "---------------- Activate\n";
         if (ECInterface::instance()->activate()) {
+            // Clockwork supplies its established POINT/ANALOGOUTPUT image
+            // before activation. ecrt_master_activate() creates a fresh domain
+            // image, so seed it before acknowledging activation and allowing
+            // the cyclic thread to transmit otherwise-zero outputs.
+            if (default_data && default_mask && default_data_size) {
+                ECInterface::instance()->updateDomain(default_data_size, default_data,
+                                                      default_mask);
+            }
             safeSend(out_sock, "ok", 2);
         }
         else {
@@ -924,6 +933,7 @@ void EtherCATThread::operator()() {
 
     uint64_t global_clock = 0;
     bool first_run = true;
+    bool operational_defaults_applied = false;
     // assume all is ok with EtherCAT. If modules go offline this flips and we stop polling
     static bool ec_ok = true;
     while (!program_done && !waitForSync(*sync_sock)) {
@@ -985,6 +995,21 @@ void EtherCATThread::operator()() {
 
         // Always receive for master/domain health (legacy ecrt).
         ECInterface::instance()->receiveState();
+
+        // Activation creates the process image before slaves finish moving to
+        // OP. Some devices clear their RxPDO image during that transition, so
+        // reapply Clockwork's established ANALOGOUTPUT values once all modules
+        // and the Clockwork process-data path are operational. Reset the latch
+        // when the bus leaves OP so recovery gets the same deterministic seed.
+        const bool all_modules_op = ECInterface::instance()->operational();
+        if (!all_modules_op) {
+            operational_defaults_applied = false;
+        }
+        else if (!operational_defaults_applied && driver_state == s_driver_operational) {
+            reapplyOutputDefaults();
+            operational_defaults_applied = true;
+            MessageLog::instance()->add("Reapplied EtherCAT outputs after all modules reached OP");
+        }
 
         // Paced pull for analog-only / keep-alive (not digital).
         unsigned long pull_us = get_polling_time();

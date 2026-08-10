@@ -37,6 +37,13 @@ class ManualConfigurationSelector {
 
 void initialiseOutputs();
 
+/**
+ * Re-emit configured/current ANALOGOUTPUT values through their IO interfaces
+ * after EtherCAT activation. This avoids retaining a stale pre-activation
+ * process image when slaves clear their RxPDOs while moving to OP.
+ */
+void reapplyOutputDefaults();
+
 class DeviceInfo;
 void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_configuration);
 

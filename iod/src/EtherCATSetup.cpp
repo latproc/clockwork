@@ -97,6 +97,74 @@ static bool getPDOIndex(const ECModule *module, const EntryDetails &details,
 }
 #endif
 
+static bool pushAnalogOutputValue(MachineInstance *m, const Value &val, bool log) {
+    if (!m) {
+        return false;
+    }
+    if (m->_type != "ANALOGOUTPUT") {
+        return false;
+    }
+    long i_val = 0;
+    if (!val.asInteger(i_val)) {
+        return false;
+    }
+    if (log) {
+        std::cout << "Initialising value for " << m->getName() << " to " << val << "\n";
+    }
+    m->setValue("VALUE", i_val);
+    if (m->io_interface) {
+        if (m->io_interface->address.is_signed) {
+            m->io_interface->setValue((int32_t)(i_val & 0xfffffffff));
+        }
+        else {
+            m->io_interface->setValue((uint32_t)(i_val & 0xfffffffff));
+        }
+    }
+    else if (log) {
+        std::cout << " warning: " << m->getName() << " is not connected to hardware\n";
+    }
+    return true;
+}
+
+void reapplyOutputDefaults() {
+    unsigned pushed = 0;
+    std::list<MachineInstance *>::iterator iter = output_points.begin();
+    while (iter != output_points.end()) {
+        MachineInstance *m = *iter++;
+        if (!m || !m->io_interface) {
+            continue;
+        }
+        const Value &cur = m->getValue("VALUE");
+        const Value &def = m->properties.lookup("default");
+        const Value *use = nullptr;
+        if (!(cur.isNull() || cur.kind == Value::t_empty)) {
+            long cur_i = 0;
+            long def_i = 0;
+            const bool cur_ok = cur.asInteger(cur_i);
+            const bool def_ok = !(def == SymbolTable::Null) && def.asInteger(def_i);
+            if (m->_type == "ANALOGOUTPUT" && cur_ok && cur_i == 0 && def_ok && def_i != 0) {
+                use = &def;
+            }
+            else {
+                use = &cur;
+            }
+        }
+        else if (!(def == SymbolTable::Null)) {
+            use = &def;
+        }
+        if (!use) {
+            continue;
+        }
+        if (pushAnalogOutputValue(m, *use, false)) {
+            ++pushed;
+        }
+    }
+    if (pushed) {
+        std::cerr << "reapplyOutputDefaults: pushed " << pushed
+                  << " output value(s) into process image\n";
+    }
+}
+
 void initialiseOutputs() {
     std::list<MachineInstance *> default_outputs;
     std::list<MachineInstance *>::iterator iter = output_points.begin();
