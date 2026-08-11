@@ -49,6 +49,14 @@ struct PendingReapply {
     bool hold_active = false; // elc setup-hold begun for this position
 };
 
+/** RAII: always clear mailbox exclusive (exceptions / early return). */
+struct SetupMailboxExclusiveGuard {
+    SetupMailboxExclusiveGuard() { ECInterface::setSetupMailboxExclusive(true); }
+    ~SetupMailboxExclusiveGuard() { ECInterface::setSetupMailboxExclusive(false); }
+    SetupMailboxExclusiveGuard(const SetupMailboxExclusiveGuard &) = delete;
+    SetupMailboxExclusiveGuard &operator=(const SetupMailboxExclusiveGuard &) = delete;
+};
+
 /** Begin setup-hold once per pending job when CAP available (API 0.19). */
 bool ensureSetupHold(KernelEthercatBus *bus, PendingReapply &p) {
     if (!bus || !bus->hasSetupHold()) {
@@ -58,9 +66,11 @@ bool ensureSetupHold(KernelEthercatBus *bus, PendingReapply &p) {
         return true;
     }
     // Brief exclusive only around the hold ioctl (not the whole wait loop).
-    ECInterface::setSetupMailboxExclusive(true);
-    const int hr = bus->setupHoldBeginPosition(p.position, /*PREOP*/ 2, /*default timeout*/ 0);
-    ECInterface::setSetupMailboxExclusive(false);
+    int hr = -1;
+    {
+        SetupMailboxExclusiveGuard exclusive;
+        hr = bus->setupHoldBeginPosition(p.position, /*PREOP*/ 2, /*default timeout*/ 0);
+    }
     if (hr == 0) {
         p.hold_active = true;
         p.ready_since_us = 0; // wait for PREOP after hold
@@ -73,15 +83,78 @@ void releaseSetupHold(KernelEthercatBus *bus, PendingReapply &p) {
     if (!bus || !p.hold_active) {
         return;
     }
-    ECInterface::setSetupMailboxExclusive(true);
-    bus->setupHoldReleasePosition(p.position);
-    ECInterface::setSetupMailboxExclusive(false);
+    {
+        SetupMailboxExclusiveGuard exclusive;
+        bus->setupHoldReleasePosition(p.position);
+    }
     p.hold_active = false;
 }
 
 std::mutex g_pending_mu;
 std::map<uint16_t, PendingReapply> g_pending;
 uint64_t g_last_apply_us = 0;
+
+// ---- Deferred CW side effects (worker must not touch MachineInstance graphs) ----
+//
+// Power-return reapply used to call setMachineStatus → MachineInstance::setValue
+// from the reapply worker. That path publishes Channel property changes,
+// setNeedsCheck, and notifyDependents. Concurrent with the processing thread
+// during ClearFault/AI storms this can wedge iod (sampler + command channel
+// dead; cooperative SIGTERM never seen because processing is blocked).
+// Queue status text here; ecat thread applies via pollFromEcatThread().
+
+struct PendingMachineStatus {
+    std::string status;
+    std::string last_error; // empty string clears
+    bool clear_error = false;
+};
+
+std::mutex g_status_mu;
+// Coalesce by machine pointer: last write wins until ecat flushes.
+std::map<MachineInstance *, PendingMachineStatus> g_status_pending;
+std::atomic<bool> g_need_output_defaults{false};
+
+void queueMachineStatus(MachineInstance *mi, const char *status, const char *err) {
+    if (!mi || !status) {
+        return;
+    }
+    PendingMachineStatus p;
+    p.status = status;
+    if (err) {
+        p.last_error = err;
+        p.clear_error = false;
+    }
+    else {
+        p.clear_error = true;
+    }
+    std::lock_guard<std::mutex> lock(g_status_mu);
+    g_status_pending[mi] = std::move(p);
+}
+
+void flushMachineStatusUpdates() {
+    std::map<MachineInstance *, PendingMachineStatus> batch;
+    {
+        std::lock_guard<std::mutex> lock(g_status_mu);
+        if (g_status_pending.empty()) {
+            return;
+        }
+        batch.swap(g_status_pending);
+    }
+    for (auto &entry : batch) {
+        MachineInstance *mi = entry.first;
+        if (!mi) {
+            continue;
+        }
+        const PendingMachineStatus &p = entry.second;
+        mi->setValue("status", Value(p.status.c_str()));
+        if (p.clear_error) {
+            mi->setValue("last_error", Value(""));
+        }
+        else {
+            mi->setValue("last_error", Value(p.last_error.c_str()));
+        }
+    }
+}
 
 // Min gap between any re-apply attempts (avoid SDO storm / bus thrash).
 constexpr uint64_t kMinApplyGapUs = 500000; // 500 ms (PDO window is short)
@@ -330,16 +403,9 @@ std::string optionString(MachineInstance *mi, const char *name) {
 }
 
 void setMachineStatus(MachineInstance *mi, const char *status, const char *err) {
-    if (!mi) {
-        return;
-    }
-    mi->setValue("status", Value(status));
-    if (err) {
-        mi->setValue("last_error", Value(err));
-    }
-    else {
-        mi->setValue("last_error", Value(""));
-    }
+    // Always queue — safe from reapply worker and from ecat/setup. Applied by
+    // pollFromEcatThread() / flush after boot applyAllConfigured.
+    queueMachineStatus(mi, status, err);
 }
 
 void collectFromMachines(std::vector<RecipeSpec> *out) {
@@ -715,6 +781,8 @@ int applyAllConfigured(KernelEthercatBus *bus) {
             setMachineStatus(spec.machine, "applied", nullptr);
         }
     }
+    // Boot path: ecat poll loop may not be running yet — apply status now.
+    flushMachineStatusUpdates();
     return worst;
 }
 
@@ -1062,9 +1130,12 @@ void processPending(KernelEthercatBus *bus) {
                                                 : "reapply in progress");
         }
         std::vector<uint16_t> one = {pos};
-        ECInterface::setSetupMailboxExclusive(true);
-        int r = applyForPositions(bus, spec.path.c_str(), one);
-        ECInterface::setSetupMailboxExclusive(false);
+        int r = 0;
+        {
+            // RAII: never leave exclusive stuck if apply throws/returns early.
+            SetupMailboxExclusiveGuard exclusive;
+            r = applyForPositions(bus, spec.path.c_str(), one);
+        }
         last_r = r;
         if (r != 0) {
             all_ok = false;
@@ -1126,8 +1197,10 @@ void processPending(KernelEthercatBus *bus) {
             pending_empty = g_pending.empty();
         }
         if (pending_empty) {
-            std::cerr << "ElcSetupRecipe: all reapply done — reapplyOutputDefaults once\n";
-            reapplyOutputDefaults();
+            // Defer to ecat thread — reapplyOutputDefaults mutates MachineInstance
+            // / IO from output_points (not safe on the reapply worker).
+            std::cerr << "ElcSetupRecipe: all reapply done — queue reapplyOutputDefaults\n";
+            g_need_output_defaults.store(true);
         }
         return;
     }
@@ -1162,6 +1235,14 @@ void processPending(KernelEthercatBus *bus) {
     }
 }
 
+void pollFromEcatThread() {
+    flushMachineStatusUpdates();
+    if (g_need_output_defaults.exchange(false)) {
+        std::cerr << "ElcSetupRecipe: applying deferred reapplyOutputDefaults\n";
+        reapplyOutputDefaults();
+    }
+}
+
 // ---- Background worker: never block sendUpdates / ecat with mailbox SDO ----
 std::mutex g_worker_mu;
 std::condition_variable g_worker_cv;
@@ -1190,17 +1271,19 @@ void reapplyWorkerMain() {
             continue;
         }
         // One processPending pass (at most one position apply + holds).
-        // Pause ecat userspace path while we hold the master for mailbox SDO.
+        // Never MachineInstance::setValue here — queue only (see setMachineStatus).
         try {
-            // Signal ECInterface via processPending-side lock: use same busy
-            // flag by calling through a thin pause if needed. Hold is short.
             processPending(bus);
         }
         catch (const std::exception &ex) {
             std::cerr << "ElcSetupRecipe: worker exception: " << ex.what() << "\n";
+            // Exclusive is RAII-guarded around apply; clear busy if anything else
+            // left it set (defensive).
+            ECInterface::setSetupMailboxExclusive(false);
         }
         catch (...) {
             std::cerr << "ElcSetupRecipe: worker unknown exception\n";
+            ECInterface::setSetupMailboxExclusive(false);
         }
     }
     std::cerr << "ElcSetupRecipe: reapply worker stopped\n";

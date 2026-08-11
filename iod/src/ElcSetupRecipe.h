@@ -58,8 +58,18 @@ void scheduleProcessPending(KernelEthercatBus *bus);
  * Does not setup-hold or SDO-apply while a position is missing/offline
  * (waiting_device). Once visible: PDO map CoE in PREOP/SAFEOP. With
  * ELC_CAP_SETUP_HOLD: hold → apply → release. Without CAP: wait PREOP window.
+ *
+ * Must not call MachineInstance::setValue / Channel publish from this thread —
+ * status and output-default side effects are queued for pollFromEcatThread().
  */
 void processPending(KernelEthercatBus *bus);
+
+/**
+ * Apply deferred ECSETUPRECIPE status property updates and any pending
+ * reapplyOutputDefaults(). Call only from the ecat / setup path (not the
+ * reapply worker). Safe while g_setup_mailbox_busy is false.
+ */
+void pollFromEcatThread();
 
 } // namespace ElcSetupRecipe
 
