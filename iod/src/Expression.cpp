@@ -489,9 +489,9 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             delete prev;
         }
     }
-    // Processing may resume after the predicate's due time.  An overdue timer
-    // must still re-check its target: dropping a sufficiently late wake leaves
-    // TIMER-driven machines stuck until an unrelated input happens to change.
+    //TBD there is an issue with testing current_time <= scheduled_time because there may have been some
+    // processing delays and current time may already be a little > scheduled time. This is especially
+    // true on slow clock cycles. For now we reschedule the trigger for up to 2ms past the necessary time.
 
     if (scheduled_time != MIN_TIMER) {
         long t = (scheduled_time - current_time) * 1000;
@@ -517,10 +517,8 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
                 DBG_SCHEDULER << "skipping event in " << t << "us as an earlier one exists\n";
             }
         }
-        // Re-check immediately for every overdue timer. setNeedsCheck() coalesces
-        // a target that is already queued, so this cannot build an unbounded
-        // duplicate work queue.
-        else {
+        // to allow for the above processing delays we keep the target runnable
+        else if (t >= -2000) {
             target->setNeedsCheck();
         }
     }

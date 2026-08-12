@@ -174,9 +174,10 @@ void MachineInstance::setNeedsCheck() {
     if (!is_enabled) {
         return;
     }
-    // Already queued for a check: bump the counter only. Overdue TIMER
-    // predicates can call setNeedsCheck on every evaluation; do not repeatedly
-    // re-activate those machines or build a duplicate work queue.
+    // Already queued for a check: bump the counter only. TIMER predicates that
+    // are slightly overdue (t >= -2000) used to call setNeedsCheck every
+    // evaluation and re-activate thousands of machines → scheduler/processing
+    // storm after mass enable.
     if (needs_check > 0 &&
         (ProcessingThread::is_pending(this) || queuedForStableStateTest() ||
          !active_actions.empty() || !mail_queue.empty())) {
