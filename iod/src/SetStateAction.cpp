@@ -342,7 +342,8 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
                                           << owner->current_state.getName()
                                           << "] scheduling condition tests for state "
                                           << node.second.state_name << "\n";
-                            ptd = node.second.condition.predicate->scheduleTimerEvents(ptd, owner);
+                            ptd = node.second.condition.predicate->scheduleTimerEvents(
+                                ptd, owner, TimerOverduePolicy::RecoverOverdue);
                         }
                     }
                     if (ptd) {

@@ -319,8 +319,8 @@ const Value &Predicate::getTimerValue() {
 }
 
 PredicateTimerDetails *Predicate::scheduleTimerEvents(
-    PredicateTimerDetails *earliest,
-    MachineInstance *target) // setup timer events that trigger the supplied machine
+    PredicateTimerDetails *earliest, MachineInstance *target,
+    TimerOverduePolicy overdue_policy) // setup timer events that trigger the supplied machine
 {
     const long MIN_TIMER = -100000;
     int64_t scheduled_time = MIN_TIMER;
@@ -458,25 +458,25 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             }
         }
         PredicateTimerDetails *prev = earliest;
-        earliest = left_p->scheduleTimerEvents(earliest, target);
+        earliest = left_p->scheduleTimerEvents(earliest, target, overdue_policy);
         if (prev && earliest != prev) {
             delete prev;
         }
         prev = earliest;
-        earliest = right_p->scheduleTimerEvents(earliest, target);
+        earliest = right_p->scheduleTimerEvents(earliest, target, overdue_policy);
         if (prev && earliest != prev) {
             delete prev;
         }
     }
     else if (left_p) {
         PredicateTimerDetails *prev = earliest;
-        earliest = left_p->scheduleTimerEvents(earliest, target);
+        earliest = left_p->scheduleTimerEvents(earliest, target, overdue_policy);
         if (prev && earliest != prev) {
             delete prev;
         }
         if (right_p) {
             prev = earliest;
-            earliest = right_p->scheduleTimerEvents(earliest, target);
+            earliest = right_p->scheduleTimerEvents(earliest, target, overdue_policy);
             if (prev && earliest != prev) {
                 delete prev;
             }
@@ -484,14 +484,14 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
     }
     else if (right_p) {
         PredicateTimerDetails *prev = earliest;
-        earliest = right_p->scheduleTimerEvents(earliest, target);
+        earliest = right_p->scheduleTimerEvents(earliest, target, overdue_policy);
         if (prev && earliest != prev) {
             delete prev;
         }
     }
-    //TBD there is an issue with testing current_time <= scheduled_time because there may have been some
-    // processing delays and current time may already be a little > scheduled time. This is especially
-    // true on slow clock cycles. For now we reschedule the trigger for up to 2ms past the necessary time.
+    // Future TIMER wakes: t > 0. Overdue (t <= 0) only re-checks when the caller
+    // used RecoverOverdue (matched holding rule). ArmFutureOnly is used while
+    // scanning false rules so a dead `TIMER < N` clause cannot re-queue forever.
 
     if (scheduled_time != MIN_TIMER) {
         long t = (scheduled_time - current_time) * 1000;
@@ -517,8 +517,10 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
                 DBG_SCHEDULER << "skipping event in " << t << "us as an earlier one exists\n";
             }
         }
-        // to allow for the above processing delays we keep the target runnable
-        else if (t >= -2000) {
+        else if (overdue_policy == TimerOverduePolicy::RecoverOverdue && target) {
+            // Matched hold path: processing may resume after the due time. Dropping
+            // a late wake left TIMER soft-clocks stuck until an unrelated input.
+            // setNeedsCheck() coalesces if the target is already queued.
             target->setNeedsCheck();
         }
     }
