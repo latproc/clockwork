@@ -2570,11 +2570,23 @@ void MachineInstance::notifyDependents() {
     }
 }
 
-void MachineInstance::notifyCommandConsumers(const char *command_name) {
+void MachineInstance::notifyCommandConsumers(const char *command_name,
+                                             uint64_t notify_period_ms) {
     // Only dependants that declare the command (RECEIVE/COMMAND handlers).
     // Same interest filter idea as CHANNEL "MONITORS MACHINES LINKED TO …".
+    // Per dependant: at most one matching command in flight. Fresh pending is
+    // coalesced; stale pending is dropped and replaced so a stuck queue cannot
+    // mute COMMANDCLOCK forever.
     if (!command_name || !*command_name) {
         command_name = "update";
+    }
+    if (notify_period_ms == 0) {
+        notify_period_ms = 100;
+    }
+    // Stale threshold: 2× notify_period, floor 50 ms (plan default K=2).
+    uint64_t stale_us = notify_period_ms * 2ULL * 1000ULL;
+    if (stale_us < 50000ULL) {
+        stale_us = 50000ULL;
     }
     Message command_msg(command_name);
     for (MachineInstance *dep : depends) {
@@ -2584,8 +2596,15 @@ void MachineInstance::notifyCommandConsumers(const char *command_name) {
         if (dep->receives_functions.find(command_msg) == dep->receives_functions.end()) {
             continue;
         }
-        if (dep->hasPending(command_msg)) {
-            continue; // do not flood mail queue
+        uint64_t pending_age_us = 0;
+        if (dep->hasPending(command_msg, &pending_age_us)) {
+            if (pending_age_us < stale_us) {
+                continue; // one in flight, still fresh
+            }
+            const size_t dropped = dep->dropPending(command_msg);
+            DBG_MESSAGING << _name << " " << command_name << " -> " << dep->getName()
+                          << " stale pending age_us=" << pending_age_us
+                          << " dropped=" << dropped << " re-send\n";
         }
         DBG_M_MESSAGING << _name << " " << command_name << " -> " << dep->getName() << "\n";
         sendMessageToReceiver(command_msg, dep, false);
@@ -2627,7 +2646,7 @@ void MachineInstance::dispatchCommandClocks(uint64_t now_us) {
 
         DBG_MESSAGING << clock->getName() << " iod " << command_name
                       << " notify_period=" << period_ms << "ms\n";
-        clock->notifyCommandConsumers(command_name.c_str());
+        clock->notifyCommandConsumers(command_name.c_str(), period_ms);
     }
 }
 

@@ -197,18 +197,22 @@ bool Message::operator==(const char *msg) const {
     return strcmp(text.c_str(), msg) == 0;
 }
 
-Package::Package() : transmitter(0), receiver(0), message(0), needs_receipt(false) {}
+Package::Package()
+    : transmitter(0), receiver(0), message(0), needs_receipt(false), enqueued_us(0) {}
 
 Package::Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt)
-    : transmitter(t), receiver(r), message(new Message(m)), needs_receipt(need_receipt) {}
+    : transmitter(t), receiver(r), message(new Message(m)), needs_receipt(need_receipt),
+      enqueued_us(microsecs()) {}
 
 Package::Package(const Package &other)
     : transmitter(other.transmitter), receiver(other.receiver),
-      message(new Message(*other.message)), needs_receipt(other.needs_receipt) {}
+      message(new Message(*other.message)), needs_receipt(other.needs_receipt),
+      enqueued_us(other.enqueued_us) {}
 
 Package::Package(Package &&other)
     : transmitter(other.transmitter), receiver(other.receiver),
-      message(other.message), needs_receipt(other.needs_receipt) {
+      message(other.message), needs_receipt(other.needs_receipt),
+      enqueued_us(other.enqueued_us) {
       other.message = 0;
 }
 
@@ -223,6 +227,7 @@ Package &Package::operator=(const Package &other) {
     }
     message = new Message(*other.message);
     needs_receipt = other.needs_receipt;
+    enqueued_us = other.enqueued_us;
     return *this;
 }
 
@@ -236,6 +241,7 @@ Package &Package::operator=(Package &&other) {
     message = other.message;
     other.message = 0;
     needs_receipt = other.needs_receipt;
+    enqueued_us = other.enqueued_us;
     return *this;
 }
 
@@ -263,14 +269,41 @@ void Transmitter::sendMessageToReceiver(const char *msg, Receiver *r, bool expec
     assert(false);
 }
 
-bool Receiver::hasPending(const Message &msg) {
+bool Receiver::hasPending(const Message &msg, uint64_t *out_age_us, uint64_t now_us) {
     boost::mutex::scoped_lock lock(q_mutex);
-    std::list<Package>::iterator iter = mail_queue.begin();
-    while (iter != mail_queue.end()) {
-        const Package &p = *iter++;
+    const uint64_t now = now_us ? now_us : microsecs();
+    bool found = false;
+    uint64_t oldest_age = 0;
+    for (const Package &p : mail_queue) {
         if (p.message && *p.message == msg) {
-            return true;
+            const uint64_t enq = p.enqueued_us ? p.enqueued_us : now;
+            const uint64_t age = (now >= enq) ? (now - enq) : 0;
+            if (!found || age > oldest_age) {
+                oldest_age = age;
+            }
+            found = true;
         }
     }
-    return false;
+    if (found && out_age_us) {
+        *out_age_us = oldest_age;
+    }
+    return found;
+}
+
+size_t Receiver::dropPending(const Message &msg) {
+    boost::mutex::scoped_lock lock(q_mutex);
+    size_t dropped = 0;
+    for (auto it = mail_queue.begin(); it != mail_queue.end();) {
+        if (it->message && *it->message == msg) {
+            it = mail_queue.erase(it);
+            ++dropped;
+        }
+        else {
+            ++it;
+        }
+    }
+    if (mail_queue.empty()) {
+        has_work = false;
+    }
+    return dropped;
 }

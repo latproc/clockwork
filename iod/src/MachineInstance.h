@@ -239,9 +239,15 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
      * Careful fan-out: SEND command only to dependants that declare that command
      * (RECEIVE/COMMAND). Does not setNeedsCheck the whole depends tree.
      * Default "update" for AI/COUNTER (CLOCKEDANALOGINPUT etc.).
+     *
+     * notify_period_ms: coalesce window for hasPending (skip if a matching
+     * command is already in mail and younger than 2×period, min 50 ms). Stale
+     * pending is dropped and one replacement is enqueued (per dependant).
      */
-    void notifyCommandConsumers(const char *command_name);
-    void notifyClockedUpdateConsumers() { notifyCommandConsumers("update"); }
+    void notifyCommandConsumers(const char *command_name, uint64_t notify_period_ms = 100);
+    void notifyClockedUpdateConsumers(uint64_t notify_period_ms = 100) {
+        notifyCommandConsumers("update", notify_period_ms);
+    }
 
     bool needsCheck();
     void resetNeedsCheck();

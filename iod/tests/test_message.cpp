@@ -257,6 +257,221 @@ TEST_F(TransmissionTest, receiver_can_refuse_message) {
     EXPECT_FALSE(taker.got_message());
 }
 
+// ---------------------------------------------------------------------------
+// Item 1: hasPending age + dropPending (COMMANDCLOCK stale recovery support)
+// Mirrors notifyCommandConsumers policy: coalesce if age < 2×period (min 50ms);
+// if stale, drop matching and allow one replacement send.
+// ---------------------------------------------------------------------------
+namespace {
+
+// Same formula as MachineInstance::notifyCommandConsumers (K=2, floor 50 ms).
+uint64_t staleThresholdUs(uint64_t notify_period_ms) {
+    if (notify_period_ms == 0) {
+        notify_period_ms = 100;
+    }
+    uint64_t stale_us = notify_period_ms * 2ULL * 1000ULL;
+    if (stale_us < 50000ULL) {
+        stale_us = 50000ULL;
+    }
+    return stale_us;
+}
+
+// Synthetic timeline: packages are stamped in the past relative to this now.
+// (process Clock often starts near 0, so "now - age" underflows without inject.)
+constexpr uint64_t kTestNowUs = 10ULL * 1000 * 1000; // 10 s synthetic
+
+// Decision used by notify path: return true if we should send (none or stale).
+bool shouldSendCommand(Receiver &recv, const Message &msg, uint64_t notify_period_ms,
+                       size_t *dropped_out = nullptr, uint64_t now_us = kTestNowUs) {
+    uint64_t age = 0;
+    if (!recv.hasPending(msg, &age, now_us)) {
+        if (dropped_out) {
+            *dropped_out = 0;
+        }
+        return true;
+    }
+    const uint64_t thr = staleThresholdUs(notify_period_ms);
+    if (age < thr) {
+        if (dropped_out) {
+            *dropped_out = 0;
+        }
+        return false; // coalesce
+    }
+    const size_t n = recv.dropPending(msg);
+    if (dropped_out) {
+        *dropped_out = n;
+    }
+    return true; // re-send after drop
+}
+
+void enqueueAged(Taker &taker, const Message &msg, uint64_t age_us,
+                 uint64_t now_us = kTestNowUs) {
+    Package p(nullptr, &taker, msg);
+    // Stamp is public so tests can simulate stale mail without sleeping.
+    p.enqueued_us = (now_us > age_us) ? (now_us - age_us) : 1;
+    taker.enqueue(p);
+}
+
+} // namespace
+
+TEST(PendingCommandTest, PackageStampsEnqueueTimeNonZero) {
+    Message msg("calcAdjust");
+    Package p(nullptr, nullptr, msg);
+    EXPECT_NE(p.enqueued_us, 0u);
+    // Stamp is "now-ish"
+    const uint64_t now = microsecs();
+    EXPECT_GE(now, p.enqueued_us);
+    EXPECT_LT(now - p.enqueued_us, 1000000ull);
+}
+
+TEST(PendingCommandTest, PackageCopyPreservesEnqueueStamp) {
+    Message msg("calcAdjust");
+    Package a(nullptr, nullptr, msg);
+    const uint64_t stamp = a.enqueued_us;
+    Package b(a);
+    EXPECT_EQ(b.enqueued_us, stamp);
+    Package c;
+    c = a;
+    EXPECT_EQ(c.enqueued_us, stamp);
+}
+
+TEST(PendingCommandTest, StaleThresholdFormula) {
+    EXPECT_EQ(staleThresholdUs(50), 100000ull);   // 2×50 ms
+    EXPECT_EQ(staleThresholdUs(100), 200000ull);  // 2×100 ms
+    EXPECT_EQ(staleThresholdUs(20), 50000ull);    // floor 50 ms
+    EXPECT_EQ(staleThresholdUs(0), 200000ull);    // default period 100 → 200 ms
+}
+
+TEST(PendingCommandTest, FreshPendingIsCoalescedNotResent) {
+    Taker taker("taker", [](const Message &, Transmitter *) { return true; });
+    Message msg("calcAdjust");
+    enqueueAged(taker, msg, 10 * 1000); // 10 ms old, period 50 → thr 100 ms
+    size_t dropped = 99;
+    EXPECT_FALSE(shouldSendCommand(taker, msg, 50, &dropped));
+    EXPECT_EQ(dropped, 0u);
+    EXPECT_EQ(taker.mailQueueSize(), 1u);
+    EXPECT_TRUE(taker.hasPending(msg));
+}
+
+TEST(PendingCommandTest, StalePendingIsDroppedAndResendAllowed) {
+    Taker taker("taker", [](const Message &, Transmitter *) { return true; });
+    Message msg("calcAdjust");
+    enqueueAged(taker, msg, 500 * 1000); // 500 ms old, thr for 50 ms period = 100 ms
+    size_t dropped = 0;
+    EXPECT_TRUE(shouldSendCommand(taker, msg, 50, &dropped));
+    EXPECT_EQ(dropped, 1u);
+    EXPECT_FALSE(taker.hasPending(msg));
+    EXPECT_EQ(taker.mailQueueSize(), 0u);
+    // Replacement send would enqueue again:
+    taker.enqueue(Package(nullptr, &taker, msg));
+    EXPECT_EQ(taker.mailQueueSize(), 1u);
+}
+
+TEST(PendingCommandTest, ExactlyAtThresholdIsStale) {
+    Taker taker("taker", [](const Message &, Transmitter *) { return true; });
+    Message msg("calcAdjust");
+    // age == thr → stale (policy: age < thr coalesce; age >= thr recover)
+    enqueueAged(taker, msg, 100 * 1000); // thr for 50 ms = 100 ms
+    size_t dropped = 0;
+    EXPECT_TRUE(shouldSendCommand(taker, msg, 50, &dropped));
+    EXPECT_EQ(dropped, 1u);
+}
+
+TEST(PendingCommandTest, JustUnderThresholdStillCoalesced) {
+    Taker taker("taker", [](const Message &, Transmitter *) { return true; });
+    Message msg("calcAdjust");
+    enqueueAged(taker, msg, 99 * 1000); // thr 100 ms
+    EXPECT_FALSE(shouldSendCommand(taker, msg, 50));
+    EXPECT_EQ(taker.mailQueueSize(), 1u);
+}
+
+TEST(PendingCommandTest, MinFloorFiftyMsEvenForTinyPeriod) {
+    Taker taker("taker", [](const Message &, Transmitter *) { return true; });
+    Message msg("calcAdjust");
+    // period 1 ms → thr floor 50 ms; 40 ms pending still fresh
+    enqueueAged(taker, msg, 40 * 1000);
+    EXPECT_FALSE(shouldSendCommand(taker, msg, 1));
+    enqueueAged(taker, msg, 60 * 1000); // second package also; drop all matching when stale
+    // After second enqueue we have two; oldest is 60ms... wait, both ages relative to now.
+    // Clear and use single 60ms package.
+    taker.dropPending(msg);
+    enqueueAged(taker, msg, 60 * 1000);
+    size_t dropped = 0;
+    EXPECT_TRUE(shouldSendCommand(taker, msg, 1, &dropped));
+    EXPECT_EQ(dropped, 1u);
+}
+
+TEST(PendingCommandTest, HasPendingReportsOldestAgeWhenDuplicates) {
+    Taker taker("taker", [](const Message &, Transmitter *) { return true; });
+    Message msg("calcAdjust");
+    enqueueAged(taker, msg, 10 * 1000);
+    enqueueAged(taker, msg, 300 * 1000); // older
+    uint64_t age = 0;
+    ASSERT_TRUE(taker.hasPending(msg, &age, kTestNowUs));
+    // Oldest should be exactly 300 ms on synthetic timeline
+    EXPECT_EQ(age, 300 * 1000ull);
+    // Recovery drops ALL matching
+    EXPECT_EQ(taker.dropPending(msg), 2u);
+    EXPECT_FALSE(taker.hasPending(msg, nullptr, kTestNowUs));
+}
+
+TEST(PendingCommandTest, DropPendingOnlyMatchingMessage) {
+    Taker taker("taker", [](const Message &, Transmitter *) { return true; });
+    Message calc("calcAdjust");
+    Message other("update");
+    taker.enqueue(Package(nullptr, &taker, calc));
+    taker.enqueue(Package(nullptr, &taker, other));
+    EXPECT_EQ(taker.mailQueueSize(), 2u);
+    EXPECT_EQ(taker.dropPending(calc), 1u);
+    EXPECT_FALSE(taker.hasPending(calc));
+    EXPECT_TRUE(taker.hasPending(other));
+    EXPECT_EQ(taker.mailQueueSize(), 1u);
+}
+
+TEST(PendingCommandTest, IndependentReceiversDoNotSharePending) {
+    // Two motion consumers: stuck A must not affect B.
+    Taker conveyor("conveyor", [](const Message &, Transmitter *) { return true; });
+    Taker head("head", [](const Message &, Transmitter *) { return true; });
+    Message msg("calcAdjust");
+    enqueueAged(conveyor, msg, 500 * 1000);
+    enqueueAged(head, msg, 5 * 1000);
+    EXPECT_TRUE(shouldSendCommand(conveyor, msg, 50));  // stale → recover
+    EXPECT_FALSE(shouldSendCommand(head, msg, 50));     // fresh → coalesce
+    EXPECT_EQ(conveyor.mailQueueSize(), 0u);
+    EXPECT_EQ(head.mailQueueSize(), 1u);
+}
+
+TEST(PendingCommandTest, NoPendingAlwaysAllowsSend) {
+    Taker taker("taker", [](const Message &, Transmitter *) { return true; });
+    Message msg("calcAdjust");
+    size_t dropped = 99;
+    EXPECT_TRUE(shouldSendCommand(taker, msg, 50, &dropped));
+    EXPECT_EQ(dropped, 0u);
+}
+
+TEST(PendingCommandTest, BurstDoesNotStackWhenFresh) {
+    // Simulate 5 COMMANDCLOCK dues while one calcAdjust is still in mail.
+    Taker taker("taker", [](const Message &, Transmitter *) { return true; });
+    Message msg("calcAdjust");
+    enqueueAged(taker, msg, 1 * 1000);
+    for (int i = 0; i < 5; ++i) {
+        EXPECT_FALSE(shouldSendCommand(taker, msg, 50)) << "burst i=" << i;
+    }
+    EXPECT_EQ(taker.mailQueueSize(), 1u);
+}
+
+TEST(PendingCommandTest, AfterDropResendThenCoalesceAgain) {
+    Taker taker("taker", [](const Message &, Transmitter *) { return true; });
+    Message msg("calcAdjust");
+    enqueueAged(taker, msg, 500 * 1000);
+    EXPECT_TRUE(shouldSendCommand(taker, msg, 50));
+    EXPECT_EQ(taker.mailQueueSize(), 0u);
+    // Replacement send stamps as fresh on the same synthetic timeline
+    enqueueAged(taker, msg, 1 * 1000);
+    EXPECT_FALSE(shouldSendCommand(taker, msg, 50));
+    EXPECT_EQ(taker.mailQueueSize(), 1u);
+}
+
 int main(int argc, char *argv[]) {
     auto *context = new zmq::context_t;
     MessagingInterface::setContext(context);

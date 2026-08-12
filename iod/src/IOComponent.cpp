@@ -1358,7 +1358,7 @@ int64_t AnalogueInput::filter(int64_t raw) {
                 eng_for_track = engFromRaw(raw_val, factor, base);
                 DBG_MESSAGING << o->getName() << " iod " << cmd
                               << " notify_period=" << period_ms << "ms (change)\n";
-                o->notifyCommandConsumers(cmd);
+                o->notifyCommandConsumers(cmd, period_ms);
             }
             config->last_emitted_raw = raw_val;
             config->last_emitted_eng = eng_for_track;
@@ -1631,7 +1631,7 @@ int64_t Counter::filter(int64_t val) {
                 eng_for_track = engFromRaw(raw_val, factor, base);
                 DBG_MESSAGING << o->getName() << " iod " << cmd
                               << " notify_period=" << period_ms << "ms (change)\n";
-                o->notifyCommandConsumers(cmd);
+                o->notifyCommandConsumers(cmd, period_ms);
             }
             internals->last_emitted_raw = raw_val;
             internals->last_emitted_eng = eng_for_track;
