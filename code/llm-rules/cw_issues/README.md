@@ -100,6 +100,15 @@ required for remaining WEBREQUEST / Result-retention work).
     issue; STALLSNAP vs processing path; design ladder. Cross-links plant
     `../2G4C/PIDLISTCLOCK_TIMER_STALL_20260805.md` and the idle-storms handoff.
 
+### COMMANDCLOCK stall hardening (post-migration residuals)
+
+- `IOD_COMMANDCLOCK_STALL_HARDENING_20260812.md`
+  - After elc COMMANDCLOCK migration: `hasPending` mute, motion deadline
+    (on-thread vs off-thread), STALLSNAP, SYSTEMEXEC image scripts
+    (`camera_capture.sh` / `image_weight.sh`), WEBREQUEST residual apply path.
+  - Work branch: `feature/commandclock-stall-hardening` from
+    `feature/iod-elc-kernel-transport`. Item 1 (stale pending recovery) first.
+
 ### IO notify + COMMANDCLOCK (elc-path design)
 
 - `../IO_NOTIFY_COMMANDCLOCK_DESIGN.md` (lives under `llm-rules/`, not
