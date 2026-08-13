@@ -37,6 +37,7 @@
 #include "Plugin.h"
 #include "Scheduler.h"
 #include "SendMessageAction.h"
+#include "StallTrace.h"
 #include "State.h"
 #include "WaitAction.h"
 #include "cJSON.h"
@@ -1417,6 +1418,8 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
     std::set<MachineInstance *>::iterator iter = to_process.begin();
     while (iter != to_process.end()) {
         MachineInstance *mi = *iter++;
+        // STALLSNAP breadcrumb only (no-op when DEBUG_STALLSNAP off).
+        StallTrace::markMachine(mi->getName().c_str());
         if (!mi->executingCommand() && mi->mail_queue.empty()) {
             // unless the machine is disabled leave the state check on the queue until it is stable
             if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states ||

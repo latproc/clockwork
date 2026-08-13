@@ -416,6 +416,7 @@ set (Clockwork_SRCS
     src/process_data.cpp
     src/process.cpp
     src/ProcessingThread.cpp
+    src/StallTrace.cpp
     src/RateEstimatorInstance.cpp
     src/read_file.c
     src/ResetAction.cpp
