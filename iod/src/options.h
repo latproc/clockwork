@@ -29,6 +29,13 @@ void set_verbose(int trueOrFalse);
 int verbose();
 void set_test_only(int trueOrFalse);
 int test_only();
+
+/* cw only: MQTT is off unless --mqtt / --enable-mqtt. iod-elc ignores this. */
+void set_mqtt_enabled(int trueOrFalse);
+int mqtt_enabled();
+
+void set_help_only(int trueOrFalse);
+int help_only();
 void set_persistent_store(const char *name);
 const char *persistent_store();
 

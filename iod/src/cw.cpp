@@ -51,6 +51,7 @@
 #include "Logger.h"
 #include "MQTTInterface.h"
 #include "MessageLog.h"
+#include "options.h"
 #include "MessagingInterface.h"
 #include "ModbusInterface.h"
 #include "PredicateAction.h"
@@ -607,6 +608,9 @@ int main(int argc, char const *argv[]) {
     if (load_result) {
         return load_result;
     }
+    if (help_only()) {
+        return 0;
+    }
 
     IODCommandListJSON::no_display.insert("tab");
     IODCommandListJSON::no_display.insert("type");
@@ -683,7 +687,13 @@ int main(int argc, char const *argv[]) {
         return generate_c() ? EXIT_SUCCESS : EXIT_FAILURE;
     }
     MQTTInterface::instance()->init();
-    MQTTInterface::instance()->start(mqtt_source_queue);
+    if (mqtt_enabled()) {
+        MQTTInterface::instance()->start(mqtt_source_queue);
+    }
+    else {
+        std::cerr << "cw: MQTT not started (pass --mqtt to enable)\n";
+        MessageLog::instance()->add("MQTT not started (pass --mqtt to enable)");
+    }
 
     bool sigok = setup_signals();
     assert(sigok);
