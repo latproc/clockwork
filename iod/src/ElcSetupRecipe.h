@@ -59,15 +59,27 @@ void scheduleProcessPending(KernelEthercatBus *bus);
  * (waiting_device). Once visible: PDO map CoE in PREOP/SAFEOP. With
  * ELC_CAP_SETUP_HOLD: hold → apply → release. Without CAP: wait PREOP window.
  *
- * Must not call MachineInstance::setValue / Channel publish from this thread —
- * status and output-default side effects are queued for pollFromEcatThread().
+ * Must not call MachineInstance::setValue / Channel publish / getValue from
+ * this thread. Status and output-default side effects are queued for
+ * pollFromProcessingThread(). Recipe specs come from refreshRecipeSnapshot().
  */
 void processPending(KernelEthercatBus *bus);
 
 /**
+ * Snapshot ECSETUPRECIPE machines + CLI into a worker-safe copy.
+ * Call from boot apply and from the processing thread only.
+ */
+void refreshRecipeSnapshot();
+
+/**
  * Apply deferred ECSETUPRECIPE status property updates and any pending
- * reapplyOutputDefaults(). Call only from the ecat / setup path (not the
- * reapply worker). Safe while g_setup_mailbox_busy is false.
+ * reapplyOutputDefaults(). Processing thread only — not ecat, not the worker.
+ */
+void pollFromProcessingThread();
+
+/**
+ * Legacy name: ecat must not mutate Clockwork. No-op; kept so older call
+ * sites compile. Use pollFromProcessingThread().
  */
 void pollFromEcatThread();
 

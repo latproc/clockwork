@@ -50,6 +50,9 @@
 #include "Channel.h"
 #include "ControlSystemMachine.h"
 #include "ECInterface.h"
+#ifndef EC_SIMULATOR
+#include "ElcSetupRecipe.h"
+#endif
 #include "ProcessingThread.h"
 #include "watchdog.h"
 #include <pthread.h>
@@ -960,6 +963,9 @@ void ProcessingThread::operator()() {
             }
             curr_t = nowMicrosecs();
             internals->process_manager.SetTime(curr_t);
+#ifndef EC_SIMULATOR
+            ElcSetupRecipe::pollFromProcessingThread();
+#endif
             // MEMSNAPSHOT: opt-in via DEBUG DEBUG_MEMSNAPSHOT on|off (default off).
             static uint64_t last_memory_snapshot = 0;
             if (LOGS(DebugExtra::instance()->DEBUG_MEMSNAPSHOT) &&

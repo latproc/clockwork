@@ -2298,9 +2298,8 @@ void ECInterface::sendUpdates() {
             g_kernel_output_dirty = true;
         }
 
-        // Apply deferred ECSETUPRECIPE status / output defaults (queued by the
-        // reapply worker so it never touches MachineInstance off-thread).
-        ElcSetupRecipe::pollFromEcatThread();
+        // ECSETUPRECIPE status / output defaults run on the processing thread
+        // (pollFromProcessingThread). Do not setValue from sendUpdates.
 
         // Offline→online re-apply: never block sendUpdates with mailbox SDO.
         // Worker thread runs processPending (setup-hold + SETUP_APPLY).

@@ -39,6 +39,11 @@ add_executable(test_ecat_entry_selector test_ecat_entry_selector.cpp
 target_link_libraries(test_ecat_entry_selector gtest_main pthread)
 add_test(NAME test_ecat_entry_selector COMMAND test_ecat_entry_selector)
 
+add_executable(test_elc_setup_reapply_policy test_elc_setup_reapply_policy.cpp)
+target_include_directories(test_elc_setup_reapply_policy PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test_elc_setup_reapply_policy gtest_main pthread)
+add_test(NAME test_elc_setup_reapply_policy COMMAND test_elc_setup_reapply_policy)
+
 # Now simply link against gtest or gtest_main as needed. Eg
 add_executable(test_value test_value.cpp )
 target_link_libraries(test_value gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${DL_LIBRARY} pthread)
