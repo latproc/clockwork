@@ -389,6 +389,11 @@ int main(int argc, char const *argv[]) {
         Scheduler::instance()->stop();
         return load_result;
     }
+    if (help_only()) {
+        Dispatcher::instance()->stop();
+        Scheduler::shutdown();
+        return 0;
+    }
     load_debug_config();
 
 #if 0

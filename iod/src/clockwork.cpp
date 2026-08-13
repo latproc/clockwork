@@ -109,13 +109,75 @@ void ClockworkInterpreter::setup(MachineInstance *new_settings) {
 
 MachineInstance *ClockworkInterpreter::settings() { return _settings; }
 
+static const char *tool_basename(const char *argv0) {
+    if (!argv0 || !argv0[0]) {
+        return "clockwork";
+    }
+    const char *slash = strrchr(argv0, '/');
+    return slash ? slash + 1 : argv0;
+}
+
+static bool tool_is_cw(const char *argv0) {
+    return strcmp(tool_basename(argv0), "cw") == 0;
+}
+
 void usage(int argc, char const *argv[]) {
+    const char *name = tool_basename(argv[0]);
+    const bool cw = tool_is_cw(argv[0]);
+
+    std::cerr << "Usage: " << name << " [options] <source-dir-or-file>...\n\n";
+    if (cw) {
+        std::cerr << "Clockwork simulator. Parses the same LPC as plant iod but does not\n"
+                     "talk to EtherCAT. MQTT is off unless you pass --mqtt.\n\n";
+    }
+    else {
+        std::cerr << "Plant Clockwork runtime (iod). MQTT starts automatically\n"
+                     "when an MQTTBROKER instance is defined in the loaded LPC.\n\n";
+    }
+
     std::cerr
-        << "Usage: " << argv[0] << " [-v] [-t] [-l logfilename] [-i persistent_store]\n"
-        << "[-c debug_config_file] [-m modbus_mapping] [-g graph_output] [-s maxlogfilesize]\n"
-        << "[-mp modbus_port] [-ps persistent_store_port] "
-        << "[-cp command/iosh port] [--name device_name] [--stats | --nostats] enable/disable statistics\n"
-        << "[--fix-invalid true [-e ethernet_interface]" << "\n";
+        << "General:\n"
+        << "  -h, --help                 Show this help and exit\n"
+        << "  -v                         Verbose logging\n"
+        << "  -t                         Parse/check only (no runtime)\n"
+        << "  -l FILE                    Log file (use - for stdout)\n"
+        << "  -i FILE                    Persistent store\n"
+        << "  -c FILE                    Debug flag file (iod.conf)\n"
+        << "  --name NAME                Process name (default CLOCKWORK)\n"
+        << "  --stats / --nostats        Enable or disable statistics\n"
+        << "  --export_c                 Generate C export and exit\n"
+        << "  --config FILE              Thread CPU / RT priority file\n"
+        << "\n"
+        << "MQTT:\n";
+    if (cw) {
+        std::cerr
+            << "  --mqtt, --enable-mqtt      Connect MQTTBROKER (off by default).\n"
+            << "                             Do not use this on a laptop sim against a\n"
+            << "                             plant broker; it will steal the plant client.\n"
+            << "                             Omit this flag for normal simulation.\n";
+    }
+    else {
+        std::cerr
+            << "  MQTT connects automatically when LPC defines MQTTBROKER.\n"
+            << "  --mqtt, --enable-mqtt      Accepted for compatibility; not required.\n"
+            << "                             Plant iod always starts MQTT.\n";
+    }
+
+    std::cerr
+        << "\n"
+        << "Ports and mappings:\n"
+        << "  -cp PORT                   Command / iosh port (default 5555)\n"
+        << "  -p PORT                    Publisher port\n"
+        << "  -ps PORT                   Persistent-store port\n"
+        << "  -mp PORT                   Modbus port\n"
+        << "  -m FILE                    Modbus mapping file\n"
+        << "  -g FILE                    Write dependency graph to FILE\n"
+        << "  -r NAME                    Dependency graph root\n"
+        << "\n"
+        << "EtherCAT (iod; ignored or unused on cw):\n"
+        << "  -e IFACE                   EtherCAT adapter name\n"
+        << "\n"
+        << "Sources after options are LPC files or directories (scanned).\n";
 }
 
 static void listDirectory(const std::string pathToCheck, std::list<std::string> &file_list) {
@@ -1164,6 +1226,15 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
         }
         else if (strcmp(argv[i], "--name") == 0 && i < argc - 1) { // set the system name
             set_device_name(argv[++i]);
+        }
+        else if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            usage(argc, argv);
+            set_help_only(1);
+            return 0;
+        }
+        else if (strcmp(argv[i], "--mqtt") == 0 || strcmp(argv[i], "--enable-mqtt") == 0) {
+            // cw: opt-in MQTT connect. plant iod always starts MQTT and ignores this.
+            set_mqtt_enabled(1);
         }
         else if (strcmp(argv[i], "--stats") == 0) { // do not keep stats
             enable_statistics(true);
