@@ -48,6 +48,15 @@ bool positionWantsReapply(uint16_t position);
 void requestReapply(uint16_t position);
 
 /**
+ * Slave left the bus or went INIT — volatile CoE is gone. Next reapply
+ * must reach PREOP (setup-hold from OP is allowed). Cleared only after
+ * a successful recipe apply.
+ */
+void markNeedsCommission(uint16_t position);
+void clearNeedsCommission(uint16_t position);
+bool needsCommission(uint16_t position);
+
+/**
  * Non-blocking: record bus and wake the reapply worker. Safe from sendUpdates /
  * ecat RT path. Blocking SETUP_APPLY / setup-hold must not run there.
  */
@@ -62,6 +71,9 @@ void scheduleProcessPending(KernelEthercatBus *bus);
  * Must not call MachineInstance::setValue / Channel publish / getValue from
  * this thread. Status and output-default side effects are queued for
  * pollFromProcessingThread(). Recipe specs come from refreshRecipeSnapshot().
+ *
+ * SkipAlreadyOp only when the slave never left OP. After INIT / not-visible,
+ * needs_commission allows setup-hold from OP so PREOP apply can run.
  */
 void processPending(KernelEthercatBus *bus);
 

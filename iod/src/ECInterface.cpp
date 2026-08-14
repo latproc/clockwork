@@ -2615,6 +2615,11 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
         MessageLog::instance()->add(buf);
         std::cout << buf << "\n";
 #ifdef USE_SDO
+        // INIT: volatile CoE is gone. Mark commission required even if the
+        // master later auto-OPs the slave before PREOP apply runs.
+        if (s.al_state == 0x01 && ElcSetupRecipe::positionWantsReapply(m->position)) {
+            ElcSetupRecipe::markNeedsCommission(m->position);
+        }
         // Entering PREOP/SAFEOP after cold start: (re)queue setup so PDO map
         // runs in that window. processPending only applies while AL is
         // PREOP/SAFEOP — not OP — so OP flaps do not burn failed attempts.
@@ -2637,9 +2642,15 @@ void ECInterface::report_module_state_change(ECModule *m, int i) {
         // Do not reapplyOutputDefaults() here — every slave online edge would
         // spam the full image; defaults are pushed at activate, first arm, and
         // after a successful setup-recipe re-apply.
+        if (!s.online && m->slave_config_state.online) {
+            if (ElcSetupRecipe::positionWantsReapply(m->position)) {
+                ElcSetupRecipe::markNeedsCommission(m->position);
+            }
+        }
         if (s.online && !m->slave_config_state.online) {
             if (m->sdo_seen_online) {
                 if (ElcSetupRecipe::positionWantsReapply(m->position)) {
+                    ElcSetupRecipe::markNeedsCommission(m->position);
                     ElcSetupRecipe::requestReapply(m->position);
                 }
                 else {

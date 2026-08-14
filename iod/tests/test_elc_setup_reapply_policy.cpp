@@ -40,3 +40,22 @@ TEST(ElcSetupReapplyPolicy, HoldStuckOnInitReleases) {
     EXPECT_EQ(ReapplyGate::ReleaseHoldStuck,
               decideReapply(true, kAlInit, true, kHoldStuckLimitUs));
 }
+
+TEST(ElcSetupReapplyPolicy, PowerDownOpWaitsInsteadOfSkip) {
+    EXPECT_EQ(ReapplyGate::WaitPreop,
+              decideReapply(true, kAlOp, false, 0, kHoldStuckLimitUs, true));
+    EXPECT_EQ(ReapplyGate::WaitPreop,
+              decideReapply(true, kAlOp, true, kHoldStuckLimitUs - 1,
+                            kHoldStuckLimitUs, true));
+}
+
+TEST(ElcSetupReapplyPolicy, PowerDownHoldStuckReleasesNotSkip) {
+    EXPECT_EQ(ReapplyGate::ReleaseHoldStuck,
+              decideReapply(true, kAlOp, true, kHoldStuckLimitUs,
+                            kHoldStuckLimitUs, true));
+}
+
+TEST(ElcSetupReapplyPolicy, PowerDownPreopApplies) {
+    EXPECT_EQ(ReapplyGate::Apply,
+              decideReapply(true, kAlPreop, true, 1000, kHoldStuckLimitUs, true));
+}

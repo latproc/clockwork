@@ -100,6 +100,9 @@ std::mutex g_pending_mu;
 std::map<uint16_t, PendingReapply> g_pending;
 uint64_t g_last_apply_us = 0;
 
+std::mutex g_commission_mu;
+std::set<uint16_t> g_needs_commission;
+
 // ---- Deferred CW side effects (worker must not touch MachineInstance graphs) ----
 //
 // Power-return reapply used to call setMachineStatus → MachineInstance::setValue
@@ -159,6 +162,12 @@ void flushMachineStatusUpdates() {
         else {
             mi->setValue("last_error", Value(p.last_error.c_str()));
         }
+        // SetupOk: applied with empty error, or skip because CoE never lost.
+        const bool setup_ok =
+            p.status == "applied" &&
+            (p.clear_error || p.last_error.empty() ||
+             p.last_error == "already OP; CoE unchanged");
+        mi->setValue("SetupOk", Value(setup_ok ? 1 : 0));
     }
 }
 
@@ -616,7 +625,7 @@ void publishAppliedSkipOp(KernelEthercatBus *bus, uint16_t position) {
             continue;
         }
         if (positionInResolved(spec, position, bus)) {
-            setMachineStatus(spec.machine, "applied", "already OP; CoE map skipped");
+            setMachineStatus(spec.machine, "applied", "already OP; CoE unchanged");
         }
     }
 }
@@ -800,6 +809,9 @@ int applyAllConfigured(KernelEthercatBus *bus) {
         }
         else {
             setMachineStatus(spec.machine, "applied", nullptr);
+            for (uint16_t p : positions) {
+                clearNeedsCommission(p);
+            }
         }
     }
     // Boot path: ecat poll loop may not be running yet — apply status now.
@@ -954,6 +966,21 @@ uint64_t backoffUs(unsigned attempts) {
     return b;
 }
 
+void markNeedsCommission(uint16_t position) {
+    std::lock_guard<std::mutex> lock(g_commission_mu);
+    g_needs_commission.insert(position);
+}
+
+void clearNeedsCommission(uint16_t position) {
+    std::lock_guard<std::mutex> lock(g_commission_mu);
+    g_needs_commission.erase(position);
+}
+
+bool needsCommission(uint16_t position) {
+    std::lock_guard<std::mutex> lock(g_commission_mu);
+    return g_needs_commission.count(position) != 0;
+}
+
 void requestReapply(uint16_t position) {
     const uint64_t now = microsecs();
     std::lock_guard<std::mutex> lock(g_pending_mu);
@@ -1007,6 +1034,7 @@ void processPending(KernelEthercatBus *bus) {
             // Hard gate: never hold/SDO while the station is missing (mains off).
             // Do not burn max-age / max-attempts while waiting for visibility.
             if (!slaveVisible(bus, p.position, &why)) {
+                markNeedsCommission(p.position);
                 if (p.hold_active) {
                     releaseSetupHold(bus, p);
                 }
@@ -1042,14 +1070,16 @@ void processPending(KernelEthercatBus *bus) {
             }();
             const uint64_t hold_wait =
                 (p.hold_active && p.hold_begun_us) ? (now - p.hold_begun_us) : 0;
+            const bool need_coe = needsCommission(p.position);
             const ReapplyGate gate =
-                decideReapply(true, al, p.hold_active, hold_wait, kHoldStuckLimitUs);
+                decideReapply(true, al, p.hold_active, hold_wait, kHoldStuckLimitUs,
+                              need_coe);
 
             if (gate == ReapplyGate::SkipAlreadyOp) {
                 releaseSetupHold(bus, p);
                 publishAppliedSkipOp(bus, p.position);
                 std::cerr << "ElcSetupRecipe: pos=" << p.position
-                          << " already OP; skip CoE reapply\n";
+                          << " already OP; skip CoE reapply (CoE unchanged)\n";
                 it = g_pending.erase(it);
                 if (g_pending.empty()) {
                     g_need_output_defaults.store(true);
@@ -1066,8 +1096,9 @@ void processPending(KernelEthercatBus *bus) {
                 continue;
             }
             if (gate == ReapplyGate::WaitPreop) {
-                // Never begin hold while the slave is already OP.
-                if (al != kAlOp) {
+                // Hold from OP only after power-down (needs_commission).
+                // Continuously OP slaves never reach WaitPreop.
+                if (al != kAlOp || need_coe) {
                     ensureSetupHold(bus, p);
                 }
                 p.ready_since_us = 0;
@@ -1240,6 +1271,7 @@ void processPending(KernelEthercatBus *bus) {
         std::cerr << "ElcSetupRecipe: reapply ok pos=" << pos << " attempts="
                   << (chosen.attempts + 1)
                   << (chosen.hold_active ? " (setup-hold)" : "") << "\n";
+        clearNeedsCommission(pos);
         {
             std::lock_guard<std::mutex> lock(g_pending_mu);
             auto it = g_pending.find(pos);
