@@ -19,14 +19,18 @@ Docs (in source tree):
   /opt/etherlab-cyclic-kmod/docs/recommended-master-lifecycle.md
 
 **PDO map / power-return setup (plant + elc):** Mapping CoE (`0x1600` /
-`0x1C12` / …) must run in **PREOP or SAFEOP**, not OP. iod
-`ElcSetupRecipe` gates reapply (`waiting_preop` while OP). **elc API 0.19**
-adds **setup-hold** (`ELC_CAP_SETUP_HOLD`: begin/release/status, per-domain
-or positions, timeout, fd close) so clients can hold servos in PREOP while
-cyclic stays up — see
-`/opt/etherlab-cyclic-kmod/docs/client-slave-recovery.md` §9 and `docs/uapi.md`.
-Plant iod still needs to **call** hold around reapply when the running module
-reports the capability.
+`0x1C12` / …) must run in **PREOP or SAFEOP**, not OP.
+
+- **Cold start:** `svc -d /etc/service/iod`, wait until slaves are PREOP
+  (`elc_bus`), then `svc -u`. If iod starts onto already-OP drives, recipes
+  skip (`already OP; CoE unchanged`) — ED3L then stays mode 1 / accel 0
+  (A.76, shaft does not turn, no 0x603F).
+- **Device / domain power-down while iod is up:** slave INIT or not-visible
+  sets `needs_commission`. Reapply must reach PREOP (setup-hold from OP is
+  allowed **only** on that path). A slave that never left OP still skips.
+- **elc API 0.19** setup-hold (`ELC_CAP_SETUP_HOLD`) holds servos in PREOP
+  while cyclic stays up — `docs/client-slave-recovery.md` §9, `docs/uapi.md`.
+  Do not apply `0x1C12` in OP (abort 0x08000022 / 1G2C-122 2026-08-11 wedge).
 
 Git lines (plant iod vs clients — not bus load params):
 
