@@ -1,11 +1,20 @@
 # Open work plan (iod / Clockwork)
 
-**Updated:** 2026-07-31  
-**Branch:** `prod-client-zmq-fix` (line **C** — cw_client / humid / modbusd / dbd / persistd)  
+**Header below is the 2026-07-31 line-C snapshot** (WEBREQUEST / channel
+history). **This checkout is line A** `prod-experimental-mqtt-fix` on
+2G4C-120 (`iod_sdo`). Do not treat the July live-binary table as current.
+
+**Current line-A tip (2026-08-14):** `12d65404` STALLSNAP; Option 1 TIMER
+recovery `4e7ec4ba`. Plant notes:
+`code/llm-rules/cw_issues/IOD_PROCESSING_LOAD_AND_IDLE_STORMS_20260725.md`,
+`code/llm-rules/2G4C/PIDLISTCLOCK_TIMER_STALL_20260805.md`.
+
+**Updated:** 2026-07-31 (body) / 2026-08-14 (this banner)  
+**Branch (file origin):** `prod-client-zmq-fix` (line **C** — cw_client / humid / modbusd / dbd / persistd)  
 **Cut from:** `prod-experimental-mqtt-fix` (line **A**)  
 **Related:** `feature/iod-elc-kernel-transport` (line **B** — iod-elc)
 
-This line is the **canonical home for Track E** (`scope: client-zmq`). Plant
+Line **C** is the **canonical home for Track E** (`scope: client-zmq`). Plant
 memory / ecrt / elc bus work stays on A or B. Port rules: `iod/docs/BRANCHES.md`,
 `iod/docs/LEGACY_ECRT_REMOVAL_PLAN.md`.
 

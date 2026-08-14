@@ -1,9 +1,12 @@
 # Long-lived git lines (iod / Clockwork clients)
 
-**Updated:** 2026-07-31
+**Updated:** 2026-08-14
 
 Three lines stay in **partial** sync. Do not full-merge tips. Port small commits
 with scope tags. Full agent rules: `LEGACY_ECRT_REMOVAL_PLAN.md` (interim workflow).
+
+This checkout is line **A** (`prod-experimental-mqtt-fix`, `iod_sdo`) on
+2G4C-120. Line **B** / 1G2C-122 work is not live-verified here.
 
 | Line | Branch | Tip product | Canonical home for |
 |------|--------|-------------|--------------------|
@@ -44,6 +47,18 @@ Port line: `Port of <hash> from <branch>: <one line>`.
 - **A:** `iod_sdo` build; processing/idle check if loop changed.
 - **B:** `iod-elc` build; PROCSNAP quiet (`brk_out` / absorb) if wait/ready changed.
 - **C:** build the client targets touched; deploy those binaries to HMI/aux hosts.
+
+## Recent line-A iod-core (this tree, 2026-08-12/13)
+
+| Commit | What |
+|--------|------|
+| `4e7ec4ba` | Load-safe overdue TIMER recovery (`TimerOverduePolicy`) |
+| `12d65404` | Opt-in STALLSNAP processing stall trace |
+
+Port STALLSNAP to line **B** as `scope: iod-core` when next syncing.
+
+Not in this WC (on `feature/commandclock-stall-hardening` / elc):
+`fcbe65f4` hasPending recovery, `934c9c63` OP CoE skip, `67230602` `cw --mqtt`.
 
 ## Track E (channel / HMI)
 

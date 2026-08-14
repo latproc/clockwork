@@ -11,7 +11,7 @@ This file is **not** authorization to edit, build, deploy, or restart a plant.
 
 | Doc | Role |
 |-----|------|
-| `IOD_PROCESSING_LOAD_AND_IDLE_STORMS_20260725.md` | Idle/load storms; live checklist; STALLSNAP proposal; 2G4C-120 overshoot evidence |
+| `IOD_PROCESSING_LOAD_AND_IDLE_STORMS_20260725.md` | Idle/load storms; live checklist; STALLSNAP (landed 2026-08-13); 2G4C-120 overshoot evidence |
 | `../2G4C/PIDLISTCLOCK_TIMER_STALL_20260805.md` | Plant soft-clock stall; LPC re-arm; overdue TIMER core history |
 | `../IO_NOTIFY_COMMANDCLOCK_DESIGN.md` | elc-path COMMANDCLOCK + silent IO notify design |
 | `../CW_RULES.md` | LIST `propagate_member_checks`; elc ANALOGINPUT/COUNTER notify scope |
@@ -222,18 +222,21 @@ Correct summary:
 - No COMMANDCLOCK instances in plant LPC on the legacy path; migration is a
   separate elc + plant project under approval.
 
-## STALLSNAP (proposed diagnostic)
+## STALLSNAP (implemented 2026-08-13 on line A)
 
 From `IOD_PROCESSING_LOAD_AND_IDLE_STORMS_20260725.md`:
 
+- Landed `12d65404` on `prod-experimental-mqtt-fix` (`StallTrace.cpp`)
 - Opt-in independent observer of processing **heartbeat / stage breadcrumbs**
-- **Not** a safety watchdog; must not stop outputs or change CW state
+- Enable: `DEBUG DEBUG_STALLSNAP on` (or `DEBUG_STALLSNAP` in `iod.conf`)
+- **Not** a safety watchdog; does not stop outputs or change CW state
 - Needed for **class B** location (where the loop spent time)
 - **Not** a substitute for COMMANDCLOCK; COMMANDCLOCK is not a substitute for
   STALLSNAP
+- Still to port to line **B** / `feature/commandclock-stall-hardening`
 
-At a few events per day, external processing-TID stack sampling is a valid
-first capture before shipping STALLSNAP.
+External processing-TID stack sampling remains valid if STALLSNAP is off or
+the binary is pre-`12d65404`.
 
 ## Design ladder (preferred order of thinking)
 
@@ -262,6 +265,9 @@ Do **not**:
 - [ ] 2G4C-120: post–Option 1 late-stop rate vs prior “few per day”
 - [ ] 2G4C-120: enable / idle HEALTH not regressed by RecoverOverdue
 - [ ] Whether residual stops are class A (clocks) vs class B (whole loop)
+- [x] STALLSNAP diagnostic on line A (`12d65404`, 2026-08-13)
+- [ ] Port STALLSNAP to elc / commandclock-stall-hardening
+- [ ] Enable STALLSNAP only for a named investigation window; review stderr
 - [ ] elc COMMANDCLOCK migration plan for Grab motion clocks (separate project)
 - [ ] Motion deadline fail-safe design if class B remains after COMMANDCLOCK
 
@@ -270,3 +276,4 @@ Do **not**:
 | Date | Note |
 |------|------|
 | 2026-08-12 | Initial handoff from investigation + architecture discussion; Option 1 running on 2G4C-120 |
+| 2026-08-13 | STALLSNAP landed on `prod-experimental-mqtt-fix` (`12d65404`) |

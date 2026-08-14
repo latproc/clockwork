@@ -88,8 +88,8 @@ required for remaining WEBREQUEST / Result-retention work).
 - `IOD_PROCESSING_LOAD_AND_IDLE_STORMS_20260725.md`
   - Stacked CW/IO causes (LIST cascade, TIMER AND, plugins, analog work queue,
     wait-loop pacing, bus vs poll, accidental PROCSNAP). Cherry-pick hashes,
-    live checklist, STALLSNAP proposal, and what still needs powered-machine
-    validation.
+    live checklist, and STALLSNAP (`12d65404` on line A, 2026-08-13).
+    Still to port to elc / the commandclock work branch.
 
 ### TIMER soft clocks vs COMMANDCLOCK (control cadence design)
 
@@ -107,7 +107,19 @@ required for remaining WEBREQUEST / Result-retention work).
     (on-thread vs off-thread), STALLSNAP, SYSTEMEXEC image scripts
     (`camera_capture.sh` / `image_weight.sh`), WEBREQUEST residual apply path.
   - Work branch: `feature/commandclock-stall-hardening` from
-    `feature/iod-elc-kernel-transport`. Item 1 (stale pending recovery) first.
+    `feature/iod-elc-kernel-transport`.
+  - **On that work branch (not this 2G4C-120 WC):** item 1 `fcbe65f4`;
+    `cw --mqtt` `67230602`; OP CoE reapply skip `934c9c63`. Confirm those
+    on 1G2C / iod-elc. STALLSNAP is on **this** line A (`12d65404`) and
+    still to port there.
+
+### 1G2C-122 mains-return iod wedge (other class — do not verify here)
+
+- `../1G2C/IOD_POWER_RETURN_REAPPLY_WEDGE_20260811.md`
+  - 2026-08-11: worker must not `setValue` / publish into CW.
+  - 2026-08-13 git record (`934c9c63`): apply recipe status on processing,
+    snapshot recipes, skip CoE unless AL is PREOP/SAFEOP. Sources are not
+    in this `iod_sdo` tree.
 
 ### IO notify + COMMANDCLOCK (elc-path design)
 

@@ -4,12 +4,17 @@ Production residual risk after COMMANDCLOCK migration on
 `feature/iod-elc-kernel-transport` / 1G2C-122. This is **not** authorization to
 edit, build, deploy, or restart a plant.
 
+This 2G4C-120 checkout is line **A** (`iod_sdo`) and does **not** run
+COMMANDCLOCK plant LPC. Status rows that cite the elc work branch are git
+records; confirm them on 1G2C-122.
+
 ## Related docs
 
 | Doc | Role |
 |-----|------|
 | `IOD_TIMER_SOFT_CLOCKS_AND_COMMANDCLOCK_20260812.md` | TIMER vs COMMANDCLOCK architecture |
-| `IOD_PROCESSING_LOAD_AND_IDLE_STORMS_20260725.md` | Class C load; STALLSNAP proposal |
+| `IOD_PROCESSING_LOAD_AND_IDLE_STORMS_20260725.md` | Class C load; STALLSNAP (line A 2026-08-13) |
+| `../1G2C/IOD_POWER_RETURN_REAPPLY_WEDGE_20260811.md` | 1G2C-122 mains-return wedge; 2026-08-13 OP CoE skip |
 | `../IO_NOTIFY_COMMANDCLOCK_DESIGN.md` | elc COMMANDCLOCK + silent IO notify |
 | `../2G4C/PIDLISTCLOCK_TIMER_STALL_20260805.md` | Legacy soft-clock plant path |
 
@@ -23,6 +28,17 @@ edit, build, deploy, or restart a plant.
 
 Do not pile this work onto the transport tip in place. Do not mix with unrelated
 setup-hold / topology work.
+
+## Status (2026-08-13)
+
+| Item | Where | Commit | State |
+|------|-------|--------|-------|
+| 1 hasPending stale recovery | elc work branch | `fcbe65f4` | In that git history (2026-08-12); not this WC |
+| 3 STALLSNAP breadcrumbs | line **A** `prod-experimental-mqtt-fix` | `12d65404` | **In this tree**; **not** on the elc work branch |
+| MQTT: `cw` needs `--mqtt` | elc work branch | `67230602` | In that git history; **not** in this `cw` |
+| OP CoE reapply skip + recipe status on processing | elc work branch (`scope: bus-elc`) | `934c9c63` | Commit-message record for 1G2C-122; sources not here |
+| 2a / 2c motion deadline | — | — | Open |
+| SYSTEMEXEC S1/S4 | — | — | Open |
 
 ## Context
 
@@ -54,7 +70,7 @@ After 1–3, deeper hot-path surgery is **evidence-led**.
 
 ---
 
-## Item 1 — hasPending coalesce / stale recovery (approved; implement first)
+## Item 1 — hasPending coalesce / stale recovery (**done** `fcbe65f4`)
 
 ### Problem
 
@@ -120,13 +136,19 @@ Do not claim 2a alone fixes multi-second free-run overshoot.
 
 ---
 
-## Item 3 — STALLSNAP
+## Item 3 — STALLSNAP (**done on line A**; port here)
 
-Per `IOD_PROCESSING_LOAD_AND_IDLE_STORMS_20260725.md` (2026-08-12):
+Landed `12d65404` on `prod-experimental-mqtt-fix` (2026-08-13). Port as
+`scope: iod-core` onto this branch before treating it as available on 1G2C-122
+iod-elc.
+
+Per `IOD_PROCESSING_LOAD_AND_IDLE_STORMS_20260725.md`:
 
 - Opt-in independent observer; processing only relaxed-atomic breadcrumbs
-- Heartbeat gap ≥ ~100 ms → one rate-limited recovery `STALLSNAP`
-- Stages: outer, ZMQ wait, EC, plugins, channels/cmds, scheduler, runnable, stable (machine id), outputs
+- Enable: `DEBUG DEBUG_STALLSNAP on`
+- Heartbeat gap ≥ 100 ms → one rate-limited recovery `STALLSNAP` on stderr
+- Stages: `outer`, `zmq_poll`, `ecat`, `plugins`, `channels_cmd`, `scheduler`,
+  `poll_machines`, `stable` (machine id), `outputs`
 - Never stops outputs or changes CW state as a diagnostic
 
 Shares heartbeat infrastructure with optional 2c safe-hold.
@@ -198,9 +220,9 @@ Optional later: early-loop COMMANDCLOCK sample before channels; light control pa
 | Step | Content |
 |------|---------|
 | Branch | `feature/commandclock-stall-hardening` from elc tip |
-| 1 | hasPending stale recovery + tests |
+| 1 | hasPending stale recovery + tests — **done** `fcbe65f4` |
 | 1b | SYSTEMEXEC S1 + script S4 (nice/ionice) |
-| 2 | STALLSNAP breadcrumbs (default off); audit output lease |
+| 2 | Port STALLSNAP from line A (`12d65404`); audit output lease |
 | 3 | Optional 2c observer safe-hold (high risk; allow-list) |
 | 4 | Optional 2a Grab seeking LPC deadline |
 | 5 | S2/S3 if evidence blames SYSTEMEXEC apply/concurrency |
@@ -212,3 +234,7 @@ Deploy only with operator-approved build/install/restart and rollback binary.
 | Date | Note |
 |------|------|
 | 2026-08-12 | Initial handoff from architecture discussion; item 1 approved first |
+| 2026-08-12 | Item 1 landed `fcbe65f4` (stale COMMANDCLOCK pending recovery) |
+| 2026-08-13 | `934c9c63` skip OP CoE reapply; recipe status on processing (1G2C-122 proven) |
+| 2026-08-13 | `67230602` `cw` requires `--mqtt` before connecting to a broker |
+| 2026-08-13 | STALLSNAP landed on line A `12d65404`; still to port here |

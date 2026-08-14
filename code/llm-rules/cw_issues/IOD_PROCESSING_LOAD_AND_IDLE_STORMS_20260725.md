@@ -164,10 +164,13 @@ motion/control clocks merely to make `SHOW HEALTH` report a lower number.
 ## Related docs
 
 - `CW_RULES.md` — LIST `propagate_member_checks` rule.
-- `TRANSPORT.md` (repo root) — kernel elc transport notes.
+- `TOOLS.md` / `LLM_CONTEXT.md` — iod-elc service and opt-in verbose log
+  (this checkout has no `/opt/latproc/TRANSPORT.md`).
 - `generic_servo_pump_pressure_control.md` — pump demand handoff / bypass timing.
 - `IOD_TIMER_SOFT_CLOCKS_AND_COMMANDCLOCK_20260812.md` — TIMER soft-clock
   design limits, Option 1 overdue recovery, COMMANDCLOCK vs whole-loop stalls.
+- `IOD_COMMANDCLOCK_STALL_HARDENING_20260812.md` — elc work-branch items
+  (hasPending, motion deadline). STALLSNAP itself is on line A here.
 - `../2G4C/PIDLISTCLOCK_TIMER_STALL_20260805.md` — plant soft-clock stall notes.
 
 ## Open / re-validate on powered plant
@@ -177,7 +180,24 @@ motion/control clocks merely to make `SHOW HEALTH` report a lower number.
 - Residual plugins / channels under production HMI load.
 - Any remaining “abandoned branch” delays under simultaneous motion + EC noise.
 
-## Proposed diagnostic: processing stall trace (2026-08-12)
+## Processing stall trace (STALLSNAP)
+
+**Status (2026-08-13):** Implemented on line **A**
+`prod-experimental-mqtt-fix` as `12d65404`
+(`iod/src/StallTrace.cpp`, `StallTrace.h`). Default **off**. Not a control or
+safety watchdog: it never stops outputs, restarts iod, or changes CW state.
+
+| Item | Value |
+|------|--------|
+| Enable | `DEBUG DEBUG_STALLSNAP on` (runtime) or `DEBUG_STALLSNAP` in `iod.conf` (start) |
+| Disable | `DEBUG DEBUG_STALLSNAP off` / remove the iod.conf token |
+| Threshold | heartbeat unchanged ≥ 100 ms |
+| Emit | one `STALLSNAP` line on **stderr** after recovery; rate-limit 1 s |
+| Hot path | relaxed atomics only when enabled; no-op load when off |
+| Port | `scope: iod-core` — still needs port to line **B** / `feature/commandclock-stall-hardening` |
+
+`COMMANDCLOCK` is not a substitute. It executes on the same processing thread
+and also pauses during a whole-loop delay.
 
 ### Evidence from 2G4C-120
 
@@ -199,17 +219,14 @@ loop.
 An attempted core change that immediately rechecked every overdue TIMER was
 reverted.  It allowed false overdue predicates to requeue themselves repeatedly
 after each evaluation, increasing processing load.  Revert commit on
-`prod-experimental-mqtt-fix`: `7ada2a6d`.
+`prod-experimental-mqtt-fix`: `7ada2a6d`.  The replacement is load-safe
+Option 1 (`4e7ec4ba`); see
+`IOD_TIMER_SOFT_CLOCKS_AND_COMMANDCLOCK_20260812.md`.
 
-### Recommendation
+### Implementation (matches the 2026-08-12 spec)
 
-Add an opt-in **diagnostic processing stall trace** to iod.  It is not a control
-or safety watchdog: it must never stop outputs, restart iod, or change CW state.
-Its only purpose is to identify where the processing thread spent or lost the
-missing time.
-
-Use an independent, low-priority observer thread.  Instrument the processing
-thread with only bounded, relaxed-atomic breadcrumb writes:
+Independent low-priority observer thread (`iod stallobs`). Processing writes
+only bounded, relaxed-atomic breadcrumbs:
 
 - monotonic heartbeat timestamp and sequence
 - current processing stage
@@ -221,9 +238,9 @@ The processing hot path must perform no logging, allocation, formatting, file
 access, socket access, mutex locking, sampler publication, or synchronous
 notification for this diagnostic.
 
-When the heartbeat is unchanged beyond an initial threshold (suggest 100 ms),
-the observer should capture a bounded snapshot.  After processing recovers, it
-may emit one rate-limited `STALLSNAP` record containing:
+When the heartbeat is unchanged beyond 100 ms, the observer captures a
+bounded snapshot. After processing recovers, it emits one rate-limited
+`STALLSNAP` record containing:
 
 - detected start, recovery time, and duration
 - last processing stage and machine/action breadcrumb
@@ -239,39 +256,47 @@ Those operations can race with the control thread or perturb it.  Any desired
 queue counts must be published by the processing thread as atomic scalar
 breadcrumbs during its normal passes.
 
-### Suggested stage coverage
+### Stage names (stderr `stage=`)
 
-At minimum distinguish:
+| Stage | Name |
+|-------|------|
+| 1 | `outer` |
+| 2 | `zmq_poll` |
+| 3 | `ecat` |
+| 4 | `plugins` |
+| 5 | `channels_cmd` |
+| 6 | `scheduler` |
+| 7 | `poll_machines` |
+| 8 | `stable` (plus `machine=` breadcrumb) |
+| 9 | `outputs` |
 
-1. outer-loop housekeeping and incoming package drain
-2. ZMQ poll/wait
-3. EtherCAT/process-data receive and `handleChange`
-4. plugin state checks
-5. channel and command handling
-6. scheduler handshake
-7. runnable machine command/action polling
-8. stable-state evaluation, including the current machine
-9. output construction and EtherCAT output delivery
+This shows whether a gap is a long-running CW machine/action, queue drain,
+plugin/channel call, scheduler/output block, or an OS/off-CPU pause.
 
-This should reveal whether a future gap is a long-running CW machine/action,
-queue drain, plugin/channel call, scheduler/output block, or an OS/off-CPU
-pause.
+Example line:
 
-### Acceptance criteria before plant deployment
+```text
+STALLSNAP start_us=… recover_us=… duration_us=… last_hb_us=… stage=stable
+  stage_enter_us=… machine=C_GrabConveyor runnable=… stable=… exec=… mail=…
+  events=… pend_ev=… suppressed=0 ring=[outer@…,stable@…]
+```
 
-- disabled by default and explicitly enabled for the investigation window
-- no functional change to scheduling, TIMER semantics, output handling, or CW
-  publication
-- hot-path overhead measured offline and limited to relaxed atomic stores
-- fixed memory use; no unbounded event or log growth
-- one bounded recovery record per stall, with rate limiting
-- offline injected-delay tests identify every instrumented stage correctly
-- build and deployment follow the plant approval and rollback procedure
+Lines go to iod **stderr**. With `/tmp/iod-verbose` they land in `/tmp/iod.log`;
+otherwise daemontools / readproctitle. They are not sampler rows.
 
-`COMMANDCLOCK` is not a substitute for this diagnostic.  It executes through
-the same iod processing path and would also pause during a whole-loop delay.
-Consider clock migration only after the trace identifies and the code fixes the
-underlying stall.
+### Ops
+
+- Enable only for an investigation window. Do not leave `DEBUG_STALLSNAP` on
+  as a standing production default.
+- Deploying a binary that first contains StallTrace still needs operator
+  approval. Toggling the DEBUG flag on an already-running STALLSNAP build
+  does not require a rebuild.
+- On 2G4C-120 the 2026-08-13 `iod_sdo` build includes the symbols; confirm
+  the running pid and `DEBUG DEBUG_STALLSNAP` before treating traces as live.
+
+`COMMANDCLOCK` is not a substitute for this diagnostic. Consider clock
+migration only after the trace identifies and the code fixes the underlying
+stall.
 
 ## Multi-domain (servo power isolation) — spike 2026-07-26
 
