@@ -183,7 +183,7 @@ static MachineInstance *ensureECDomainMachine(uint32_t domain_id) {
         mi->setStateMachine(cls);
     }
     mi->setDefinitionLocation("Internal", 0);
-    mi->setValue("domain_id", Value{static_cast<long>(domain_id)});
+    mi->setValue("domain_id", Value{static_cast<int64_t>(domain_id)});
     mi->markActive();
     machines[name] = mi;
     MachineInstance *list = MachineInstance::find("L_ECDomains");
@@ -213,8 +213,8 @@ void elcRegisterClockworkDomains(const std::vector<uint32_t> &domain_ids) {
     }
     MachineInstance *ec = MachineInstance::find("ETHERCAT");
     if (ec) {
-        ec->setValue("primary_domain_id", Value{static_cast<long>(g_primary_domain_id)});
-        ec->setValue("domain_count", Value{static_cast<long>(g_domains.size())});
+        ec->setValue("primary_domain_id", Value{static_cast<int64_t>(g_primary_domain_id)});
+        ec->setValue("domain_count", Value{static_cast<int64_t>(g_domains.size())});
     }
 }
 
@@ -274,20 +274,20 @@ static void publishKernelEthercatClockworkMachines() {
             }
             continue;
         }
-        dm->setValue("domain_id", Value{static_cast<long>(slot.id)});
+        dm->setValue("domain_id", Value{static_cast<int64_t>(slot.id)});
         // status_known=0 → lifecycle hold (not "bus failed"). Keep last size/offset.
         dm->setValue("status_known", Value{slot.status_known ? 1 : 0});
         if (slot.status_known) {
             dm->setValue("valid", Value{slot.valid ? 1 : 0});
             dm->setValue("armed", Value{slot.armed ? 1 : 0});
             dm->setValue("rearm", Value{slot.rearm_required ? 1 : 0});
-            dm->setValue("wc", Value{static_cast<long>(slot.wc)});
-            dm->setValue("wc_state", Value{static_cast<long>(slot.wc_state)});
-            dm->setValue("faults", Value{static_cast<long>(slot.faults)});
-            dm->setValue("slave_states", Value{static_cast<long>(slot.slave_states)});
+            dm->setValue("wc", Value{static_cast<int64_t>(slot.wc)});
+            dm->setValue("wc_state", Value{static_cast<int64_t>(slot.wc_state)});
+            dm->setValue("faults", Value{static_cast<int64_t>(slot.faults)});
+            dm->setValue("slave_states", Value{static_cast<int64_t>(slot.slave_states)});
             if (slot.domain_size != 0) {
-                dm->setValue("base_offset", Value{static_cast<long>(slot.base_offset)});
-                dm->setValue("domain_size", Value{static_cast<long>(slot.domain_size)});
+                dm->setValue("base_offset", Value{static_cast<int64_t>(slot.base_offset)});
+                dm->setValue("domain_size", Value{static_cast<int64_t>(slot.domain_size)});
             }
         }
         if (!dstate) {
@@ -311,8 +311,8 @@ static void publishKernelEthercatClockworkMachines() {
     g_all_domains_complete = all_complete && any_known && !any_pending;
 
     if (ec) {
-        ec->setValue("primary_domain_id", Value{static_cast<long>(g_primary_domain_id)});
-        ec->setValue("domain_count", Value{static_cast<long>(g_domains.size())});
+        ec->setValue("primary_domain_id", Value{static_cast<int64_t>(g_primary_domain_id)});
+        ec->setValue("domain_count", Value{static_cast<int64_t>(g_domains.size())});
         ec->setValue("domain_status_pending", Value{any_pending ? 1 : 0});
         if (g_domain_status_ok) {
             ec->setValue("all_ok_source", Value("primary_domain", Value::t_string));
@@ -330,7 +330,7 @@ static void publishKernelEthercatClockworkMachines() {
     if (g_domain_status_ok && !g_domains.empty() && g_domains.front().status_known) {
         const ElcDomainSlot &p = g_domains.front();
         const char *state = "INCOMPLETE";
-        long value = static_cast<long>(p.wc);
+        int64_t value = static_cast<int64_t>(p.wc);
         if (p.wc_state == 2 && p.valid) {
             state = "COMPLETE";
         }

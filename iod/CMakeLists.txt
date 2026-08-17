@@ -490,7 +490,15 @@ if(BUILD_IOD_ELC)
     set(ENV{PKG_CONFIG_PATH} "/usr/local/lib/pkgconfig:/opt/elc/lib/pkgconfig")
   endif()
   find_package(PkgConfig REQUIRED)
-  pkg_check_modules(ELC REQUIRED elcethercat)
+  pkg_check_modules(ELC elcethercat)
+  if(NOT ELC_FOUND)
+    message(WARNING
+      "elcethercat not found; skipping iod-elc. "
+      "Install libelcethercat (pkg-config elcethercat) to build the plant controller. "
+      "cw and the other RELEASE_TARGETS still build.")
+  endif()
+endif()
+if(BUILD_IOD_ELC AND ELC_FOUND)
   include_directories(${ELC_INCLUDE_DIRS})
 
   add_executable(iod-elc
@@ -517,14 +525,18 @@ if(BUILD_IOD_ELC)
       target_link_directories_compat(iod-elc "${_elc_libdir}")
     endif()
   endforeach()
+  set(_iod_elc_extra_libs)
+  if(NOT APPLE)
+    list(APPEND _iod_elc_extra_libs rt)
+  endif()
   target_link_libraries(iod-elc
     cw_client
     ${ELC_LIBRARIES}
-    dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" rt curl
+    dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" ${_iod_elc_extra_libs} curl
   )
   install(TARGETS iod-elc RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
   message(STATUS "Building iod-elc with libelcethercat (${ELC_VERSION}) include=${ELC_INCLUDE_DIRS}")
-else()
+elseif(NOT BUILD_IOD_ELC)
   message(WARNING "BUILD_IOD_ELC is OFF; no plant iod binary will be built on this branch")
 endif()
 

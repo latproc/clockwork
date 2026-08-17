@@ -468,8 +468,11 @@ int main(int argc, const char *argv[]) {
 
         // readline completion function
         rl_attempted_completion_function = my_rl_completion;
-        // Keep command list order (DESCRIBE first) instead of alphabetical sort.
+#if !defined(__APPLE__)
+        // GNU readline: keep command list order (DESCRIBE first).
+        // macOS libedit has no rl_sort_completion_matches.
         rl_sort_completion_matches = 0;
+#endif
         if (!quiet) {
             initialise_machine_names(0);
             check_messages();

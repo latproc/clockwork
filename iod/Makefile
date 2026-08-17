@@ -36,7 +36,15 @@ release:
 	@if [ "$(RELEASE_TARGETS)" = "all" ]; then \
 		$(MAKE) -C build/Release $(JOBS); \
 	else \
-		$(MAKE) -C build/Release $(JOBS) $(RELEASE_TARGETS); \
+		targets=""; \
+		for t in $(RELEASE_TARGETS); do \
+			if [ -f "build/Release/CMakeFiles/$$t.dir/build.make" ]; then \
+				targets="$$targets $$t"; \
+			else \
+				echo "skipping $$t (not configured)"; \
+			fi; \
+		done; \
+		$(MAKE) -C build/Release $(JOBS) $$targets; \
 	fi
 
 # Install Release binaries into iod/ (project root). Safe while iod is running:
@@ -51,6 +59,10 @@ release-install: release
 		echo "Installing $(RELEASE_TARGETS) -> $(CURDIR)/"; \
 		for t in $(RELEASE_TARGETS); do \
 			src="build/Release/$$t"; \
+			if [ ! -f "build/Release/CMakeFiles/$$t.dir/build.make" ]; then \
+				echo "skipping $$t (not configured)"; \
+				continue; \
+			fi; \
 			test -x "$$src" || { echo "missing $$src"; exit 1; }; \
 			tmp="./.$$t.new.$$$$"; \
 			cp -a "$$src" "$$tmp" && mv -f "$$tmp" "./$$t"; \
