@@ -2607,6 +2607,10 @@ void MachineInstance::notifyCommandConsumers(const char *command_name,
         if (dep->receives_functions.find(command_msg) == dep->receives_functions.end()) {
             continue;
         }
+        // Skip if every WITHIN/WHEN fails. Unrestricted fallback still sends.
+        if (!dep->acceptsCommandInCurrentState(command_name)) {
+            continue;
+        }
         uint64_t pending_age_us = 0;
         if (dep->hasPending(command_msg, &pending_age_us)) {
             if (pending_age_us < stale_us) {
@@ -2659,6 +2663,21 @@ void MachineInstance::dispatchCommandClocks(uint64_t now_us) {
                       << " notify_period=" << period_ms << "ms\n";
         clock->notifyCommandConsumers(command_name.c_str(), period_ms);
     }
+}
+
+bool MachineInstance::acceptsCommandInCurrentState(const char *command_name) const {
+    if (!command_name || !*command_name) {
+        return false;
+    }
+    const Message command_msg(command_name);
+    for (auto it = receives_functions.find(command_msg);
+         it != receives_functions.end() && it->first == command_msg; ++it) {
+        MachineCommand *cmd = it->second;
+        if (cmd && (cmd->autoSwitch() || cmd->matches(const_cast<MachineInstance *>(this)))) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void MachineInstance::notifyDependents(Message &msg) {

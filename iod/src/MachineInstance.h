@@ -245,6 +245,10 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
      * pending is dropped and one replacement is enqueued (per dependant).
      */
     void notifyCommandConsumers(const char *command_name, uint64_t notify_period_ms = 100);
+    // True if a RECEIVE/COMMAND handler for command_name applies now
+    // (WITHIN list, WHEN/REQUIRES, unrestricted fallback). Same rules as
+    // tests/unit/command_guards.cw. No handler → false.
+    bool acceptsCommandInCurrentState(const char *command_name) const;
     void notifyClockedUpdateConsumers(uint64_t notify_period_ms = 100) {
         notifyCommandConsumers("update", notify_period_ms);
     }

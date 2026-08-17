@@ -1,8 +1,13 @@
+#include "Dispatcher.h"
 #include "Expression.h"
+#include "Logger.h"
 #include "MachineClass.h"
 #include "MachineCommandAction.h"
+#include "MachineInstance.h"
 #include "Message.h"
+#include "ThreadSafeQueue.h"
 #include "gtest/gtest.h"
+#include <boost/thread.hpp>
 
 #include "library_globals.cpp"
 
@@ -74,6 +79,139 @@ TEST(CommandGuardsTest, MachineClassOverlapFindsReceiveVariant) {
     cls.receives.insert(std::make_pair(Message("tick"), first));
     EXPECT_TRUE(cls.findOverlappingReceive(Message("tick"), {"idle"}, nullptr));
     EXPECT_FALSE(cls.findOverlappingReceive(Message("tick"), {}, nullptr));
+}
+
+// Runtime accept = MachineCommand::matches (WITHIN list / WHEN / unrestricted).
+// COMMANDCLOCK notify skips the dependant when this is false.
+// Mirrors tests/unit/command_guards.cw (listed, gated, ping fallback, calcAdjust).
+
+class CommandAcceptTest : public ::testing::Test {
+  protected:
+    MachineClass *cls = nullptr;
+    MachineInstance *mi = nullptr;
+
+    static void EnsureDispatcher() {
+        static boost::condition_variable_any cond;
+        static boost::shared_mutex mutex;
+        static SharedThreadSafeQueue<Package *> queue(cond, mutex);
+        static bool created = false;
+        if (!created) {
+            Logger::instance();
+            Dispatcher::create(queue);
+            created = true;
+        }
+    }
+
+    void SetUp() override {
+        EnsureDispatcher();
+        cls = new MachineClass("CommandAcceptSubject");
+        cls->addState("a");
+        cls->addState("b");
+        cls->addState("c");
+        cls->addState("idle");
+        cls->addState("active");
+        cls->addState("stopping");
+        cls->addState("stopped");
+
+        cls->receives.insert(std::make_pair(Message("listed"), makeHandler("listed", {"a", "b"})));
+        cls->receives.insert(std::make_pair(Message("split"), makeHandler("split", {"a"})));
+        cls->receives.insert(std::make_pair(Message("split"), makeHandler("split", {"b"})));
+
+        Predicate *when_true =
+            new Predicate(new Predicate("counter"), opGT, new Predicate(0));
+        cls->receives.insert(
+            std::make_pair(Message("gated"), makeHandler("gated", {}, when_true)));
+
+        cls->receives.insert(std::make_pair(Message("ping"), makeHandler("ping", {"a", "b"})));
+        Predicate *ping_when =
+            new Predicate(new Predicate("counter"), opGT, new Predicate(0));
+        cls->receives.insert(
+            std::make_pair(Message("ping"), makeHandler("ping", {"c"}, ping_when)));
+        cls->receives.insert(std::make_pair(Message("ping"), makeHandler("ping", {})));
+
+        cls->receives.insert(
+            std::make_pair(Message("calcAdjust"), makeHandler("calcAdjust", {"idle"})));
+        cls->receives.insert(
+            std::make_pair(Message("calcAdjust"), makeHandler("calcAdjust", {"active"})));
+        cls->receives.insert(
+            std::make_pair(Message("calcAdjust"), makeHandler("calcAdjust", {"stopping"})));
+
+        cls->receives.insert(
+            std::make_pair(Message("only_tick"), makeHandler("only_tick", {"a"})));
+
+        const std::string inst =
+            std::string("cg_") + ::testing::UnitTest::GetInstance()->current_test_info()->name();
+        mi = MachineInstanceFactory::create(inst.c_str(), "CommandAcceptSubject");
+        mi->setStateMachine(cls);
+        mi->setValue("counter", 0);
+    }
+
+    void TearDown() override { delete mi; }
+
+    void go(const char *state) { mi->getCurrent() = State(state); }
+};
+
+TEST_F(CommandAcceptTest, ListedWithinAnyOfTheStates) {
+    go("a");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("listed"));
+    go("b");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("listed"));
+    go("c");
+    EXPECT_FALSE(mi->acceptsCommandInCurrentState("listed"));
+}
+
+TEST_F(CommandAcceptTest, SplitHandlersAreIndependent) {
+    go("a");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("split"));
+    go("b");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("split"));
+    go("c");
+    EXPECT_FALSE(mi->acceptsCommandInCurrentState("split"));
+}
+
+TEST_F(CommandAcceptTest, WhenPredicateGatesDispatch) {
+    go("a");
+    mi->setValue("counter", 0);
+    EXPECT_FALSE(mi->acceptsCommandInCurrentState("gated"));
+    mi->setValue("counter", 1);
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("gated"));
+}
+
+TEST_F(CommandAcceptTest, PingListWhenThenUnrestrictedFallback) {
+    mi->setValue("counter", 0);
+    go("a");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("ping"));
+    go("b");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("ping"));
+    go("c");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("ping")) << "unrestricted fallback";
+    mi->setValue("counter", 1);
+    go("c");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("ping")) << "WHEN handler also matches";
+}
+
+TEST_F(CommandAcceptTest, CalcAdjustSkippedWhenStopped) {
+    go("stopped");
+    EXPECT_FALSE(mi->acceptsCommandInCurrentState("calcAdjust"));
+    go("idle");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("calcAdjust"));
+    go("active");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("calcAdjust"));
+    go("stopping");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("calcAdjust"));
+}
+
+TEST_F(CommandAcceptTest, ReceiveOnlyInListedState) {
+    go("c");
+    EXPECT_FALSE(mi->acceptsCommandInCurrentState("only_tick"));
+    go("a");
+    EXPECT_TRUE(mi->acceptsCommandInCurrentState("only_tick"));
+}
+
+TEST_F(CommandAcceptTest, UnknownCommandIsNotAccepted) {
+    go("a");
+    EXPECT_FALSE(mi->acceptsCommandInCurrentState("no_such"));
+    EXPECT_FALSE(mi->acceptsCommandInCurrentState(nullptr));
 }
 
 } // namespace
