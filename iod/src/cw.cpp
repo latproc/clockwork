@@ -631,8 +631,9 @@ int main(int argc, char const *argv[]) {
     load_debug_config();
     load_result = loadConfig(source_files);
     if (load_result) {
-        Dispatcher::instance()->stop();
-        Scheduler::shutdown();
+        // Parse/semantic errors: do not tear down the unused scheduler.
+        // Scheduler::shutdown() closes a bound inproc socket and can throw
+        // zmq::error_t (EADDRINUSE) if anything recreates the singleton.
         return load_result;
     }
 
@@ -790,15 +791,15 @@ int main(int argc, char const *argv[]) {
         process.join();
         MQTTInterface::instance()->stop();
         Dispatcher::instance()->stop();
-        Scheduler::shutdown();
         stateMonitor->stop();
         monitor.join();
-        delete dbg_instance;
-        //kill(0, 0); // interrupt select() and poll()s to enable termination
-        //context->close();
-        //delete context;
+        // Same as iod-elc: do not destroy ZMQ sockets / Scheduler here.
+        // ~Scheduler and inproc unbind throw zmq::error_t (EADDRINUSE) on
+        // some platforms and abort after a clean SHUTDOWN.
+        _exit(0);
     }
     catch (const zmq::error_t &) {
+        _exit(0);
     }
     return 0;
 }

@@ -242,7 +242,7 @@ Scheduler::Scheduler()
     next_time = 0;
 }
 
-Scheduler::~Scheduler() {
+Scheduler::~Scheduler() try {
     if (internals && internals->thread_ptr) {
         try {
             internals->thread_ptr->interrupt(); // wakes sleep_for(...) via boost::thread_interrupted
@@ -267,6 +267,9 @@ Scheduler::~Scheduler() {
     }
     delete internals;
     instance_ = 0;
+} catch (...) {
+    // Member ZMQ sockets can throw on close/unbind (EADDRINUSE). Never throw
+    // from a destructor.
 }
 
 void Scheduler::setThreadRef(boost::thread &ref) { internals->thread_ptr = &ref; }
@@ -394,7 +397,13 @@ void Scheduler::shutdown() {
     // Drop the singleton pointer before delete so re-entrant instance()
     // cannot observe a half-destroyed object; ~Scheduler also nulls instance_.
     instance_ = nullptr;
-    delete to_delete;
+    try {
+        delete to_delete;
+    }
+    catch (const zmq::error_t &) {
+        // Closing the inproc scheduler sockets can throw if a second
+        // Scheduler was constructed during teardown. Process is exiting.
+    }
 }
 
 void Scheduler::idle() {
