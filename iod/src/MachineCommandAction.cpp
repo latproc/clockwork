@@ -26,7 +26,101 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "SendMessageAction.h"
+#include <algorithm>
 #include <sstream>
+
+namespace {
+
+std::string predicateText(const Predicate *p) {
+    if (!p) {
+        return "";
+    }
+    std::ostringstream oss;
+    oss << *p;
+    return oss.str();
+}
+
+std::vector<std::string> sortedCopy(const std::vector<std::string> &in) {
+    std::vector<std::string> out(in);
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+} // namespace
+
+MachineCommandTemplate::MachineCommandTemplate(CStringHolder cmd_name, CStringHolder state,
+                                               bool auto_switch)
+    : command_name(cmd_name), state_name(state), guard(0), timeout(0), switch_state(auto_switch) {
+    if (!auto_switch && state.get() && *state.get()) {
+        within_states.push_back(state.get());
+    }
+}
+
+MachineCommandTemplate::~MachineCommandTemplate() { delete guard; }
+
+void MachineCommandTemplate::setWithinStates(std::vector<std::string> states) {
+    within_states = std::move(states);
+}
+
+void MachineCommandTemplate::setGuard(Predicate *p) {
+    delete guard;
+    guard = p ? new Condition(p) : 0;
+}
+
+bool MachineCommandTemplate::matchesWithin(const std::string &state) const {
+    if (switch_state) {
+        return true;
+    }
+    if (within_states.empty()) {
+        return true;
+    }
+    return std::find(within_states.begin(), within_states.end(), state) != within_states.end();
+}
+
+bool MachineCommandTemplate::sameWithinSet(const std::vector<std::string> &other) const {
+    return sortedCopy(within_states) == sortedCopy(other);
+}
+
+bool MachineCommandTemplate::sameGuard(const Predicate *other) const {
+    const Predicate *mine = (guard && guard->predicate) ? guard->predicate : 0;
+    return predicateText(mine) == predicateText(other);
+}
+
+bool MachineCommandTemplate::isDuplicateOf(const std::vector<std::string> &within,
+                                           const Predicate *g) const {
+    if (switch_state) {
+        return false;
+    }
+    return sameWithinSet(within) && sameGuard(g);
+}
+
+void MachineCommandTemplate::describeGuards(std::ostream &out) const {
+    if (switch_state) {
+        out << "AUTO SWITCH to " << state_name.get();
+        return;
+    }
+    bool wrote = false;
+    if (!within_states.empty()) {
+        out << "WITHIN ";
+        for (size_t i = 0; i < within_states.size(); ++i) {
+            if (i) {
+                out << ", ";
+            }
+            out << within_states[i];
+        }
+        wrote = true;
+    }
+    if (guard && guard->predicate) {
+        if (wrote) {
+            out << " ";
+        }
+        out << "WHEN " << *guard->predicate;
+        wrote = true;
+    }
+    if (!wrote) {
+        out << "unrestricted";
+    }
+}
 
 void MachineCommandTemplate::setActionTemplates(std::list<ActionTemplate *> &new_actions) {
     BOOST_FOREACH (ActionTemplate *at, new_actions) {
@@ -39,7 +133,9 @@ void MachineCommandTemplate::setActionTemplate(ActionTemplate *at) {
 
 MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
     : Action(mi), last_step(0), current_step(0), command_name(mct->command_name),
-      state_name(mct->getStateName()), timeout_trigger(0), switch_state(mct->switch_state) {
+      state_name(mct->getStateName()), within_states(mct->getWithinStates()),
+      guard(mct->getGuard() ? new Condition(*mct->getGuard()) : 0), timeout_trigger(0),
+      switch_state(mct->switch_state) {
     BOOST_FOREACH (ActionTemplate *t, mct->action_templates) {
         //DBG_M_ACTIONS << "copying action " << (*t) << " for machine " << mi->_name << "\n";
         actions.push_back(t->factory(mi));
@@ -67,6 +163,7 @@ MachineCommand::~MachineCommand() {
         timeout_trigger->disable();
         timeout_trigger = timeout_trigger->release();
     }
+    delete guard;
 }
 
 void MachineCommand::addAction(Action *a, ActionParameterList *params) { actions.push_back(a); }
@@ -78,15 +175,45 @@ void MachineCommand::setActions(std::list<Action *> &new_actions) {
 std::ostream &MachineCommand::operator<<(std::ostream &out) const {
     out << "Command " << owner->getName() << "." << command_name << " (at step " << current_step
         << ")";
-    if (state_name.get() && *state_name.get()) {
-        if (switch_state) {
-            out << " AUTO SWITCH to " << state_name.get();
-        }
-        else {
-            out << " WITHIN " << state_name.get();
+    if (switch_state && state_name.get() && *state_name.get()) {
+        out << " AUTO SWITCH to " << state_name.get();
+    }
+    else if (!within_states.empty()) {
+        out << " WITHIN ";
+        for (size_t i = 0; i < within_states.size(); ++i) {
+            if (i) {
+                out << ", ";
+            }
+            out << within_states[i];
         }
     }
+    if (guard && guard->predicate) {
+        out << " WHEN " << *guard->predicate;
+    }
     return out;
+}
+
+bool MachineCommand::matchesWithin(const std::string &state) const {
+    if (switch_state) {
+        return true;
+    }
+    if (within_states.empty()) {
+        return true;
+    }
+    return std::find(within_states.begin(), within_states.end(), state) != within_states.end();
+}
+
+bool MachineCommand::matches(MachineInstance *mi) const {
+    if (!mi) {
+        return false;
+    }
+    if (!matchesWithin(mi->getCurrent().getName())) {
+        return false;
+    }
+    if (guard && guard->predicate) {
+        return (*guard)(mi);
+    }
+    return true;
 }
 
 Action::Status MachineCommand::checkAction(Action *a, Action::Status stat) { return stat; }
@@ -178,9 +305,7 @@ Action::Status MachineCommand::run() {
     status = Running;
     last_step = 0;
     current_step = 0;
-    const char *state_name_str = state_name.get();
-    if (state_name_str && *state_name_str && owner->getCurrent().getName() != state_name_str &&
-        !switch_state) {
+    if (!switch_state && !matches(owner)) {
         /*
             std::stringstream ss;
             ss << "Command " << (*this) << " was ignored due to a mismatch of current state (" << owner->getCurrent().getName()

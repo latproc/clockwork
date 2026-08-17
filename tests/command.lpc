@@ -22,10 +22,9 @@ RestrictedReceive MACHINE {
 	c STATE;
 
 	COMMAND test WITHIN a { LOG "test received within a" }
-    # we would like to also be able to add:
 	COMMAND test WITHIN b { LOG "test received within b" }
 	COMMAND test { LOG " test received" }
-    # but this is not possible in the current implementation
+	# Runtime coverage for WITHIN / WHEN / fallback is in tests/unit/command_guards.cw
 }
 restricted_receive RestrictedReceive;
 

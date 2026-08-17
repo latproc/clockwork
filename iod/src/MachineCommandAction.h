@@ -22,7 +22,10 @@
 #define __MACHINECOMMAND_ACTION 1
 
 #include "Action.h"
+#include "Expression.h"
 #include "symboltable.h"
+#include <string>
+#include <vector>
 
 /*
     A MachineCommand executes a list of actions,
@@ -43,8 +46,10 @@ class MachineInstance;
 
 class MachineCommandTemplate : public ActionTemplate {
   public:
-    MachineCommandTemplate(CStringHolder cmd_name, CStringHolder state, bool auto_switch = false)
-        : command_name(cmd_name), state_name(state), timeout(0), switch_state(auto_switch) {}
+    MachineCommandTemplate(CStringHolder cmd_name, CStringHolder state, bool auto_switch = false);
+    MachineCommandTemplate(const MachineCommandTemplate &) = delete;
+    MachineCommandTemplate &operator=(const MachineCommandTemplate &) = delete;
+    ~MachineCommandTemplate() override;
     virtual Action *factory(MachineInstance *mi);
 
     std::ostream &operator<<(std::ostream &out) const {
@@ -54,12 +59,24 @@ class MachineCommandTemplate : public ActionTemplate {
     void setActionTemplate(ActionTemplate *action);
 
     CStringHolder &getStateName() { return state_name; }
+    const std::vector<std::string> &getWithinStates() const { return within_states; }
+    void setWithinStates(std::vector<std::string> states);
+    Condition *getGuard() const { return guard; }
+    void setGuard(Predicate *p);
+
+    bool matchesWithin(const std::string &state) const;
+    bool sameWithinSet(const std::vector<std::string> &other) const;
+    bool sameGuard(const Predicate *other) const;
+    bool isDuplicateOf(const std::vector<std::string> &within, const Predicate *g) const;
+    void describeGuards(std::ostream &out) const;
 
     std::vector<ActionTemplate *> action_templates;
     CStringHolder command_name;
 
   private:
     CStringHolder state_name;
+    std::vector<std::string> within_states;
+    Condition *guard;
 
   public:
     long timeout;
@@ -83,6 +100,10 @@ class MachineCommand : public Action {
 
     CStringHolder &getStateName() { return state_name; }
     bool autoSwitch() { return switch_state; }
+    const std::vector<std::string> &getWithinStates() const { return within_states; }
+    Condition *getGuard() const { return guard; }
+    bool matchesWithin(const std::string &state) const;
+    bool matches(MachineInstance *mi) const;
 
   private:
     std::vector<Action *> actions;
@@ -90,6 +111,8 @@ class MachineCommand : public Action {
     CStringHolder command_name;
 
     CStringHolder state_name;
+    std::vector<std::string> within_states;
+    Condition *guard;
     Trigger *timeout_trigger;
     bool switch_state;
 };

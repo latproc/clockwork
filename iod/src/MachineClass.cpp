@@ -155,8 +155,42 @@ MachineCommandTemplate *MachineClass::findMatchingCommand(std::string cmd_name, 
             break;
         }
         MachineCommandTemplate *cmd = curr.second;
-        if (!state || cmd->switch_state ||
-            (!cmd->switch_state && cmd->getStateName().get() == state)) {
+        if (!state || cmd->switch_state || cmd->matchesWithin(state)) {
+            return cmd;
+        }
+    }
+    return 0;
+}
+
+MachineCommandTemplate *
+MachineClass::findOverlappingCommand(const std::string &cmd_name,
+                                     const std::vector<std::string> &within,
+                                     const Predicate *guard) const {
+    auto cmd_it = commands.find(cmd_name);
+    while (cmd_it != commands.end()) {
+        const auto &curr = *cmd_it++;
+        if (curr.first != cmd_name) {
+            break;
+        }
+        MachineCommandTemplate *cmd = curr.second;
+        if (cmd && cmd->isDuplicateOf(within, guard)) {
+            return cmd;
+        }
+    }
+    return 0;
+}
+
+MachineCommandTemplate *
+MachineClass::findOverlappingReceive(const Message &msg, const std::vector<std::string> &within,
+                                     const Predicate *guard) const {
+    auto recv_it = receives.find(msg);
+    while (recv_it != receives.end()) {
+        const auto &curr = *recv_it++;
+        if (!(curr.first == msg)) {
+            break;
+        }
+        MachineCommandTemplate *cmd = curr.second;
+        if (cmd && cmd->isDuplicateOf(within, guard)) {
             return cmd;
         }
     }
