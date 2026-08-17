@@ -86,6 +86,12 @@ class MachineClass {
     addPrivateProperty(const std::string &name); // used in interfaces to list synced properties
     virtual void addCommand(const char *name);   // used in interfaces to list permitted commands
     MachineCommandTemplate *findMatchingCommand(std::string cmd_name, const char *state);
+    MachineCommandTemplate *findOverlappingCommand(const std::string &cmd_name,
+                                                   const std::vector<std::string> &within,
+                                                   const Predicate *guard) const;
+    MachineCommandTemplate *findOverlappingReceive(const Message &msg,
+                                                   const std::vector<std::string> &within,
+                                                   const Predicate *guard) const;
     bool propertyIsLocal(const char *name) const;
     bool propertyIsLocal(const std::string &name) const;
     bool propertyIsLocal(const Value &name) const;

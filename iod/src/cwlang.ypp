@@ -8,6 +8,7 @@
 #include <iomanip>
 #include <string>
 #include <sstream>
+#include <vector>
 #include <boost/foreach.hpp>
 #include "symboltable.h"
 #include "Logger.h"
@@ -112,7 +113,89 @@ static MachineInstance *addMachine(const char *name, const char *type,
     return machine;
 }
 
-static void cleanupErrorClause(bool deallocate = false) {
+static void cleanupErrorClause(bool deallocate = false);
+
+static std::vector<std::string> takeNameList() {
+    std::vector<std::string> names(current_name_list.begin(), current_name_list.end());
+    current_name_list.clear();
+    return names;
+}
+
+static void reportDuplicateHandler(const char *kind, const char *name,
+                                   MachineCommandTemplate *existing) {
+    std::stringstream ss;
+    ss << "## - Error: " << yyfilename << ":" << yylineno << " Already have a " << kind << " for "
+       << name;
+    if (existing) {
+        ss << " (";
+        existing->describeGuards(ss);
+        ss << ")";
+    }
+    DBG_PARSER << ss.str() << "\n";
+    error_messages.push_back(ss.str());
+    ++num_errors;
+}
+
+static std::vector<std::string> normalizeWithin(std::vector<std::string> within) {
+    for (const auto &s : within) {
+        if (s == "ANY") {
+            return std::vector<std::string>();
+        }
+    }
+    return within;
+}
+
+static bool registerCommandHandler(const char *name, std::vector<std::string> within,
+                                   Predicate *guard) {
+    within = normalizeWithin(std::move(within));
+    MachineCommandTemplate *existing = current_machineclass->findOverlappingCommand(name, within, guard);
+    if (!existing) {
+        existing = current_machineclass->findOverlappingReceive(Message(name), within, guard);
+    }
+    if (existing) {
+        reportDuplicateHandler("COMMAND", name, existing);
+        current_actions->clear();
+        return false;
+    }
+    MachineCommandTemplate *mc = new MachineCommandTemplate(name, "");
+    mc->setWithinStates(std::move(within));
+    if (guard) {
+        mc->setGuard(guard);
+    }
+    mc->setActionTemplates(*current_actions);
+    DBG_PARSER << "generating command function " << name << " for " << mc->action_templates.size()
+               << " actions:\n";
+    BOOST_FOREACH (ActionTemplate *at, mc->action_templates) { DBG_PARSER << "\t" << *at << "\n"; }
+    current_machineclass->receives.insert(std::make_pair(Message(name), mc));
+    current_machineclass->commands.insert(std::make_pair(name, mc));
+    current_actions->clear();
+    return true;
+}
+
+static bool registerReceiveHandler(const char *name, std::vector<std::string> within,
+                                   Predicate *guard) {
+    within = normalizeWithin(std::move(within));
+    MachineCommandTemplate *existing =
+        current_machineclass->findOverlappingReceive(Message(name), within, guard);
+    if (existing) {
+        reportDuplicateHandler("RECEIVES handler", name, existing);
+        current_actions->clear();
+        cleanupErrorClause(true);
+        return false;
+    }
+    MachineCommandTemplate *mc = new MachineCommandTemplate(name, "");
+    mc->setWithinStates(std::move(within));
+    if (guard) {
+        mc->setGuard(guard);
+    }
+    mc->setActionTemplates(*current_actions);
+    current_machineclass->receives.insert(std::make_pair(Message(name), mc));
+    current_actions->clear();
+    cleanupErrorClause(true);
+    return true;
+}
+
+static void cleanupErrorClause(bool deallocate) {
 	if (timeout_message_name) {
 		if (deallocate) free(timeout_message_name);
 		timeout_message_name = 0;
@@ -198,6 +281,7 @@ struct Subcondition {
 	Value *val;
 	Parameter *param;
 	struct Subcondition *subcond;
+	std::vector<std::string> *namevec;
 };
 
 %token <iVal> INTEGERVAL
@@ -235,6 +319,8 @@ struct Subcondition {
 %type <iVal> size_type
 %type <subcond> state_subcondition
 %type <bVal> transition_semantics
+%type <namevec> within_clause
+%type <expr> command_guard
 
 %%
 
@@ -1221,72 +1307,23 @@ enter_command
 
 basic_command:
 COMMAND SYMBOL /* command name */ action {
-	// commands are essentially messages
-    MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
-    mc->setActionTemplates(*current_actions);
-    if (current_machineclass->receives.count(Message($2)) == 0) {
-    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions:\n";
-    	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
-    	    DBG_PARSER << "\t"<< *at << "\n";
-    	}
-
-	    current_machineclass->receives.insert(std::make_pair(Message($2), mc));
-	    current_machineclass->commands.insert(std::make_pair($2, mc)); // by making a command form, the command will be exported
-	}
-    else {
-        std::stringstream ss;
-        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a COMMAND for " << $2;
-        DBG_PARSER << ss.str() << "\n";
-        error_messages.push_back(ss.str());
-        ++num_errors;
-    }
-	current_actions->clear();
+    registerCommandHandler($2, std::vector<std::string>(), 0);
 }
-| COMMAND SYMBOL /* command name */ WITHIN SYMBOL action {
-	// commands are essentially messages
-    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
-    mc->setActionTemplates(*current_actions);
-	MachineCommandTemplate *handler = current_machineclass->findMatchingCommand($2, $4);
-	//unsigned int existing_commands = current_machineclass->receives.count(Message($2));
-    if (!handler) {
-    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions:\n";
-    	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
-    	    DBG_PARSER << "\t" << *at << "\n";
-    	}
-
-		current_machineclass->receives.insert(std::make_pair(Message($2), mc));
-		current_machineclass->commands.insert(std::make_pair($2,mc)); // by making a command form, the command will be exported
-	}
-    else {
-        std::stringstream ss;
-        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a COMMAND for " << $2;
-        DBG_PARSER << ss.str() << "\n";
-        error_messages.push_back(ss.str());
-        ++num_errors;
-    }
-	current_actions->clear();
+| COMMAND SYMBOL command_guard action {
+    registerCommandHandler($2, std::vector<std::string>(), $3);
+}
+| COMMAND SYMBOL within_clause action {
+    std::vector<std::string> within = $3 ? *$3 : std::vector<std::string>();
+    delete $3;
+    registerCommandHandler($2, std::move(within), 0);
+}
+| COMMAND SYMBOL within_clause command_guard action {
+    std::vector<std::string> within = $3 ? *$3 : std::vector<std::string>();
+    delete $3;
+    registerCommandHandler($2, std::move(within), $4);
 }
 | COMMAND SYMBOL /* command name */ property_block action {
-	// commands are essentially messages
-    MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
-    mc->setActionTemplates(*current_actions);
-    if (current_machineclass->receives.count(Message($2)) == 0) {
-    	DBG_PARSER << "generating command function " << $2 << " for " << mc->action_templates.size() << " actions:\n";
-    	BOOST_FOREACH(ActionTemplate *at, mc->action_templates) {
-    	    DBG_PARSER << *at << "\n";
-    	}
-
-	    current_machineclass->receives.insert(std::make_pair(Message($2), mc));
-	    current_machineclass->commands.insert(std::make_pair($2, mc)); // by making a command form, the command will be exported
-	}
-    else {
-        std::stringstream ss;
-        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a COMMAND for " << $2;
-        DBG_PARSER << ss.str() << "\n";
-        error_messages.push_back(ss.str());
-        ++num_errors;
-    }
-	current_actions->clear();
+    registerCommandHandler($2, std::vector<std::string>(), 0);
 }
 ;
 
@@ -1344,7 +1381,7 @@ CATCH SYMBOL action {
 		DBG_PARSER << *at << ", ";
 	}
 	DBG_PARSER << "\n";
-	if (current_machineclass->receives.count(Message($2)) == 0) {
+	if (!current_machineclass->findOverlappingReceive(Message($2), std::vector<std::string>(), 0)) {
 		MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
 		mc->setActionTemplates(*current_actions);
 		current_machineclass->receives.insert(std::make_pair(Message($2), mc));
@@ -1365,43 +1402,23 @@ RECEIVE SYMBOL /* message */ error_clause action  {
         DBG_PARSER << *at << ", ";
     }
     DBG_PARSER << "\n";
-    if (current_machineclass->receives.count(Message($2)) == 0) {
-        MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
-        mc->setActionTemplates(*current_actions);
-        current_actions->clear();
-        current_machineclass->receives.insert(std::make_pair(Message($2), mc));
-    }
-    else {
-        std::stringstream ss;
-        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a RECEIVES handler for " << $2;
-        DBG_PARSER << ss.str() << "\n";
-        error_messages.push_back(ss.str());
-        ++num_errors;
-    }
-	cleanupErrorClause(true);
+    registerReceiveHandler($2, std::vector<std::string>(), 0);
 }
 |
-RECEIVE SYMBOL /* message */ WITHIN SYMBOL error_clause action  {
-    DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
-    BOOST_FOREACH(ActionTemplate *at, *current_actions) {
-        DBG_PARSER << *at << ", ";
-    }
-    DBG_PARSER << "\n";
-    MachineCommandTemplate *mc = new MachineCommandTemplate($2, $4);
-    mc->setActionTemplates(*current_actions);
-	MachineCommandTemplate *handler = current_machineclass->findMatchingCommand($2, $4);
-    if (!handler) {
-        current_machineclass->receives.insert(std::make_pair(Message($2), mc));
-    }
-    else {
-        std::stringstream ss;
-        ss << "## - Error: " << yyfilename << ":"<< yylineno << " Already have a RECEIVES handler for " << $2;
-        DBG_PARSER << ss.str() << "\n";
-        error_messages.push_back(ss.str());
-        ++num_errors;
-    }
-    current_actions->clear();
-	cleanupErrorClause(true);
+RECEIVE SYMBOL command_guard error_clause action {
+    registerReceiveHandler($2, std::vector<std::string>(), $3);
+}
+|
+RECEIVE SYMBOL within_clause error_clause action {
+    std::vector<std::string> within = $3 ? *$3 : std::vector<std::string>();
+    delete $3;
+    registerReceiveHandler($2, std::move(within), 0);
+}
+|
+RECEIVE SYMBOL within_clause command_guard error_clause action {
+    std::vector<std::string> within = $3 ? *$3 : std::vector<std::string>();
+    delete $3;
+    registerReceiveHandler($2, std::move(within), $4);
 }
 |
 RECEIVE SYMBOL /* message */ FROM SYMBOL /* machine */ error_clause action  {
@@ -2400,6 +2417,17 @@ SYMBOL {
 	DBG_PARSER << ", " << $3;
 	current_name_list.push_back($3);
 }
+;
+
+within_clause:
+WITHIN state_list {
+    $$ = new std::vector<std::string>(takeNameList());
+}
+;
+
+command_guard:
+WHEN predicate { $$ = $2; }
+| REQUIRES predicate { $$ = $2; }
 ;
 state_list:
 transition_state {

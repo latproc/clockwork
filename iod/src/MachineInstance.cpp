@@ -911,15 +911,26 @@ void MachineInstance::describe(std::ostream &out) {
         while (cmd_iter != state_machine->commands.end()) {
             const std::pair<std::string, MachineCommandTemplate *> &curr = *cmd_iter++;
             out << delim << curr.first;
-            const char *within_state = curr.second->getStateName().get();
-            if (within_state && *within_state) {
-                if (curr.second->switch_state) {
-                    out << " AUTO SWITCH to ";
+            if (curr.second->switch_state) {
+                const char *within_state = curr.second->getStateName().get();
+                if (within_state && *within_state) {
+                    out << " AUTO SWITCH to " << within_state;
                 }
-                else {
+            }
+            else {
+                const auto &states = curr.second->getWithinStates();
+                if (!states.empty()) {
                     out << " WITHIN ";
+                    for (size_t i = 0; i < states.size(); ++i) {
+                        if (i) {
+                            out << ", ";
+                        }
+                        out << states[i];
+                    }
                 }
-                out << within_state;
+                if (curr.second->getGuard() && curr.second->getGuard()->predicate) {
+                    out << " WHEN " << *curr.second->getGuard()->predicate;
+                }
             }
             delim = ", ";
         }
@@ -2427,10 +2438,7 @@ Action *MachineInstance::findMatchingCommand(const std::string &command_name) {
         }
         MachineCommand *cmd = curr.second;
         DBG_M_MESSAGING << _name << " checking command " << *cmd << "\n";
-        const char *cmd_state_name = cmd->getStateName().get();
-        if ((!cmd_state_name || !*cmd_state_name) // no WITHIN clause set
-            || cmd->autoSwitch()                  // uses a DURING to auto switch states (no WITHIN)
-            || (!cmd->autoSwitch() && current_state.getName() == cmd_state_name)) {
+        if (cmd->autoSwitch() || cmd->matches(this)) {
             return cmd->retain();
         }
     }
@@ -2486,16 +2494,11 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
             }
 #endif
             auto &handler = receive_handler_i->second;
-            if (strlen(handler->getStateName().get()) > 0) {
-                DBG_M_MESSAGING << "handler has state requirement " << handler->getStateName().get()
-                                << "\n";
-                if (current_state.getName() != handler->getStateName().get()) {
-                    receive_handler_i++;
-                    continue;
-                }
-            }
-            else {
-                DBG_M_MESSAGING << "no state requirement for " << receive_handler_i->first << "\n";
+            if (!handler->matches(this)) {
+                DBG_M_MESSAGING << "handler does not match current state/guard "
+                                << current_state.getName() << "\n";
+                receive_handler_i++;
+                continue;
             }
             if (response_required) {
                 prepareCompletionMessage(from, short_name);
@@ -2516,17 +2519,21 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
         } // no other alternatives
         std::map<Message, MachineCommand *>::iterator receive_handler_i =
             receives_functions.find(Message(short_name.c_str()));
-        if (receive_handler_i != receives_functions.end()) {
-            if (debug()) {
-                DBG_M_MESSAGING << " found event receive handler: " << (*receive_handler_i).first
-                                << "\n"
-                                << "handler: " << *((*receive_handler_i).second) << "\n";
-            }
-            if (response_required) {
-                prepareCompletionMessage(from, short_name);
-            }
+        while (receive_handler_i != receives_functions.end() &&
+               receive_handler_i->first == Message(short_name.c_str())) {
+            if (receive_handler_i->second->matches(this)) {
+                if (debug()) {
+                    DBG_M_MESSAGING << " found event receive handler: "
+                                    << (*receive_handler_i).first << "\n"
+                                    << "handler: " << *((*receive_handler_i).second) << "\n";
+                }
+                if (response_required) {
+                    prepareCompletionMessage(from, short_name);
+                }
 
-            return (*receive_handler_i).second->retain();
+                return (*receive_handler_i).second->retain();
+            }
+            ++receive_handler_i;
         }
     }
     if (response_required) {
