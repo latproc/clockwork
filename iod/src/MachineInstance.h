@@ -490,6 +490,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     static std::list<MachineInstance *> command_clocks;
     void registerCommandClockLocked();
     void refreshCommandClockCache();
+    // CLOCKED* update wrappers: copy IA props without HandleMessage.
+    // False → caller should sendMessageToReceiver as usual.
+    bool applyThinClockedUpdate(MachineInstance *dep);
 
     uint64_t cached_notify_period_ms;
     uint64_t cached_notify_phase_ms;

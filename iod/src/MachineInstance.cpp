@@ -2608,6 +2608,36 @@ void MachineInstance::notifyDependents() {
     }
 }
 
+bool MachineInstance::applyThinClockedUpdate(MachineInstance *dep) {
+    if (!dep || !dep->state_machine) {
+        return false;
+    }
+    const std::string &cls = dep->state_machine->name;
+    if (cls == "CLOCKEDANALOGINPUT" || cls == "CLOCKEDANALOGINPUTWITHSETTINGS") {
+        dep->setValue("IOTIME", getValue("IOTIME"));
+        dep->setValue("VALUE", getValue("ENG"));
+        dep->setValue("Velocity", getValue("Velocity"));
+        dep->setValue("Acceleration", getValue("Acceleration"));
+        return true;
+    }
+    if (cls == "CLOCKEDCOUTERINPUT") {
+        dep->setValue("IOTIME", getValue("IOTIME"));
+        dep->setValue("VALUE", getValue("VALUE"));
+        return true;
+    }
+    if (cls == "CLOCKEDCOUTER16BIT") {
+        int64_t raw = 0;
+        getValue("VALUE").asInteger(raw);
+        if (raw > 32767) {
+            raw -= 65536;
+        }
+        dep->setValue("IOTIME", getValue("IOTIME"));
+        dep->setValue("VALUE", Value(raw));
+        return true;
+    }
+    return false;
+}
+
 void MachineInstance::notifyCommandConsumers(const char *command_name,
                                              uint64_t notify_period_ms, bool continue_fanout) {
     // Only dependants that declare the command (RECEIVE/COMMAND handlers).
@@ -2670,7 +2700,9 @@ void MachineInstance::notifyCommandConsumers(const char *command_name,
             break;
         }
         DBG_M_MESSAGING << _name << " " << command_name << " -> " << dep->getName() << "\n";
-        sendMessageToReceiver(command_msg, dep, false);
+        if (strcmp(command_name, "update") != 0 || !applyThinClockedUpdate(dep)) {
+            sendMessageToReceiver(command_msg, dep, false);
+        }
         ++sent;
         ++idx;
         command_fanout_skip = idx;
