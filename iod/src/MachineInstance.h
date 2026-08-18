@@ -487,9 +487,11 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     void refreshCommandClockCache();
 
     uint64_t cached_notify_period_ms;
+    uint64_t cached_notify_phase_ms;
     std::string cached_command_name;
     MachineInstance *cached_clock_guard;
     bool command_clock_cache_valid;
+    size_t command_clock_index;
     int property_notify_defer;
     bool deferred_property_notify;
 

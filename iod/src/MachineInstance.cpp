@@ -880,9 +880,9 @@ MachineInstance::MachineInstance(InstanceType instance_type)
       is_active(false), current_value_holder(0), last_state_evaluation_time(0),
       stable_states_stats("StableState processing"), message_handling_stats("Message handling"),
       data(0), idle_time(0), next_poll(0), is_traceable(false), published(0), action_errors(0),
-      owner_channel(0), cache(0), cached_notify_period_ms(1000), cached_clock_guard(0),
-      command_clock_cache_valid(false), property_notify_defer(0),
-      deferred_property_notify(false), expected_authority(0) {
+      owner_channel(0), cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
+      cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
+      property_notify_defer(0), deferred_property_notify(false), expected_authority(0) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -918,9 +918,9 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
       is_active(false), current_value_holder(0), last_state_evaluation_time(0),
       stable_states_stats("StableState processing"), message_handling_stats("Message handling"),
       data(0), idle_time(0), is_traceable(false), published(0), action_errors(0), owner_channel(0),
-      cache(0), cached_notify_period_ms(1000), cached_clock_guard(0),
-      command_clock_cache_valid(false), property_notify_defer(0),
-      deferred_property_notify(false), expected_authority(0) {
+      cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
+      cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
+      property_notify_defer(0), deferred_property_notify(false), expected_authority(0) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -2665,6 +2665,7 @@ void MachineInstance::registerCommandClockLocked() {
             return;
         }
     }
+    command_clock_index = command_clocks.size();
     command_clocks.push_back(this);
 }
 
@@ -2686,6 +2687,23 @@ void MachineInstance::refreshCommandClockCache() {
     if (configured_command.kind == Value::t_string && !configured_command.sValue.empty()) {
         cached_command_name = configured_command.sValue;
     }
+    // Optional notify_phase (ms). Missing → stagger by list index so same-period
+    // clocks do not share a slot. Analog/COUNTER CommandClock callers stay phase 0.
+    if (properties.exists("notify_phase")) {
+        const Value &configured_phase = getValue("notify_phase");
+        if (configured_phase.kind == Value::t_integer && configured_phase.iValue >= 0) {
+            cached_notify_phase_ms = static_cast<uint64_t>(configured_phase.iValue);
+        }
+        else {
+            cached_notify_phase_ms = 0;
+        }
+    }
+    else if (cached_notify_period_ms > 0) {
+        cached_notify_phase_ms = static_cast<uint64_t>(command_clock_index % cached_notify_period_ms);
+    }
+    else {
+        cached_notify_phase_ms = 0;
+    }
     cached_clock_guard = lookup("Guard");
     command_clock_cache_valid = true;
 }
@@ -2703,6 +2721,7 @@ void MachineInstance::dispatchCommandClocks(uint64_t now_us) {
             clock->refreshCommandClockCache();
         }
         const uint64_t period_ms = clock->cached_notify_period_ms;
+        const uint64_t phase_ms = clock->cached_notify_phase_ms;
 
         // Local CW state is visible to DESCRIBE; also fail-closed on Guard while a
         // transition is queued or Guard becomes disabled/off/false.
@@ -2714,13 +2733,13 @@ void MachineInstance::dispatchCommandClocks(uint64_t now_us) {
             enabled = state && strcasecmp(state, "off") != 0 && strcasecmp(state, "false") != 0;
         }
 
-        if (!clock->command_clock.due(now_us, period_ms, enabled)) {
+        if (!clock->command_clock.due(now_us, period_ms, enabled, phase_ms)) {
             continue;
         }
         IOComponent::noteClockDue();
 
         DBG_MESSAGING << clock->getName() << " iod " << clock->cached_command_name
-                      << " notify_period=" << period_ms << "ms\n";
+                      << " notify_period=" << period_ms << "ms phase=" << phase_ms << "ms\n";
         clock->notifyCommandConsumers(clock->cached_command_name.c_str(), period_ms);
         IOComponent::noteClockSend();
     }
@@ -4876,7 +4895,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         return false;
     }
 
-    if (property == "notify_period" || property == "command") {
+    if (property == "notify_period" || property == "command" || property == "notify_phase") {
         command_clock_cache_valid = false;
     }
 
