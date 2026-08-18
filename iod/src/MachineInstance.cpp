@@ -2608,21 +2608,46 @@ void MachineInstance::notifyDependents() {
     }
 }
 
+// CLOCKED* wrappers: same silent property write as IA IOTIME (properties.add,
+// no per-field setValue). IOTIME always changes; using setValue here notified
+// CHANNEL + dependents four times per analog per period and starved HMI/mode.
+namespace {
+bool replaceIfChanged(MachineInstance *dep, const char *key, const Value &v) {
+    const Value &prev = dep->properties.lookup(key);
+    if (prev != SymbolTable::Null && prev.identical(v) && prev.kind == v.kind) {
+        return false;
+    }
+    dep->properties.add(key, v, SymbolTable::ST_REPLACE);
+    return true;
+}
+
+void publishThinValueIfChanged(MachineInstance *dep, const Value &v) {
+    if (!replaceIfChanged(dep, "VALUE", v)) {
+        return;
+    }
+    if (dep->published) {
+        Channel::sendPropertyChange(dep, "VALUE", v, 0);
+    }
+    dep->setNeedsCheck();
+    dep->notifyDependents();
+}
+} // namespace
+
 bool MachineInstance::applyThinClockedUpdate(MachineInstance *dep) {
     if (!dep || !dep->state_machine) {
         return false;
     }
     const std::string &cls = dep->state_machine->name;
     if (cls == "CLOCKEDANALOGINPUT" || cls == "CLOCKEDANALOGINPUTWITHSETTINGS") {
-        dep->setValue("IOTIME", getValue("IOTIME"));
-        dep->setValue("VALUE", getValue("ENG"));
-        dep->setValue("Velocity", getValue("Velocity"));
-        dep->setValue("Acceleration", getValue("Acceleration"));
+        replaceIfChanged(dep, "IOTIME", getValue("IOTIME"));
+        replaceIfChanged(dep, "Velocity", getValue("Velocity"));
+        replaceIfChanged(dep, "Acceleration", getValue("Acceleration"));
+        publishThinValueIfChanged(dep, getValue("ENG"));
         return true;
     }
     if (cls == "CLOCKEDCOUTERINPUT") {
-        dep->setValue("IOTIME", getValue("IOTIME"));
-        dep->setValue("VALUE", getValue("VALUE"));
+        replaceIfChanged(dep, "IOTIME", getValue("IOTIME"));
+        publishThinValueIfChanged(dep, getValue("VALUE"));
         return true;
     }
     if (cls == "CLOCKEDCOUTER16BIT") {
@@ -2631,8 +2656,8 @@ bool MachineInstance::applyThinClockedUpdate(MachineInstance *dep) {
         if (raw > 32767) {
             raw -= 65536;
         }
-        dep->setValue("IOTIME", getValue("IOTIME"));
-        dep->setValue("VALUE", Value(raw));
+        replaceIfChanged(dep, "IOTIME", getValue("IOTIME"));
+        publishThinValueIfChanged(dep, Value(raw));
         return true;
     }
     return false;
