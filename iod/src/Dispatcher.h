@@ -47,6 +47,8 @@ class Dispatcher {
     std::ostream &operator<<(std::ostream &out) const;
     void deliver(Package *p);
     void deliverZ(Package *p);
+    // Move queued packages onto the processing queue (processing thread).
+    void pumpToProcessQueue();
     void addReceiver(Receiver *r);
     void removeReceiver(Receiver *r);
     static Dispatcher *create(SharedThreadSafeQueue<Package*> &process_queue);

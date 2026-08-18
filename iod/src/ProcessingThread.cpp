@@ -477,6 +477,16 @@ bool ProcessingThread::is_pending(MachineInstance *m) {
     return pt->runnable.count(m) != 0;
 }
 
+void ProcessingThread::drainMessageQueue() {
+    Package *p = 0;
+    while (message_queue.try_dequeue(p)) {
+        if (p) {
+            handle_package(p);
+            delete p;
+        }
+    }
+}
+
 void ProcessingThread::handle_package(Package *p) {
 {
 #ifdef KEEPSTATS

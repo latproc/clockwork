@@ -1652,6 +1652,12 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
             int steps = 0;
             bool keep_pending = false;
             while (steps < 32) {
+                if (Dispatcher::instance()) {
+                    Dispatcher::instance()->pumpToProcessQueue();
+                }
+                if (ProcessingThread::instance()) {
+                    ProcessingThread::instance()->drainMessageQueue();
+                }
                 if (mi->executingCommand() || !mi->mail_queue.empty()) {
                     mi->idle();
                 }
@@ -3504,8 +3510,17 @@ void MachineInstance::sendMessageToReceiver(const Message &message, Receiver *r,
             expect_reply) { // allow the call to hang here, this will change when throw works TBD
             DBG_M_MESSAGING << _name << " message " << message.getText()
                             << " expect reply: " << expect_reply << "\n";
-            Package *p = new Package(this, r, message, expect_reply);
-            Dispatcher::instance()->deliver(p);
+            MachineInstance *dest = dynamic_cast<MachineInstance *>(r);
+            Channel *chn = dynamic_cast<Channel *>(r);
+            if (dest && !chn) {
+                dest->enqueue(Package(this, dest, message, expect_reply));
+                SharedWorkSet::instance()->add(dest);
+                ProcessingThread::activate(dest);
+            }
+            else {
+                Package *p = new Package(this, r, message, expect_reply);
+                Dispatcher::instance()->deliver(p);
+            }
         }
         else {
 #if 0

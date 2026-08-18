@@ -73,6 +73,7 @@ class ProcessingThread : public ClockworkProcessManager {
     static uint64_t programStartTime() { return instance()->program_start; }
 
     void handle_package(Package *p);
+    void drainMessageQueue();
 
     std::set<MachineInstance *>::iterator begin() { return runnable.begin(); }
     std::set<MachineInstance *>::iterator end() { return runnable.end(); }

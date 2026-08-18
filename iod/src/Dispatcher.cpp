@@ -160,6 +160,15 @@ void Dispatcher::deliver(Package *p) {
     package_available.notify_one();
 }
 
+void Dispatcher::pumpToProcessQueue() {
+    Package *p = 0;
+    while (to_deliver.try_pop_front(p)) {
+        if (p) {
+            process_queue.enqueue(p);
+        }
+    }
+}
+
 bool Dispatcher::wait() {
     if (finished || !to_deliver.is_empty() || !command_queue.is_empty()) {
         return true;

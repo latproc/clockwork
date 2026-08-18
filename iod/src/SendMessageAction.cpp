@@ -84,11 +84,17 @@ Action::Status SendMessageAction::run() {
                 msg_str = message.asString();
             }
             owner->sendMessageToReceiver(msg_str.c_str(), target_machine);
+            if (target_machine->hasMail() || target_machine->executingCommand()) {
+                target_machine->idle();
+            }
             if (target_machine->_type == "LIST" && target_machine->enabled()) {
                 for (unsigned int i = 0; i < target_machine->parameters.size(); ++i) {
                     MachineInstance *entry = target_machine->parameters[i].machine;
                     if (entry) {
                         owner->sendMessageToReceiver(msg_str.c_str(), entry);
+                        if (entry->hasMail() || entry->executingCommand()) {
+                            entry->idle();
+                        }
                     }
                 }
             }
@@ -98,6 +104,9 @@ Action::Status SendMessageAction::run() {
                     MachineInstance *entry = target_machine->locals[i].machine;
                     if (entry) {
                         owner->sendMessageToReceiver(msg_str.c_str(), entry);
+                        if (entry->hasMail() || entry->executingCommand()) {
+                            entry->idle();
+                        }
                     }
                 }
             }
