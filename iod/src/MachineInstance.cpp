@@ -1638,9 +1638,40 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
         // STALLSNAP breadcrumb only (no-op when DEBUG_STALLSNAP off).
         StallTrace::markMachine(mi->getName().c_str());
         if (!mi->executingCommand() && mi->mail_queue.empty()) {
-            // unless the machine is disabled leave the state check on the queue until it is stable
-            if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states ||
-                !mi->setStableState()) {
+            // List walkers (HMISCREEN, LIST calc, …) queue one SetState per
+            // check. Stopping after that one step leaves the rest for later
+            // loops (HEALTH age). Drain apply+recheck here so all ready
+            // work on this machine runs in this pass. TIMER WHENs still wait.
+            // Bound stops flip-flop livelock.
+            if (!mi->enabled() || !mi->getStateMachine() ||
+                !mi->getStateMachine()->allow_auto_states) {
+                std::lock_guard<std::mutex> lock(pending_state_change_mutex);
+                pending_state_change.erase(mi);
+                continue;
+            }
+            int steps = 0;
+            bool keep_pending = false;
+            while (steps < 32) {
+                if (mi->executingCommand() || !mi->mail_queue.empty()) {
+                    mi->idle();
+                }
+                if (mi->executingCommand() || !mi->mail_queue.empty()) {
+                    SharedWorkSet::instance()->add(mi);
+                    ProcessingThread::activate(mi);
+                    keep_pending = false;
+                    break;
+                }
+                if (!mi->setStableState()) {
+                    keep_pending = false;
+                    break;
+                }
+                ++steps;
+            }
+            if (steps >= 32) {
+                keep_pending = true;
+                ProcessingThread::activate(mi);
+            }
+            if (!keep_pending) {
                 std::lock_guard<std::mutex> lock(pending_state_change_mutex);
                 pending_state_change.erase(mi);
             }
