@@ -2720,7 +2720,11 @@ void MachineInstance::notifyCommandConsumers(const char *command_name,
                           << " stale pending age_us=" << pending_age_us
                           << " dropped=" << dropped << " re-send\n";
         }
-        if (sent >= 1) {
+        // Due tick: one dependant (do not stack calcAdjust). Continue
+        // poll: drain the rest in this call so every 1 ms sample is not
+        // a K=1 send from every pending IA/clock.
+        const size_t send_limit = continue_fanout ? static_cast<size_t>(-1) : 1;
+        if (sent >= send_limit) {
             more = true;
             break;
         }

@@ -234,7 +234,7 @@ TEST_F(CommandAcceptTest, FanoutSendsOneDependantPerCall) {
     EXPECT_TRUE(mi->hasCommandFanoutPending()) << "K=1 leaves the second dependant";
 
     mi->notifyCommandConsumers("ping", 100, true);
-    EXPECT_FALSE(mi->hasCommandFanoutPending()) << "second poll drains the remainder";
+    EXPECT_FALSE(mi->hasCommandFanoutPending()) << "continue poll drains all remainder";
 
     delete b;
     delete a;
