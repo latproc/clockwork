@@ -47,7 +47,10 @@
 #include <boost/thread/mutex.hpp>
 #include <mutex>
 #include <cassert>
+#include <cstdlib>
+#include <cstring>
 #include <dlfcn.h>
+#include <strings.h>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -2685,7 +2688,20 @@ void MachineInstance::notifyCommandConsumers(const char *command_name,
             continue;
         }
         uint64_t pending_age_us = 0;
-        if (dep->hasPending(command_msg, &pending_age_us)) {
+        const bool thin = thinReceiveEnabled();
+        if (thin) {
+            if (dep->hasThinReceivePending(command_msg, &pending_age_us)) {
+                if (pending_age_us < stale_us) {
+                    ++idx;
+                    continue;
+                }
+                const size_t dropped = dep->dropThinReceive(command_msg);
+                DBG_MESSAGING << _name << " " << command_name << " -> " << dep->getName()
+                              << " stale thin receive age_us=" << pending_age_us
+                              << " dropped=" << dropped << " re-queue\n";
+            }
+        }
+        else if (dep->hasPending(command_msg, &pending_age_us)) {
             if (pending_age_us < stale_us) {
                 ++idx;
                 continue;
@@ -2701,7 +2717,12 @@ void MachineInstance::notifyCommandConsumers(const char *command_name,
         }
         DBG_M_MESSAGING << _name << " " << command_name << " -> " << dep->getName() << "\n";
         if (strcmp(command_name, "update") != 0 || !applyThinClockedUpdate(dep)) {
-            sendMessageToReceiver(command_msg, dep, false);
+            if (thin) {
+                dep->enqueueThinReceive(this, command_msg);
+            }
+            else {
+                sendMessageToReceiver(command_msg, dep, false);
+            }
         }
         ++sent;
         ++idx;
@@ -2711,6 +2732,70 @@ void MachineInstance::notifyCommandConsumers(const char *command_name,
     if (!more) {
         command_fanout_skip = 0;
     }
+}
+
+bool MachineInstance::thinReceiveEnabled() {
+    const char *env = std::getenv("IOD_THIN_RECEIVE");
+    if (env && (env[0] == '1' || strcasecmp(env, "on") == 0 || strcasecmp(env, "true") == 0)) {
+        return true;
+    }
+    DebugExtra *dbg = DebugExtra::instance();
+    return dbg && LogState::instance()->includes(dbg->DEBUG_THIN_RECEIVE);
+}
+
+bool MachineInstance::hasThinReceivePending(const Message &msg, uint64_t *out_age_us) {
+    const uint64_t now = microsecs();
+    bool found = false;
+    uint64_t oldest_age = 0;
+    for (Action *act : active_actions) {
+        ThinReceiveAction *thin = dynamic_cast<ThinReceiveAction *>(act);
+        if (!thin || thin->message() != msg) {
+            continue;
+        }
+        const Action::Status st = thin->getStatus();
+        if (st == Action::Complete || st == Action::Failed) {
+            continue;
+        }
+        // Running / Suspended: never treat as stale (handler may be in flight).
+        uint64_t age = 0;
+        if (st == Action::New) {
+            const uint64_t enq = thin->enqueuedUs();
+            age = (now >= enq) ? (now - enq) : 0;
+        }
+        if (!found || age > oldest_age) {
+            oldest_age = age;
+        }
+        found = true;
+    }
+    if (found && out_age_us) {
+        *out_age_us = oldest_age;
+    }
+    return found;
+}
+
+size_t MachineInstance::dropThinReceive(const Message &msg) {
+    size_t dropped = 0;
+    std::list<Action *> doomed;
+    for (Action *act : active_actions) {
+        ThinReceiveAction *thin = dynamic_cast<ThinReceiveAction *>(act);
+        if (!thin || thin->message() != msg) {
+            continue;
+        }
+        if (thin->getStatus() != Action::New) {
+            continue;
+        }
+        doomed.push_back(thin);
+    }
+    for (Action *act : doomed) {
+        stop(act);
+        ++dropped;
+    }
+    return dropped;
+}
+
+void MachineInstance::enqueueThinReceive(Transmitter *from, const Message &msg) {
+    Action *a = new ThinReceiveAction(this, from, msg);
+    enqueueAction(a);
 }
 
 void MachineInstance::registerCommandClockLocked() {

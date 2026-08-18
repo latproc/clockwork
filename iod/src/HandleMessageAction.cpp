@@ -117,3 +117,68 @@ std::ostream &HandleMessageAction::operator<<(std::ostream &out) const {
     }
     return out;
 }
+
+ThinReceiveAction::ThinReceiveAction(MachineInstance *mi, Transmitter *from_, const Message &m)
+    : Action(mi), from(from_), message_(m), enqueued_us(microsecs()), handler(0) {}
+
+ThinReceiveAction::~ThinReceiveAction() {
+    if (handler) {
+        handler->release();
+    }
+}
+
+Action::Status ThinReceiveAction::run() {
+    owner->start(this);
+    suspend();
+    Status stat = owner->invokeReceive(message_, from, false, &handler);
+    if (handler) {
+        if (stat == Failed) {
+            status = Failed;
+            owner->stop(this);
+            return status;
+        }
+        else if (stat == Running || stat == Suspended) {
+            status = stat;
+            return status;
+        }
+        else {
+            if (stat == Complete) {
+                owner->stop(this);
+            }
+            status = stat;
+            return status;
+        }
+    }
+    status = Complete;
+    owner->stop(this);
+    return status;
+}
+
+Action::Status ThinReceiveAction::checkComplete() {
+    if (status == Complete || status == Failed) {
+        return status;
+    }
+    if (status == Suspended) {
+        resume();
+    }
+    if (handler && status == Running) {
+        (void)handler->complete();
+        status = handler->getStatus();
+    }
+    if (status == Complete || status == Failed) {
+        owner->stop(this);
+    }
+    return status;
+}
+
+std::ostream &ThinReceiveAction::operator<<(std::ostream &out) const {
+    out << "ThinReceive ";
+    message_.operator<<(out);
+    if (from) {
+        out << " from " << from->getName();
+    }
+    if (owner) {
+        out << " to " << owner->getName();
+    }
+    return out;
+}
