@@ -1400,6 +1400,14 @@ int64_t AnalogueInput::filter(int64_t raw) {
         }
     }
 
+    {
+        const char *cmd = ownerCommandName(notify_owner, "update");
+        for (MachineInstance *o : owners) {
+            if (o && o->hasCommandFanoutPending()) {
+                o->notifyCommandConsumers(cmd, period_ms, true);
+            }
+        }
+    }
     if (config->notify_clock.due(now_us, period_ms, allowed)) {
         if (notifyValueChanged(owners, raw_val, config->last_emitted_raw,
                                config->last_emitted_eng, config->startup_emitted)) {
@@ -1414,7 +1422,7 @@ int64_t AnalogueInput::filter(int64_t raw) {
                 eng_for_track = engFromRaw(raw_val, factor, base);
                 DBG_MESSAGING << o->getName() << " iod " << cmd
                               << " notify_period=" << period_ms << "ms (change)\n";
-                o->notifyCommandConsumers(cmd, period_ms);
+                o->notifyCommandConsumers(cmd, period_ms, false);
                 ++g_notify_send;
             }
             config->last_emitted_raw = raw_val;
@@ -1682,6 +1690,14 @@ int64_t Counter::filter(int64_t val) {
         }
     }
 
+    {
+        const char *cmd = ownerCommandName(notify_owner, "update");
+        for (MachineInstance *o : owners) {
+            if (o && o->hasCommandFanoutPending()) {
+                o->notifyCommandConsumers(cmd, period_ms, true);
+            }
+        }
+    }
     if (internals->notify_clock.due(now_us, period_ms, allowed)) {
         if (notifyValueChanged(owners, raw_val, internals->last_emitted_raw,
                                internals->last_emitted_eng, internals->startup_emitted)) {
@@ -1696,7 +1712,7 @@ int64_t Counter::filter(int64_t val) {
                 eng_for_track = engFromRaw(raw_val, factor, base);
                 DBG_MESSAGING << o->getName() << " iod " << cmd
                               << " notify_period=" << period_ms << "ms (change)\n";
-                o->notifyCommandConsumers(cmd, period_ms);
+                o->notifyCommandConsumers(cmd, period_ms, false);
                 ++g_notify_send;
             }
             internals->last_emitted_raw = raw_val;

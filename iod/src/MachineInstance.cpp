@@ -882,7 +882,8 @@ MachineInstance::MachineInstance(InstanceType instance_type)
       data(0), idle_time(0), next_poll(0), is_traceable(false), published(0), action_errors(0),
       owner_channel(0), cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
       cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
-      property_notify_defer(0), deferred_property_notify(false), expected_authority(0) {
+      command_fanout_skip(0), command_fanout_pending(false), property_notify_defer(0),
+      deferred_property_notify(false), expected_authority(0) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -920,7 +921,8 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
       data(0), idle_time(0), is_traceable(false), published(0), action_errors(0), owner_channel(0),
       cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
       cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
-      property_notify_defer(0), deferred_property_notify(false), expected_authority(0) {
+      command_fanout_skip(0), command_fanout_pending(false), property_notify_defer(0),
+      deferred_property_notify(false), expected_authority(0) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -2607,12 +2609,14 @@ void MachineInstance::notifyDependents() {
 }
 
 void MachineInstance::notifyCommandConsumers(const char *command_name,
-                                             uint64_t notify_period_ms) {
+                                             uint64_t notify_period_ms, bool continue_fanout) {
     // Only dependants that declare the command (RECEIVE/COMMAND handlers).
     // Same interest filter idea as CHANNEL "MONITORS MACHINES LINKED TO …".
     // Per dependant: at most one matching command in flight. Fresh pending is
     // coalesced; stale pending is dropped and replaced so a stuck queue cannot
     // mute COMMANDCLOCK forever.
+    // K=1: at most one eligible send per call. Remainder is drained on the
+    // next poll via continue_fanout (not the next period).
     if (!command_name || !*command_name) {
         command_name = "update";
     }
@@ -2624,30 +2628,56 @@ void MachineInstance::notifyCommandConsumers(const char *command_name,
     if (stale_us < 50000ULL) {
         stale_us = 50000ULL;
     }
+    if (!continue_fanout) {
+        command_fanout_skip = 0;
+        command_fanout_pending = false;
+    }
     Message command_msg(command_name);
+    size_t idx = 0;
+    size_t sent = 0;
+    bool more = false;
+    const size_t start = command_fanout_skip;
     for (MachineInstance *dep : depends) {
+        if (idx < start) {
+            ++idx;
+            continue;
+        }
         if (!dep || dep == this || !dep->enabled()) {
+            ++idx;
             continue;
         }
         if (dep->receives_functions.find(command_msg) == dep->receives_functions.end()) {
+            ++idx;
             continue;
         }
-        // Skip if every WITHIN/WHEN fails. Unrestricted fallback still sends.
         if (!dep->acceptsCommandInCurrentState(command_name)) {
+            ++idx;
             continue;
         }
         uint64_t pending_age_us = 0;
         if (dep->hasPending(command_msg, &pending_age_us)) {
             if (pending_age_us < stale_us) {
-                continue; // one in flight, still fresh
+                ++idx;
+                continue;
             }
             const size_t dropped = dep->dropPending(command_msg);
             DBG_MESSAGING << _name << " " << command_name << " -> " << dep->getName()
                           << " stale pending age_us=" << pending_age_us
                           << " dropped=" << dropped << " re-send\n";
         }
+        if (sent >= 1) {
+            more = true;
+            break;
+        }
         DBG_M_MESSAGING << _name << " " << command_name << " -> " << dep->getName() << "\n";
         sendMessageToReceiver(command_msg, dep, false);
+        ++sent;
+        ++idx;
+        command_fanout_skip = idx;
+    }
+    command_fanout_pending = more;
+    if (!more) {
+        command_fanout_skip = 0;
     }
 }
 
@@ -2733,6 +2763,11 @@ void MachineInstance::dispatchCommandClocks(uint64_t now_us) {
             enabled = state && strcasecmp(state, "off") != 0 && strcasecmp(state, "false") != 0;
         }
 
+        if (clock->hasCommandFanoutPending()) {
+            clock->notifyCommandConsumers(clock->cached_command_name.c_str(), period_ms, true);
+            IOComponent::noteClockSend();
+        }
+
         if (!clock->command_clock.due(now_us, period_ms, enabled, phase_ms)) {
             continue;
         }
@@ -2740,7 +2775,7 @@ void MachineInstance::dispatchCommandClocks(uint64_t now_us) {
 
         DBG_MESSAGING << clock->getName() << " iod " << clock->cached_command_name
                       << " notify_period=" << period_ms << "ms phase=" << phase_ms << "ms\n";
-        clock->notifyCommandConsumers(clock->cached_command_name.c_str(), period_ms);
+        clock->notifyCommandConsumers(clock->cached_command_name.c_str(), period_ms, false);
         IOComponent::noteClockSend();
     }
 }

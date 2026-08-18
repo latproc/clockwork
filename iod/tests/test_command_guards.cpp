@@ -214,6 +214,31 @@ TEST_F(CommandAcceptTest, UnknownCommandIsNotAccepted) {
     EXPECT_FALSE(mi->acceptsCommandInCurrentState(nullptr));
 }
 
+TEST_F(CommandAcceptTest, FanoutSendsOneDependantPerCall) {
+    MachineClass *dep_cls = new MachineClass("FanoutDep");
+    dep_cls->addState("idle");
+    dep_cls->receives.insert(std::make_pair(Message("ping"), makeHandler("ping", {})));
+
+    MachineInstance *a = MachineInstanceFactory::create("fanout_a", "FanoutDep");
+    a->setStateMachine(dep_cls);
+    a->enable();
+    MachineInstance *b = MachineInstanceFactory::create("fanout_b", "FanoutDep");
+    b->setStateMachine(dep_cls);
+    b->enable();
+    mi->addDependancy(a);
+    mi->addDependancy(b);
+    mi->enable();
+
+    mi->notifyCommandConsumers("ping", 100, false);
+    EXPECT_TRUE(mi->hasCommandFanoutPending()) << "K=1 leaves the second dependant";
+
+    mi->notifyCommandConsumers("ping", 100, true);
+    EXPECT_FALSE(mi->hasCommandFanoutPending()) << "second poll drains the remainder";
+
+    delete b;
+    delete a;
+}
+
 TEST_F(CommandAcceptTest, RegistersOnlyCommandClockInstances) {
     const size_t before = MachineInstance::commandClockCount();
     MachineInstance *other = MachineInstanceFactory::create("clk_other", "Undefined");

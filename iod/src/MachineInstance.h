@@ -248,7 +248,12 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
      * command is already in mail and younger than 2×period, min 50 ms). Stale
      * pending is dropped and one replacement is enqueued (per dependant).
      */
-    void notifyCommandConsumers(const char *command_name, uint64_t notify_period_ms = 100);
+    // continue_fanout: drain the leftover dependants from the last due
+    // (next poll). false starts a new wave from the first dependant.
+    // At most one eligible dependant is sent per call (K=1).
+    void notifyCommandConsumers(const char *command_name, uint64_t notify_period_ms = 100,
+                                bool continue_fanout = false);
+    bool hasCommandFanoutPending() const { return command_fanout_pending; }
     // True if a RECEIVE/COMMAND handler for command_name applies now
     // (WITHIN list, WHEN/REQUIRES, unrestricted fallback). Same rules as
     // tests/unit/command_guards.cw. No handler → false.
@@ -492,6 +497,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     MachineInstance *cached_clock_guard;
     bool command_clock_cache_valid;
     size_t command_clock_index;
+    size_t command_fanout_skip;
+    bool command_fanout_pending;
     int property_notify_defer;
     bool deferred_property_notify;
 
