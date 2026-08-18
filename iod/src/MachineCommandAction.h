@@ -90,6 +90,8 @@ class MachineCommand : public Action {
     void addAction(Action *a, ActionParameterList *params);
     Status checkAction(Action *a, Status stat);
     Status runActions();
+    bool canRunFast() const;
+    bool runFastBody();
     Status run();
     Status checkComplete();
     void reset();
@@ -115,6 +117,8 @@ class MachineCommand : public Action {
     Condition *guard;
     Trigger *timeout_trigger;
     bool switch_state;
+    bool fast_tried;
+    bool fast_ok;
 };
 
 #endif

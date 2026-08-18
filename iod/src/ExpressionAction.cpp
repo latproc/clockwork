@@ -19,6 +19,7 @@
 */
 
 #include "ExpressionAction.h"
+#include "ExpressionPcode.h"
 #include "Logger.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
@@ -62,13 +63,46 @@ ExpressionAction::ExpressionAction(MachineInstance *mi, ExpressionActionTemplate
     }
 }
 
+ExpressionAction::~ExpressionAction() { delete pcode; }
+
+bool ExpressionAction::applyAssign() {
+    if (!expr || !owner) {
+        return false;
+    }
+    if (ExpressionPcode::fastPathEnabled()) {
+        if (!pcode_tried) {
+            pcode = ExpressionPcode::tryCompile(expr);
+            pcode_tried = true;
+        }
+        if (pcode) {
+            owner->setValue(lhs.get(), pcode->run(owner));
+            return true;
+        }
+    }
+    owner->setValue(lhs.get(), expr->evaluate(owner));
+    return true;
+}
+
 Action::Status ExpressionAction::run() {
     owner->start(this);
     status = Running;
     if (expr) {
-        owner->setValue(lhs.get(), expr->evaluate(owner));
+        if (ExpressionPcode::fastPathEnabled()) {
+            if (!pcode_tried) {
+                pcode = ExpressionPcode::tryCompile(expr);
+                pcode_tried = true;
+            }
+            if (pcode) {
+                owner->setValue(lhs.get(), pcode->run(owner));
+            }
+            else {
+                owner->setValue(lhs.get(), expr->evaluate(owner));
+            }
+        }
+        else {
+            owner->setValue(lhs.get(), expr->evaluate(owner));
+        }
         status = Complete;
-        owner->setNeedsCheck();
         owner->stop(this);
         return status;
     }

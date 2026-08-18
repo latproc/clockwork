@@ -32,3 +32,15 @@ TEST(CommandClockTest, DisabledGroupsWaitForTheNextBoundary) {
     EXPECT_FALSE(clock.due(199'999, 100, true));
     EXPECT_TRUE(clock.due(200'000, 100, true));
 }
+
+TEST(CommandClockTest, WouldBeDueDoesNotAdvanceSlot) {
+    CommandClock clock;
+
+    EXPECT_FALSE(clock.wouldBeDue(25'000, 50));
+    EXPECT_FALSE(clock.due(25'000, 50, true));
+    EXPECT_FALSE(clock.wouldBeDue(49'999, 50));
+    EXPECT_TRUE(clock.wouldBeDue(50'000, 50));
+    EXPECT_TRUE(clock.wouldBeDue(50'000, 50));
+    EXPECT_TRUE(clock.due(50'000, 50, true));
+    EXPECT_FALSE(clock.wouldBeDue(50'000, 50));
+}

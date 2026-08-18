@@ -34,6 +34,21 @@ class CommandClock {
         return true;
     }
 
+    // True if due() would fire now. Does not arm or advance the slot.
+    bool wouldBeDue(uint64_t now_us, uint64_t period_ms) const {
+        if (!seen_ || period_us_ == 0) {
+            return false;
+        }
+        if (period_ms == 0) {
+            period_ms = 1000;
+        }
+        const uint64_t period_us = period_ms * 1000ULL;
+        if (period_us != period_us_) {
+            return false;
+        }
+        return (now_us / period_us) != slot_;
+    }
+
   private:
     uint64_t period_us_ = 0;
     uint64_t slot_ = 0;

@@ -49,6 +49,10 @@ class DebugExtra {
     int DEBUG_PROCSNAP = 0;
     /** Periodic allocator / queue memory snapshot (MEMSNAPSHOT lines). Default off. */
     int DEBUG_MEMSNAPSHOT = 0;
+    /** Processing stall trace (STALLSNAP). Default off; see StallTrace.h. */
+    int DEBUG_STALLSNAP = 0;
+    /** Optional pcode + deferred notify + fast command body. Default off. */
+    int DEBUG_EXPR_FAST = 0;
 
   private:
     DebugExtra();
@@ -76,6 +80,8 @@ class DebugExtra {
 #define DBG_ETHERCAT_PACKETS MSG(DebugExtra::instance()->DEBUG_ETHERCAT_PACKETS)
 #define DBG_PROCSNAP MSG(DebugExtra::instance()->DEBUG_PROCSNAP)
 #define DBG_MEMSNAPSHOT MSG(DebugExtra::instance()->DEBUG_MEMSNAPSHOT)
+#define DBG_STALLSNAP MSG(DebugExtra::instance()->DEBUG_STALLSNAP)
+#define DBG_EXPR_FAST MSG(DebugExtra::instance()->DEBUG_EXPR_FAST)
 
 #define DBG_M_PARSER M_MSG(DebugExtra::instance()->DEBUG_PARSER, this)
 #define DBG_M_PREDICATES M_MSG(DebugExtra::instance()->DEBUG_PREDICATES, this)

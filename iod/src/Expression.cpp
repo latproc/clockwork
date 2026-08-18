@@ -19,6 +19,7 @@
 */
 
 #include "Expression.h"
+#include "ExpressionPcode.h"
 #include "DebugExtra.h"
 #include "ExportState.h"
 #include "FireTriggerAction.h"
@@ -194,7 +195,10 @@ static bool stringEndsWith(const std::string &str, const std::string &subs) {
     return false;
 }
 
-Condition::~Condition() { delete predicate; }
+Condition::~Condition() {
+    delete predicate;
+    delete pcode;
+}
 
 Predicate::Predicate(Value *v)
     : left_p(0), op(opNone), right_p(0), entry(*v), mi(0), dyn_value(0), cached_entry(0),
@@ -852,13 +856,14 @@ void Predicate::flushCache() {
         if (right_p) right_p->flushCache();*/
 }
 
-Condition::Condition(Predicate *p) : predicate(0) {
+Condition::Condition(Predicate *p) : predicate(0), pcode(0), pcode_tried(false) {
     if (p) {
         predicate = new Predicate(*p);
     }
 }
 
-Condition::Condition(const Condition &other) : predicate(0) {
+Condition::Condition(const Condition &other)
+    : predicate(0), pcode(0), pcode_tried(false) {
     if (other.predicate) {
         predicate = new Predicate(*(other.predicate));
     }
@@ -867,7 +872,10 @@ Condition::Condition(const Condition &other) : predicate(0) {
 Condition &Condition::operator=(const Condition &other) {
     if (this == &other) { return *this; }
     delete predicate;
+    delete pcode;
     predicate = nullptr;
+    pcode = nullptr;
+    pcode_tried = false;
     if (other.predicate) {
         predicate = new Predicate(*(other.predicate));
     }
@@ -1453,6 +1461,7 @@ Value Predicate::evaluate(MachineInstance *m) {
 
 bool Condition::operator()(MachineInstance *m) {
     if (predicate) {
+        // Never pcode Condition: IS/state symbols are not property loads.
         predicate->stack.stack.clear();
         if (predicate->stack.stack.empty()) {
             if (!prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation)) {

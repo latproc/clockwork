@@ -280,6 +280,7 @@ set (Clockwork_Headers
     src/ExecuteMessageAction.h
     src/ExportState.h
     src/Expression.h
+    src/ExpressionPcode.h
     src/ExpressionAction.h
     src/filtering.h
     src/FireTriggerAction.h
@@ -390,6 +391,7 @@ set (Clockwork_SRCS
     src/ExecuteMessageAction.cpp
     src/ExportState.cpp
     src/Expression.cpp
+    src/ExpressionPcode.cpp
     src/ExpressionAction.cpp
     src/filtering.cpp
     src/FireTriggerAction.cpp
@@ -422,6 +424,7 @@ set (Clockwork_SRCS
     src/process_data.cpp
     src/process.cpp
     src/ProcessingThread.cpp
+    src/StallTrace.cpp
     src/RateEstimatorInstance.cpp
     src/read_file.c
     src/ResetAction.cpp

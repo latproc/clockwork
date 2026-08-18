@@ -116,6 +116,21 @@ class IOComponent : public Transmitter {
        value is unchanged. bitlen==1 (POINT) and multi-bit inputs both use this. */
     void publishSampleTime(uint64_t sample_clock, bool publish_raw = false, int64_t raw = 0);
     static void stampAllInputSampleTimes(uint64_t sample_clock);
+    struct SampleStats {
+        uint64_t polls = 0;
+        uint64_t filter_skip = 0;
+        uint64_t filter_run = 0;
+        uint64_t notify_send = 0;
+        uint64_t clock_visits = 0;
+        uint64_t clock_due = 0;
+        uint64_t clock_send = 0;
+        size_t command_clocks = 0;
+        size_t regular_polls = 0;
+    };
+    static SampleStats sampleStats();
+    static void noteClockVisit();
+    static void noteClockDue();
+    static void noteClockSend();
     static void setupIOMap();
     static int getMinIOOffset();
     static int getMaxIOOffset();

@@ -38,8 +38,23 @@
 #endif
 #include "ProcessingThread.h"
 #include "buffering.c"
+#include <atomic>
 
 #define VERBOSE_DEBUG 0
+
+namespace {
+std::atomic<uint64_t> g_sample_polls{0};
+std::atomic<uint64_t> g_filter_skip{0};
+std::atomic<uint64_t> g_filter_run{0};
+std::atomic<uint64_t> g_notify_send{0};
+std::atomic<uint64_t> g_clock_visits{0};
+std::atomic<uint64_t> g_clock_due{0};
+std::atomic<uint64_t> g_clock_send{0};
+} // namespace
+
+void IOComponent::noteClockVisit() { ++g_clock_visits; }
+void IOComponent::noteClockDue() { ++g_clock_due; }
+void IOComponent::noteClockSend() { ++g_clock_send; }
 //static void MEMCHECK() { char *x = new char[12358]; memset(x,0,12358); delete[] x; }
 
 /* byte swapping macros using either custom code or the network byte order std functions */
@@ -102,6 +117,20 @@ IOComponent::HardwareState IOComponent::hardware_state = s_hardware_preinit;
 /* these items define a process for polling certain IOComponents on a regular basis */
 
 std::set<IOComponent *> regular_polls;
+
+IOComponent::SampleStats IOComponent::sampleStats() {
+    SampleStats s;
+    s.polls = g_sample_polls.load();
+    s.filter_skip = g_filter_skip.load();
+    s.filter_run = g_filter_run.load();
+    s.notify_send = g_notify_send.load();
+    s.clock_visits = g_clock_visits.load();
+    s.clock_due = g_clock_due.load();
+    s.clock_send = g_clock_send.load();
+    s.command_clocks = MachineInstance::commandClockCount();
+    s.regular_polls = regular_polls.size();
+    return s;
+}
 
 static uint64_t last_sample = 0; // retains a timestamp for the last sample
 
@@ -846,6 +875,28 @@ double engFromRaw(int64_t raw, double factor, double base) {
     return static_cast<double>(raw) * factor + base;
 }
 
+void replaceIntIfChanged(MachineInstance *o, const char *key, int64_t val) {
+    if (!o) {
+        return;
+    }
+    const Value &cur = o->properties.lookup(key);
+    if (cur.kind == Value::t_integer && cur.iValue == val) {
+        return;
+    }
+    o->properties.add(key, val, SymbolTable::ST_REPLACE);
+}
+
+void replaceFloatIfChanged(MachineInstance *o, const char *key, double val) {
+    if (!o) {
+        return;
+    }
+    const Value &cur = o->properties.lookup(key);
+    if (cur.kind == Value::t_float && cur.fValue == val) {
+        return;
+    }
+    o->properties.add(key, val, SymbolTable::ST_REPLACE);
+}
+
 // First emit, or eng/raw moved past owner window (max-rate limited by notify_period).
 bool notifyValueChanged(const std::list<MachineInstance *> &owners, int64_t raw_val,
                         int64_t last_raw, double last_eng, bool startup_done) {
@@ -1242,6 +1293,7 @@ int64_t AnalogueInput::filter(int64_t raw) {
     /*  Plugins (and CW) need IOTIME/raw on every EtherCAT sample, even when the
         filtered VALUE is unchanged. properties.add does not notify dependents. */
     publishSampleTime(read_time, true, raw);
+    ++g_sample_polls;
 
     // Lazy rebind: setupProperties often runs before Settings machine properties
     // / parameter links are ready (filter_type stayed null → default average).
@@ -1258,6 +1310,15 @@ int64_t AnalogueInput::filter(int64_t raw) {
     // Types 1/2 keep throttle + optional tolerance on last_sent.
     const bool filter_due =
         raw_mode || (config->last_time == 0) || (now_us - config->last_time >= filter_us);
+
+    MachineInstance *notify_owner = owners.empty() ? nullptr : owners.front();
+    const uint64_t period_ms = ownerNotifyPeriodMs(notify_owner);
+    const bool notify_due = config->notify_clock.wouldBeDue(now_us, period_ms);
+    if (!filter_due && !notify_due && config->startup_emitted) {
+        ++g_filter_skip;
+        return static_cast<int64_t>(config->last_sent);
+    }
+    ++g_filter_run;
 
     if (filter_due) {
         if (config->property_changed) {
@@ -1324,26 +1385,21 @@ int64_t AnalogueInput::filter(int64_t raw) {
             double factor = 1.0, base = 0.0, window = 0.0;
             readScaleOptions(o, factor, base, window);
             const double eng = engFromRaw(raw_val, factor, base);
-            o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
-            o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
-            o->properties.add("DurationTolerance", config->rate_len, SymbolTable::ST_REPLACE);
+            replaceIntIfChanged(o, "VALUE", raw_val);
+            replaceFloatIfChanged(o, "ENG", eng);
+            replaceIntIfChanged(o, "DurationTolerance", config->rate_len);
             if (*config->calc_stddev) {
-                o->properties.add("stddev", bufferStddev(config->positions, 5),
-                                  SymbolTable::ST_REPLACE);
+                replaceFloatIfChanged(o, "stddev", bufferStddev(config->positions, 5));
             }
             if (*config->calc_dt) {
-                o->properties.add("Velocity", config->speed * config->speed_scale,
-                                  SymbolTable::ST_REPLACE);
+                replaceFloatIfChanged(o, "Velocity", config->speed * config->speed_scale);
             }
             if (*config->calc_d2t) {
-                o->properties.add("Acceleration", config->accel * config->accel_scale,
-                                  SymbolTable::ST_REPLACE);
+                replaceFloatIfChanged(o, "Acceleration", config->accel * config->accel_scale);
             }
         }
     }
 
-    MachineInstance *notify_owner = owners.empty() ? nullptr : owners.front();
-    const uint64_t period_ms = ownerNotifyPeriodMs(notify_owner);
     if (config->notify_clock.due(now_us, period_ms, allowed)) {
         if (notifyValueChanged(owners, raw_val, config->last_emitted_raw,
                                config->last_emitted_eng, config->startup_emitted)) {
@@ -1359,6 +1415,7 @@ int64_t AnalogueInput::filter(int64_t raw) {
                 DBG_MESSAGING << o->getName() << " iod " << cmd
                               << " notify_period=" << period_ms << "ms (change)\n";
                 o->notifyCommandConsumers(cmd, period_ms);
+                ++g_notify_send;
             }
             config->last_emitted_raw = raw_val;
             config->last_emitted_eng = eng_for_track;
@@ -1564,12 +1621,22 @@ void Counter::setupProperties(MachineInstance *m) {
 
 int64_t Counter::filter(int64_t val) {
     publishSampleTime(read_time);
+    ++g_sample_polls;
 
     // Wall-clock periods only (see AnalogueInput::filter).
     const uint64_t filter_us = filterPeriodUs(internals->throttle);
     const uint64_t now_us = microsecs();
     const bool filter_due =
         (internals->last_time == 0) || (now_us - internals->last_time >= filter_us);
+
+    MachineInstance *notify_owner = owners.empty() ? nullptr : owners.front();
+    const uint64_t period_ms = ownerNotifyPeriodMs(notify_owner);
+    const bool notify_due = internals->notify_clock.wouldBeDue(now_us, period_ms);
+    if (!filter_due && !notify_due && internals->startup_emitted) {
+        ++g_filter_skip;
+        return internals->last_sent;
+    }
+    ++g_filter_run;
 
     if (filter_due) {
         double scaled_val = (double)val / (double)*internals->input_scale;
@@ -1605,18 +1672,16 @@ int64_t Counter::filter(int64_t val) {
             double factor = 1.0, base = 0.0, window = 0.0;
             readScaleOptions(o, factor, base, window);
             const double eng = engFromRaw(raw_val, factor, base);
-            o->properties.add("VALUE", raw_val, SymbolTable::ST_REPLACE);
-            o->properties.add("Position", raw_val, SymbolTable::ST_REPLACE);
-            o->properties.add("ENG", eng, SymbolTable::ST_REPLACE);
-            o->properties.add("DurationTolerance", static_cast<uint64_t>(internals->rate_len),
-                              SymbolTable::ST_REPLACE);
-            o->properties.add("Velocity", internals->speeds.average(internals->speeds.length()),
-                              SymbolTable::ST_REPLACE);
+            replaceIntIfChanged(o, "VALUE", raw_val);
+            replaceIntIfChanged(o, "Position", raw_val);
+            replaceFloatIfChanged(o, "ENG", eng);
+            replaceIntIfChanged(o, "DurationTolerance",
+                                static_cast<int64_t>(internals->rate_len));
+            replaceFloatIfChanged(o, "Velocity",
+                                  internals->speeds.average(internals->speeds.length()));
         }
     }
 
-    MachineInstance *notify_owner = owners.empty() ? nullptr : owners.front();
-    const uint64_t period_ms = ownerNotifyPeriodMs(notify_owner);
     if (internals->notify_clock.due(now_us, period_ms, allowed)) {
         if (notifyValueChanged(owners, raw_val, internals->last_emitted_raw,
                                internals->last_emitted_eng, internals->startup_emitted)) {
@@ -1632,6 +1697,7 @@ int64_t Counter::filter(int64_t val) {
                 DBG_MESSAGING << o->getName() << " iod " << cmd
                               << " notify_period=" << period_ms << "ms (change)\n";
                 o->notifyCommandConsumers(cmd, period_ms);
+                ++g_notify_send;
             }
             internals->last_emitted_raw = raw_val;
             internals->last_emitted_eng = eng_for_track;

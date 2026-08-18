@@ -21,6 +21,9 @@
 #include "MachineCommandAction.h"
 #include "AbortAction.h"
 #include "DebugExtra.h"
+#include "ExpressionAction.h"
+#include "ExpressionPcode.h"
+#include "IfCommandAction.h"
 #include "IOComponent.h"
 #include "Logger.h"
 #include "MachineInstance.h"
@@ -135,7 +138,7 @@ MachineCommand::MachineCommand(MachineInstance *mi, MachineCommandTemplate *mct)
     : Action(mi), last_step(0), current_step(0), command_name(mct->command_name),
       state_name(mct->getStateName()), within_states(mct->getWithinStates()),
       guard(mct->getGuard() ? new Condition(*mct->getGuard()) : 0), timeout_trigger(0),
-      switch_state(mct->switch_state) {
+      switch_state(mct->switch_state), fast_tried(false), fast_ok(false) {
     BOOST_FOREACH (ActionTemplate *t, mct->action_templates) {
         //DBG_M_ACTIONS << "copying action " << (*t) << " for machine " << mi->_name << "\n";
         actions.push_back(t->factory(mi));
@@ -217,6 +220,71 @@ bool MachineCommand::matches(MachineInstance *mi) const {
 }
 
 Action::Status MachineCommand::checkAction(Action *a, Action::Status stat) { return stat; }
+
+bool MachineCommand::canRunFast() const {
+    for (size_t i = 0; i < actions.size(); ++i) {
+        Action *a = actions[i];
+        if (dynamic_cast<ExpressionAction *>(a)) {
+            ExpressionAction *ea = static_cast<ExpressionAction *>(a);
+            if (!ea->expr) {
+                return false;
+            }
+            continue;
+        }
+        if (IfCommandAction *ia = dynamic_cast<IfCommandAction *>(a)) {
+            if (!ia->command || !ia->command->canRunFast()) {
+                return false;
+            }
+            continue;
+        }
+        if (IfElseCommandAction *ie = dynamic_cast<IfElseCommandAction *>(a)) {
+            if (!ie->command || !ie->command->canRunFast()) {
+                return false;
+            }
+            if (ie->else_command && !ie->else_command->canRunFast()) {
+                return false;
+            }
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+bool MachineCommand::runFastBody() {
+    for (size_t i = 0; i < actions.size(); ++i) {
+        Action *a = actions[i];
+        if (ExpressionAction *ea = dynamic_cast<ExpressionAction *>(a)) {
+            if (!ea->applyAssign()) {
+                return false;
+            }
+            continue;
+        }
+        if (IfCommandAction *ia = dynamic_cast<IfCommandAction *>(a)) {
+            if (ia->condition(owner)) {
+                if (!ia->command->runFastBody()) {
+                    return false;
+                }
+            }
+            continue;
+        }
+        if (IfElseCommandAction *ie = dynamic_cast<IfElseCommandAction *>(a)) {
+            if (ie->condition(owner)) {
+                if (!ie->command->runFastBody()) {
+                    return false;
+                }
+            }
+            else if (ie->else_command) {
+                if (!ie->else_command->runFastBody()) {
+                    return false;
+                }
+            }
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
 
 Action::Status MachineCommand::runActions() {
     while (current_step < actions.size()) {
@@ -328,8 +396,26 @@ Action::Status MachineCommand::run() {
         return status; // no steps to run
     }
 
-    // attempt to run commands until one `blocks' on a timer
-    Action::Status stat = runActions();
+    const bool expr_fast = ExpressionPcode::fastPathEnabled();
+    if (expr_fast) {
+        owner->beginDeferredPropertyNotify();
+        if (!fast_tried) {
+            fast_ok = canRunFast();
+            fast_tried = true;
+        }
+    }
+    Action::Status stat = Complete;
+    if (expr_fast && fast_ok) {
+        if (!runFastBody()) {
+            stat = Failed;
+        }
+    }
+    else {
+        stat = runActions();
+    }
+    if (expr_fast) {
+        owner->endDeferredPropertyNotify();
+    }
     if (stat == Failed) {
         std::stringstream ss;
         ss << owner->fullName() << ": " << command_name.get();

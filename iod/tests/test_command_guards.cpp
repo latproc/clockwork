@@ -214,4 +214,16 @@ TEST_F(CommandAcceptTest, UnknownCommandIsNotAccepted) {
     EXPECT_FALSE(mi->acceptsCommandInCurrentState(nullptr));
 }
 
+TEST_F(CommandAcceptTest, RegistersOnlyCommandClockInstances) {
+    const size_t before = MachineInstance::commandClockCount();
+    MachineInstance *other = MachineInstanceFactory::create("clk_other", "Undefined");
+    EXPECT_EQ(MachineInstance::commandClockCount(), before);
+    MachineInstance *clock = MachineInstanceFactory::create("clk_index", "COMMANDCLOCK");
+    EXPECT_EQ(MachineInstance::commandClockCount(), before + 1);
+    delete clock;
+    EXPECT_EQ(MachineInstance::commandClockCount(), before);
+    delete other;
+    EXPECT_EQ(MachineInstance::commandClockCount(), before);
+}
+
 } // namespace

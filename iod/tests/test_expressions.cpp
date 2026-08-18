@@ -317,6 +317,48 @@ TEST_F(EvaluatorTest, assigns_null_value_if_key_not_found_and_no_default) {
 }
 
 
+#include "ExpressionPcode.h"
+
+TEST_F(EvaluatorTest, pcode_matches_eval_pid_style_math) {
+    MachineInstance *scope = MachineInstanceFactory::create("pcode_pid", "FLAG");
+    scope->setValue("target", 100.0);
+    scope->setValue("meas", 80.0);
+    scope->setValue("dt", 0.01);
+    scope->setValue("Kp", 2.0);
+    Evaluator eval;
+    Predicate pred(new Predicate(new Predicate("target"), opMinus, new Predicate("meas")), opTimes,
+                   new Predicate("Kp"));
+    Value interp = eval.evaluate(&pred, scope);
+    ExpressionPcode *code = ExpressionPcode::tryCompile(&pred);
+    ASSERT_TRUE(code != 0);
+    Value fast = code->run(scope);
+    EXPECT_EQ(interp, fast);
+    delete code;
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, pcode_matches_eval_cast_and_compare) {
+    MachineInstance *scope = MachineInstanceFactory::create("pcode_cast", "FLAG");
+    scope->setValue("raw", 10);
+    Evaluator eval;
+    Predicate *asf = new Predicate(0, opFloat, new Predicate("raw"));
+    Predicate pred(asf, opGT, new Predicate(Value(5.0)));
+    Value interp = eval.evaluate(&pred, scope);
+    ExpressionPcode *code = ExpressionPcode::tryCompile(&pred);
+    ASSERT_TRUE(code != 0);
+    EXPECT_EQ(interp, code->run(scope));
+    delete code;
+    delete scope;
+}
+
+TEST_F(EvaluatorTest, pcode_rejects_json_subexpr) {
+    Predicate *dest = new Predicate("x");
+    Predicate *src = new Predicate("json");
+    src->json_expression = "$.a";
+    Predicate pred(dest, opGetSubExpr, src);
+    EXPECT_EQ(static_cast<ExpressionPcode *>(0), ExpressionPcode::tryCompile(&pred));
+}
+
 #include <Dispatcher.h>
 #include <Logger.h>
 #include <MessagingInterface.h>

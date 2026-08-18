@@ -194,17 +194,23 @@ public:
     Value evaluate(Predicate *p, MachineInstance *m);
 };
 
+class ExpressionPcode;
+
 class Condition {
   public:
     Predicate *predicate;
     std::string last_evaluation;
     Value last_result;
     bool operator()(MachineInstance *m);
-    Condition() : predicate(0) {}
+    Condition() : predicate(0), pcode(0), pcode_tried(false) {}
     Condition(Predicate *p);
     Condition(const Condition &other);
     Condition &operator=(const Condition &other);
     ~Condition();
+
+  private:
+    ExpressionPcode *pcode;
+    bool pcode_tried;
 };
 
 #endif

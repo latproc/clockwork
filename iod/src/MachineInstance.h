@@ -179,6 +179,10 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
             property); // provides the current value of an object accessible in the scope of this machine
     virtual bool setValue(const std::string &property, const Value &new_value,
                           uint64_t authority = 0);
+    // Batch setNeedsCheck / notifyDependents / channel spam across one
+    // command body (calcAdjust). Nested. IO / dotted VALUE still notify now.
+    void beginDeferredPropertyNotify();
+    void endDeferredPropertyNotify();
     const Value *resolve(
         std::string
             property); // provides a pointer to the value of an object that can be evaluated in the future
@@ -414,6 +418,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     // Dispatch COMMANDCLOCK instances whose monotonic cadence is due.
     // Called once from the regular EtherCAT input sampling path.
     static void dispatchCommandClocks(uint64_t now_us);
+    static size_t commandClockCount();
     static bool workToDo();
     static std::list<Package *> &pendingEvents();
     static std::set<MachineInstance *> &pluginMachines();
@@ -477,6 +482,16 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     MachineInstance &operator=(const MachineInstance &orig);
     MachineInstance(const MachineInstance &other);
     static std::list<MachineInstance *> all_machines;
+    static std::list<MachineInstance *> command_clocks;
+    void registerCommandClockLocked();
+    void refreshCommandClockCache();
+
+    uint64_t cached_notify_period_ms;
+    std::string cached_command_name;
+    MachineInstance *cached_clock_guard;
+    bool command_clock_cache_valid;
+    int property_notify_defer;
+    bool deferred_property_notify;
 
   protected:
     static std::list<MachineInstance *>

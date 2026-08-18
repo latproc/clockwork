@@ -789,6 +789,14 @@ bool IODCommandHealth::run(std::vector<Value> &params) {
     else {
         ss << " | THRASH none";
     }
+    {
+        const IOComponent::SampleStats io = IOComponent::sampleStats();
+        ss << " | sample polls=" << io.polls << " skip=" << io.filter_skip
+           << " filt=" << io.filter_run << " ntfy=" << io.notify_send
+           << " clocks=" << io.command_clocks << " cvis=" << io.clock_visits
+           << " cdue=" << io.clock_due << " csend=" << io.clock_send
+           << " pollsN=" << io.regular_polls;
+    }
     if (issue) {
         ss << "  ** check **";
     }

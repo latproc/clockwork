@@ -43,12 +43,16 @@ struct ExpressionActionTemplate : public ActionTemplate {
 
 class MachineInstance;
 class Action;
+class ExpressionPcode;
 
 struct ExpressionAction : public Action {
     ExpressionAction(MachineInstance *mi, ExpressionActionTemplate &eat);
+    ~ExpressionAction() override;
     Status run() override;
     Status checkComplete() override;
     std::ostream &operator<<(std::ostream &out) const override;
+    // Assignment only (expr). No Action start/stop. False if not an expr assign.
+    bool applyAssign();
 
     CStringHolder lhs;
     Value rhs;
@@ -56,4 +60,6 @@ struct ExpressionAction : public Action {
     Value extra;
     Predicate *expr = nullptr;
     MachineInstance *machine = nullptr;
+    ExpressionPcode *pcode = nullptr;
+    bool pcode_tried = false;
 };

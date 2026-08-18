@@ -54,6 +54,7 @@
 #include "ElcSetupRecipe.h"
 #endif
 #include "ProcessingThread.h"
+#include "StallTrace.h"
 #include "watchdog.h"
 #include <pthread.h>
 #include "SharedWorkSet.h"
@@ -636,6 +637,7 @@ void ProcessingThread::sampleRegularPolls(uint64_t curr_t) {
 void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_work_queue,
                                                   uint64_t curr_t,
                                                   AutoStatStorage &avg_io_time) {
+    StallTrace::markStage(StallTrace::StageEcatHandle);
     IOLockHelper io_lock;
 #ifdef KEEPSTATS
     static unsigned long total_mp_time = 0;
@@ -662,6 +664,7 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     }
     // Analog/counter sampling (same lock as processAll — do not re-lock).
     sampleRegularPolls(curr_t);
+    StallTrace::markStage(StallTrace::StageOuterHousekeeping);
 }
 
 ProcessingThread::ProcessingState ProcessingThread::poll_machines() {
@@ -762,6 +765,9 @@ void ProcessingThread::operator()() {
     pthread_setname_np(pthread_self(), "iod processing");
 #endif
 
+    // Opt-in STALLSNAP observer (DEBUG DEBUG_STALLSNAP on). Safe if never enabled.
+    StallTrace::init();
+
     Statistic *cycle_delay_stat = new Statistic("Cycle Delay");
     Statistic::add(cycle_delay_stat);
 
@@ -850,6 +856,8 @@ void ProcessingThread::operator()() {
     const int MAX_UNCONTROLLED_POLLS = 5;
     int io_unsafe_polls_remaining = MAX_UNCONTROLLED_POLLS;
     while (!program_done) {
+        StallTrace::syncEnabledFromDebug();
+        StallTrace::markStage(StallTrace::StageOuterHousekeeping);
         if (IOComponent::getHardwareState() == IOComponent::s_hardware_preinit) {
             IOLockHelper io_lock;
             // attempt to initialise the hardware interface. If this
@@ -1203,9 +1211,11 @@ void ProcessingThread::operator()() {
 
             //if (Watchdog::anyTriggered(curr_t))
             //  Watchdog::showTriggered(curr_t, true, std::cerr);
+            StallTrace::markStage(StallTrace::StageZmqPoll);
             systems_waiting = pollZMQItems(poll_wait, items, 5 + num_channels, ecat_sync,
                                            resource_mgr, sched_sync, ecat_out);
             curr_t = microsecs();
+            StallTrace::markStage(StallTrace::StageOuterHousekeeping);
 
             // ---- In-wait EC + scheduler service (event-safe, no usleep) ----
             // Drain EC first so digital edges are never delayed by a TIMER poke.
@@ -1461,7 +1471,9 @@ if (IOComponent::updatesWaiting()
                 AutoStat stats(avg_plugin_time);
 #endif
                 if (processing_state == eIdle) {
+                    StallTrace::markStage(StallTrace::StagePlugins);
                     MachineInstance::checkPluginStates();
+                    StallTrace::markStage(StallTrace::StageOuterHousekeeping);
                 }
                 last_checked_plugins = curr_t;
             }
@@ -1572,7 +1584,9 @@ if (IOComponent::updatesWaiting()
             AutoStat stats(avg_channel_time);
 #endif
             // poll channels
+            StallTrace::markStage(StallTrace::StageChannelsCommands);
             Channel::handleChannels();
+            StallTrace::markStage(StallTrace::StageOuterHousekeeping);
         }
 
         if (program_done) {
@@ -1732,9 +1746,11 @@ if (IOComponent::updatesWaiting()
             }
         }
         if (status == e_handling_sched) {
+            StallTrace::markStage(StallTrace::StageScheduler);
             size_t len = 0;
             safeSend(sched_sync, "continue", 8);
             status = e_waiting_sched;
+            StallTrace::markStage(StallTrace::StageOuterHousekeeping);
         }
 
         if (machine.activationRequested()) {
@@ -1750,9 +1766,11 @@ if (IOComponent::updatesWaiting()
             const int num_loops = 1;
             for (int i = 0; i < num_loops; ++i) {
                 if (processing_state == ePollingMachines) {
+                    StallTrace::markStage(StallTrace::StagePollMachines);
                     processing_state = poll_machines();
                 }
                 if (processing_state == eStableStates) {
+                    StallTrace::markStage(StallTrace::StageStableStates);
                     std::set<MachineInstance *> to_process;
                     {
                         boost::recursive_mutex::scoped_lock lock(runnable_mutex);
@@ -1777,6 +1795,7 @@ if (IOComponent::updatesWaiting()
                         DBG_SCHEDULER << "processing stable states\n";
                         MachineInstance::checkStableStates(to_process, 150000);
                     }
+                    StallTrace::markStage(StallTrace::StageOuterHousekeeping);
                     if (i < num_loops - 1) {
                         processing_state = ePollingMachines;
                     }
@@ -1872,6 +1891,7 @@ if (IOComponent::updatesWaiting()
 #ifdef KEEPSTATS
             avg_update_time.start();
 #endif
+            StallTrace::markStage(StallTrace::StageOutputs);
             if (update_state == s_update_idle) {
                 IOUpdate *upd = 0;
                 if (IOComponent::getHardwareState() == IOComponent::s_hardware_init) {
@@ -2079,6 +2099,10 @@ if (IOComponent::updatesWaiting()
                 }
                 const size_t n_pend = MachineInstance::pendingEvents().size();
                 noteRunnablePeaks(n_runnable, n_stable, n_exec, n_mail, n_events, n_pend);
+                StallTrace::publishQueueCounts(
+                    static_cast<uint32_t>(n_runnable), static_cast<uint32_t>(n_stable),
+                    static_cast<uint32_t>(n_exec), static_cast<uint32_t>(n_mail),
+                    static_cast<uint32_t>(n_events), static_cast<uint32_t>(n_pend));
 
                 ProcSnap snap;
                 snap.at_us = last_iter_us;
