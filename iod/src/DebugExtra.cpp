@@ -47,7 +47,6 @@ DebugExtra::DebugExtra() {
     DEBUG_MEMSNAPSHOT = logstate->define("DEBUG_MEMSNAPSHOT");
     DEBUG_STALLSNAP = logstate->define("DEBUG_STALLSNAP");
     DEBUG_EXPR_FAST = logstate->define("DEBUG_EXPR_FAST");
-    DEBUG_THIN_RECEIVE = logstate->define("DEBUG_THIN_RECEIVE");
 }
 
 DebugExtra *DebugExtra::instance() {

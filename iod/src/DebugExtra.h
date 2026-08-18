@@ -53,8 +53,6 @@ class DebugExtra {
     int DEBUG_STALLSNAP = 0;
     /** Optional pcode + deferred notify + fast command body. Default off. */
     int DEBUG_EXPR_FAST = 0;
-    /** Optional thin queued receive for clock/AI notify. Default off. */
-    int DEBUG_THIN_RECEIVE = 0;
 
   private:
     DebugExtra();
@@ -84,7 +82,6 @@ class DebugExtra {
 #define DBG_MEMSNAPSHOT MSG(DebugExtra::instance()->DEBUG_MEMSNAPSHOT)
 #define DBG_STALLSNAP MSG(DebugExtra::instance()->DEBUG_STALLSNAP)
 #define DBG_EXPR_FAST MSG(DebugExtra::instance()->DEBUG_EXPR_FAST)
-#define DBG_THIN_RECEIVE MSG(DebugExtra::instance()->DEBUG_THIN_RECEIVE)
 
 #define DBG_M_PARSER M_MSG(DebugExtra::instance()->DEBUG_PARSER, this)
 #define DBG_M_PREDICATES M_MSG(DebugExtra::instance()->DEBUG_PREDICATES, this)

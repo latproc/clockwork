@@ -9,7 +9,6 @@
 #include "ThreadSafeQueue.h"
 #include "gtest/gtest.h"
 #include <boost/thread.hpp>
-#include <cstdlib>
 
 #include "library_globals.cpp"
 
@@ -239,46 +238,6 @@ TEST_F(CommandAcceptTest, FanoutSendsOneDependantPerCall) {
 
     delete b;
     delete a;
-}
-
-TEST_F(CommandAcceptTest, ThinReceiveQueuesOnActionStackNotMail) {
-    unsetenv("IOD_THIN_RECEIVE");
-    EXPECT_FALSE(MachineInstance::thinReceiveEnabled());
-
-    MachineClass *dep_cls = new MachineClass("ThinRecvDep");
-    dep_cls->addState("idle");
-    dep_cls->receives.insert(std::make_pair(Message("ping"), makeHandler("ping", {})));
-    MachineInstance *dep = MachineInstanceFactory::create("thin_recv_dep", "ThinRecvDep");
-    dep->setStateMachine(dep_cls);
-    dep->enable();
-    mi->addDependancy(dep);
-    mi->enable();
-
-    setenv("IOD_THIN_RECEIVE", "1", 1);
-    ASSERT_TRUE(MachineInstance::thinReceiveEnabled());
-    mi->notifyCommandConsumers("ping", 100, false);
-
-    size_t thin_new = 0;
-    for (Action *act : dep->active_actions) {
-        ThinReceiveAction *thin = dynamic_cast<ThinReceiveAction *>(act);
-        if (thin && thin->getStatus() == Action::New) {
-            ++thin_new;
-        }
-    }
-    EXPECT_EQ(thin_new, 1u) << "notify enqueues ThinReceive, does not run it";
-    EXPECT_FALSE(dep->hasPending(Message("ping")));
-
-    mi->notifyCommandConsumers("ping", 100, false);
-    size_t thin_total = 0;
-    for (Action *act : dep->active_actions) {
-        if (dynamic_cast<ThinReceiveAction *>(act)) {
-            ++thin_total;
-        }
-    }
-    EXPECT_EQ(thin_total, 1u) << "second notify coalesces while New is queued";
-
-    unsetenv("IOD_THIN_RECEIVE");
-    delete dep;
 }
 
 TEST_F(CommandAcceptTest, InvokeReceiveUsesTheSameHandlerAsListed) {

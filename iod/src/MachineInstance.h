@@ -259,11 +259,6 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     void notifyCommandConsumers(const char *command_name, uint64_t notify_period_ms = 100,
                                 bool continue_fanout = false);
     bool hasCommandFanoutPending() const { return command_fanout_pending; }
-    // Default off. Enable: IOD_THIN_RECEIVE=1 or DEBUG DEBUG_THIN_RECEIVE on.
-    static bool thinReceiveEnabled();
-    bool hasThinReceivePending(const Message &msg, uint64_t *out_age_us = nullptr);
-    size_t dropThinReceive(const Message &msg);
-    void enqueueThinReceive(Transmitter *from, const Message &msg);
     // True if a RECEIVE/COMMAND handler for command_name applies now
     // (WITHIN list, WHEN/REQUIRES, unrestricted fallback). Same rules as
     // tests/unit/command_guards.cw. No handler → false.

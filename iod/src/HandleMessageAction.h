@@ -45,20 +45,3 @@ struct HandleMessageAction : public Action {
     MachineInstance *machine;
     Action *handler;
 };
-
-// Clock/AI notify path when DEBUG_THIN_RECEIVE / IOD_THIN_RECEIVE is on.
-// Same invokeReceive as HandleMessageAction, but queued on the machine
-// action stack (idle()) — not run from handle_io_sampling.
-struct ThinReceiveAction : public Action {
-    ThinReceiveAction(MachineInstance *mi, Transmitter *from, const Message &m);
-    ~ThinReceiveAction() override;
-    Status run() override;
-    Status checkComplete() override;
-    std::ostream &operator<<(std::ostream &out) const override;
-    const Message &message() const { return message_; }
-    uint64_t enqueuedUs() const { return enqueued_us; }
-    Transmitter *from;
-    Message message_;
-    uint64_t enqueued_us;
-    Action *handler;
-};
