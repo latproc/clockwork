@@ -105,6 +105,24 @@ char *rl_gets(const char *prompt) {
 }
 
 zmq::socket_t *psocket = 0;
+static std::string g_cmd_url;
+
+static zmq::socket_t *make_cmd_socket() {
+    zmq::socket_t *s = new zmq::socket_t(*context, ZMQ_REQ);
+    int linger = 0;
+    s->setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+    int timeout_ms = 4000;
+    s->setsockopt(ZMQ_RCVTIMEO, &timeout_ms, sizeof(timeout_ms));
+    s->setsockopt(ZMQ_SNDTIMEO, &timeout_ms, sizeof(timeout_ms));
+    s->connect(g_cmd_url.c_str());
+    return s;
+}
+
+static void reconnect_cmd_socket() {
+    delete psocket;
+    psocket = make_cmd_socket();
+}
+
 std::list<Value> params;
 char *send_command(std::list<Value> &params) {
     if (params.size() == 0) {
@@ -118,22 +136,30 @@ char *send_command(std::list<Value> &params) {
         cmd += ";";
         write_history(history_file);
     }
-    sendMessage(*psocket, msg.c_str());
-    size_t size;
-    zmq::message_t reply;
-    if (psocket->recv(&reply)) {
-        size = reply.size();
-        char *data = (char *)malloc(size + 1);
-        if (data) {
-            memcpy(data, reply.data(), size);
-            data[size] = 0;
-
-            if (cmd == "LIST") {
-                initialise_machine_names(data);
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        try {
+            sendMessage(*psocket, msg.c_str());
+            zmq::message_t reply;
+            if (psocket->recv(&reply)) {
+                size_t size = reply.size();
+                char *data = (char *)malloc(size + 1);
+                if (data) {
+                    memcpy(data, reply.data(), size);
+                    data[size] = 0;
+                    if (cmd == "LIST") {
+                        initialise_machine_names(data);
+                    }
+                }
+                return data;
             }
         }
-        return data;
+        catch (const zmq::error_t &e) {
+            std::cerr << "command port: " << e.what() << "\n";
+        }
+        std::cerr << "no reply; reconnecting to " << g_cmd_url << "\n";
+        reconnect_cmd_socket();
     }
+    std::cerr << "no reply from iod (is it up?)\n";
     return nullptr;
 }
 void process_command(std::list<Value> &params) {
@@ -430,18 +456,14 @@ int main(int argc, const char *argv[]) {
         std::stringstream ss;
         ss << "tcp://" << host << ":" << port;
         std::string url(ss.str());
+        g_cmd_url = url;
         if (!quiet) {
             std::cout
                 << "Connecting to " << url << "\n"
                 << "\nEnter HELP; for help. Note that ';' is required at the end of each command\n"
                 << "  use exit; or ctrl-D to exit this program\n\n";
         }
-        zmq::socket_t socket(*context, ZMQ_REQ);
-        int linger = 0; // do not wait at socket close time
-        socket.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
-        psocket = &socket;
-
-        socket.connect(url.c_str());
+        psocket = make_cmd_socket();
 
         // readline completion function
         rl_attempted_completion_function = my_rl_completion;
@@ -464,11 +486,15 @@ int main(int argc, const char *argv[]) {
             std::cerr << "Exception raised: " << e.what() << "\n";
         }
         cleanup();
+        delete psocket;
+        psocket = 0;
         return 1;
     }
     catch (...) {
         std::cerr << "Exception of unknown type!\n";
     }
     cleanup();
+    delete psocket;
+    psocket = 0;
     return 0;
 }
