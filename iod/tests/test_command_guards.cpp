@@ -3,6 +3,7 @@
 #include "Logger.h"
 #include "MachineClass.h"
 #include "MachineCommandAction.h"
+#include "HandleMessageAction.h"
 #include "MachineInstance.h"
 #include "Message.h"
 #include "ThreadSafeQueue.h"
@@ -237,6 +238,21 @@ TEST_F(CommandAcceptTest, FanoutSendsOneDependantPerCall) {
 
     delete b;
     delete a;
+}
+
+TEST_F(CommandAcceptTest, InvokeReceiveUsesTheSameHandlerAsListed) {
+    go("a");
+    Message listed("listed");
+    Action *handler = nullptr;
+    const Action::Status st = mi->invokeReceive(listed, mi, false, &handler);
+    EXPECT_TRUE(st == Action::Complete || st == Action::Running);
+    if (handler) {
+        handler->release();
+    }
+    go("c");
+    handler = nullptr;
+    EXPECT_EQ(mi->invokeReceive(listed, mi, false, &handler), Action::Complete);
+    EXPECT_EQ(handler, nullptr);
 }
 
 TEST_F(CommandAcceptTest, RegistersOnlyCommandClockInstances) {

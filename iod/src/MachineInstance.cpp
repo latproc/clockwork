@@ -3000,6 +3000,30 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
 
 */
 
+Action::Status MachineInstance::invokeReceive(const Message &msg, Transmitter *from,
+                                              bool needs_receipt, Action **out_handler) {
+    if (out_handler) {
+        *out_handler = nullptr;
+    }
+    Message m(msg);
+    if (io_interface && from == io_interface) {
+        const Action::Status sent = execute(m, from);
+        return (sent == Action::Failed) ? Action::Failed : Action::Complete;
+    }
+    Action *h = findHandler(m, from, needs_receipt);
+    if (!h) {
+        return Action::Complete;
+    }
+    const Action::Status stat = (*h)();
+    if (out_handler) {
+        *out_handler = h;
+    }
+    else {
+        h->release();
+    }
+    return stat;
+}
+
 Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool response_required) {
     std::string short_name(m.getText());
     if (short_name.find('.') != std::string::npos) {

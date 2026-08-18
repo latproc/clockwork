@@ -221,6 +221,11 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     void push(Action *new_action);
     void prepareCompletionMessage(Transmitter *from, std::string message);
     Action *findHandler(Message &msg, Transmitter *t, bool response_required = false);
+    // Shared receive path used by HandleMessageAction (and later clock ticks).
+    // Finds the handler and starts it. Does not start/stop a HandleMessageAction.
+    // If out_handler is set, the caller owns a retain and must release().
+    Action::Status invokeReceive(const Message &msg, Transmitter *from, bool needs_receipt,
+                                 Action **out_handler = nullptr);
     void enqueueAction(Action *a);
     void enqueue(const Package &package);
     State &getCurrent() { return current_state; }

@@ -40,27 +40,25 @@ Action::Status HandleMessageAction::run() {
     DBG_M_MESSAGING << "Handling message " << *package.message << " from "
                     << package.transmitter->getName() << " to " << owner->getName() << "\n";
 
-    if (owner->io_interface && package.transmitter == owner->io_interface) {
-        Status sent = owner->execute(*package.message, package.transmitter);
-        if (sent == Failed) {
-            status = Failed;
-        }
-        else {
-            status = Complete;
-        }
+    const bool io_direct = owner->io_interface && package.transmitter == owner->io_interface;
+    if (!io_direct) {
+        // Same order as before extract: wrapper is suspended while the
+        // receive handler runs (WAIT / checkComplete).
+        suspend();
+    }
+    Status stat = owner->invokeReceive(*package.message, package.transmitter, package.needs_receipt,
+                                       io_direct ? nullptr : &handler);
+    if (io_direct) {
+        status = (stat == Failed) ? Failed : Complete;
         owner->stop(this);
         if (package.needs_receipt) {
             MachineInstance *mi = dynamic_cast<MachineInstance *>(package.transmitter);
             owner->prepareCompletionMessage(mi, package.message->getText());
         }
-
         return status;
     }
 
-    handler = owner->findHandler(*package.message, package.transmitter, package.needs_receipt);
     if (handler) {
-        suspend();
-        Status stat = (*handler)();
         if (stat == Failed) {
             std::stringstream ss;
             ss << "handler " << *handler << " failed to start\n" << std::flush;
