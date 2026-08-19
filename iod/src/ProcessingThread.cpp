@@ -71,6 +71,13 @@
 #include <malloc.h>
 #endif
 
+namespace {
+bool sched_payload_is(const char *buf, size_t len, const char *word) {
+    const size_t n = std::strlen(word);
+    return buf && word && len >= n && std::memcmp(buf, word, n) == 0;
+}
+} // namespace
+
 extern bool program_done;
 extern bool machine_is_ready;
 extern "C" long cJSON_LiveNodeCount(void);
@@ -1229,8 +1236,8 @@ void ProcessingThread::operator()() {
 
             // ---- In-wait EC + scheduler service (event-safe, no usleep) ----
             // Drain EC first so digital edges are never delayed by a TIMER poke.
-            // Service one full scheduler handshake in-wait so TIMER fires without
-            // a full outer loop when no machines need work afterward.
+            // Slim sched handshake in-wait (continue, then done/bye on a later
+            // poll). Do not sit 10 ms waiting for done.
             const int n_poll = 5 + static_cast<int>(num_channels);
             bool other_non_sched = false;
             bool sched_awake = false;
@@ -1239,7 +1246,12 @@ void ProcessingThread::operator()() {
                     continue;
                 }
                 if (items[i].revents & (ZMQ_POLLIN | ZMQ_POLLERR)) {
-                    if (i < 8) {
+                    // Do not count leftover handshake POLLIN as a new scheduler
+                    // wake — that is the 66k/s spin after a half-finished
+                    // sched/continue (2G4C-120 1 s overshoot).
+                    if (i < 8 &&
+                        !(i == internals->SCHEDULER_ITEM &&
+                          (status == e_waiting_sched || status == e_handling_sched))) {
                         ++snap_oth_idx[i];
                     }
                     if (i == internals->SCHEDULER_ITEM) {
@@ -1300,12 +1312,41 @@ void ProcessingThread::operator()() {
                 return false;
             };
 
-            // One complete scheduler handshake (sched → continue → done → bye).
+            auto finish_sched_done = [&]() -> bool {
+                char sbuf[16];
+                size_t len = 0;
+                try {
+                    len = sched_sync.recv(sbuf, sizeof(sbuf), ZMQ_DONTWAIT);
+                }
+                catch (const zmq::error_t &) {
+                    len = 0;
+                }
+                if (!len || !sched_payload_is(sbuf, len, "done")) {
+                    return false;
+                }
+                safeSend(sched_sync, "bye", 3);
+                status = e_waiting;
+                items[internals->SCHEDULER_ITEM].revents = 0;
+                ++snap_brk_oth;
+                return true;
+            };
+
+            // Slim handshake: only sched_sync. Never poll/send ecat_sync here
+            // (that abort()ed on 2G4C-120). EC runs after this wait loop.
+            // No 10 ms abandon. Port of 34a9afdf.
             auto service_scheduler_in_wait = [&]() -> bool {
+                if (status == e_handling_sched) {
+                    safeSend(sched_sync, "continue", 8);
+                    status = e_waiting_sched;
+                    return false;
+                }
+                if (status == e_waiting_sched) {
+                    return finish_sched_done();
+                }
                 if (!(items[internals->SCHEDULER_ITEM].revents & ZMQ_POLLIN)) {
                     return false;
                 }
-                if (status != e_waiting || processing_state != eIdle) {
+                if (processing_state != eIdle) {
                     return false;
                 }
                 char sbuf[16];
@@ -1320,35 +1361,28 @@ void ProcessingThread::operator()() {
                     items[internals->SCHEDULER_ITEM].revents = 0;
                     return false;
                 }
-                safeSend(sched_sync, "continue", 8);
-                zmq::pollitem_t spoll = {(void *)sched_sync, 0, ZMQ_POLLIN, 0};
-                bool got_done = false;
-                for (int n = 0; n < 10; ++n) { // up to ~10 ms (do not black out EC long)
-                    try {
-                        if (zmq::poll(&spoll, 1, std::chrono::milliseconds(1)) > 0 &&
-                            (spoll.revents & ZMQ_POLLIN)) {
-                            len = 0;
-                            try {
-                                len = sched_sync.recv(sbuf, sizeof(sbuf), ZMQ_DONTWAIT);
-                            }
-                            catch (const zmq::error_t &) {
-                                len = 0;
-                            }
-                            if (len) {
-                                safeSend(sched_sync, "bye", 3);
-                                got_done = true;
-                                break;
-                            }
-                        }
-                    }
-                    catch (const zmq::error_t &) {
-                        break;
-                    }
+                if (sched_payload_is(sbuf, len, "done")) {
+                    safeSend(sched_sync, "bye", 3);
+                    status = e_waiting;
+                    items[internals->SCHEDULER_ITEM].revents = 0;
+                    ++snap_brk_oth;
+                    return true;
                 }
+                safeSend(sched_sync, "continue", 8);
+                status = e_waiting_sched;
                 items[internals->SCHEDULER_ITEM].revents = 0;
-                ++snap_brk_oth;
-                return got_done;
+                return false;
             };
+
+            // Open handshake: try done/bye. Break (do not absorb-continue)
+            // so outer EC + command path still run.
+            if (status == e_waiting_sched || status == e_handling_sched) {
+                service_scheduler_in_wait();
+                if (status == e_waiting_sched || status == e_handling_sched) {
+                    systems_waiting = 1;
+                    break;
+                }
+            }
 
             if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
                 HandleIncomingEtherCatData(io_work_queue, curr_t, avg_io_time);
@@ -1378,6 +1412,10 @@ void ProcessingThread::operator()() {
                 }
                 if (sched_awake) {
                     service_scheduler_in_wait();
+                    if (status == e_waiting_sched || status == e_handling_sched) {
+                        systems_waiting = 1;
+                        break;
+                    }
                     if (has_immediate_machine_work() || !io_work_queue.empty() ||
                         !MachineInstance::pendingEvents().empty()) {
                         ++snap_brk_exec;
@@ -1425,6 +1463,10 @@ void ProcessingThread::operator()() {
             // Pure scheduler wake (no EC this poll): handshake in-wait.
             if (sched_awake && !other_non_sched) {
                 service_scheduler_in_wait();
+                if (status == e_waiting_sched || status == e_handling_sched) {
+                    systems_waiting = 1;
+                    break;
+                }
                 if (has_immediate_machine_work() || !io_work_queue.empty() ||
                     !MachineInstance::pendingEvents().empty()) {
                     ++snap_brk_exec;
@@ -1731,11 +1773,18 @@ if (IOComponent::updatesWaiting()
                     len = 0;
                 }
                 if (len) {
-                    status = e_handling_sched;
+                    if (sched_payload_is(buf, len, "done")) {
+                        // Orphan done from an abandoned in-wait handshake.
+                        safeSend(sched_sync, "bye", 3);
+                        status = e_waiting;
+                    }
+                    else {
+                        status = e_handling_sched;
 #ifdef KEEPSTATS
-                    scheduler_delay.stop();
-                    avg_scheduler_time.start();
+                        scheduler_delay.stop();
+                        avg_scheduler_time.start();
 #endif
+                    }
                 }
             }
             else if (status == e_waiting_sched) {
@@ -1746,7 +1795,7 @@ if (IOComponent::updatesWaiting()
                 catch (const zmq::error_t &) {
                     len = 0;
                 }
-                if (len) {
+                if (len && sched_payload_is(buf, len, "done")) {
                     safeSend(sched_sync, "bye", 3);
                     status = e_waiting;
 #ifdef KEEPSTATS
