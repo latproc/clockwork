@@ -223,6 +223,8 @@ class IOComponent : public Transmitter {
     void setIndex(int idx) { io_index = idx; }
 
     static size_t updatesWaiting();
+    /** Append a locked snapshot of outputs awaiting EtherCAT confirmation. */
+    static void describePendingOutputUpdates(std::ostream &out);
     /**
      * True if curr differs from prev on any non-analog IO bit (POINT / 1-bit /
      * non-regular_poll). Used by the ecat thread so digital edges push to CW
