@@ -1,0 +1,13 @@
+# Test-only stub. generic_system_exec.lpc loads system_exec.so.
+# generic_panel.lpc mentions SYSTEMEXEC on HMIIMAGEWEIGHTADD; we do not
+# instantiate that type.
+TOTAL_CORING_LOCATIONS CONSTANT 11;
+
+SYSTEMEXEC MACHINE {
+  Idle INITIAL;
+  Running STATE;
+  Done STATE;
+  Error STATE;
+  COMMAND start { }
+  COMMAND reset { }
+}

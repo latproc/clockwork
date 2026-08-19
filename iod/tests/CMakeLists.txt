@@ -57,6 +57,20 @@ target_link_libraries(test_disable_action gmock_main cw_interpreter cw_client
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_disable_action COMMAND test_disable_action)
 
+# LIST drain fixtures: HMISCREEN + rotating/grid map types.
+# Type LPC paths are compile defs so the test source stays generic.
+add_executable(test_list_walkers test_list_walkers.cpp)
+set_target_properties (test_list_walkers PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_compile_definitions(test_list_walkers PRIVATE
+  LIST_WALKER_LIB_DIR="/opt/latproc/code/lib"
+  LIST_WALKER_ROTATE_LPC="/opt/latproc/code/machine/Grab/Grabbing/GrabPlanner.lpc"
+  LIST_WALKER_GRID_LPC="/opt/latproc/code/machine/Core/Sampling/CoreSelection.lpc"
+  LIST_WALKER_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures")
+target_link_libraries(test_list_walkers gmock_main cw_interpreter cw_client
+  ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_list_walkers COMMAND test_list_walkers)
+
 add_executable(test_sync_remote_states_action iod_mock.h test_sync_remote_states_action.cpp)
 target_link_libraries(test_sync_remote_states_action gmock_main cw_interpreter cw_client
         ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
