@@ -201,6 +201,14 @@ class IOComponent : public Transmitter {
         (void)relative_bit;
         return true;
     }
+    /** Absolute domain-bit form of inputBitTriggersWork (idx into indexed_components). */
+    bool indexedInputBitTriggersWork(size_t idx) const {
+        if (io_index < 0 || idx < static_cast<size_t>(io_index)) {
+            return true;
+        }
+        return inputBitTriggersWork(
+            static_cast<unsigned int>(idx - static_cast<size_t>(io_index)));
+    }
 
     void setName(std::string &&new_name) { io_name = std::move(new_name); }
     std::string io_name;

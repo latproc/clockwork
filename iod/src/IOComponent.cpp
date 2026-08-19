@@ -392,10 +392,7 @@ bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *pre
             if (!ioc) {
                 continue;
             }
-            const int first_bit = ioc->index();
-            if (first_bit >= 0 && idx >= static_cast<size_t>(first_bit) &&
-                !ioc->inputBitTriggersWork(
-                    static_cast<unsigned int>(idx - static_cast<size_t>(first_bit)))) {
+            if (!ioc->indexedInputBitTriggersWork(idx)) {
                 continue;
             }
             // ANALOGINPUT / COUNTER on regular_polls: not a digital edge.
@@ -544,13 +541,18 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                             // remotely source change on this io
                             if (ioc) {
                                 // Only ANALOGINPUT/COUNTER join regular_polls (bitlen>1).
-                                // POINT / STATUS_FLAG / DIGITALVALUE / 1-bit Input must
-                                // stay on the event path (on_enter/off_enter / setValue).
+                                // POINT / STATUS_FLAG / unmasked DIGITALVALUE / 1-bit
+                                // Input stay on the event path. Masked DIGITALVALUE
+                                // bits still update the process image so the next
+                                // compare is honest, but must not enqueue handleChange
+                                // (VALUE unchanged after MASK, IOTIME would still
+                                // force a full outer loop).
+                                const size_t idx = static_cast<size_t>(i) * 8 +
+                                                   static_cast<size_t>(j);
                                 if (regular_polls.count(ioc) && ioc->address.bitlen > 1) {
                                     regular_poll_dirty.insert(ioc);
                                 }
-                                else {
-                                    //std::cout << " adding " << ioc->io_name << " due to bit change\n";
+                                else if (ioc->indexedInputBitTriggersWork(idx)) {
                                     boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
                                     updatedComponentsIn.insert(ioc);
                                 }
