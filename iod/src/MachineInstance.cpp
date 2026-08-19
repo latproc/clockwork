@@ -2662,6 +2662,24 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
         if (!machine_class_state->isLocal()) {
             notifyDependents(msg);
         }
+        // HMISCREEN TestTrueLast: Jump the last finished true screen.
+        // Drain can Jump the TestFalse (resume) machine instead; Done's
+        // last member is the walk's last screen (GrabAutoScalesLoad).
+        if (state_machine && state_machine->name == "HMISCREEN" &&
+            new_state.getName() == "Waiting") {
+            MachineInstance *done = lookup("Done");
+            if (done && !done->parameters.empty()) {
+                MachineInstance *last = done->parameters.back().machine;
+                if (last && last->enabled() &&
+                    last->acceptsCommandInCurrentState("Jump")) {
+                    sendMessageToReceiver("Jump", last);
+                    if (!last->executingCommand() && last->hasMail()) {
+                        last->idle();
+                    }
+                    last->idleReadyDependents();
+                }
+            }
+        }
     }
     return stat;
 }
