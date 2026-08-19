@@ -4696,7 +4696,13 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         else
 #endif //USE_SDO
 #endif
-            if (property_val.token_id == ClockworkToken::tokVALUE && io_interface) {
+            // VALUE updates originating from input filters still need normal
+            // property publication and dependant notification, but must not be
+            // written back into the EtherCAT output queue.  In particular a
+            // masked DIGITALVALUE can never have its application VALUE equal
+            // the raw PDO word, leaving updatedComponentsOut permanently busy.
+            if (property_val.token_id == ClockworkToken::tokVALUE && io_interface &&
+                io_interface->direction() != IOComponent::DirInput) {
             char buf[100];
             errno = 0;
             int64_t value = 0; // TBD deal with sign

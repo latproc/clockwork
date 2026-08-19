@@ -338,7 +338,26 @@ void IOComponent::setInitialState() {}
 
 size_t IOComponent::updatesWaiting() {
     // Prefer set size; counter can desync if ++ was used on re-inserts.
+    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
     return updatedComponentsOut.size();
+}
+
+void IOComponent::describePendingOutputUpdates(std::ostream &out) {
+    boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    out << "PENDING PHYSICAL OUTPUTS: " << updatedComponentsOut.size() << "\n";
+    for (std::set<IOComponent *>::const_iterator iter = updatedComponentsOut.begin();
+         iter != updatedComponentsOut.end(); ++iter) {
+        const IOComponent *ioc = *iter;
+        if (!ioc) {
+            out << "(null)\n";
+            continue;
+        }
+        out << ioc->io_name << "  pending=" << ioc->pending_value
+            << " actual=" << ioc->address.value
+            << " module=" << ioc->address.module_position
+            << " offset=" << ioc->address.io_offset
+            << " bit=" << ioc->address.io_bitpos << "\n";
+    }
 }
 
 bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *prev,
@@ -1152,7 +1171,9 @@ class CounterInternals {
     }
 };
 
-DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {}
+DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {
+    direction_ = DirInput;
+}
 
 int64_t DigitalValue::filter(int64_t val) {
     // Always stamp sample time; only setValue VALUE when it changes.
