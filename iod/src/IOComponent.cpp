@@ -392,6 +392,12 @@ bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *pre
             if (!ioc) {
                 continue;
             }
+            const int first_bit = ioc->index();
+            if (first_bit >= 0 && idx >= static_cast<size_t>(first_bit) &&
+                !ioc->inputBitTriggersWork(
+                    static_cast<unsigned int>(idx - static_cast<size_t>(first_bit)))) {
+                continue;
+            }
             // ANALOGINPUT / COUNTER on regular_polls: not a digital edge.
             if (regular_polls.count(ioc) && ioc->address.bitlen > 1) {
                 continue;
@@ -1173,6 +1179,28 @@ class CounterInternals {
 
 DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {
     direction_ = DirInput;
+}
+
+bool DigitalValue::inputBitTriggersWork(unsigned int relative_bit) const {
+    if (relative_bit >= 64) {
+        return true;
+    }
+    bool found_mask = false;
+    uint64_t combined_mask = 0;
+    for (std::list<MachineInstance *>::const_iterator iter = owners.begin();
+         iter != owners.end(); ++iter) {
+        const MachineInstance *owner = *iter;
+        if (!owner) {
+            continue;
+        }
+        const Value &mask = owner->properties.lookup("MASK");
+        if (mask.kind != Value::t_integer) {
+            return true;
+        }
+        found_mask = true;
+        combined_mask |= static_cast<uint64_t>(mask.iValue);
+    }
+    return !found_mask || (combined_mask & (uint64_t{1} << relative_bit)) != 0;
 }
 
 int64_t DigitalValue::filter(int64_t val) {

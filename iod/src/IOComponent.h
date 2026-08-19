@@ -196,6 +196,11 @@ class IOComponent : public Transmitter {
         MachineInstance *m); // link properties in the component to the MachineInstance properties
 
     virtual int64_t filter(int64_t);
+    /** True when a raw input bit change must wake Clockwork immediately. */
+    virtual bool inputBitTriggersWork(unsigned int relative_bit) const {
+        (void)relative_bit;
+        return true;
+    }
 
     void setName(std::string &&new_name) { io_name = std::move(new_name); }
     std::string io_name;
@@ -293,6 +298,7 @@ class DigitalValue : public IOComponent {
     DigitalValue(IOAddress addr);
     const char *type() override { return "DigitalValue"; }
     int64_t filter(int64_t val) override;
+    bool inputBitTriggersWork(unsigned int relative_bit) const override;
 };
 
 class CounterRate : public IOComponent {
