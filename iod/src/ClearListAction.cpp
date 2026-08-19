@@ -63,7 +63,10 @@ Action::Status ClearListAction::run() {
         }
 #endif
         dest_machine->parameters.clear();
+        dest_machine->updateLastEvaluationTime();
         dest_machine->setNeedsCheck();
+        dest_machine->notifyDependents();
+        dest_machine->idleReadyDependents();
         status = Complete;
     }
     else if (dest_machine && dest_machine->_type == "REFERENCE") {

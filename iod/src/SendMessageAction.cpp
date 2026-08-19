@@ -75,10 +75,12 @@ static void idleLocalSendDest(MachineInstance *dest) {
             return;
         }
         if (!dest->hasMail()) {
+            dest->idleReadyDependents();
             return;
         }
         dest->idle();
     }
+    dest->idleReadyDependents();
 }
 
 Action::Status SendMessageAction::run() {

@@ -1341,6 +1341,39 @@ void MachineInstance::propagateNeedsCheckToDependents() {
     }
 }
 
+void MachineInstance::idleReadyWork() {
+    if (!is_enabled || executingCommand()) {
+        return;
+    }
+    if (hasMail()) {
+        idle();
+        if (executingCommand()) {
+            return;
+        }
+    }
+    if (!getStateMachine() || !getStateMachine()->allow_auto_states) {
+        return;
+    }
+    if (!needs_check && !queuedForStableStateTest()) {
+        return;
+    }
+    if (setStableState()) {
+        if (executingCommand() || hasMail()) {
+            idle();
+        }
+    }
+}
+
+void MachineInstance::idleReadyDependents() {
+    std::set<MachineInstance *>::iterator dep_iter = depends.begin();
+    while (dep_iter != depends.end()) {
+        MachineInstance *dep = *dep_iter++;
+        if (dep && dep != this && dep->is_enabled) {
+            dep->idleReadyWork();
+        }
+    }
+}
+
 bool MachineInstance::queuedForStableStateTest() {
     std::lock_guard<std::mutex> lock(pending_state_change_mutex);
     return pending_state_change.count(this);
@@ -1667,6 +1700,9 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
                     keep_pending = false;
                     break;
                 }
+                // SEND/PUSH during the last idle must have run dest Change/Jump
+                // and HMISCREENTRACK TAKE LAST before the next SIZE/ALL/ANY.
+                mi->idleReadyDependents();
                 if (!mi->setStableState()) {
                     keep_pending = false;
                     break;
@@ -1812,9 +1848,13 @@ void MachineInstance::addParameter(const Parameter &p, MachineInstance *mi, ssiz
         if (parameters.size() > 0 && current_state.getName() != "nonempty") {
             setState("nonempty");
         }
+        updateLastEvaluationTime();
     }
     setNeedsCheck();
     notifyDependents();
+    if (_type == "LIST") {
+        idleReadyDependents();
+    }
     //}
 }
 
@@ -1857,9 +1897,13 @@ void MachineInstance::removeParameter(size_t which) {
         if (parameters.size() == 0 && current_state.getName() != "empty") {
             setState("empty");
         }
+        updateLastEvaluationTime();
     }
     setNeedsCheck();
     notifyDependents();
+    if (_type == "LIST") {
+        idleReadyDependents();
+    }
 }
 
 void MachineInstance::addLocal(Value param, MachineInstance *mi) {
