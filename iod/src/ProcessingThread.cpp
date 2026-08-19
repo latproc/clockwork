@@ -1151,6 +1151,28 @@ void ProcessingThread::operator()() {
 
             //if (Watchdog::anyTriggered(curr_t))
             //  Watchdog::showTriggered(curr_t, true, std::cerr);
+            // While a scheduler handshake is open the scheduler thread owns the
+            // machines, so the command/channel drain below is deferred. Leaving
+            // those sockets armed would return POLLIN on every poll with nobody
+            // to consume it — a free-running outer loop until "done" arrives.
+            // Mask them until the handshake closes; the traffic is picked up on
+            // the next poll, exactly as before, just without the spin.
+            {
+                const bool sched_handshake_open =
+                    (status == e_waiting_sched || status == e_handling_sched);
+                for (int i = internals->CMD_SYNC_ITEM;
+                     i < 5 + static_cast<int>(num_channels); ++i) {
+                    if (sched_handshake_open) {
+                        items[i].events = 0;
+                    }
+                    else {
+                        items[i].events = (i == internals->CMD_SYNC_ITEM)
+                                              ? ZMQ_POLLIN
+                                              : (ZMQ_POLLERR | ZMQ_POLLIN);
+                    }
+                }
+            }
+
             StallTrace::markStage(StallTrace::StageZmqPoll);
             systems_waiting = pollZMQItems(poll_wait, items, 5 + num_channels, ecat_sync,
                                            resource_mgr, sched_sync, ecat_out);
