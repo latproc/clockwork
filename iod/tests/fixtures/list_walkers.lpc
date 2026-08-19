@@ -1,0 +1,126 @@
+# Instances for iod LIST drain tests. Names here are the public test API
+# (what C++ looks up). Type implementations are loaded separately.
+
+# ---------------------------------------------------------------------------
+# Primitive LIST (MOVE / SEND / ADD)
+# ---------------------------------------------------------------------------
+F_ItemA FLAG;
+F_ItemB FLAG;
+F_ItemC FLAG;
+L_Items LIST F_ItemA, F_ItemB, F_ItemC;
+L_Moved LIST;
+
+M_ListOps LISTOPS L_Items, L_Moved;
+
+LISTOPS MACHINE Src, Work {
+  idle INITIAL;
+  COMMAND peel { MOVE 1 FROM Src TO Work; }
+  COMMAND shove { ADD ITEMS FROM Work AFTER LAST OF Src; CLEAR Work; }
+  COMMAND light { SEND turnOn TO Src; }
+}
+
+# ---------------------------------------------------------------------------
+# Screen walker: start list, auto/manual fork, held questions, default screen
+# ---------------------------------------------------------------------------
+ALWAYSTRUE MACHINE {
+  true INITIAL;
+  false STATE;
+}
+
+ALLARETRUE MACHINE List {
+  true WHEN ALL List ARE true;
+  false DEFAULT;
+  false INITIAL;
+}
+
+TESTGUARD MACHINE {
+  true INITIAL;
+  false STATE;
+  COMMAND fail { SET SELF TO false; }
+  COMMAND pass { SET SELF TO true; }
+}
+
+G_Ready ALWAYSTRUE;
+G_Fault TESTGUARD;
+P_Mode FLAG;
+G_Mode HMIINPUT2GUARD P_Mode;
+
+M_HoldA HMIQUESTION;
+M_HoldB HMIQUESTION;
+M_HoldC HMIQUESTION;
+G_HoldA HMIQUESTION2GUARD M_HoldA;
+G_HoldB HMIQUESTION2GUARD M_HoldB;
+G_HoldC HMIQUESTION2GUARD M_HoldC;
+L_Holds LIST G_HoldC, G_HoldB, G_HoldA;
+G_HoldsClear ALLARETRUE L_Holds;
+
+V_Screen VARIABLE (strlen:50) "IdleScreen";
+
+L_ScreenStart LIST M_ScreenStart, M_ScreenFork;
+L_ScreenAuto LIST M_ScreenFault, M_ScreenHoldA, M_ScreenHoldB, M_ScreenHoldC, M_ScreenAuto;
+L_ScreenManual LIST M_ScreenFault, M_ScreenManual;
+L_ScreenWalk LIST;
+L_ScreenCmds LIST;
+
+M_Screen HMISCREEN L_ScreenStart, L_ScreenWalk, L_ScreenCmds;
+M_ScreenTrack HMISCREENTRACK V_Screen, L_ScreenCmds;
+M_ScreenFork HMISCREENFORK G_Mode, L_ScreenWalk, L_ScreenAuto, L_ScreenManual;
+
+M_ScreenStart HMISCREENTEST (ScreenNo:"Start") G_Ready, L_ScreenCmds;
+M_ScreenFault HMISCREENTEST (ScreenNo:"Fault") G_Fault, L_ScreenCmds;
+M_ScreenHoldA HMISCREENTEST (ScreenNo:"HoldA") G_HoldA, L_ScreenCmds;
+M_ScreenHoldB HMISCREENTEST (ScreenNo:"HoldB") G_HoldB, L_ScreenCmds;
+M_ScreenHoldC HMISCREENTEST (ScreenNo:"HoldC") G_HoldC, L_ScreenCmds;
+M_ScreenAuto HMISCREENTEST (ScreenNo:"AutoHome") G_Mode, L_ScreenCmds;
+M_ScreenManual HMISCREENTEST (ScreenNo:"ManualHome") G_Mode, L_ScreenCmds;
+
+# ---------------------------------------------------------------------------
+# Rotating cell map
+# ---------------------------------------------------------------------------
+S_Rotate GRABPLANSTATUS;
+F_Cell1 CNTFLAG (loc:1, zone:1, depth:0, rowLoc:1, columnLoc:0);
+F_Cell2 CNTFLAG (loc:2, zone:1, depth:1, rowLoc:1, columnLoc:0);
+F_Cell3 CNTFLAG (loc:3, zone:2, depth:0, rowLoc:2, columnLoc:2);
+F_Cell4 CNTFLAG (loc:4, zone:2, depth:1, rowLoc:2, columnLoc:2);
+F_Cell5 CNTFLAG (loc:5, zone:3, depth:0, rowLoc:0, columnLoc:1);
+F_Cell6 CNTFLAG (loc:6, zone:3, depth:1, rowLoc:0, columnLoc:1);
+L_Cells LIST F_Cell1, F_Cell2, F_Cell3, F_Cell4, F_Cell5, F_Cell6;
+M_RotateImpl GRABPLANNER S_Rotate, L_Cells;
+M_Rotate ROTATECTL M_RotateImpl;
+
+ROTATECTL MACHINE Planner {
+  OPTION count 0;
+  OPTION bits 0;
+  sync WHEN bits != Planner.grabMap;
+  idle DEFAULT;
+  ENTER sync { bits := Planner.grabMap; }
+  COMMAND start { Planner.NumGrabs := count; CALL getMap ON Planner; }
+  COMMAND clear { CALL reset ON Planner; }
+}
+
+# ---------------------------------------------------------------------------
+# Grid slot map
+# ---------------------------------------------------------------------------
+S_Grid COREPLANSTATUS;
+P_Skip0 PFLAG (SlotId:0);
+P_Skip1 PFLAG (SlotId:1);
+F_R1S0 TUBEFLAG (ID:0, SlotId:0, Location:1) P_Skip0;
+F_R1S1 TUBEFLAG (ID:1, SlotId:1, Location:1) P_Skip1;
+F_R2S0 TUBEFLAG (ID:2, SlotId:0, Location:2) P_Skip0;
+F_R2S1 TUBEFLAG (ID:3, SlotId:1, Location:2) P_Skip1;
+F_R3S0 TUBEFLAG (ID:4, SlotId:0, Location:3) P_Skip0;
+F_R3S1 TUBEFLAG (ID:5, SlotId:1, Location:3) P_Skip1;
+L_Slots LIST F_R1S0, F_R1S1, F_R2S0, F_R2S1, F_R3S0, F_R3S1;
+L_Skipped LIST P_Skip0, P_Skip1;
+M_GridImpl COREPLANNER S_Grid, L_Slots, L_Skipped;
+M_Grid GRIDCTL M_GridImpl;
+
+GRIDCTL MACHINE Planner {
+  OPTION count 0;
+  OPTION bits 0;
+  sync WHEN bits != Planner.coreMap;
+  idle DEFAULT;
+  ENTER sync { bits := Planner.coreMap; }
+  COMMAND start { Planner.numCores := count; CALL getMap ON Planner; }
+  COMMAND clear { CALL reset ON Planner; }
+}
