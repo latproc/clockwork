@@ -53,6 +53,17 @@ The cyclic kthread must be real-time or domain working-counter flaps
 `ELC_IO_FAULT_DOMAIN_INCOMPLETE` (0x20) under load → `bus_healthy=0` → outputs
 publish but never arm (even with 34/34 OP and link up).
 
+**Boot order (1G2C-122):** `daemontools-run.service` must start **after**
+`ethercat.service`. `iod-elc.sh` `modprobe elc_ethercat` depends on `ec_master`;
+if that happens first, IgH loads with empty `main_devices` and `/dev/EtherCAT0`
+never appears (`ethercatctl start` is a no-op). Host drop-in:
+
+`/etc/systemd/system/daemontools-run.service.d/10-after-ethercat.conf`  
+(source: `code/config/scripts/systemd/daemontools-run.service.d/`).
+
+`iod-elc.sh` also refuses to load `elc_ethercat` until `/dev/EtherCAT0` exists
+and `main_devices` is non-empty.
+
 **Plant path: DKMS + modprobe** (RT defaults in `/etc/modprobe.d/elc_ethercat.conf`):
 
 ```sh
