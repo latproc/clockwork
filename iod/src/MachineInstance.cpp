@@ -1342,19 +1342,25 @@ void MachineInstance::propagateNeedsCheckToDependents() {
 }
 
 void MachineInstance::idleReadyWork() {
-    if (!is_enabled || executingCommand()) {
+    // Re-entry: COPY/PUSH during idle() mutates lists and must not nest.
+    static thread_local int idle_ready_depth = 0;
+    if (idle_ready_depth > 0 || !is_enabled || executingCommand()) {
         return;
     }
+    ++idle_ready_depth;
     if (hasMail()) {
         idle();
         if (executingCommand()) {
+            --idle_ready_depth;
             return;
         }
     }
     if (!getStateMachine() || !getStateMachine()->allow_auto_states) {
+        --idle_ready_depth;
         return;
     }
     if (!needs_check && !queuedForStableStateTest()) {
+        --idle_ready_depth;
         return;
     }
     if (setStableState()) {
@@ -1362,12 +1368,13 @@ void MachineInstance::idleReadyWork() {
             idle();
         }
     }
+    --idle_ready_depth;
 }
 
 void MachineInstance::idleReadyDependents() {
-    std::set<MachineInstance *>::iterator dep_iter = depends.begin();
-    while (dep_iter != depends.end()) {
-        MachineInstance *dep = *dep_iter++;
+    // Snapshot: idleReadyWork may add/remove depends.
+    std::vector<MachineInstance *> deps(depends.begin(), depends.end());
+    for (MachineInstance *dep : deps) {
         if (dep && dep != this && dep->is_enabled) {
             dep->idleReadyWork();
         }
@@ -1700,9 +1707,6 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
                     keep_pending = false;
                     break;
                 }
-                // SEND/PUSH during the last idle must have run dest Change/Jump
-                // and HMISCREENTRACK TAKE LAST before the next SIZE/ALL/ANY.
-                mi->idleReadyDependents();
                 if (!mi->setStableState()) {
                     keep_pending = false;
                     break;
