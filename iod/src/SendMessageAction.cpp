@@ -57,6 +57,30 @@ void SendMessageActionTemplate::toC(std::ostream &out, std::ostream &vars) const
 SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)
     : Action(mi), message(eat.message), target(eat.target), target_machine(eat.target_machine) {}
 
+// LPC SEND (HMISCREEN Change/Jump, LIST calc) must run dest work in this
+// pass so the walker sees COPY/MOVE results. Clock notify does not use
+// this path — it only enqueues.
+//
+// Do not idle a dest that is already executing a command. Unconditional
+// idle() here nested into HMISCREENFORK while Jump was Running
+// (Jump { SEND Change TO SELF }) and pinned the panel on Initial2025.
+// After dest idle returns, drain leftover mail so that same Jump's
+// Change still copies L_True/L_False into ScreenList.
+static void idleLocalSendDest(MachineInstance *dest) {
+    if (!dest) {
+        return;
+    }
+    for (int n = 0; n < 16; ++n) {
+        if (dest->executingCommand()) {
+            return;
+        }
+        if (!dest->hasMail()) {
+            return;
+        }
+        dest->idle();
+    }
+}
+
 Action::Status SendMessageAction::run() {
     owner->start(this);
     if (target != 0) {
@@ -84,11 +108,13 @@ Action::Status SendMessageAction::run() {
                 msg_str = message.asString();
             }
             owner->sendMessageToReceiver(msg_str.c_str(), target_machine);
+            idleLocalSendDest(target_machine);
             if (target_machine->_type == "LIST" && target_machine->enabled()) {
                 for (unsigned int i = 0; i < target_machine->parameters.size(); ++i) {
                     MachineInstance *entry = target_machine->parameters[i].machine;
                     if (entry) {
                         owner->sendMessageToReceiver(msg_str.c_str(), entry);
+                        idleLocalSendDest(entry);
                     }
                 }
             }
@@ -98,6 +124,7 @@ Action::Status SendMessageAction::run() {
                     MachineInstance *entry = target_machine->locals[i].machine;
                     if (entry) {
                         owner->sendMessageToReceiver(msg_str.c_str(), entry);
+                        idleLocalSendDest(entry);
                     }
                 }
             }
