@@ -839,6 +839,8 @@ bool IODCommandBusy::run(std::vector<Value> &params) {
         ss << "\n";
     }
     if (!shown) ss << "(none)\n";
+    ss << "\n";
+    IOComponent::describePendingOutputUpdates(ss);
     result_str = ss.str();
     return true;
 }
