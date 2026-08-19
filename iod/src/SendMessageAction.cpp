@@ -57,28 +57,56 @@ void SendMessageActionTemplate::toC(std::ostream &out, std::ostream &vars) const
 SendMessageAction::SendMessageAction(MachineInstance *mi, SendMessageActionTemplate &eat)
     : Action(mi), message(eat.message), target(eat.target), target_machine(eat.target_machine) {}
 
-// LPC SEND (HMISCREEN Change/Jump, LIST calc) must run dest work in this
-// pass so the walker sees COPY/MOVE results. Clock notify does not use
+// LPC SEND must run dest work in this pass. Clock notify does not use
 // this path — it only enqueues.
 //
-// Do not idle a dest that is already executing a command. Unconditional
-// idle() here nested into HMISCREENFORK while Jump was Running
-// (Jump { SEND Change TO SELF }) and pinned the panel on Initial2025.
-// After dest idle returns, drain leftover mail so that same Jump's
-// Change still copies L_True/L_False into ScreenList.
+// dest->idle() first drains mail into a HandleMessageAction (status New)
+// and returns without running it. Treating any executingCommand() as
+// "stop" left that New handler queued; a later processAll might run it,
+// or a MOVE off the source LIST could leave it stranded. Finish New /
+// NeedsRetry work here.
+//
+// Do not idle a dest that already has a Running/Suspended command.
+// Unconditional idle() nested into dest while a command such as
+// SEND-to-SELF was still Running and left that dest pinned.
+static bool destHasDeliverableWork(MachineInstance *dest) {
+    if (dest->hasMail()) {
+        return true;
+    }
+    Action *a = dest->executingCommand();
+    if (!a) {
+        return false;
+    }
+    Action::Status s = a->getStatus();
+    return s == Action::New || s == Action::NeedsRetry;
+}
+
 static void idleLocalSendDest(MachineInstance *dest) {
     if (!dest) {
         return;
     }
-    for (int n = 0; n < 16; ++n) {
-        if (dest->executingCommand()) {
+    Action *pre = dest->executingCommand();
+    if (pre) {
+        Action::Status s = pre->getStatus();
+        if (s != Action::New && s != Action::NeedsRetry) {
+            dest->idleReadyDependents();
             return;
         }
-        if (!dest->hasMail()) {
+    }
+    for (int n = 0; n < 16; ++n) {
+        if (!destHasDeliverableWork(dest)) {
             dest->idleReadyDependents();
             return;
         }
         dest->idle();
+        Action *a = dest->executingCommand();
+        if (a) {
+            Action::Status s = a->getStatus();
+            if (s != Action::New && s != Action::NeedsRetry) {
+                dest->idleReadyDependents();
+                return;
+            }
+        }
     }
     dest->idleReadyDependents();
 }

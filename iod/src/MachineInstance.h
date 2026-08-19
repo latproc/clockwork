@@ -275,8 +275,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     bool listPropagatesMemberChecks() const;
     void propagateNeedsCheckToDependents();
     // Run queued mail / one stable-state step if this machine is not already
-    // executing a command. Used after LPC SEND/PUSH/MOVE so HMISCREENTRACK
-    // TAKE LAST and list walkers see results in the same drain pass.
+    // executing a command. Used after LPC SEND/PUSH/MOVE so a dependent that
+    // tests the mutated LIST can take the new member in the same drain pass.
     void idleReadyWork();
     void idleReadyDependents();
     void resetTemporaryStringStream();
