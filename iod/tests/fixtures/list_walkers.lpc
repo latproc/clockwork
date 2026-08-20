@@ -65,6 +65,9 @@ L_ScreenCmds LIST;
 M_Screen HMISCREEN L_ScreenStart, L_ScreenWalk, L_ScreenCmds;
 M_ScreenTrack HMISCREENTRACK V_Screen, L_ScreenCmds;
 M_ScreenFork HMISCREENFORK G_Mode, L_ScreenWalk, L_ScreenAuto, L_ScreenManual;
+M_HoldARefresh HMIQUESTIONSCREENREFRESH M_HoldA, M_Screen;
+M_HoldBRefresh HMIQUESTIONSCREENREFRESH M_HoldB, M_Screen;
+M_HoldCRefresh HMIQUESTIONSCREENREFRESH M_HoldC, M_Screen;
 
 M_ScreenStart HMISCREENTEST (ScreenNo:"Start") G_Ready, L_ScreenCmds;
 M_ScreenFault HMISCREENTEST (ScreenNo:"Fault") G_Fault, L_ScreenCmds;
@@ -124,3 +127,32 @@ GRIDCTL MACHINE Planner {
   COMMAND start { Planner.numCores := count; CALL getMap ON Planner; }
   COMMAND clear { CALL reset ON Planner; }
 }
+
+# ---------------------------------------------------------------------------
+# SEND Sample: dest COMMAND SET State; WHEN must recheck without SET SELF
+# (SEND Sample → ToPackBlast / ToPackBlastWait)
+# ---------------------------------------------------------------------------
+TUBESEQSTATES MACHINE {
+  Ready INITIAL;
+  ToPackBlast STATE;
+}
+
+TUBESEQ MACHINE State {
+  Ready WHEN State IS Ready;
+  ToPackBlastWait WHEN State IS ToPackBlast;
+  Ready INITIAL;
+  COMMAND Sample WITHIN Ready { SET State TO ToPackBlast; }
+  COMMAND Reset {
+    SET State TO Ready;
+    SET SELF TO Ready;
+  }
+}
+
+TUBESEQSRC MACHINE Tube {
+  idle INITIAL;
+  COMMAND go { SEND Sample TO Tube; }
+}
+
+M_TubeSeqState TUBESEQSTATES;
+M_TubeSeq TUBESEQ M_TubeSeqState;
+M_TubeSeqSrc TUBESEQSRC M_TubeSeq;

@@ -148,6 +148,10 @@ class ListWalkersTest : public ::testing::Test {
         static SharedThreadSafeQueue<Package *> queue(cond, mutex);
         Dispatcher::create(queue);
 
+        auto readable = [](const std::string &p) {
+            struct stat st;
+            return stat(p.c_str(), &st) == 0 && S_ISREG(st.st_mode);
+        };
         std::list<std::string> files;
         auto maybe = [&](const std::string &p) {
             struct stat st;
@@ -248,6 +252,41 @@ TEST_F(ListWalkersTest, ScreenHoldYesReturnsToAutoHomeSameDrain) {
     EXPECT_EQ(valueOf("V_Screen"), "AutoHome")
         << "walker=" << stateOf("M_Screen")
         << " (tracker must take last Jump in this drain)";
+}
+
+TEST_F(ListWalkersTest, SendSampleDestWhenRechecksWithoutSetSelf) {
+    sendCmd("M_TubeSeq", "Reset");
+    drainSamePass();
+    ASSERT_EQ(stateOf("M_TubeSeqState"), "Ready");
+    ASSERT_EQ(stateOf("M_TubeSeq"), "Ready");
+
+    MachineInstance *src = mustFind("M_TubeSeqSrc");
+    ASSERT_NE(src, nullptr);
+    sendCmd("M_TubeSeqSrc", "go");
+    finishActions(src);
+
+    EXPECT_EQ(stateOf("M_TubeSeqState"), "ToPackBlast");
+    EXPECT_EQ(stateOf("M_TubeSeq"), "ToPackBlastWait")
+        << "SEND Sample must run dest WHEN after SET State in the same pass "
+           "(no SET SELF; no later global setNeedsCheck)";
+}
+
+TEST_F(ListWalkersTest, ScreenReevaluateFromTestFalseReseedsWalk) {
+    resetScreen();
+    sendCmd("M_HoldA", "Question");
+    drainSamePass();
+    ASSERT_EQ(valueOf("V_Screen"), "HoldA");
+    ASSERT_EQ(stateOf("M_Screen"), "TestFalse");
+
+    sendCmd("M_Screen", "Reevaluate");
+    drainOnce();
+    MachineInstance *walk = mustFind("L_ScreenWalk");
+    ASSERT_NE(walk, nullptr);
+    EXPECT_GT(walk->parameters.size(), 0u)
+        << "Reevaluate from TestFalse must re-seed ScreenList";
+    EXPECT_EQ(valueOf("V_Screen"), "HoldA")
+        << "walker=" << stateOf("M_Screen")
+        << " walkN=" << walk->parameters.size();
 }
 
 TEST_F(ListWalkersTest, ScreenForkChangeCopiesManualList) {

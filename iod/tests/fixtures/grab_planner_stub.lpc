@@ -1,0 +1,32 @@
+# Minimal map-planner types for list_walkers.lpc.
+GRABPLANSTATUS MACHINE {
+  OPTION grabMap 0;
+  OPTION NumGrabs 0;
+  idle INITIAL;
+}
+GRABPLANNER MACHINE Status, Cells {
+  OPTION grabMap 0;
+  OPTION NumGrabs 0;
+  idle INITIAL;
+  COMMAND getMap { }
+  COMMAND reset { grabMap := 0; }
+}
+COREPLANSTATUS MACHINE {
+  OPTION coreMap 0;
+  OPTION numCores 0;
+  idle INITIAL;
+}
+COREPLANNER MACHINE Status, Slots, Skipped {
+  OPTION coreMap 0;
+  OPTION numCores 0;
+  idle INITIAL;
+  COMMAND getMap { }
+  COMMAND reset { coreMap := 0; }
+}
+TUBEFLAG MACHINE DeSelect {
+  OPTION ID 0;
+  OPTION SlotId 0;
+  OPTION Location 0;
+  on STATE;
+  off INITIAL;
+}

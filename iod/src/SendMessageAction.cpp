@@ -95,6 +95,10 @@ static void idleLocalSendDest(MachineInstance *dest) {
     }
     for (int n = 0; n < 16; ++n) {
         if (!destHasDeliverableWork(dest)) {
+            // Dest COMMAND that SET a listened machine bumps needs_check
+            // while actions still run; setNeedsCheck may skip pending_state.
+            // WHEN on that property (no SET SELF) must run after the command.
+            dest->idleReadyWork();
             dest->idleReadyDependents();
             return;
         }
@@ -108,6 +112,7 @@ static void idleLocalSendDest(MachineInstance *dest) {
             }
         }
     }
+    dest->idleReadyWork();
     dest->idleReadyDependents();
 }
 

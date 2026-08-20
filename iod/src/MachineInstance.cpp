@@ -1539,6 +1539,16 @@ void MachineInstance::idle() {
     }
     if (mail_queue.empty() && active_actions.empty()) {
         has_work = false;
+        // A COMMAND that SET a parameter (or other listened machine) can
+        // notify this instance while actions are still running. setNeedsCheck
+        // then only bumps the counter and skips pending_state. Queue a WHEN
+        // recheck once the command has drained (e.g. Sample → ToPackBlastWait
+        // when State IS ToPackBlast, without SET SELF).
+        if (needs_check > 0 && state_machine && state_machine->allow_auto_states) {
+            std::lock_guard<std::mutex> lock(pending_state_change_mutex);
+            pending_state_change.insert(this);
+            ProcessingThread::activate(this);
+        }
     }
     if (has_work) {
         ProcessingThread::activate(this);
