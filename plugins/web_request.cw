@@ -6,6 +6,8 @@ WEBREQUEST MACHINE {
     OPTION PostData "";    # POST data
     OPTION ContentType NULL;
     OPTION Method NULL;
+    OPTION Headers JSON_VALUE {}; # Additional HTTP headers (string values only)
+    OPTION ResponseHeaders JSON_VALUE {}; # Final response headers
 
     OPTION TrustHostCert FALSE; # Whether to trust host certificate
 
@@ -17,10 +19,10 @@ WEBREQUEST MACHINE {
     Done STATE;
     Idle INITIAL;
 
-    COMMAND start WITHIN Error { Status := 0; Result := ""; Errors := ""; SET SELF TO Start; }
-    COMMAND start WITHIN Done  { Status := 0; Result := ""; Errors := ""; SET SELF TO Start; }
-    COMMAND start WITHIN Idle  { Status := 0; Result := ""; Errors := ""; SET SELF TO Start; }
-    COMMAND reset { Status := 0; Request := ""; Result := ""; Errors := ""; PostData := ""; SET SELF TO Idle; }
+    COMMAND start WITHIN Error { Status := 0; Result := ""; Errors := ""; ResponseHeaders := JSON_VALUE {}; SET SELF TO Start; }
+    COMMAND start WITHIN Done  { Status := 0; Result := ""; Errors := ""; ResponseHeaders := JSON_VALUE {}; SET SELF TO Start; }
+    COMMAND start WITHIN Idle  { Status := 0; Result := ""; Errors := ""; ResponseHeaders := JSON_VALUE {}; SET SELF TO Start; }
+    COMMAND reset { Status := 0; Request := ""; Result := ""; Errors := ""; PostData := ""; ResponseHeaders := JSON_VALUE {}; SET SELF TO Idle; }
 }
 
 %BEGIN_PLUGIN

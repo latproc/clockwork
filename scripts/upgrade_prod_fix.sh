@@ -398,6 +398,9 @@ build_one_plugin() {
   if grep -qE 'curl/|exec_web_request|libcurl' "$tmpc" 2>/dev/null; then
     extra_libs+=(-lcurl)
   fi
+  if grep -qE 'openssl/|exec_digest|EVP_' "$tmpc" 2>/dev/null; then
+    extra_libs+=(-lcrypto)
+  fi
 
   out="${PLUGIN_DIR}/${name}"
   mkdir -p "$PLUGIN_DIR"
