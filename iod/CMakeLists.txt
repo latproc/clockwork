@@ -115,6 +115,7 @@ FIND_PACKAGE(Mosquitto)
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
 FIND_PACKAGE(ZeroMQ REQUIRED)
+FIND_PACKAGE(OpenSSL REQUIRED)
 
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIR} ${ZeroMQ_INCLUDE_DIR})
 
@@ -276,6 +277,7 @@ set (Clockwork_Headers
     src/EnableAction.h
     src/EtherCATSetup.h
     src/exec_command.h
+    src/exec_digest.h
     src/exec_web_request.h
     src/ExecuteMessageAction.h
     src/ExportState.h
@@ -387,6 +389,7 @@ set (Clockwork_SRCS
     src/ECInterface.cpp
     src/EnableAction.cpp
     src/exec_command.c
+    src/exec_digest.c
     src/exec_web_request.c
     src/ExecuteMessageAction.cpp
     src/ExportState.cpp
@@ -465,6 +468,7 @@ endif()
 endif()
 add_library(cw_interpreter ${Clockwork_SRCS})
 set_target_properties (cw_interpreter PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(cw_interpreter PUBLIC OpenSSL::Crypto)
 
 add_executable(cw src/cw.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
@@ -535,7 +539,7 @@ if(BUILD_IOD_ELC AND ELC_FOUND)
   target_link_libraries(iod-elc
     cw_client
     ${ELC_LIBRARIES}
-    dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" ${_iod_elc_extra_libs} curl
+    dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" ${_iod_elc_extra_libs} curl OpenSSL::Crypto
   )
   install(TARGETS iod-elc RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
   message(STATUS "Building iod-elc with libelcethercat (${ELC_VERSION}) include=${ELC_INCLUDE_DIRS}")

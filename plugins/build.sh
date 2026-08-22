@@ -31,11 +31,17 @@ cat "$script" | awk -v file="$script" '
 if [ $(uname -s) == "Darwin" ]; then
     LDFLAGS="$LDFLAGS -dynamiclib -Wall -pedantic -fPIC -Wl,-undefined,dynamic_lookup"
     echo gcc $CFLAGS $LDFLAGS -I../iod/src plugin_$$.c -o "$out"
-    gcc $CFLAGS $LDFLAGS -I../iod/src plugin_$$.c -lcurl -o "$out" && rm plugin_$$.c
+    extra_libs=""
+    grep -q 'exec_web_request' plugin_$$.c && extra_libs="$extra_libs -lcurl"
+    grep -q 'exec_digest' plugin_$$.c && extra_libs="$extra_libs -lcrypto"
+    gcc $CFLAGS $LDFLAGS -I../iod/src plugin_$$.c $extra_libs -o "$out" && rm plugin_$$.c
 elif [ $(uname -s) == "Linux" ]; then
     LDFLAGS="$LDFLAGS -shared -Wall -fPIC -Wl,-soname,$out"
     echo gcc $CFLAGS -rdynamic $LDFLAGS -I../iod/src plugin_$$.c -o "$out"
-    gcc $CFLAGS $LDFLAGS -I../iod/src plugin_$$.c -o "$out" && rm plugin_$$.c
+    extra_libs=""
+    grep -q 'exec_web_request' plugin_$$.c && extra_libs="$extra_libs -lcurl"
+    grep -q 'exec_digest' plugin_$$.c && extra_libs="$extra_libs -lcrypto"
+    gcc $CFLAGS $LDFLAGS -I../iod/src plugin_$$.c $extra_libs -o "$out" && rm plugin_$$.c
 else
     echo "unknown platform $(uname -s)"
 fi
