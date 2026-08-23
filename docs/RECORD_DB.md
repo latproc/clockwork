@@ -15,6 +15,8 @@
 
 This is the design spec only. Language, `dbd`, datastore, Warehouse LPC, SamplingLine, and `cw-migrate` implementation happen later on a separate branch.
 
+**Implementation plan:** `docs/RECORD_IMPLEMENTATION_PLAN.md` (generic Clockwork + datastore PRs, tests, `cw-scaffold`, WAL/ZMQ).
+
 ---
 
 ## Overview
