@@ -475,6 +475,10 @@ set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 #target_link_libraries(cw cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES})
 target_link_libraries(cw cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
 
+add_executable(cw-scaffold src/cw_scaffold.cpp)
+set_target_properties(cw-scaffold PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_link_libraries(cw-scaffold cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+
 enable_testing()
 set(_record_parse ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_parse.cmake)
 set(_record_fix ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/record)
@@ -501,6 +505,14 @@ add_test(NAME record_parse_no_key COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/no_key.cw -DEXPECT_RC=2
   -DMUST_CONTAIN=KEY
   -P ${_record_parse})
+add_test(NAME record_scaffold_customer COMMAND ${CMAKE_COMMAND}
+  -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
+  -DCW=$<TARGET_FILE:cw>
+  -DFROM=${_record_fix}/customer.cw
+  -DGOLDEN=${_record_fix}/expected_CustomerINTERFACE.lpc
+  -DOUT_NAME=CustomerINTERFACE.lpc
+  -DCHANNEL=${CMAKE_CURRENT_SOURCE_DIR}/../tests/db-channel.cw
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_scaffold.cmake)
 
 if (USE_ETHERCAT)
 # Experimental cw with SOEM EtherCAT library support
@@ -630,7 +642,7 @@ target_link_libraries(persistd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "p
 
 # modbusd/dbd need libmodbus. HMI panels often only build cw_client and do not
 # install libmodbus-dev; do not fail configure for that case.
-set(CLOCKWORK_RUNTIME_TARGETS cw iosh iocmd device_connector persistd)
+set(CLOCKWORK_RUNTIME_TARGETS cw cw-scaffold iosh iocmd device_connector persistd)
 if (MODBUS_FOUND)
   add_executable(modbusd src/modbusd.cpp )
   target_link_libraries(modbusd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")

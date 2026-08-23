@@ -67,6 +67,7 @@ Thumbs.db
 #project build files
 iod/build/
 iod/build-record/
+iod/tests/_scaffold_out/
 iod/xcode/
 iod/.test/
 modbus/build/

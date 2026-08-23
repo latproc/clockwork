@@ -629,7 +629,6 @@ Hand-written INTERFACE + JSON on DATABASE_CHANNEL remains valid. **v1 persist sc
 
 ```
 CustomerINTERFACE MACHINE record, items {
-    GLOBAL DATABASE_CHANNEL;
     OPTION request JSON_VALUE {};
     COMMAND create { … action insert … SEND request TO DATABASE_CHANNEL; }
     COMMAND update { … }
@@ -822,7 +821,7 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 ### Clockwork
 
 1. **RECORD grammar + subprocess parse tests** — **landed.** `RECORD` body OPTIONS only; `KEY`/`UNIQUE`/`NOT NULL`; `VIEW`/`TABLE`; `cw --parse-only`; fixtures under `iod/tests/fixtures/record/`. KEY on MACHINE is an error; missing KEY on a table RECORD is an error. No dbd/datastore change.
-2. **`cw-scaffold` + goldens** — `cw-scaffold --from a.cw --out dir/`. `CustomerINTERFACE`; VIEW find/list only; LOCAL omitted; no KEY → non-zero. Parse RECORD + generated file + `tests/db-channel.cw`.
+2. **`cw-scaffold` + goldens** — **landed.** `cw-scaffold --from a.cw --out dir/` writes `<Class>INTERFACE.lpc`. create=`insert`; VIEW omits write COMMANDs; LOCAL omitted. Golden `expected_CustomerINTERFACE.lpc` plus parse with `tests/db-channel.cw`. Do not declare `GLOBAL DATABASE_CHANNEL` (CHANNEL is not a MACHINE in the instance table).
 3. **dbd ZMQ recovery** (with datastore linger 0) — one context, REQ deadline, `forceFullReconnect`, no `exit` on STARTUP. Before persist round-trips.
 4. **dbd maps typed JSON rows onto RECORD OPTIONS** by type+key; skip echo persist. Wants datastore RETURNING/typed replies.
 5. **Two Clockworks, one datastore** — client A / client B; `dbsvr` PUB after commit (Q6 decided).
