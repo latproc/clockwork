@@ -1,6 +1,6 @@
 # Clockwork RECORD and native database
 
-**Status:** Draft (amended after original-author comments and implementation review 2026-08-23)  
+**Status:** Draft (amended after original-author comments, implementation review, and Q6: PUB after commit)  
 **Date:** 2026-08-23  
 **Author:** (design)  
 **Repos:**
@@ -112,7 +112,7 @@ WoolSamplingLineAPI (`SamplingLineProjects/WoolSamplingLineAPI`) is Alembic-mana
 
 Two Clockwork iods (Grab and Core Warehouse configs) both use this HTTP API as shared memory. `BALEREFMOVE` on one machine plus `ChangeCounter` on the other is how a bale leaving Grab appears on Core.
 
-RECORD + one shared **datastore** is how Clockwork can take on that job: a write on one iod commits once in `dbsvr`; both Clockworks see the OPTIONS change without an HTTP GET. How the second iod is notified is still open (datastore is request/reply today) — see Open questions.
+RECORD + one shared **datastore** is how Clockwork can take on that job: a write on one iod commits once in `dbsvr`; both Clockworks that hold that RECORD see the same OPTIONS without an HTTP GET. After COMMIT, `dbsvr` publishes so the other `dbd` can apply (Q6).
 
 ---
 
@@ -228,7 +228,7 @@ Grab and Core must **not** each open the database file. Two writers would split 
 
 Connection: named database from config (Jemalong `jemalong.conf` `db_name`). Datastore already reads that. CHANNEL `KEY` as today. Network: `dbsvr` on the warehouse LAN so both dbds can reach `:5554`.
 
-**Fan-out (open):** datastore is ZMQ REP today — one request, one reply. A SAVE on Grab updates that iod after the reply. Core does not hear about it unless (a) datastore grows a publish/notify after commit, (b) Core’s dbd is told to refresh, or (c) something else Martin specifies. That is **not** a reason to merge sqlite into `dbd`.
+**Fan-out (decided):** datastore is ZMQ REP today — one request, one reply. After COMMIT, `dbsvr` **publishes** the table + key (or the row). Every `dbd` that holds that RECORD applies OPTIONS so A and B stay the same. PUB/SUB uses linger 0 and the same restart rules as dbd REQ. That is **not** a reason to merge sqlite into `dbd`.
 
 ### RECORD is MACHINE with a parser limit
 
@@ -459,7 +459,7 @@ Today `dbd` parses JSON, `client.connect("tcp://127.0.0.1:5554")`, `makeRemoteRe
 - Parameterized SQL (today `SQLInterface` concatenates; tighten with an identifier allow-list and bound values).
 - Richer JSON: `select` / `join` / `view` / `order` / `limit`.
 - Store remains sqlite3 until a Redis (or other) Store is written. Clockwork does not care.
-- Optional notify-after-commit if that is how two Clockworks share a row (open).
+- Notify-after-commit: PUB table+key (or row) so every dbd that holds the RECORD applies OPTIONS.
 
 Do **not** open sqlite from `dbd`. Do **not** fold `dbsvr` into the Clockwork tree as “the SQL worker”.
 
@@ -472,7 +472,7 @@ Do **not** open sqlite from `dbd`. Do **not** fold `dbsvr` into the Clockwork tr
 | D3 | insert/update/delete do not return the row (need `RETURNING` or equivalent) | `performRequestMessage` |
 | D4 | JSON null / boolean not emitted as SQL | `collectValuesString` |
 | D5–D6 | No `select`/`join`/`order`/`limit`; WHERE is equality-AND only | `buildSQL` |
-| D7 | ZMQ REP only — no notify (open Q6) | `dbsvr.cpp` |
+| D7 | ZMQ REP only today — add PUB after COMMIT (Q6 decided) | `dbsvr.cpp` |
 | D8 | `action: "create"` is CREATE TABLE (README is wrong) | `buildSQL` |
 | D9 | `action: "sql"` unsandboxed | `buildSQL` |
 | D10 | No identifier catalog | new |
@@ -516,7 +516,7 @@ Required:
 3. Configurable `dbsvr` endpoint (default `127.0.0.1:5554`).
 4. `dbsvr`: linger 0 on bind; reset REP state on send/recv failure; `EADDRINUSE` retry/log.
 5. CHANNEL: `forceFullReconnect` like persistd; STARTUP reconnects in-process (**no `exit(0)`**).
-6. Notify-after-commit (if Q6 is PUB) uses the same linger/timeout rules — not a second silent REQ.
+6. Notify-after-commit is PUB (Q6); same linger/timeout rules — not a second silent REQ.
 
 `iod/CMakeLists.txt` only builds `dbd` if `MODBUS_FOUND`. Parser/scaffold tests must not require `dbd`.
 
@@ -729,7 +729,7 @@ Warehouse `BaleInstance` mapping is **out of v1 schema**; a later PR may declare
 | Parser `RECORD` vs user class named RECORD | Low | Keyword; same as MACHINE |
 | Dynamic instance lifetime / leaks | Medium | Registry + optional LRU for unbound query hits; named instances never evicted |
 | Migration applied on wrong file | High | Refuse mismatch; never auto-upgrade prod |
-| Second iod misses a write | High | Open: notify-after-commit vs refresh. Do not “fix” by merging sqlite into dbd |
+| Second iod misses a write | High | `dbsvr` PUB after COMMIT; dbd applies onto held RECORDs. Do not “fix” by merging sqlite into dbd |
 | REQ/REP hang after iod or dbsvr restart | High | Linger 0, REQ deadline, recreate socket, `forceFullReconnect`; do not `exit` on STARTUP |
 
 ---
@@ -777,7 +777,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 3. ~~Table naming~~ **Decided:** lowercase class name; `TABLE "…"` override.
 4. ~~Composite keys in v1~~ **Decided:** single-column `KEY` in v1; composites later (views for multi-column lookup if needed).
 5. **QUERY JSON richness in v1:** **lean named views first**; ad-hoc `join` arrays later (DS-4).
-6. **Two-Clockwork notify:** datastore PUB after commit, dbd refresh, or another mechanism? Still open. Any notify socket uses the same linger/timeout rules as dbd↔dbsvr.
+6. ~~Two-Clockwork notify~~ **Decided:** after COMMIT, `dbsvr` **publishes** (table + key, or the row). Every `dbd` that holds that RECORD applies OPTIONS. B must not stay stale. New PUB/SUB uses linger 0 and the same restart rules as dbd REQ. Not a second silent REQ; not poll-until-refresh.
 7. ~~Builtin persist~~ **Decided for v1:** generated `<Class>INTERFACE` (`cw-scaffold`), not FLAG-style `save`/`load` on RECORD.
 
 ---
@@ -796,6 +796,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 10. **Table name = lowercase class name** unless `TABLE "…"`.
 11. **Datastore SQLite PRAGMAs** match WoolSamplingLineAPI `app/db.py` (copy PRAGMAs only, not models): `foreign_keys=ON`, `journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=5000`. Automatic transaction per JSON request.
 12. **ZMQ restart:** one dbd context; linger 0; REQ deadlines; recreate on EFSM; `forceFullReconnect` on iod CHANNEL; no `exit` on STARTUP; configurable `dbsvr` endpoint. `dbsvr` linger 0 on REP bind.
+13. **Two Clockworks, same RECORD → same OPTIONS.** After COMMIT, `dbsvr` PUBlishes `{type, keys}` or the row; every dbd that holds that instance applies it. Not poll-until-refresh.
 
 ---
 
@@ -824,7 +825,7 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 2. **`cw-scaffold` + goldens** — `cw-scaffold --from a.cw --out dir/`. `CustomerINTERFACE`; VIEW find/list only; LOCAL omitted; no KEY → non-zero. Parse RECORD + generated file + `tests/db-channel.cw`.
 3. **dbd ZMQ recovery** (with datastore linger 0) — one context, REQ deadline, `forceFullReconnect`, no `exit` on STARTUP. Before persist round-trips.
 4. **dbd maps typed JSON rows onto RECORD OPTIONS** by type+key; skip echo persist. Wants datastore RETURNING/typed replies.
-5. **Two Clockworks, one datastore** — client A / client B; notify still open (Q6).
+5. **Two Clockworks, one datastore** — client A / client B; `dbsvr` PUB after commit (Q6 decided).
 6. **COPY ALL FROM RecordClass INTO LIST** — then scaffolder `list` switches to COPY. `tests/record_list.cw`.
 7. **QUERY INTO** — named views first.
 
@@ -837,7 +838,7 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 3. **`select` / `order` / `limit` / richer `where`.**
 4. **JSON `join` (optional)** after named views.
 5. **`cw-migrate`** — tables and views; no auto-upgrade on `dbsvr` start. Examples use `customer`.
-6. **Notify-after-commit (Q6)** if that is the chosen fan-out.
+6. **PUB after COMMIT** — `{type, keys}` or the row; each dbd that holds the RECORD applies OPTIONS.
 
 DS-0 can start in parallel with Clockwork 1. DS-1 before Clockwork 4. DS-3 before COPY-from-class (or COPY finds all and filters in iod).
 
