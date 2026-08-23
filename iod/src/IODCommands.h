@@ -79,6 +79,10 @@ struct IODCommandProperty : public IODCommand {
     std::string raw_message_;
 };
 
+struct IODCommandRecordApply : public IODCommand {
+    bool run(std::vector<Value> &params);
+};
+
 struct IODCommandDescribe : public IODCommand {
     bool run(std::vector<Value> &params);
 };

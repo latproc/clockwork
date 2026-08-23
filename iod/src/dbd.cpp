@@ -18,13 +18,6 @@
     Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
 
-/*
-    dbd starts a thread that accepts connections from database server
-    programs and starts a subscriber on clockwork to listen for
-    changes to items that are exported and for direct database
-    commands.
-*/
-
 #include <boost/thread/thread.hpp>
 
 #include "DebugExtra.h"
@@ -50,6 +43,7 @@
 #include <zmq.hpp>
 
 #include "ConnectionManager.h"
+#include "DeadlineReq.h"
 #include "MessageEncoding.h"
 #include "MessagingInterface.h"
 #include "SocketMonitor.h"
@@ -58,71 +52,12 @@
 #include <netinet/tcp.h>
 #include <signal.h>
 #include <sys/socket.h>
+#include <libgen.h>
 #include <string>
-
-namespace {
-
-int debug = 0;
-
-void send_response_to_clockwork(cJSON *json_request, const char *buf) {
-    struct ResponseTarget {
-        Value machine{"manager"};
-        Value property{"response"};
-    };
-    ResponseTarget target;
-    auto respond_to = cJSON_GetObjectItem(json_request, "respond_to");
-    if (respond_to && respond_to->type == cJSON_String) {
-        std::string respond_to_str = respond_to->valuestring;
-        target.machine = Value{respond_to_str.substr(0, respond_to_str.rfind('.'))};
-        target.property = Value{respond_to_str.substr(respond_to_str.rfind('.') + 1)};
-        std::cout << "responding to " << target.machine << "." << target.property << "\n";
-    }
-    cJSON *msg = cJSON_Parse(buf);
-    if (!msg) {
-        std::cout << "could not parse database response: " << buf << "\n";
-        return;
-    }
-    auto str = cJSON_Print(msg);
-    assert(str && "cJSON_Print returned a null pointer");
-    auto cmd = MessageEncoding::encodeCommand("PROPERTY", target.machine, target.property, Value{msg});
-    if (!cmd.empty()) {
-        if (debug) {
-            std::cout << "sending response to clockwork: " << cmd << "\n" << std::flush;
-        }
-        std::cout << str << "\n";
-        zmq::context_t context;
-        zmq::socket_t client(context, ZMQ_REQ);
-        client.connect("tcp://127.0.0.1:5555");
-
-        std::string response;
-        if (sendMessage(cmd.c_str(), client, response)) {
-            std::cout << "response: " << response << "\n";
-            auto update = MessageEncoding::encodeCommand("SEND",
-                             target.property + Value{"_changed"},
-                             Value{"TO",Value::t_string},
-                             target.machine);
-            if (!update.empty()) {
-                if (debug) {
-                    std::cout << "sending update to clockwork: " << update << "\n" << std::flush;
-                }
-                std::string response;
-                if (sendMessage(update.c_str(), client, response)) {
-                    std::cout << "response: " << response << "\n";
-                }
-            }
-        }
-        else {
-            std::cout << "send failed\n";
-        }
-    }
-    free(str);
-}
-
-}
 
 namespace po = boost::program_options;
 
-static boost::condition_variable_any cond;
+int debug = 0;
 
 const char *local_commands = "inproc://local_cmds";
 
@@ -135,34 +70,27 @@ const int DEBUG_ALL = 0xffff;
 const int NOTLIB = DEBUG_ALL ^ DEBUG_LIB;
 
 #define DEBUG_BASIC (debug & NOTLIB)
-#define DEBUG_ANY (debug)
-
-std::stringstream dummy;
-time_t last = 0;
-time_t now;
-#define OUT (time(&now) == last) ? dummy : std::cout
 
 static unsigned long start_t = 0;
+static const int64_t DBSVR_TIMEOUT_MS = 5000;
+static const int64_t IOD_CMD_TIMEOUT_MS = 3000;
+
+MessagingInterface *g_iodcmd;
+DeadlineReq *g_iod_req = 0;
+DeadlineReq *g_dbsvr_req = 0;
+
+std::string getIODSyncCommand(int group, int addr, int new_value);
+char *sendIOD(int group, int addr, int new_value);
+char *sendIODMessage(const std::string &s);
 
 std::ostream &timestamp(std::ostream &out) {
     unsigned long t = microsecs() - start_t;
     return out << (t / 1000);
 }
 
-std::string getIODSyncCommand(int group, int addr, int new_value);
-
-MessagingInterface *g_iodcmd;
-
-char *sendIOD(int group, int addr, int new_value);
-char *sendIODMessage(const std::string &s);
-
 std::string getIODSyncCommand(int group, int addr, int new_value) {
     auto msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
     sendIODMessage(msg);
-
-    if (DEBUG_BASIC) {
-        std::cout << "IOD command: " << msg << "\n";
-    }
     return msg;
 }
 
@@ -171,24 +99,145 @@ char *sendIOD(int group, int addr, int new_value) {
     if (g_iodcmd) {
         return g_iodcmd->send(s.c_str());
     }
-    else {
-        if (DEBUG_BASIC) {
-            std::cout << "IOD interface not ready\n";
-        }
-        return strdup("IOD interface not ready\n");
-    }
+    return strdup("IOD interface not ready\n");
 }
 
 char *sendIODMessage(const std::string &s) {
     if (g_iodcmd) {
         return g_iodcmd->send(s.c_str());
     }
-    else {
-        if (DEBUG_BASIC) {
-            std::cout << "IOD interface not ready\n";
-        }
-        return strdup("IOD interface not ready\n");
+    return strdup("IOD interface not ready\n");
+}
+
+static bool sendIodCommand(const std::string &cmd, std::string &reply) {
+    if (g_iod_req) {
+        return g_iod_req->request(cmd, reply, IOD_CMD_TIMEOUT_MS);
     }
+    if (!g_iodcmd) {
+        return false;
+    }
+    char *r = g_iodcmd->send(cmd.c_str());
+    if (!r) {
+        return false;
+    }
+    reply = r;
+    free(r);
+    return true;
+}
+
+static void send_response_to_clockwork(cJSON *json_request, const char *buf) {
+    if (!json_request || !buf) {
+        return;
+    }
+    struct ResponseTarget {
+        Value machine{"manager"};
+        Value property{"response"};
+    };
+    ResponseTarget target;
+    auto respond_to = cJSON_GetObjectItem(json_request, "respond_to");
+    if (respond_to && respond_to->type == cJSON_String && respond_to->valuestring) {
+        std::string respond_to_str = respond_to->valuestring;
+        size_t dot = respond_to_str.rfind('.');
+        target.machine = Value{respond_to_str.substr(0, dot)};
+        target.property = Value{dot == std::string::npos ? respond_to_str : respond_to_str.substr(dot + 1)};
+    }
+    cJSON *msg = cJSON_Parse(buf);
+    if (!msg) {
+        std::cout << "could not parse database response: " << buf << "\n";
+        return;
+    }
+    char *str = cJSON_PrintUnformatted(msg);
+    auto cmd = MessageEncoding::encodeCommand("PROPERTY", target.machine, target.property,
+                                              Value(str ? str : "", Value::t_string));
+    free(str);
+    cJSON_Delete(msg);
+    if (cmd.empty()) {
+        return;
+    }
+    if (debug) {
+        std::cout << "sending response to clockwork: " << cmd << "\n" << std::flush;
+    }
+    std::string response;
+    if (sendIodCommand(cmd, response)) {
+        std::cout << "response: " << response << "\n";
+        auto update = MessageEncoding::encodeCommand("SEND", target.property + Value{"_changed"},
+                                                     Value{"TO", Value::t_string}, target.machine);
+        if (!update.empty()) {
+            sendIodCommand(update, response);
+        }
+    }
+    else {
+        std::cout << "send failed\n";
+    }
+}
+
+static void apply_rows_to_records(cJSON *request, cJSON *reply) {
+    if (!request || !reply) {
+        return;
+    }
+    cJSON *type_json = cJSON_GetObjectItem(request, "type");
+    const char *type = (type_json && type_json->type == cJSON_String) ? type_json->valuestring : 0;
+    cJSON *response = cJSON_GetObjectItem(reply, "response");
+    if (!type || !response) {
+        return;
+    }
+    cJSON *keys = cJSON_GetObjectItem(request, "keys");
+    auto send_apply = [&](cJSON *row) {
+        if (!row) {
+            return;
+        }
+        char *keys_s = keys ? cJSON_PrintUnformatted(keys) : strdup("{}");
+        char *row_s = cJSON_PrintUnformatted(row);
+        if (keys_s && row_s) {
+            auto cmd = MessageEncoding::encodeCommand("RECORD_APPLY",
+                                                      Value(type, Value::t_string),
+                                                      Value(keys_s, Value::t_string),
+                                                      Value(row_s, Value::t_string));
+            std::string reply_s;
+            sendIodCommand(cmd, reply_s);
+        }
+        free(keys_s);
+        free(row_s);
+    };
+    if (response->type == cJSON_Array) {
+        cJSON *row = response->child;
+        while (row) {
+            send_apply(row);
+            row = row->next;
+        }
+    }
+    else if (response->type == cJSON_Object) {
+        send_apply(response);
+    }
+}
+
+static void apply_notify_payload(const std::string &payload) {
+    cJSON *note = cJSON_Parse(payload.c_str());
+    if (!note) {
+        return;
+    }
+    cJSON *type_json = cJSON_GetObjectItem(note, "type");
+    const char *type = (type_json && type_json->type == cJSON_String) ? type_json->valuestring : 0;
+    cJSON *keys = cJSON_GetObjectItem(note, "keys");
+    cJSON *row = cJSON_GetObjectItem(note, "row");
+    if (row && row->type == cJSON_Array) {
+        row = row->child;
+    }
+    if (type && row) {
+        char *keys_s = keys ? cJSON_PrintUnformatted(keys) : strdup("{}");
+        char *row_s = cJSON_PrintUnformatted(row);
+        if (keys_s && row_s) {
+            auto cmd = MessageEncoding::encodeCommand("RECORD_APPLY",
+                                                      Value(type, Value::t_string),
+                                                      Value(keys_s, Value::t_string),
+                                                      Value(row_s, Value::t_string));
+            std::string reply_s;
+            sendIodCommand(cmd, reply_s);
+        }
+        free(keys_s);
+        free(row_s);
+    }
+    cJSON_Delete(note);
 }
 
 static void finish(int sig) {
@@ -219,12 +268,7 @@ static void toggle_debug(int sig) {
 }
 
 static void toggle_debug_all(int sig) {
-    if (debug) {
-        debug = 0;
-    }
-    else {
-        debug = DEBUG_ALL;
-    }
+    debug = debug ? 0 : DEBUG_ALL;
 }
 
 bool setup_signals() {
@@ -236,22 +280,17 @@ bool setup_signals() {
         return false;
     }
     sa.sa_handler = toggle_debug;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
     if (sigaction(SIGUSR1, &sa, 0)) {
         return false;
     }
     sa.sa_handler = toggle_debug_all;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
     if (sigaction(SIGUSR2, &sa, 0)) {
         return false;
     }
     return true;
 }
 
-size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fillin params
-{
+size_t parseIncomingMessage(const char *data, std::vector<Value> &params) {
     size_t count = 0;
     std::list<Value> parts;
     std::string ds;
@@ -261,8 +300,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
         if (param_list) {
             std::list<Value>::const_iterator iter = param_list->begin();
             while (iter != param_list->end()) {
-                const Value &v = *iter++;
-                params.push_back(v);
+                params.push_back(*iter++);
             }
         }
         count = params.size();
@@ -281,9 +319,7 @@ size_t parseIncomingMessage(const char *data, std::vector<Value> &params) // fil
 
 class SetupDisconnectMonitor : public EventResponder {
   public:
-    void operator()(const zmq_event_t &event_, const char *addr_) {
-            NB_MSG << "IOD disconnected\n";
-    }
+    void operator()(const zmq_event_t &event_, const char *addr_) { NB_MSG << "IOD disconnected\n"; }
 };
 
 static bool need_refresh = false;
@@ -292,45 +328,6 @@ class SetupConnectMonitor : public EventResponder {
   public:
     void operator()(const zmq_event_t &event_, const char *addr_) { need_refresh = true; }
 };
-
-char *makeRemoteRequest(zmq::socket_t  &client, const char *request) {
-  bool sending = true;
-  bool got_error;
-  do {
-    got_error = false;
-    if (sending) {
-      size_t len = strlen(request);
-      zmq::message_t message(len+1);
-      memcpy ((void *) message.data(), request, len+1);
-      if (client.send(message, ZMQ_DONTWAIT)) {
-        sending = false;
-      }
-      else {
-        got_error = true;
-      }
-    }
-    if (!got_error) {
-      zmq::message_t message;
-      if (client.recv(&message, 0)) {
-        sending = true;
-        std::cout << "got message of size " << message.size() << "\n";
-        size_t len = message.size();
-        char *buf = new char[len+1];
-        memcpy(buf, message.data(), len);
-        buf[len] = 0;
-        return buf;
-      }
-      else {
-        got_error = true;
-      }
-    }
-    if (got_error && zmq_errno() == EAGAIN) {
-      usleep(1000);
-    }
-  }
-  while (got_error && zmq_errno() == EAGAIN);
-  return nullptr;
-}
 
 int main(int argc, const char *argv[]) {
     char *pn = strdup(argv[0]);
@@ -341,16 +338,21 @@ int main(int argc, const char *argv[]) {
     MessagingInterface::setContext(&context);
 
     start_t = microsecs();
-    int cw_port;
-    std::string hostname;
+    int cw_port = 5555;
+    std::string hostname = "localhost";
+    std::string dbsvr_endpoint = "tcp://127.0.0.1:5554";
+    std::string notify_endpoint = "tcp://127.0.0.1:5556";
 
     po::options_description desc("Allowed options");
     desc.add_options()("help", "produce help message")(
-        "debug", po::value<int>(&debug)->default_value(0),
-        "set debug level")("host", po::value<std::string>(&hostname)->default_value("localhost"),
-                           "remote host (localhost)")(
-        "cwout", po::value<int>(&cw_port)->default_value(5555),
-        "clockwork outgoing port (5555)")("cwin", "clockwork incoming port (deprecated)");
+        "debug", po::value<int>(&debug)->default_value(0), "set debug level")(
+        "host", po::value<std::string>(&hostname)->default_value("localhost"),
+        "remote host (localhost)")("cwout", po::value<int>(&cw_port)->default_value(5555),
+                                   "clockwork outgoing port (5555)")(
+        "dbsvr", po::value<std::string>(&dbsvr_endpoint)->default_value("tcp://127.0.0.1:5554"),
+        "datastore REQ endpoint")(
+        "notify", po::value<std::string>(&notify_endpoint)->default_value("tcp://127.0.0.1:5556"),
+        "datastore PUB notify endpoint")("cwin", "clockwork incoming port (deprecated)");
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
@@ -358,63 +360,65 @@ int main(int argc, const char *argv[]) {
         std::cout << desc << "\n";
         return 1;
     }
-    int cw_out = 5555;
     std::string host("127.0.0.1");
-    // backward compatibility
     if (vm.count("cwout")) {
-        cw_out = vm["cwout"].as<int>();
+        cw_port = vm["cwout"].as<int>();
     }
     if (vm.count("host")) {
         host = vm["host"].as<std::string>();
     }
-    if (vm.count("debug")) {
-        debug = vm["debug"].as<int>();
-    }
-
-    if (debug & DEBUG_LIB) {
-        //LogState::instance()->insert(DebugExtra::instance()->DEBUG_DATABASE);
-    }
 
     std::cout << "-------- Starting Command Interface ---------\n" << std::flush;
-    std::cout << "connecting to clockwork on " << host << ":" << cw_out << "\n";
-    g_iodcmd = MessagingInterface::create(host, cw_out);
+    std::cout << "connecting to clockwork on " << host << ":" << cw_port << "\n";
+    std::cout << "dbsvr " << dbsvr_endpoint << " notify " << notify_endpoint << "\n";
+    g_iodcmd = MessagingInterface::create(host, cw_port);
     g_iodcmd->start();
+
+    std::ostringstream iod_ep;
+    iod_ep << "tcp://" << host << ":" << cw_port;
+    DeadlineReq iod_req(context, iod_ep.str());
+    DeadlineReq dbsvr_req(context, dbsvr_endpoint);
+    g_iod_req = &iod_req;
+    g_dbsvr_req = &dbsvr_req;
+
+    zmq::socket_t notify_sub(context, ZMQ_SUB);
+    int linger = 0;
+    notify_sub.setsockopt(ZMQ_LINGER, &linger, sizeof(linger));
+    notify_sub.setsockopt(ZMQ_SUBSCRIBE, "", 0);
+    notify_sub.connect(notify_endpoint.c_str());
 
     program_state = s_running;
     setup_signals();
 
-    // the local command channel accepts commands and relays them to iod.
     zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
     iosh_cmd.bind(local_commands);
 
     SubscriptionManager subscription_manager("DATABASE_CHANNEL", eCLOCKWORK, "localhost", 5555);
-    subscription_manager.configureSetupConnection(host.c_str(), cw_out);
+    subscription_manager.configureSetupConnection(host.c_str(), cw_port);
     SetupDisconnectMonitor disconnect_responder;
     SetupConnectMonitor connect_responder;
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
     subscription_manager.monit_setup->addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
+    subscription_manager.monit_subs.addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
+    subscription_manager.monit_subs.addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
     subscription_manager.setupConnections();
 
     try {
         int exception_count = 0;
         int error_count = 0;
         while (program_state != s_finished) {
-
             zmq::pollitem_t items[] = {
                 {(void *)subscription_manager.setup(), 0, ZMQ_POLLIN, 0},
                 {(void *)subscription_manager.subscriber(), 0, ZMQ_POLLIN, 0},
-                { iosh_cmd, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0 }
+                {iosh_cmd, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0},
+                {(void *)notify_sub, 0, ZMQ_POLLIN, 0},
             };
             try {
-                if (!subscription_manager.checkConnections(items, 3, iosh_cmd)) {
-                    if (debug) {
-                        std::cout << "no connection to iod\n";
-                    }
+                if (!subscription_manager.checkConnections(items, 4, iosh_cmd)) {
                     usleep(10000);
                     exception_count = 0;
                     continue;
                 }
-
                 exception_count = 0;
                 error_count = 0;
             }
@@ -422,32 +426,39 @@ int main(int argc, const char *argv[]) {
                 if (zmq_errno() == EINTR) {
                     continue;
                 }
-                ++error_count;
                 {
                     FileLogger fl(program_name);
                     fl.f() << "zmq exception " << zmq_errno() << " " << zmq_strerror(zmq_errno())
                            << " polling connections\n";
                 }
-                if (++exception_count <= 5 && program_state != s_finished) {
-                    usleep(2000);
-                    exit(2);
-                    continue;
+                subscription_manager.forceFullReconnect("dbd poll error");
+                usleep(200000);
+                if (++exception_count > 20) {
+                    exception_count = 0;
                 }
+                continue;
             }
             catch (const std::exception &ex) {
                 std::cout << "polling connections: " << ex.what() << "\n";
                 if (errno == EINTR) {
                     continue;
                 }
-                if (++exception_count <= 5 && program_state != s_finished) {
-                    usleep(2000);
-                    exit(1);
-                    continue;
-                }
+                subscription_manager.forceFullReconnect("dbd poll std exception");
+                usleep(200000);
+                continue;
             }
             if (need_refresh && subscription_manager.setupStatus() == SubscriptionManager::e_done) {
                 need_refresh = false;
             }
+
+            if (items[3].revents & ZMQ_POLLIN) {
+                zmq::message_t note;
+                if (notify_sub.recv(&note, ZMQ_DONTWAIT)) {
+                    std::string payload(static_cast<char *>(note.data()), note.size());
+                    apply_notify_payload(payload);
+                }
+            }
+
             if (!(items[1].revents & ZMQ_POLLIN)) {
                 usleep(50);
                 continue;
@@ -459,89 +470,65 @@ int main(int argc, const char *argv[]) {
                     usleep(50);
                     continue;
                 }
-                if (errno == EFSM) {
-                    exit(1);
-                }
-                if (errno == ENOTSOCK) {
-                    exit(1);
+                if (errno == EFSM || errno == ENOTSOCK) {
+                    subscription_manager.forceFullReconnect("dbd subscriber EFSM");
+                    usleep(200000);
+                    continue;
                 }
                 std::cerr << "subscriber recv: " << zmq_strerror(zmq_errno()) << "\n";
                 if (++error_count > 5) {
-                    exit(1);
+                    subscription_manager.forceFullReconnect("dbd subscriber errors");
+                    error_count = 0;
                 }
                 continue;
             }
             error_count = 0;
 
             long len = update.size();
-            char *data = (char *)malloc(len + 1);
-            memcpy(data, update.data(), len);
+            std::vector<char> data(len + 1);
+            memcpy(&data[0], update.data(), len);
             data[len] = 0;
             if (DEBUG_BASIC) {
-                std::cout << "received: " << data << " from clockwork\n";
+                std::cout << "received: " << &data[0] << " from clockwork\n";
             }
 
-            // FIXME: Do we need this call to parseIncomingMessage the message here?
-            std::vector<Value> params(0);
-            size_t count = parseIncomingMessage(data, params);
+            std::vector<Value> params;
+            size_t count = parseIncomingMessage(&data[0], params);
             if (count == 0) {
-                std::cout << "received unknown data, '" << data << "', from clockwork of length "
-                          << len << " could not parse\n";
+                std::cout << "received unknown data from clockwork of length " << len << "\n";
             }
-            if (data) {
-                try {
-                    char *buf = nullptr;
-                    cJSON *json_request = nullptr;
-                    {
-                        zmq::context_t context;
-                        zmq::socket_t client(context, ZMQ_REQ);
-                        client.connect("tcp://127.0.0.1:5554");
-                        std::cout << "sending: " << data << "\n";
-                        json_request = cJSON_Parse(data);
-                        if (json_request) {
-                            buf = makeRemoteRequest(client, data);
-                        }
 
-                    }
-                    std::cout << buf << "\n";
-                    send_response_to_clockwork(json_request, buf);
-                    delete[] buf;
-                }
-                catch(std::exception& e) {
-                    std::cerr << "error: " << e.what() << "\n";
-                    return 1;
-                }
-                catch(...) {
-                    std::cerr << "Exception of unknown type!\n";
-                }
-
-                free(data);
-                data = 0;
-            }
-            std::string cmd(params[0].asString());
-            free(data);
-            data = 0;
-
+            std::string cmd = params.empty() ? "" : params[0].asString();
             if (cmd == "STARTUP") {
-                {
-                    FileLogger fl(program_name);
-                    fl.f() << " iod startup detected. restarting\n";
-                }
-                try {
-                }
-                catch (const std::exception &ex) {
-                    {
-                        FileLogger fl(program_name);
-                        fl.f() << "exception during restart " << ex.what() << "\n";
-                    }
-                }
-                exit(0);
-                break;
+                FileLogger fl(program_name);
+                fl.f() << " iod startup detected. reconnecting CHANNEL\n";
+                subscription_manager.forceFullReconnect("iod STARTUP");
+                iod_req.reconnect();
+                continue;
             }
-            else if (cmd == "DEBUG" && params.size() >= 2 &&
-                     (params[1].kind == Value::t_symbol || params[1].kind == Value::t_string)) {
+            if (cmd == "DEBUG" && params.size() >= 2 &&
+                (params[1].kind == Value::t_symbol || params[1].kind == Value::t_string)) {
                 debug = params[1].sValue == "ON";
+                continue;
             }
+
+            cJSON *json_request = cJSON_Parse(&data[0]);
+            if (!json_request) {
+                continue;
+            }
+            std::cout << "sending: " << &data[0] << "\n";
+            std::string dbsvr_reply;
+            if (!dbsvr_req.request(&data[0], dbsvr_reply, DBSVR_TIMEOUT_MS)) {
+                std::cerr << "dbsvr request failed; will retry with a new socket\n";
+                cJSON_Delete(json_request);
+                continue;
+            }
+            std::cout << dbsvr_reply << "\n";
+            send_response_to_clockwork(json_request, dbsvr_reply.c_str());
+            cJSON *parsed_reply = cJSON_Parse(dbsvr_reply.c_str());
+            apply_rows_to_records(json_request, parsed_reply);
+            cJSON_Delete(parsed_reply);
+            cJSON_Delete(json_request);
         }
     }
     catch (const std::exception &e) {
@@ -556,8 +543,10 @@ int main(int argc, const char *argv[]) {
     catch (...) {
         std::cerr << "Exception of unknown type!\n";
         finish(SIGTERM);
-        exit(1);
+        return 1;
     }
 
+    g_iod_req = 0;
+    g_dbsvr_req = 0;
     return 0;
 }

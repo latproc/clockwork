@@ -429,6 +429,7 @@ set (Clockwork_SRCS
     src/ProcessingThread.cpp
     src/StallTrace.cpp
     src/RateEstimatorInstance.cpp
+    src/RecordApply.cpp
     src/read_file.c
     src/ResetAction.cpp
     src/ResumeAction.cpp
@@ -505,6 +506,24 @@ add_test(NAME record_parse_no_key COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/no_key.cw -DEXPECT_RC=2
   -DMUST_CONTAIN=KEY
   -P ${_record_parse})
+add_test(NAME record_parse_copy_from_class COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/record_list.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_executable(test_record_apply tests/test_record_apply.cpp)
+set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_record_apply PRIVATE src tests)
+target_link_libraries(test_record_apply cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_record_apply COMMAND test_record_apply)
+add_executable(test_copy_from_record tests/test_copy_from_record.cpp)
+set_target_properties(test_copy_from_record PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_copy_from_record PRIVATE src tests)
+target_link_libraries(test_copy_from_record cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_copy_from_record COMMAND test_copy_from_record)
+add_executable(test_deadline_req tests/test_deadline_req.cpp src/DeadlineReq.cpp)
+set_target_properties(test_deadline_req PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_deadline_req PRIVATE src)
+target_link_libraries(test_deadline_req cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_deadline_req COMMAND test_deadline_req)
 add_test(NAME record_scaffold_customer COMMAND ${CMAKE_COMMAND}
   -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
   -DCW=$<TARGET_FILE:cw>
@@ -640,18 +659,17 @@ target_link_libraries(device_connector cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRA
 add_executable(persistd src/persistd.cpp src/PersistentStore.cpp )
 target_link_libraries(persistd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
-# modbusd/dbd need libmodbus. HMI panels often only build cw_client and do not
-# install libmodbus-dev; do not fail configure for that case.
+# modbusd needs libmodbus. dbd talks ZMQ only.
 set(CLOCKWORK_RUNTIME_TARGETS cw cw-scaffold iosh iocmd device_connector persistd)
+add_executable(dbd src/dbd.cpp src/DeadlineReq.cpp)
+target_link_libraries(dbd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+list(APPEND CLOCKWORK_RUNTIME_TARGETS dbd)
 if (MODBUS_FOUND)
   add_executable(modbusd src/modbusd.cpp )
   target_link_libraries(modbusd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
-
-  add_executable(dbd src/dbd.cpp )
-  target_link_libraries(dbd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
-  list(APPEND CLOCKWORK_RUNTIME_TARGETS modbusd dbd)
+  list(APPEND CLOCKWORK_RUNTIME_TARGETS modbusd)
 else()
-  message(STATUS "libmodbus not found: skipping modbusd and dbd (cw_client still builds)")
+  message(STATUS "libmodbus not found: skipping modbusd (cw_client and dbd still build)")
 endif()
 
 if (RUN_TESTS)

@@ -28,6 +28,7 @@
 #include "MessageLog.h"
 #include "MessagingInterface.h"
 #include "ProcessingThread.h"
+#include "RecordApply.h"
 #include "Scheduler.h"
 #include "SharedWorkSet.h"
 #include "Statistic.h"
@@ -523,6 +524,61 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
         error_str = buf;
         return false;
     }
+}
+
+bool IODCommandRecordApply::run(std::vector<Value> &params) {
+    if (params.size() < 3) {
+        error_str = "Usage: RECORD_APPLY type [keys_json] row_json";
+        return false;
+    }
+    std::string type = params[1].asString();
+    cJSON *keys = 0;
+    cJSON *row = 0;
+    bool own_keys = false;
+    bool own_row = false;
+    if (params.size() >= 4) {
+        if (params[2].kind == Value::t_json) {
+            keys = params[2].asJSON();
+        }
+        else {
+            keys = cJSON_Parse(params[2].asString().c_str());
+            own_keys = true;
+        }
+        if (params[3].kind == Value::t_json) {
+            row = params[3].asJSON();
+        }
+        else {
+            row = cJSON_Parse(params[3].asString().c_str());
+            own_row = true;
+        }
+    }
+    else {
+        if (params[2].kind == Value::t_json) {
+            row = params[2].asJSON();
+        }
+        else {
+            row = cJSON_Parse(params[2].asString().c_str());
+            own_row = true;
+        }
+    }
+    if (!row) {
+        if (own_keys) {
+            cJSON_Delete(keys);
+        }
+        error_str = "RECORD_APPLY: invalid row JSON";
+        return false;
+    }
+    int n = RecordApply::applyRow(type, keys, row);
+    if (own_keys) {
+        cJSON_Delete(keys);
+    }
+    if (own_row) {
+        cJSON_Delete(row);
+    }
+    std::ostringstream ss;
+    ss << "OK " << n;
+    result_str = ss.str();
+    return n >= 0;
 }
 
 bool IODCommandList::run(std::vector<Value> &params) {
@@ -1239,6 +1295,7 @@ bool IODCommandHelp::run(std::vector<Value> &params) {
        << "MODBUS group address new_value\n"
        << "MODBUS REFRESH\n"
        << "PROPERTY machine_name property new_value\n"
+       << "RECORD_APPLY type [keys_json] row_json\n"
        << "QUIT\n"
        << "RESUME machine_name\n"
        << "SEND command\n"

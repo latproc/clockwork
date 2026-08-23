@@ -20,6 +20,7 @@
 
 #include "SetOperationAction.h"
 #include "Logger.h"
+#include "MachineClass.h"
 #include "MachineInstance.h"
 
 static void debugParameterChange(MachineInstance *dest_machine) {
@@ -491,10 +492,76 @@ SelectSetOperation::SelectSetOperation(MachineInstance *m, const SetOperationAct
     */
 }
 
+static int copyFromRecordClass(MachineInstance *owner, MachineInstance *dest_machine,
+                               MachineClass *mc, Condition &condition) {
+    int num_copied = 0;
+    bool keep_item = false;
+    unsigned int idx = 0;
+    while (idx < dest_machine->locals.size()) {
+        if (dest_machine->locals[idx].val.asString() == "ITEM") {
+            keep_item = true;
+            break;
+        }
+        ++idx;
+    }
+    if (condition.predicate && !keep_item) {
+        dest_machine->locals.push_back(Parameter(Value("ITEM")));
+        idx = dest_machine->locals.size() - 1;
+    }
+    std::list<MachineInstance *>::iterator it = MachineInstance::begin();
+    while (it != MachineInstance::end()) {
+        MachineInstance *mi = *it++;
+        if (!mi || mi->getStateMachine() != mc) {
+            continue;
+        }
+        Value a(mi->getName(), Value::t_symbol);
+        a.cached_machine = mi;
+        bool include = true;
+        if (condition.predicate) {
+            dest_machine->locals[idx].machine = mi;
+            dest_machine->locals[idx].val = Value("ITEM");
+            dest_machine->locals[idx].real_name = a.sValue;
+            dest_machine->localised_names["ITEM"] = mi;
+            owner->localised_names["ITEM"] = mi;
+            condition.predicate->flushCache();
+            include = condition(owner);
+        }
+        if (include && dest_machine->_type == "LIST") {
+            if (!MachineIncludesParameter(dest_machine, a)) {
+                if (dest_machine->enabled()) {
+                    dest_machine->addParameter(a, mi);
+                }
+                else {
+                    Parameter p(a);
+                    p.machine = mi;
+                    p.real_name = mi->getName();
+                    dest_machine->parameters.push_back(p);
+                }
+            }
+            ++num_copied;
+        }
+    }
+    if (condition.predicate) {
+        dest_machine->localised_names.erase("ITEM");
+        owner->localised_names.erase("ITEM");
+        if (!keep_item && idx < dest_machine->locals.size()) {
+            dest_machine->locals.erase(dest_machine->locals.begin() + idx);
+        }
+    }
+    return num_copied;
+}
+
 Action::Status SelectSetOperation::doOperation() {
     int num_copied = 0;
     int64_t to_copy;
     if (!source_a_machine) {
+        MachineClass *mc = MachineClass::find(source_a.asString().c_str());
+        if (mc && mc->is_record && dest_machine && dest_machine->_type == "LIST") {
+            copyFromRecordClass(owner, dest_machine, mc, condition);
+            status = Complete;
+            owner->stop(this);
+            return status;
+        }
         error_str = "No source machine for copy";
         status = Failed;
         owner->stop(this);

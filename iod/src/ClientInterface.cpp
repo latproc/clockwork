@@ -444,6 +444,9 @@ IODCommand *parseCommandString(const char *data) {
     else if (ds == "PROPERTY") {
         command = new IODCommandProperty(data);
     }
+    else if (ds == "RECORD_APPLY") {
+        command = new IODCommandRecordApply;
+    }
     else if (ds == "PERSISTENT") {
         command = new IODCommandPersistentState;
     }
