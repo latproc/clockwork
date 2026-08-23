@@ -1,6 +1,6 @@
 # RECORD implementation plan (revised after review)
 
-**Source:** `docs/RECORD_DB.md` plus Martin: *pretty much got the idea; write tests; standalone tools that generate scaffolding for operational code (create, update, list, etc.) from RECORDs.*
+**Source:** `docs/RECORD_DB.md` (design spec, updated with the same decisions) plus Martin: *pretty much got the idea; write tests; standalone tools that generate scaffolding for operational code (create, update, list, etc.) from RECORDs.*
 
 **Branch:** `feature/db-record-implementation`
 

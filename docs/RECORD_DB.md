@@ -1,6 +1,6 @@
 # Clockwork RECORD and native database
 
-**Status:** Draft (amended after original-author comments; more review still coming)  
+**Status:** Draft (amended after original-author comments and implementation review 2026-08-23)  
 **Date:** 2026-08-23  
 **Author:** (design)  
 **Repos:**
@@ -13,9 +13,7 @@
 | Warehouse | plant HTTP client | `WEBREQUEST` to SamplingLine APIs |
 | SamplingLineProjects | Python + Alembic | operational warehouse data today |
 
-This is the design spec only. Language, `dbd`, datastore, Warehouse LPC, SamplingLine, and `cw-migrate` implementation happen later on a separate branch.
-
-**Implementation plan:** `docs/RECORD_IMPLEMENTATION_PLAN.md` (generic Clockwork + datastore PRs, tests, `cw-scaffold`, WAL/ZMQ).
+This is the design spec. Sequencing, grammar, scaffolder goldens, datastore WAL/SQL, and ZMQ restart work are in `docs/RECORD_IMPLEMENTATION_PLAN.md`. Clockwork implementation is generic (Customer/Order fixtures). Plant LPC (Jemalong, Warehouse) is background and later application work, not Clockwork tests.
 
 ---
 
@@ -128,7 +126,9 @@ RECORD + one shared **datastore** is how Clockwork can take on that job: a write
 4. **Alembic-like schema management** for tables *and* views: versioned upgrade/downgrade, revision table, CLI, no silent prod auto-mutate.
 5. **LIST commands work on RECORD instances** (`COPY`, `TAKE FIRST`, `SORT BY PROPERTY`, `CLEAR`, `SIZE OF`, ALL/ANY, SUM/MIN/MAX, `SEND TO list`).
 6. **Non-blocking iod scan:** iod never opens the database file. `dbd` does not become the SQL engine.
-7. Design now; implement later on a new branch.
+7. **Standalone `cw-scaffold`:** from RECORD classes, generate operational Clockwork (`create`/`update`/`find`/`list`/`delete` as an INTERFACE MACHINE). Persist stays off the RECORD body.
+8. **Datastore SQLite like the Python API’s connection PRAGMAs:** WAL, `synchronous=NORMAL`, `busy_timeout=5000`, `foreign_keys=ON`; one BEGIN/COMMIT/ROLLBACK per JSON request (Clockwork never sends those).
+9. **`dbd`/`dbsvr` survive process restart** (linger 0, REQ deadlines, CHANNEL `forceFullReconnect`). Copy persistd/modbusd, not throwaway REQ contexts.
 
 ### Non-goals (this design)
 
@@ -140,6 +140,9 @@ RECORD + one shared **datastore** is how Clockwork can take on that job: a write
 - Reimplementing SQL in the Clockwork parser.
 - Automatic rename detection in migrations.
 - Embedding a Python ORM in iod.
+- Plant/wool types in Clockwork source or tests (`WEIGHTNOTE`, bales, Grab/Core). Those stay in application repos.
+- FLAG-style `save`/`load` builtins on RECORD in v1 (generated INTERFACE instead).
+- Schema `action: "create"` as the scaffolder “create” command (that JSON is CREATE TABLE; operational create is `insert`).
 
 ---
 
@@ -514,11 +517,11 @@ NoteEditor MACHINE note {
 #   COPY ALL FROM all_notes TO subset WHERE all_notes.ITEM.bales > 0
 ```
 
-Parser additions: `RECORD` (reject logic in the body), optional `VIEW "name"` / `TABLE "name"`, `KEY`/`UNIQUE`/`NOT NULL` on OPTION, `COPY ALL FROM` RECORD-class source. `QUERY` and persist commands live on MACHINEs (or later FLAG-style builtins). `FIND` stays the **iosh** command (`IODCommandFind`). Joins are JSON/`CREATE VIEW`, not new WHEN syntax.
+Parser additions: `RECORD` (reject logic in the body), optional `VIEW "name"` / `TABLE "name"`, `KEY`/`UNIQUE`/`NOT NULL` on OPTION, `COPY ALL FROM` RECORD-class source. Persist COMMANDs are generated (`cw-scaffold` → `<Class>INTERFACE`); `QUERY` lives on MACHINE if added. `FIND` stays the **iosh** command (`IODCommandFind`). Joins are JSON/`CREATE VIEW`, not new WHEN syntax.
 
-### INTERFACE layer (kept)
+### INTERFACE layer (kept, then generated)
 
-`WEIGHTNOTEINTERFACE` / `BALEDETAILSINTERFACE` / `RecordManager` remain valid against the JSON/channel path. They are how persist works today. RECORD removes the need for a hand-maintained field mapper once replies land on OPTIONS.
+Hand-written INTERFACE + JSON on DATABASE_CHANNEL remains valid. **v1 persist scaffolding is generated:** `cw-scaffold` emits `<RecordClass>INTERFACE MACHINE record, items` with create=`insert`, update, find, list, delete. Do not put those COMMANDs on the RECORD. After dbd applies rows onto OPTIONS, the hand-maintained field mapper is no longer required.
 
 ### IOD / dbd / datastore protocol
 
@@ -537,7 +540,7 @@ dbd applies `response` rows onto OPTIONS of the RECORD instance(s), then depende
 
 ## Data model
 
-v1 tables = one per RECORD class (snake or exact class name; pick **lowercase class name**, document it).
+v1 tables = one per RECORD class. **Lowercase class name** (`Customer` → `customer`) unless `TABLE "…"`. Scaffolder JSON `type` uses that name.
 
 Plus system tables:
 
@@ -600,17 +603,19 @@ Warehouse `BaleInstance` mapping is **out of v1 schema**; a later PR may declare
 | Dynamic instance lifetime / leaks | Medium | Registry + optional LRU for unbound query hits; named instances never evicted |
 | Migration applied on wrong file | High | Refuse mismatch; never auto-upgrade prod |
 | Second iod misses a write | High | Open: notify-after-commit vs refresh. Do not “fix” by merging sqlite into dbd |
+| REQ/REP hang after iod or dbsvr restart | High | Linger 0, REQ deadline, recreate socket, `forceFullReconnect`; do not `exit` on STARTUP |
 
 ---
 
 ## Rollout
 
-1. Language: RECORD grammar (no logic in the body). **No Warehouse LPC changes in early PRs.**
-2. dbd applies datastore JSON rows onto OPTIONS. Existing `dbsvr` is enough for round-trip tests.
-3. datastore: parameterized SQL, joins/views JSON.
-4. Two iods / two dbds / one `dbsvr` (sim of Grab/Core): persist on A updates OPTIONS on B.
-5. `cw-migrate` including `CREATE VIEW`.
-6. Docs + Jemalong RECORD example. Warehouse HTTP stays until a later PR.
+1. Language: RECORD grammar (no logic in the body) + `cw --parse-only` tests. Generic fixtures only.
+2. `cw-scaffold` goldens (`CustomerINTERFACE`).
+3. Datastore WAL/transactions + dbd/`dbsvr` ZMQ linger and reconnect.
+4. Typed replies / RETURNING; dbd applies rows onto OPTIONS.
+5. Two iods / two dbds / one `dbsvr` (client A / client B).
+6. `cw-migrate` including `CREATE VIEW`.
+7. Application RECORD examples (Jemalong/Warehouse) in those repos later. Warehouse HTTP stays until a later PR.
 
 Rollback: leave RECORD unused; old HTTP path unchanged; datastore/dbd as today.
 
@@ -618,16 +623,19 @@ Rollback: leave RECORD unused; old HTTP path unchanged; datastore/dbd as today.
 
 ## Testing
 
-New tests beside `tests/datastore.cw`, `tests/db-channel.cw`, `tests/lists.cw`, `tests/copy.cw`:
+Clockwork tests are **generic language** (`Customer`, `OrderLine`, `CustomerWithAddress`). Do not `loadConfig` two conflicting programs in one process (`loadConfig` is not reentrant). Parser and scaffolder tests are **subprocesses** (`cw --parse-only`, `cw-scaffold`).
 
-- RECORD with OPTIONS parses; WHEN/COMMAND in the RECORD body is a parse error.
+- RECORD with OPTIONS parses; WHEN/COMMAND/states in the RECORD body is a parse error.
+- `cw-scaffold` goldens: `CustomerINTERFACE` with create=`insert`, update, find, list, delete; VIEW RECORD emits find/list only; LOCAL OPTIONS omitted.
 - Persist round-trip → OPTIONS filled; a MACHINE that depends on them re-checks; **no** FIND required for that.
-- Two simulated iods: persist on A updates OPTIONS on B; B does not persist back.
-- JSON `join` / named VIEW query into a LIST (flatten like `bale_with_links_dict`).
-- `COPY ALL FROM WEIGHTNOTE TO list` then `TAKE FIRST`, `SORT BY PROPERTY`, `SIZE OF`.
+- Two simulated iods (client A / client B): persist on A updates OPTIONS on B; B does not persist back.
+- JSON `find` / named VIEW query into a LIST.
+- `COPY ALL FROM Customer TO list` then `TAKE FIRST`, `SORT BY PROPERTY`, `SIZE OF`.
 - Local assign does not hit datastore until explicit persist; inbound PROPERTY does not persist again.
 - Migration generate/upgrade add column; start without upgrade refuses.
 - Negative: COPY FROM RECORD with non-column predicate errors.
+- WAL: `PRAGMA journal_mode` is `wal`; readers during a write; failed statement rolls back.
+- ZMQ: restart `dbsvr` then next request succeeds; restart iod and dbd resubscribes without `exit`; linger 0 rebinds `:5554`.
 
 C++: datastore `SQLInterface` / Store tests in the datastore repo; dbd apply-OPTIONS tests in `iod/tests/`.
 
@@ -635,29 +643,32 @@ C++: datastore `SQLInterface` / Store tests in the datastore repo; dbd apply-OPT
 
 ## Open questions
 
-These do not block the recommended design; they affect later cutover and remaining author review.
+These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 
-1. **Cutover target for Warehouse:** keep WoolSamplingLineAPI as operational SoT and add a RECORD *projection*, or move operational `BaleInstance` into Clockwork’s DB and make FastAPI a client?
+1. **Cutover target for Warehouse:** keep WoolSamplingLineAPI as operational SoT and add a RECORD *projection*, or move operational `BaleInstance` into Clockwork’s DB and make FastAPI a client? (Application repos, not Clockwork.)
 2. **Where `dbsvr` runs on the plant:** one of the two warehouse PCs, or a small third box both iods already reach for the API?
-3. **Table naming:** exact class name `WEIGHTNOTE` vs `weightnote` vs explicit `TABLE "weight_notes"`?
-4. **Composite keys** in v1, or single KEY plus views for `(wn, bale_no)` lookups?
-5. **QUERY JSON richness in v1:** named views only, or ad-hoc `join` arrays from LPC as well?
-6. **Two-Clockwork notify:** datastore PUB after commit, dbd refresh, or another mechanism?
-7. **Builtin persist messages** (FLAG-style `save`/`load` on RECORD) vs INTERFACE-only?
+3. ~~Table naming~~ **Decided:** lowercase class name; `TABLE "…"` override.
+4. ~~Composite keys in v1~~ **Decided:** single-column `KEY` in v1; composites later (views for multi-column lookup if needed).
+5. **QUERY JSON richness in v1:** **lean named views first**; ad-hoc `join` arrays later (DS-4).
+6. **Two-Clockwork notify:** datastore PUB after commit, dbd refresh, or another mechanism? Still open. Any notify socket uses the same linger/timeout rules as dbd↔dbsvr.
+7. ~~Builtin persist~~ **Decided for v1:** generated `<Class>INTERFACE` (`cw-scaffold`), not FLAG-style `save`/`load` on RECORD.
 
 ---
 
 ## Key decisions
 
-1. **`RECORD` is MACHINE with a lex/bison limit (no user handlers or states).** OPTIONS are columns of a table or view. No new instance type.
+1. **`RECORD` is MACHINE with a lex/bison limit (no user handlers or states).** OPTIONS are columns of a table or view. No new instance type. Builtin `INIT` remains (constructor); no user states.
 2. **Keep datastore as the database server; keep `dbd` as the channel adapter.** Do not fold sqlite into `dbd`.
 3. **JSON in Clockwork; Store ops in datastore** (sqlite today, other backends later). LPC does not parse SQL. Named views cover today’s API flatten.
-4. **Explicit persist, not write-through** — mid-edit writes and echo loops stay out. INTERFACE + DATABASE_CHANNEL remains the persist path until builtins are specified.
-5. **Per-column PROPERTY after a successful reply** — dependents already run. No extra GET on that iod.
-6. **`COPY ALL FROM` / `QUERY json INTO list` reuse LIST** — FIND stays iosh; WHEN stays off SQL.
-7. **Alembic-like revisions including `CREATE VIEW`; no auto-upgrade on start.**
+4. **Explicit persist, not write-through.** Operational CRUD is **generated** by `cw-scaffold` as `<RecordClass>INTERFACE MACHINE record, items`. Scaffolder **create** = JSON `insert`, not schema `create`.
+5. **Per-column PROPERTY after a successful reply** — dbd applies by `(type, key)` registry onto RECORD OPTIONS; blob `respond_to` stays for old INTERFACE. Dependents already run. Datastore insert/update replies must include the row (RETURNING or equivalent).
+6. **`COPY ALL FROM` / `QUERY json INTO list` reuse LIST** — FIND stays iosh; WHEN stays off SQL. Until COPY-from-class exists, generated `list` uses JSON `find` with empty keys.
+7. **Alembic-like revisions including `CREATE VIEW`; no auto-upgrade on start.** `cw-migrate` lives next to datastore.
 8. **Do not share `bales.db` with Python Alembic in v1.**
-9. **JemalongDB first in examples/tests; Warehouse HTTP until a later PR.**
+9. **Clockwork tests and goldens are generic** (`Customer`, …). Plant Jemalong/Warehouse rewrites are other repos, later.
+10. **Table name = lowercase class name** unless `TABLE "…"`.
+11. **Datastore SQLite PRAGMAs** match WoolSamplingLineAPI `app/db.py` (copy PRAGMAs only, not models): `foreign_keys=ON`, `journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=5000`. Automatic transaction per JSON request.
+12. **ZMQ restart:** one dbd context; linger 0; REQ deadlines; recreate on EFSM; `forceFullReconnect` on iod CHANNEL; no `exit` on STARTUP; configurable `dbsvr` endpoint. `dbsvr` linger 0 on REP bind.
 
 ---
 
@@ -676,67 +687,29 @@ These do not block the recommended design; they affect later cutover and remaini
 
 ## PR Plan
 
-Implementation on a new branch; each PR independently reviewable. Clockwork PRs and datastore PRs stay in their own repos.
+Detail and review notes: `docs/RECORD_IMPLEMENTATION_PLAN.md`. Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice does not need `dbsvr`.
 
-### PR 1 — RECORD grammar (Clockwork)
+### Clockwork
 
-- **Title:** Add RECORD class syntax; reject logic in the body
-- **Files:** `iod/src/cwlang.lpp`, `cwlang.ypp`, `MachineClass.h/.cpp`, tests that parse OPTIONS-only RECORD and reject WHEN/COMMAND/states
-- **Depends:** none
-- **Description:** `Name RECORD { OPTION … }` parses like MACHINE. `is_record` flag. Instances are `MachineInstance`. No dbd/datastore change.
+1. **RECORD grammar + subprocess parse tests** — `RECORD` body OPTIONS only; `KEY`/`UNIQUE`/`NOT NULL`; optional `VIEW`/`TABLE`; `cw --parse-only`; generic fixtures. No dbd/datastore change.
+2. **`cw-scaffold` + goldens** — RECORD → `<Class>INTERFACE` (create=`insert`, update, find, list, delete). VIEW: find/list only.
+3. **dbd ZMQ recovery** (with datastore linger 0) — one context, REQ deadline, `forceFullReconnect`, no `exit` on STARTUP. Before trusting persist round-trips.
+4. **dbd maps typed JSON rows onto RECORD OPTIONS** by type+key; skip echo persist. Wants datastore RETURNING/typed replies.
+5. **Two Clockworks, one datastore** — client A / client B; notify still open (Q6).
+6. **COPY ALL FROM RecordClass INTO LIST** — then scaffolder `list` switches to COPY.
+7. **QUERY INTO** — named views first.
 
-### PR 2 — Apply datastore rows onto OPTIONS (Clockwork)
+### Datastore (`../datastore`)
 
-- **Title:** dbd maps JSON response rows onto RECORD OPTIONS
-- **Files:** `dbd`, PROPERTY apply, skip echo persist, tests with existing `dbsvr` or a fixture
-- **Depends:** PR 1
-- **Description:** Per-column PROPERTY instead of one JSON blob. Dependents re-check. INTERFACE path still works.
+0. **WAL + busy timeout + automatic transactions** — same four PRAGMAs as WoolSamplingLineAPI `app/db.py`; BEGIN IMMEDIATE on writes; ROLLBACK on error. Generic `customer` tests.
+0b. **REP linger 0 + send/recv recovery** — with Clockwork dbd-zmq.
+1. **Typed replies, NULL, RETURNING** so OPTIONS can be applied without a follow-up GET.
+2. **Bound parameters + identifier allow-list.**
+3. **`select` / `order` / `limit` / richer `where`.**
+4. **JSON `join` (optional)** after named views.
+5. **`cw-migrate`** — tables and views; no auto-upgrade on `dbsvr` start.
+6. **Notify-after-commit (Q6)** if that is the chosen fan-out.
 
-### PR 3 — Parameterized JSON→SQL and joins (datastore)
+### Later, other repos (not Clockwork CI)
 
-- **Title:** Bound parameters, identifier allow-list, select/join/view JSON
-- **Files:** `../datastore` `SQLInterface`, `Store`, tests
-- **Depends:** none (can parallel PR 1)
-- **Description:** Finish the JSON compiler in datastore. sqlite stays a Store. No sqlite in `dbd`.
-
-### PR 4 — Two Clockworks, one datastore
-
-- **Title:** Grab persist updates Core OPTIONS
-- **Files:** dbd and/or datastore notify (mechanism from open question 6), two-process test
-- **Depends:** PR 2, PR 3
-- **Description:** Shared `dbsvr`. Echo-loop tests. This is the plant-sharing requirement.
-
-### PR 5 — COPY ALL FROM RecordClass INTO LIST (Clockwork)
-
-- **Title:** Materialize RECORD queries into LIST
-- **Files:** COPY parser, dbd/datastore find, `tests/record_list.cw`
-- **Depends:** PR 2, PR 3
-- **Description:** PK registry reuse. TAKE/SORT/SIZE/WHERE-on-LIST work. Simple `where` push-down.
-
-### PR 6 — VIEW-backed RECORD and QUERY INTO
-
-- **Title:** VIEW-backed RECORD and QUERY JSON INTO list
-- **Files:** Clockwork VIEW on class, QUERY on MACHINE; datastore view/`select`
-- **Depends:** PR 5
-- **Description:** Named `CREATE VIEW` plus ad-hoc JSON joins. LIST of joined RECORDs.
-
-### PR 7 — cw-migrate (tables and views)
-
-- **Title:** Alembic-style cw-migrate including CREATE VIEW
-- **Files:** datastore-adjacent `cw-migrate`, `db/versions/`, start-time revision check
-- **Depends:** PR 1, PR 3
-- **Description:** generate/upgrade/downgrade/current. Views for joined API shapes. No auto-apply in production.
-
-### PR 8 — JemalongDB example rewrite (docs + sim only)
-
-- **Title:** Rewrite WarehouseSIM/JemalongDB to RECORD
-- **Files:** JemalongDB or `latproc/examples/`, language_ref
-- **Depends:** PR 5, PR 7
-- **Description:** Same weight-note and bale-details as RECORD. INTERFACE remains the persist bridge. No plant Warehouse change.
-
-### PR 9 (optional, later) — Warehouse projection
-
-- **Title:** Optional BALEDETAILAPI backed by RECORD + shared datastore
-- **Files:** Warehouse LPC (Grab and Core), optional Python JSON client of `dbsvr`
-- **Depends:** PR 4, PR 6, PR 8, Open Question 1
-- **Description:** Both iods use datastore; station panels can skip refresh GET for CW-visible rows.
+JemalongDB / Warehouse may use RECORD. Not Clockwork tests.
