@@ -1001,7 +1001,18 @@ void MachineInstance::remove_pending() {
     }
 }
 
+bool MachineInstance::isPrivateConstant() const {
+    if (_type != "CONSTANT") {
+        return false;
+    }
+
+    const Value &private_value = properties.lookup("private");
+    bool is_private = false;
+    return private_value.asBoolean(is_private) && is_private;
+}
+
 void MachineInstance::describe(std::ostream &out) {
+    const bool private_constant = isPrivateConstant();
     out << "---------------\n"
         << _name << ": " << current_state.getName() << " " << " Class: " << _type
         << (enabled() ? "" : " DISABLED") << (isShadow() ? " SHADOW " : " ")
@@ -1018,7 +1029,11 @@ void MachineInstance::describe(std::ostream &out) {
         if (!describeEtherCATIOParameters(out, this)) {
             for (unsigned int i = 0; i < parameters.size(); i++) {
                 Value p_i = parameters[i].val;
-                if (p_i.kind == Value::t_symbol) {
+                if (private_constant) {
+                    out << "  parameter " << (i + 1) << " <private> ("
+                        << parameters[i].real_name << ")\n";
+                }
+                else if (p_i.kind == Value::t_symbol) {
                     out << "  parameter " << (i + 1) << " " << p_i.sValue << " ("
                         << parameters[i].real_name << "), state: "
                         << (parameters[i].machine ? parameters[i].machine->getCurrent().getName()
@@ -1028,8 +1043,8 @@ void MachineInstance::describe(std::ostream &out) {
                         << "\n";
                 }
                 else {
-                    out << "  parameter " << (i + 1) << " " << p_i << " (" << parameters[i].real_name
-                        << ")\n";
+                    out << "  parameter " << (i + 1) << " " << p_i << " ("
+                        << parameters[i].real_name << ")\n";
                 }
             }
             out << "\n";
@@ -1163,7 +1178,25 @@ void MachineInstance::describe(std::ostream &out) {
     }
     if (properties.size()) {
         out << "properties:\n  ";
-        out << properties << "\n\n";
+        if (!private_constant) {
+            out << properties;
+        }
+        else {
+            SymbolTableConstIterator property = properties.begin();
+            const char *separator = "";
+            while (property != properties.end()) {
+                const std::pair<std::string, Value> item = *property++;
+                out << separator << item.first << ": ";
+                if (item.first == "VALUE") {
+                    out << "<private>";
+                }
+                else {
+                    out << item.second;
+                }
+                separator = ", ";
+            }
+        }
+        out << "\n\n";
     }
     if (locked) {
         out << "locked: " << locked->getName() << "\n";
@@ -5561,6 +5594,16 @@ void MachineInstance::setupModbusInterface() {
 
     if (modbus_addresses.size() != 0) {
         return; // already done
+    }
+    if (isPrivateConstant()) {
+        // A private constant may be consumed by Clockwork expressions and plugins,
+        // but it must never be assigned an externally readable Modbus address.
+        if (properties.exists("export") || !state_machine->exports.empty() ||
+            !state_machine->state_exports.empty() || !state_machine->state_exports_rw.empty() ||
+            !state_machine->command_exports.empty()) {
+            MessageLog::instance()->add((_name + " is private; ignoring Modbus exports").c_str());
+        }
+        return;
     }
     DBG_MODBUS << fullName() << " setting up modbus\n";
     std::string full_name = fullName();
