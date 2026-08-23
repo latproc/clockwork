@@ -13,7 +13,7 @@
 | Warehouse | plant HTTP client | `WEBREQUEST` to SamplingLine APIs |
 | SamplingLineProjects | Python + Alembic | operational warehouse data today |
 
-This is the design spec. Sequencing, grammar, scaffolder goldens, datastore WAL/SQL, and ZMQ restart work are in `docs/RECORD_IMPLEMENTATION_PLAN.md`. Clockwork implementation is generic (Customer/Order fixtures). Plant LPC (Jemalong, Warehouse) is background and later application work, not Clockwork tests.
+This is the single design and implementation spec. Clockwork work is generic (`Customer` / `Order` fixtures). Plant LPC (Jemalong, Warehouse) is background and later application work, not Clockwork tests.
 
 ---
 
@@ -144,6 +144,19 @@ RECORD + one shared **datastore** is how Clockwork can take on that job: a write
 - FLAG-style `save`/`load` builtins on RECORD in v1 (generated INTERFACE instead).
 - Schema `action: "create"` as the scaffolder “create” command (that JSON is CREATE TABLE; operational create is `insert`).
 
+### Clockwork is generic
+
+latproc / Clockwork is a general language. RECORD, `dbd`, `cw-scaffold`, `cw-migrate`, and every test in **this** repo must be domain-neutral. Plant background below explains *why* the feature exists; it is not a license to put those names in iod or tests.
+
+| Allowed in Clockwork | Not allowed in Clockwork |
+| --- | --- |
+| `Customer`, `Order`, `Item`, `Address` | `WEIGHTNOTE`, `BALEDETAILS`, `BaleWithLinks`, `GrabChamber` as fixtures |
+| `tests/datastore.cw`-style JSON | station queues / RFID as first-class types |
+| Generated `CustomerINTERFACE` | Generated `WEIGHTNOTEINTERFACE` as a Clockwork test |
+| Two-process tests: iod A and iod B | Tests named Grab / Core |
+
+`loadConfig` is **not reentrant** (`MachineClass` tables are process-static; `reset_parser()` does not clear classes). Parser and scaffolder tests are **subprocesses** (`cw --parse-only`, `cw-scaffold`).
+
 ---
 
 ## Proposed design
@@ -232,8 +245,42 @@ Add:
 - Instances are **normal** `MachineInstance`s. LIST, EXPORT, HMI, and dependency tracking apply unchanged.
 - **Reject in a RECORD body:** WHEN, RECEIVE, COMMAND, user states, transitions. OPTIONS only (`KEY` / `LOCAL` / `UNIQUE` / `NOT NULL` as agreed).
 - Optional `VIEW "name"` (or `TABLE "name"`) on the class so a RECORD can sit on a join view, not only a base table.
+- `KEY` is already a lexer token (CHANNEL). Add `UNIQUE`, `VIEW`, `TABLE`. Do **not** add a `NULL` keyword: `OPTION x NULL` is the symbol `"NULL"` folded to `Value::t_empty` (`tests/null.cw`). Parse `NOT NULL` as `NOT` + symbol `"NULL"`.
+- Prefer a separate `record_body` production (OPTIONS only). `COMMAND` inside RECORD is a syntax error.
+- `KEY`/`UNIQUE`/`NOT NULL` on a non-RECORD OPTION is an error.
+- Disable automatic state changes (like FLAG). Builtin `INIT` stays; no user `on`/`off`.
 
-Sketch (JemalongDB rewritten):
+Grammar:
+
+```
+definition_header:
+  SYMBOL RECORD record_header_tail parameters
+
+record_header_tail: /* empty */ | VIEW STRINGVAL | TABLE STRINGVAL
+
+record_body:
+  OPTION option_settings ';'
+| LOCAL OPTION local_option_settings ';'
+
+option_setting:
+  SYMBOL value
+| SYMBOL value option_annots   # KEY | UNIQUE | NOT NULL
+```
+
+Clockwork fixture (generic):
+
+```
+Customer RECORD {
+    OPTION id 0 KEY;
+    OPTION name "";
+    OPTION email "";
+    OPTION age 0;
+    LOCAL OPTION dirty false;
+}
+cust Customer;
+```
+
+Application sketch (Jemalong later, not a Clockwork test):
 
 ```
 WEIGHTNOTE RECORD {
@@ -416,6 +463,63 @@ Today `dbd` parses JSON, `client.connect("tcp://127.0.0.1:5554")`, `makeRemoteRe
 
 Do **not** open sqlite from `dbd`. Do **not** fold `dbsvr` into the Clockwork tree as “the SQL worker”.
 
+**Datastore gaps today** (generic `customer` tests in that repo):
+
+| # | Issue | Where |
+| --- | --- | --- |
+| D1 | SQL concatenated; `db_server` **rejects** bind parameters | `sql_interface.cpp`; `db_server.cpp` ~103–106 |
+| D2 | Every column is a JSON string; NULL `sqlite3_column_text` is unsafe | `db_server.cpp` ~124–127 |
+| D3 | insert/update/delete do not return the row (need `RETURNING` or equivalent) | `performRequestMessage` |
+| D4 | JSON null / boolean not emitted as SQL | `collectValuesString` |
+| D5–D6 | No `select`/`join`/`order`/`limit`; WHERE is equality-AND only | `buildSQL` |
+| D7 | ZMQ REP only — no notify (open Q6) | `dbsvr.cpp` |
+| D8 | `action: "create"` is CREATE TABLE (README is wrong) | `buildSQL` |
+| D9 | `action: "sql"` unsandboxed | `buildSQL` |
+| D10 | No identifier catalog | new |
+| D11 | No test target in CMake | `CMakeLists.txt` |
+| D13 | `char buf[1000]` truncates | `buildSQL` |
+| D15 | No WAL, no busy timeout, no request transaction | `store.cpp` `connect` |
+
+**SQLite PRAGMAs — copy from WoolSamplingLineAPI `app/db.py`, not the domain.** On every connect:
+
+```
+PRAGMA foreign_keys=ON
+PRAGMA journal_mode=WAL
+PRAGMA synchronous=NORMAL
+PRAGMA busy_timeout=5000
+```
+
+(`alembic/env.py` omits busy_timeout; datastore and `cw-migrate` must apply all four.) Live `bales.db-wal` shows the Python API actually uses WAL. RFID Capture `db.py` has no WAL — ignore it. Do not copy SQLAlchemy, Alembic Python, or plant models. `create_all` on start is not allowed.
+
+One JSON request = one HTTP request: writes `BEGIN IMMEDIATE` … `COMMIT` / `ROLLBACK`; reads `BEGIN DEFERRED` (not IMMEDIATE). Clockwork never sends BEGIN. Retry `SQLITE_BUSY` until busy_timeout. Open `SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE`. Fail connect if `journal_mode` is not `wal`. Checkpoint on clean `dbsvr` shutdown.
+
+### ZMQ channels and process restarts
+
+humid/modbusd/persistd already recover CHANNEL setup (`forceFullReconnect`, linger 0, `sendWithDeadline`). **`dbd` does not.** `dbsvr` linger is commented out. Persist will hang or exit on the first bounce unless this is fixed before round-trip tests.
+
+```
+iod DATABASE_CHANNEL
+        ▲  SubscriptionManager SUB + setup REQ :5555
+       dbd
+        │  throwaway ZMQ_REQ + new context per request (today)
+     dbsvr REP :5554
+```
+
+Reply path today creates **another** context + REQ to iod `:5555` and ignores `g_iodcmd`. `STARTUP` from iod does `exit(0)`. Subscriber EFSM/`ENOTSOCK` does `exit(1)`. `makeRemoteRequest` recv is blocking with no deadline. `127.0.0.1:5554` is hardcoded. `dbd.cpp` double-`free`s the message buffer.
+
+REQ/REP does not survive peer restart without linger 0, a deadline, and a **new socket**.
+
+Required:
+
+1. One long-lived dbd context; reuse `g_iodcmd` / `sendWithDeadline` for PROPERTY.
+2. Long-lived REQ to `dbsvr`, linger 0, recreate on timeout/EFSM.
+3. Configurable `dbsvr` endpoint (default `127.0.0.1:5554`).
+4. `dbsvr`: linger 0 on bind; reset REP state on send/recv failure; `EADDRINUSE` retry/log.
+5. CHANNEL: `forceFullReconnect` like persistd; STARTUP reconnects in-process (**no `exit(0)`**).
+6. Notify-after-commit (if Q6 is PUB) uses the same linger/timeout rules — not a second silent REQ.
+
+`iod/CMakeLists.txt` only builds `dbd` if `MODBUS_FOUND`. Parser/scaffold tests must not require `dbd`.
+
 ### Alembic-like schema (`cw-migrate`)
 
 RECORD classes in `.cw`/`.lpc` are the **table** model. **Views** are first-class migration objects (`CREATE VIEW` SQL), optionally bound to a RECORD with `VIEW "name"`.
@@ -521,7 +625,30 @@ Parser additions: `RECORD` (reject logic in the body), optional `VIEW "name"` / 
 
 ### INTERFACE layer (kept, then generated)
 
-Hand-written INTERFACE + JSON on DATABASE_CHANNEL remains valid. **v1 persist scaffolding is generated:** `cw-scaffold` emits `<RecordClass>INTERFACE MACHINE record, items` with create=`insert`, update, find, list, delete. Do not put those COMMANDs on the RECORD. After dbd applies rows onto OPTIONS, the hand-maintained field mapper is no longer required.
+Hand-written INTERFACE + JSON on DATABASE_CHANNEL remains valid. **v1 persist scaffolding is generated.** Standalone `cw-scaffold --from a.cw --out dir/` loads the program with the real parser and emits one `<Class>INTERFACE.lpc` per RECORD. Do not put COMMANDs on the RECORD.
+
+```
+CustomerINTERFACE MACHINE record, items {
+    GLOBAL DATABASE_CHANNEL;
+    OPTION request JSON_VALUE {};
+    COMMAND create { … action insert … SEND request TO DATABASE_CHANNEL; }
+    COMMAND update { … }
+    COMMAND find { … }
+    COMMAND list { … find with empty keys until COPY ALL FROM RecordClass exists … }
+    COMMAND delete { … }
+}
+# cust Customer; all_cust LIST; mgr CustomerINTERFACE cust, all_cust;
+```
+
+| COMMAND | JSON `action` | Notes |
+| --- | --- | --- |
+| create | `insert` | Persisted OPTIONS including KEY. **Not** schema `create`. |
+| update | `update` | keys = KEY; data = other persisted OPTIONS |
+| find | `find` | keys = KEY; fields = persisted OPTIONS |
+| list | `find` | keys omitted/`{}` until COPY-from-class |
+| delete | `delete` | keys = KEY |
+
+`type` = lowercase class name. `auth` = `"xxx"`. LOCAL omitted. VIEW RECORD: find + list only. Missing KEY on a base-table RECORD: scaffolder error. `COPY ALL FROM SYMBOL` today looks up a **LIST instance** (`SetOperationAction`); do not emit COPY-from-class until that PR.
 
 ### IOD / dbd / datastore protocol
 
@@ -682,33 +809,37 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 - `SamplingLineProjects/WoolSamplingLineAPI/app/models.py`, `app/utils.py` `bale_with_links_dict`, `specs/02-api-contract.md`, `specs/03-data-model-and-migrations.md` — joins/views-as-API and Alembic
 - Warehouse `config/Grab` and `config/Core` — two iods sharing the HTTP API today
 - `iod/src/clockwork.cpp` FLAG/LIST `MachineClass`, `iod/src/cwlang.ypp` COPY ALL FROM, `MachineInstance::notifyDependents`
+- WoolSamplingLineAPI `app/db.py` — SQLite PRAGMAs to copy (not models)
+- `iod/src/persistd.cpp` / `modbusd.cpp` — linger 0, `sendWithDeadline`, `forceFullReconnect` (pattern for dbd)
 
 ---
 
 ## PR Plan
 
-Detail and review notes: `docs/RECORD_IMPLEMENTATION_PLAN.md`. Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice does not need `dbsvr`.
+Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice does not need `dbsvr`.
 
 ### Clockwork
 
-1. **RECORD grammar + subprocess parse tests** — `RECORD` body OPTIONS only; `KEY`/`UNIQUE`/`NOT NULL`; optional `VIEW`/`TABLE`; `cw --parse-only`; generic fixtures. No dbd/datastore change.
-2. **`cw-scaffold` + goldens** — RECORD → `<Class>INTERFACE` (create=`insert`, update, find, list, delete). VIEW: find/list only.
-3. **dbd ZMQ recovery** (with datastore linger 0) — one context, REQ deadline, `forceFullReconnect`, no `exit` on STARTUP. Before trusting persist round-trips.
+1. **RECORD grammar + subprocess parse tests** — `cwlang.lpp`/`.ypp`, `MachineClass` `is_record` + column flags. `cw --parse-only` (or tiny `cw-parse`): loadConfig then exit 0/2. Fixtures `iod/tests/fixtures/record/customer.cw`, `reject_when.cw`, view RECORD. KEY on MACHINE is an error. No dbd/datastore change.
+2. **`cw-scaffold` + goldens** — `cw-scaffold --from a.cw --out dir/`. `CustomerINTERFACE`; VIEW find/list only; LOCAL omitted; no KEY → non-zero. Parse RECORD + generated file + `tests/db-channel.cw`.
+3. **dbd ZMQ recovery** (with datastore linger 0) — one context, REQ deadline, `forceFullReconnect`, no `exit` on STARTUP. Before persist round-trips.
 4. **dbd maps typed JSON rows onto RECORD OPTIONS** by type+key; skip echo persist. Wants datastore RETURNING/typed replies.
 5. **Two Clockworks, one datastore** — client A / client B; notify still open (Q6).
-6. **COPY ALL FROM RecordClass INTO LIST** — then scaffolder `list` switches to COPY.
+6. **COPY ALL FROM RecordClass INTO LIST** — then scaffolder `list` switches to COPY. `tests/record_list.cw`.
 7. **QUERY INTO** — named views first.
 
 ### Datastore (`../datastore`)
 
-0. **WAL + busy timeout + automatic transactions** — same four PRAGMAs as WoolSamplingLineAPI `app/db.py`; BEGIN IMMEDIATE on writes; ROLLBACK on error. Generic `customer` tests.
-0b. **REP linger 0 + send/recv recovery** — with Clockwork dbd-zmq.
-1. **Typed replies, NULL, RETURNING** so OPTIONS can be applied without a follow-up GET.
+0. **WAL + busy timeout + automatic transactions** — four PRAGMAs; BEGIN IMMEDIATE on writes; ROLLBACK on error. Temp `customer.db`: journal is wal; reader during write; failed statement rolls back.
+0b. **REP linger 0 + send/recv recovery** — with Clockwork dbd-zmq. Restart `dbsvr` rebinds `:5554`; next insert/find succeeds.
+1. **Typed replies, NULL, RETURNING.**
 2. **Bound parameters + identifier allow-list.**
 3. **`select` / `order` / `limit` / richer `where`.**
 4. **JSON `join` (optional)** after named views.
-5. **`cw-migrate`** — tables and views; no auto-upgrade on `dbsvr` start.
+5. **`cw-migrate`** — tables and views; no auto-upgrade on `dbsvr` start. Examples use `customer`.
 6. **Notify-after-commit (Q6)** if that is the chosen fan-out.
+
+DS-0 can start in parallel with Clockwork 1. DS-1 before Clockwork 4. DS-3 before COPY-from-class (or COPY finds all and filters in iod).
 
 ### Later, other repos (not Clockwork CI)
 
