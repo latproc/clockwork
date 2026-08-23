@@ -43,8 +43,12 @@ CustomerINTERFACE MACHINE record, items {
         ITEM ${keys.id} OF request := record.id;
         SEND request TO DATABASE_CHANNEL;
     }
-    COMMAND list {
+    COMMAND load {
         request := list_template;
         SEND request TO DATABASE_CHANNEL;
+    }
+    COMMAND list {
+        CLEAR items;
+        COPY ALL FROM Customer TO items;
     }
 }

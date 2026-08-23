@@ -537,7 +537,19 @@ add_test(NAME record_scaffold_customer COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw>
   -DFROM=${_record_fix}/customer.cw
   -DGOLDEN=${_record_fix}/expected_CustomerINTERFACE.lpc
+  -DGOLDEN_SQL=${_record_fix}/expected_Customer.sql
   -DOUT_NAME=CustomerINTERFACE.lpc
+  -DSQL_NAME=Customer.sql
+  -DCHANNEL=${CMAKE_CURRENT_SOURCE_DIR}/../tests/db-channel.cw
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_scaffold.cmake)
+add_test(NAME record_scaffold_view COMMAND ${CMAKE_COMMAND}
+  -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
+  -DCW=$<TARGET_FILE:cw>
+  -DFROM=${_record_fix}/customer_with_address_view.cw
+  -DGOLDEN=${_record_fix}/expected_CustomerWithAddressINTERFACE.lpc
+  -DGOLDEN_SQL=${_record_fix}/expected_CustomerWithAddress.sql
+  -DOUT_NAME=CustomerWithAddressINTERFACE.lpc
+  -DSQL_NAME=CustomerWithAddress.sql
   -DCHANNEL=${CMAKE_CURRENT_SOURCE_DIR}/../tests/db-channel.cw
   -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_scaffold.cmake)
 

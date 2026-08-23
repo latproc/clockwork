@@ -821,11 +821,11 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 ### Clockwork
 
 1. **RECORD grammar + subprocess parse tests** — **landed.** `RECORD` body OPTIONS only; `KEY`/`UNIQUE`/`NOT NULL`; `VIEW`/`TABLE`; `cw --parse-only`; fixtures under `iod/tests/fixtures/record/`. KEY on MACHINE is an error; missing KEY on a table RECORD is an error. No dbd/datastore change.
-2. **`cw-scaffold` + goldens** — **landed.** `cw-scaffold --from a.cw --out dir/` writes `<Class>INTERFACE.lpc`. create=`insert`; VIEW omits write COMMANDs; LOCAL omitted. Golden `expected_CustomerINTERFACE.lpc` plus parse with `tests/db-channel.cw`. Do not declare `GLOBAL DATABASE_CHANNEL` (CHANNEL is not a MACHINE in the instance table).
+2. **`cw-scaffold` + goldens** — **landed.** `cw-scaffold --from a.cw --out dir/ [--sql]`. INTERFACE: create=`insert`; **list** = `COPY ALL FROM Class TO items`; **load** = JSON `find` with empty keys (hydrate from dbsvr). `--sql` writes `CREATE TABLE` for base RECORDs; VIEW classes only get a comment (join SQL is hand-written). LOCAL omitted. Golden `expected_CustomerINTERFACE.lpc` + `expected_Customer.sql`.
 3. **dbd ZMQ recovery** — **landed.** One context; `DeadlineReq` linger 0 + recv deadline + recreate on timeout/EFSM; `--dbsvr` / `--notify`; `forceFullReconnect` on STARTUP (no `exit`); subscriber EFSM/ENOTSOCK reconnects. `test_deadline_req`.
 4. **dbd maps typed JSON rows onto RECORD OPTIONS** — **landed.** `RECORD_APPLY type keys_json row_json` (`RecordApply`) writes per-column OPTIONS by table+KEY, skips LOCAL, creates `Class#key` if none held. dbd sends RECORD_APPLY for dbsvr replies and PUB notify. Blob `respond_to` PROPERTY remains. `test_record_apply`.
 5. **Two Clockworks, one datastore** — **notify path landed.** `dbsvr` PUB after COMMIT (`--notify-port`, default 5556). dbd SUB applies. Automated coverage is `test_notify` in datastore plus RECORD_APPLY; a live two-iod plant test is still later.
-6. **COPY ALL FROM RecordClass INTO LIST** — **landed (in-memory).** Works for table and VIEW RECORD classes (`Customer`, `CustomerWithCity`). Scaffolder `list` still sends JSON `find` so dbd apply materializes rows first.
+6. **COPY ALL FROM RecordClass INTO LIST** — **landed (in-memory).** Table and VIEW RECORD classes. Scaffolder **list** is COPY; **load** still SEND-find so dbd can materialize rows first.
 7. **QUERY INTO** — **not started.** v1 uses `select` on a named view (JSON) + `RECORD_APPLY` + COPY. `QUERY json INTO list` would only wrap that SEND; it still cannot wait for dbsvr inside the scan.
 
 ### Datastore (`../datastore`)

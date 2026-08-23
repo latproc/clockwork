@@ -6,8 +6,12 @@ endif()
 set(outdir "${CMAKE_CURRENT_LIST_DIR}/_scaffold_out")
 file(REMOVE_RECURSE "${outdir}")
 file(MAKE_DIRECTORY "${outdir}")
+set(_sql_arg)
+if(GOLDEN_SQL)
+  set(_sql_arg --sql)
+endif()
 execute_process(
-  COMMAND "${CW_SCAFFOLD}" --from "${FROM}" --out "${outdir}"
+  COMMAND "${CW_SCAFFOLD}" --from "${FROM}" --out "${outdir}" ${_sql_arg}
   RESULT_VARIABLE rc
   OUTPUT_VARIABLE out
   ERROR_VARIABLE err
@@ -21,6 +25,17 @@ file(READ "${gen}" got)
 file(READ "${GOLDEN}" want)
 if(NOT got STREQUAL want)
   message(FATAL_ERROR "scaffold output does not match golden\n--- got ---\n${got}\n--- want ---\n${want}")
+endif()
+if(GOLDEN_SQL)
+  if(NOT SQL_NAME)
+    message(FATAL_ERROR "SQL_NAME is required when GOLDEN_SQL is set")
+  endif()
+  set(sqlgen "${outdir}/${SQL_NAME}")
+  file(READ "${sqlgen}" sqlgot)
+  file(READ "${GOLDEN_SQL}" sqlwant)
+  if(NOT sqlgot STREQUAL sqlwant)
+    message(FATAL_ERROR "scaffold SQL does not match golden\n--- got ---\n${sqlgot}\n--- want ---\n${sqlwant}")
+  endif()
 endif()
 
 execute_process(
