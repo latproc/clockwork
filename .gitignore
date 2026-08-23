@@ -37,6 +37,7 @@ nohup.out
 *.log
 *.sql
 *.sqlite
+!iod/tests/fixtures/**/*.sql
 *.dat
 
 # local configuration (root / iod tree; product sample is etc/iod.conf)
