@@ -86,7 +86,8 @@ bool IODCommandGetStatus::run(std::vector<Value> &params) {
             MachineInstance *machine = MachineInstance::find(params[1].asString().c_str());
             if (machine) {
                 ok = true;
-                result_str = machine->getCurrentStateString();
+                result_str = machine->isPrivateConstant() ? "<private>"
+                                                          : machine->getCurrentStateString();
             }
             else {
                 error_str = "Not Found";
@@ -428,12 +429,17 @@ bool IODCommandGetProperty::run(std::vector<Value> &params) {
             error_str = "Error: usage is GET machine property";
             return false;
         }
-        const Value &v = m->getValue(params[2].asString());
+        const std::string property = params[2].asString();
+        const Value &v = m->getValue(property);
         if (v == SymbolTable::Null) {
             error_str = "Error: property not found";
             return false;
         }
         else {
+            if (m->isPrivateConstant() && property == "VALUE") {
+                result_str = "<private>";
+                return true;
+            }
             if (v.kind == Value::t_dynamic && v.dynamicValue()) {
                 const Value *last = v.dynamicValue()->lastResult();
                 if (last) {
@@ -546,9 +552,17 @@ bool IODCommandShow::run(std::vector<Value> &params) {
     if (found != machines.end()) {
         MachineInstance *m = (*found).second;
         const Value &val = m->properties.lookup("VALUE");
-        ss << m->getName() << " " << m->_type << " state=" << m->getCurrentStateString();
+        const bool private_constant = m->isPrivateConstant();
+        ss << m->getName() << " " << m->_type << " state="
+           << (private_constant ? "<private>" : m->getCurrentStateString());
         if (val != SymbolTable::Null) {
-            ss << " value=" << val;
+            ss << " value=";
+            if (private_constant) {
+                ss << "<private>";
+            }
+            else {
+                ss << val;
+            }
         }
         ss << " state_age=";
         simple_deltat(ss, m->currentStateAge());
@@ -588,7 +602,14 @@ bool IODCommandFind::run(std::vector<Value> &params) {
         const Value &val = m->properties.lookup("VALUE");
         if (params.size() == 1 || m->getName().find(params[1].asString()) != std::string::npos) {
             if (val != SymbolTable::Null) {
-                ss << m->getName() << " " << m->_type << " " << val
+                ss << m->getName() << " " << m->_type << " ";
+                if (m->isPrivateConstant()) {
+                    ss << "<private>";
+                }
+                else {
+                    ss << val;
+                }
+                ss
                    << ((m->enabled()) ? "" : " [DISABLED]") << "\n";
             }
             else {
@@ -868,10 +889,14 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
     }
 #endif
 
+    const bool private_constant = m->isPrivateConstant();
     SymbolTableConstIterator st_iter = m->properties.begin();
     while (st_iter != m->properties.end()) {
         std::pair<std::string, Value> item(*st_iter++);
-        if (item.second.kind == Value::t_integer) {
+        if (private_constant && item.first == "VALUE") {
+            cJSON_AddStringToObject(node, item.first.c_str(), "<private>");
+        }
+        else if (item.second.kind == Value::t_integer) {
             cJSON_AddNumberToObject(node, item.first.c_str(), item.second.iValue);
         }
         else if (item.second.kind == Value::t_float) {
@@ -898,7 +923,7 @@ cJSON *printMachineInstanceToJSON(MachineInstance *m, std::string prefix = "") {
         size_t len = m->getCurrent().getName().length() + 1;
         char *cs = (char *)malloc(len);
         memcpy(cs, m->getCurrentStateString(), len);
-        cJSON_AddStringToObject(node, "state", cs);
+        cJSON_AddStringToObject(node, "state", private_constant ? "<private>" : cs);
         free(cs);
     }
     else {

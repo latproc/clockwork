@@ -143,6 +143,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     virtual std::ostream &operator<<(std::ostream &out) const;
     void describe(std::ostream &out);
+    bool isPrivateConstant() const;
 
     static void add_io_entry(const char *name, unsigned int io_offset, unsigned int bit_offset);
 
