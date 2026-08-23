@@ -830,8 +830,8 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 
 ### Datastore (`../datastore`)
 
-0. **WAL + busy timeout + automatic transactions** — four PRAGMAs; BEGIN IMMEDIATE on writes; ROLLBACK on error. Temp `customer.db`: journal is wal; reader during write; failed statement rolls back.
-0b. **REP linger 0 + send/recv recovery** — with Clockwork dbd-zmq. Restart `dbsvr` rebinds `:5554`; next insert/find succeeds.
+0. **WAL + busy timeout + automatic transactions** — **landed in datastore.** Four PRAGMAs on connect; writable open CREATE; `BEGIN IMMEDIATE` on writes / `BEGIN DEFERRED` on reads; ROLLBACK on error. `test_store_wal` checks `journal_mode=wal` and insert+rollback leaves no rows. `action: sql` may not include BEGIN/COMMIT/ROLLBACK.
+0b. **REP linger 0** — **partial:** `dbsvr` sets `ZMQ_LINGER=0` on bind. dbd REQ recovery still later.
 1. **Typed replies, NULL, RETURNING.**
 2. **Bound parameters + identifier allow-list.**
 3. **`select` / `order` / `limit` / richer `where`.**
