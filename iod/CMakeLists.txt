@@ -509,6 +509,9 @@ add_test(NAME record_parse_no_key COMMAND ${CMAKE_COMMAND}
 add_test(NAME record_parse_copy_from_class COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/record_list.cw -DEXPECT_RC=0
   -P ${_record_parse})
+add_test(NAME record_parse_copy_from_view COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/customer_view_list.cw -DEXPECT_RC=0
+  -P ${_record_parse})
 add_executable(test_record_apply tests/test_record_apply.cpp)
 set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_record_apply PRIVATE src tests)

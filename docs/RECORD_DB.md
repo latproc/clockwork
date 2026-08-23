@@ -756,7 +756,7 @@ Clockwork tests are **generic language** (`Customer`, `OrderLine`, `CustomerWith
 - `RECORD_APPLY` fills OPTIONS by type+key; LOCAL skipped; two instances with the same KEY both update; `Class#key` is registered for lookup.
 - PUB notify with a row **array** applies each row (`test_db_notify`).
 - `COPY ALL FROM Customer TO list` (held instances).
-- Named **VIEW** (not ad-hoc JSON join): `customer_with_city` SELECT + WHERE + ORDER + LIMIT; FK reject; insert returns the row by `rowid`. Queue shape is `select` + `where station` + `order` + `limit` on a generic `item` table.
+- Named **VIEW** (not ad-hoc JSON join): `customer_with_city` SELECT + WHERE + ORDER + LIMIT; FK reject; insert returns the row by `rowid`. Queue shape is `select` + `where station` + `order` + `limit` on generic `item`. `station: null` → `IS NULL`; `{"is":"not_null"}` → `IS NOT NULL`. COPY ALL FROM a VIEW RECORD class.
 - WAL: `journal_mode=wal`; rollback leaves no rows.
 - `cw-migrate` upgrade/downgrade including `CREATE VIEW`.
 - ZMQ: `DeadlineReq` recreate after peer bounce.
@@ -825,8 +825,8 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 3. **dbd ZMQ recovery** — **landed.** One context; `DeadlineReq` linger 0 + recv deadline + recreate on timeout/EFSM; `--dbsvr` / `--notify`; `forceFullReconnect` on STARTUP (no `exit`); subscriber EFSM/ENOTSOCK reconnects. `test_deadline_req`.
 4. **dbd maps typed JSON rows onto RECORD OPTIONS** — **landed.** `RECORD_APPLY type keys_json row_json` (`RecordApply`) writes per-column OPTIONS by table+KEY, skips LOCAL, creates `Class#key` if none held. dbd sends RECORD_APPLY for dbsvr replies and PUB notify. Blob `respond_to` PROPERTY remains. `test_record_apply`.
 5. **Two Clockworks, one datastore** — **notify path landed.** `dbsvr` PUB after COMMIT (`--notify-port`, default 5556). dbd SUB applies. Automated coverage is `test_notify` in datastore plus RECORD_APPLY; a live two-iod plant test is still later.
-6. **COPY ALL FROM RecordClass INTO LIST** — **landed (in-memory).** `COPY ALL FROM Customer TO list` copies held instances of that RECORD class (optional WHERE via ITEM). Does **not** query sqlite from iod. Scaffolder `list` still sends JSON `find` so dbd apply can materialize rows first. Fixture `record_list.cw`; `test_copy_from_record`.
-7. **QUERY INTO** — named views first. **Not started.**
+6. **COPY ALL FROM RecordClass INTO LIST** — **landed (in-memory).** Works for table and VIEW RECORD classes (`Customer`, `CustomerWithCity`). Scaffolder `list` still sends JSON `find` so dbd apply materializes rows first.
+7. **QUERY INTO** — **not started.** v1 uses `select` on a named view (JSON) + `RECORD_APPLY` + COPY. `QUERY json INTO list` would only wrap that SEND; it still cannot wait for dbsvr inside the scan.
 
 ### Datastore (`../datastore`)
 
@@ -834,7 +834,7 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 0b. **REP linger 0** — **landed.** `ZMQ_LINGER=0` on REP and PUB; EADDRINUSE bind retry; recreate REP on send/recv failure; WAL checkpoint on SIGINT/SIGTERM.
 1. **Typed replies, NULL, RETURNING** — **landed.** Column types from sqlite (`INTEGER`/`REAL`/`TEXT`/`NULL`); JSON null/bool on write; insert/update reply is the row via `SELECT` after write (bundled sqlite 3.7 has no `RETURNING`). `test_typed_json`.
 2. **Bound parameters + identifier allow-list** — **landed for CRUD.** Identifiers `[A-Za-z_][A-Za-z0-9_]*`; values bound (`?`). `action: sql` stays a raw hatch (still rejects BEGIN/COMMIT/ROLLBACK).
-3. **`select` / `order` / `limit` / equality `where`** — **landed.** `action: "select"` (or `find`) with `where`/`keys`, `order` (identifier list), `limit`.
+3. **`select` / `order` / `limit` / `where`** — **landed.** Equality, JSON `null` → `IS NULL`, `{"is":"not_null"}` / `{"neq":null}` → `IS NOT NULL`, `{"eq":…}` / `{"neq":…}`. `order` identifiers, `-col` for DESC, `limit`. Named views are the join path.
 4. **JSON `join` (optional)** — **not started; not needed for v1.** Plant joins are named SQL views (`CREATE VIEW` in `cw-migrate`), same as the API flatten (`bale_with_links_dict`) but without putting wool types in Clockwork tests (`customer_with_city`).
 5. **`cw-migrate`** — **landed (upgrade/downgrade/current).** SQL revision files; `cw_revision`; `0001_customer.sql` + `0002_customer_with_city.sql` (`CREATE VIEW`). No `generate --from-program` yet. No auto-upgrade on `dbsvr` start. `test_cw_migrate`.
 6. **PUB after COMMIT** — **landed.** `{action,type,keys,row}` on the notify PUB socket. `test_notify`.

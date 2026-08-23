@@ -68,6 +68,35 @@ int main() {
         return 3;
     }
     delete act;
+
+    MachineClass *view = new MachineClass("CustomerWithCity");
+    view->is_record = true;
+    view->is_view = true;
+    view->table_name = "customer_with_city";
+    view->setOption("id", Value(static_cast<int64_t>(0)));
+    view->setColumnFlags("id", MachineClass::COL_KEY);
+    view->setOption("name", Value("", Value::t_string));
+    view->setOption("city", Value("", Value::t_string));
+    MachineInstance *v1 = MachineInstanceFactory::create("row_a", "CustomerWithCity");
+    v1->setStateMachine(view);
+    v1->setValue("id", Value(static_cast<int64_t>(1)));
+    v1->setValue("name", Value("Ann", Value::t_string));
+    v1->setValue("city", Value("Perth", Value::t_string));
+    machines[v1->getName()] = v1;
+
+    MachineInstance *from_view = MachineInstanceFactory::create("from_view", "LIST");
+    from_view->setStateMachine(listc);
+    machines[from_view->getName()] = from_view;
+    SetOperationActionTemplate vcopy(-1, Value("CustomerWithCity"), SymbolTable::Null,
+                                     Value("from_view"), Value(""), soSelect, 0, false);
+    Action *vact = vcopy.factory(ed);
+    if ((*vact)() != Action::Complete || from_view->parameters.size() != 1) {
+        std::cerr << "COPY FROM view RECORD expected 1 member, got "
+                  << from_view->parameters.size() << "\n";
+        return 4;
+    }
+    delete vact;
+
     std::cout << "ok\n";
     return 0;
 }
