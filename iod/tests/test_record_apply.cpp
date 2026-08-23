@@ -70,6 +70,24 @@ int main() {
         std::cerr << "did not create Customer#2\n";
         return 4;
     }
+    if (machines.find("Customer#2") == machines.end() || machines["Customer#2"] != created) {
+        std::cerr << "Customer#2 not registered for lookup\n";
+        return 7;
+    }
+
+    MachineInstance *shadow = MachineInstanceFactory::create("cust_b", "Customer");
+    shadow->setStateMachine(mc);
+    shadow->setValue("id", Value(static_cast<int64_t>(1)));
+    shadow->setValue("name", Value("", Value::t_string));
+    machines[shadow->getName()] = shadow;
+    cJSON *row_both = cJSON_Parse("{\"id\":1,\"name\":\"Both\"}");
+    n = RecordApply::applyRow("customer", 0, row_both);
+    cJSON_Delete(row_both);
+    if (n < 2 || cust->getValue("name").asString() != "Both" ||
+        shadow->getValue("name").asString() != "Both") {
+        std::cerr << "two holders of the same key did not both update n=" << n << "\n";
+        return 8;
+    }
 
     IODCommandRecordApply cmd;
     std::vector<Value> params;

@@ -37,6 +37,7 @@
 #include <iterator>
 #include <list>
 #include <sstream>
+#include <vector>
 #include <stdio.h>
 #include <string.h>
 #include <utility>
@@ -44,6 +45,7 @@
 
 #include "ConnectionManager.h"
 #include "DeadlineReq.h"
+#include "DbNotify.h"
 #include "MessageEncoding.h"
 #include "MessagingInterface.h"
 #include "SocketMonitor.h"
@@ -212,32 +214,16 @@ static void apply_rows_to_records(cJSON *request, cJSON *reply) {
 }
 
 static void apply_notify_payload(const std::string &payload) {
-    cJSON *note = cJSON_Parse(payload.c_str());
-    if (!note) {
-        return;
+    std::vector<DbNotifyRow> rows;
+    parseDbNotify(payload, rows);
+    for (size_t i = 0; i < rows.size(); ++i) {
+        auto cmd = MessageEncoding::encodeCommand("RECORD_APPLY",
+                                                  Value(rows[i].type, Value::t_string),
+                                                  Value(rows[i].keys_json, Value::t_string),
+                                                  Value(rows[i].row_json, Value::t_string));
+        std::string reply_s;
+        sendIodCommand(cmd, reply_s);
     }
-    cJSON *type_json = cJSON_GetObjectItem(note, "type");
-    const char *type = (type_json && type_json->type == cJSON_String) ? type_json->valuestring : 0;
-    cJSON *keys = cJSON_GetObjectItem(note, "keys");
-    cJSON *row = cJSON_GetObjectItem(note, "row");
-    if (row && row->type == cJSON_Array) {
-        row = row->child;
-    }
-    if (type && row) {
-        char *keys_s = keys ? cJSON_PrintUnformatted(keys) : strdup("{}");
-        char *row_s = cJSON_PrintUnformatted(row);
-        if (keys_s && row_s) {
-            auto cmd = MessageEncoding::encodeCommand("RECORD_APPLY",
-                                                      Value(type, Value::t_string),
-                                                      Value(keys_s, Value::t_string),
-                                                      Value(row_s, Value::t_string));
-            std::string reply_s;
-            sendIodCommand(cmd, reply_s);
-        }
-        free(keys_s);
-        free(row_s);
-    }
-    cJSON_Delete(note);
 }
 
 static void finish(int sig) {

@@ -147,6 +147,7 @@ int applyRow(const std::string &type, cJSON *keys, cJSON *row) {
             m = MachineInstanceFactory::create(name.c_str(), mc->name.c_str());
             if (m) {
                 m->setStateMachine(mc);
+                machines[name] = m;
             }
         }
         if (m) {

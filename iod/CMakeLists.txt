@@ -524,6 +524,11 @@ set_target_properties(test_deadline_req PROPERTIES COMPILE_DEFINITIONS "EC_SIMUL
 target_include_directories(test_deadline_req PRIVATE src)
 target_link_libraries(test_deadline_req cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
 add_test(NAME test_deadline_req COMMAND test_deadline_req)
+add_executable(test_db_notify tests/test_db_notify.cpp src/DbNotify.cpp)
+set_target_properties(test_db_notify PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_db_notify PRIVATE src)
+target_link_libraries(test_db_notify cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_db_notify COMMAND test_db_notify)
 add_test(NAME record_scaffold_customer COMMAND ${CMAKE_COMMAND}
   -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
   -DCW=$<TARGET_FILE:cw>
@@ -661,7 +666,7 @@ target_link_libraries(persistd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "p
 
 # modbusd needs libmodbus. dbd talks ZMQ only.
 set(CLOCKWORK_RUNTIME_TARGETS cw cw-scaffold iosh iocmd device_connector persistd)
-add_executable(dbd src/dbd.cpp src/DeadlineReq.cpp)
+add_executable(dbd src/dbd.cpp src/DeadlineReq.cpp src/DbNotify.cpp)
 target_link_libraries(dbd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 list(APPEND CLOCKWORK_RUNTIME_TARGETS dbd)
 if (MODBUS_FOUND)
