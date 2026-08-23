@@ -2062,6 +2062,11 @@ bool Channel::doesMonitor()
 #endif
 
 bool Channel::filtersAllow(MachineInstance *machine) {
+    // Private constants are runtime inputs, not observable state.  Do not publish
+    // them even when a broad channel pattern (for example `.*`) selects them.
+    if (machine->isPrivateConstant()) {
+        return false;
+    }
     if (!definition()->monitor_linked.empty() &&
         (machine->_type == "INPUTBIT" || machine->_type == "INPUTREGISTER")) {
         return false;
