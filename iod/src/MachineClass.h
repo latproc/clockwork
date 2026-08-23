@@ -96,14 +96,29 @@ class MachineClass {
     bool propertyIsLocal(const std::string &name) const;
     bool propertyIsLocal(const Value &name) const;
 
+    enum ColumnFlag {
+        COL_NONE = 0,
+        COL_KEY = 1,
+        COL_UNIQUE = 2,
+        COL_NOT_NULL = 4
+    };
+    void setColumnFlags(const std::string &option_name, unsigned flags);
+    unsigned getColumnFlags(const std::string &option_name) const;
+    std::string keyColumn() const;
+    unsigned keyColumnCount() const;
+
     State default_state;
     State initial_state;
     std::string name;
     static std::list<MachineClass *> all_machine_classes;
     bool allow_auto_states;
+    bool is_record;
+    bool is_view;
+    std::string table_name;
     int token_id;
     Plugin *plugin;
     long polling_delay;
+    std::map<std::string, unsigned> column_flags;
 
     std::set<std::string> property_names;
     std::set<std::string> command_names;

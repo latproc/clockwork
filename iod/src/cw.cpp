@@ -636,6 +636,9 @@ int main(int argc, char const *argv[]) {
         // zmq::error_t (EADDRINUSE) if anything recreates the singleton.
         return load_result;
     }
+    if (parse_only()) {
+        return 0;
+    }
 
     if (dependency_graph()) {
         std::ofstream graph(dependency_graph());

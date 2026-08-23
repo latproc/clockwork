@@ -88,6 +88,47 @@ std::list<ChannelDefinition> all_channeldefs;
 ChannelDefinition::Feature current_feature;
 std::set<ChannelDefinition::Feature> *current_features = 0;
 std::set<std::string> all_machine_types;
+static unsigned pending_column_flags = 0;
+static std::string pending_record_view;
+static std::string pending_record_table;
+
+static std::string lowercase_copy(const char *s) {
+    std::string out(s ? s : "");
+    for (size_t i = 0; i < out.size(); ++i) {
+        if (out[i] >= 'A' && out[i] <= 'Z') {
+            out[i] = static_cast<char>(out[i] - 'A' + 'a');
+        }
+    }
+    return out;
+}
+
+static void apply_column_annots(const char *option_name) {
+    if (!pending_column_flags) {
+        return;
+    }
+    if (!current_machineclass) {
+        pending_column_flags = 0;
+        return;
+    }
+    if (!current_machineclass->is_record) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno
+           << " KEY, UNIQUE, and NOT NULL are only valid on RECORD OPTIONS";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+    else if (current_machineclass->propertyIsLocal(option_name)) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno << " LOCAL OPTION " << option_name
+           << " cannot be KEY, UNIQUE, or NOT NULL";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+    else {
+        current_machineclass->setColumnFlags(option_name, pending_column_flags);
+    }
+    pending_column_flags = 0;
+}
 
 static MachineInstance *addMachine(const char *name, const char *type,
             MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE) {
@@ -226,6 +267,9 @@ void reset_parser() {
     current_channel = 0;
     current_features = 0;
     current_parameters.clear();
+    pending_column_flags = 0;
+    pending_record_view.clear();
+    pending_record_table.clear();
 }
 
 struct Subcondition {
@@ -255,6 +299,7 @@ struct Subcondition {
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
+%token RECORD UNIQUE VIEW TABLE
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
 %token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
@@ -366,13 +411,35 @@ option_setting
 
 
 option_setting:
-SYMBOL value {
+SYMBOL value option_annots_opt {
 	std::string name($1);
 	Value v(*$2);
-//  if (v.kind == Value::t_symbol)
-//    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
 	current_machineclass->setOption(name, v);
+	apply_column_annots($1);
 	delete $2;
+}
+
+option_annots_opt:
+/* empty */ { pending_column_flags = 0; }
+| { pending_column_flags = 0; } option_annots
+
+option_annots:
+option_annot
+| option_annots option_annot
+
+option_annot:
+KEY { pending_column_flags |= MachineClass::COL_KEY; }
+| UNIQUE { pending_column_flags |= MachineClass::COL_UNIQUE; }
+| NOT SYMBOL {
+    if (!$2 || strcmp($2, "NULL") != 0) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno << " expected NOT NULL, not NOT " << ($2 ? $2 : "");
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+    else {
+        pending_column_flags |= MachineClass::COL_NOT_NULL;
+    }
 }
 //| SYMBOL REFERS TO SYMBOL {
 //  std::string name($1);
@@ -419,6 +486,54 @@ definition_header '{' definition_body '}' {
         current_machineclass = NULL;
     }
 }
+| record_definition_header '{' record_definition_body '}' {
+    DBG_PARSER << "record definition\n";
+    if (current_machineclass) {
+        if (current_locals.size()) {
+            std::copy(current_locals.begin(), current_locals.end(),
+                      back_inserter(current_machineclass->locals));
+            current_locals.clear();
+        }
+        current_machineclass = NULL;
+    }
+}
+;
+
+record_definition_header:
+SYMBOL RECORD record_rel parameters {
+    DBG_PARSER << " record class " << $1 << "\n";
+    check_machine_type($1);
+    current_machineclass = new MachineClass($1);
+    current_machineclass->is_record = true;
+    current_machineclass->disableAutomaticStateChanges();
+    current_machineclass->table_name = lowercase_copy($1);
+    if (!pending_record_view.empty()) {
+        current_machineclass->is_view = true;
+        current_machineclass->table_name = pending_record_view;
+    }
+    if (!pending_record_table.empty()) {
+        current_machineclass->is_view = false;
+        current_machineclass->table_name = pending_record_table;
+    }
+    pending_record_view.clear();
+    pending_record_table.clear();
+    std::copy(current_parameters.begin(), current_parameters.end(),
+              back_inserter(current_machineclass->parameters));
+    current_parameters.clear();
+}
+
+record_rel:
+/* empty */
+| VIEW STRINGVAL { pending_record_view = $2; }
+| TABLE STRINGVAL { pending_record_table = $2; }
+
+record_definition_body:
+record_section
+| record_definition_body record_section
+
+record_section:
+OPTION option_settings ';'
+| LOCAL OPTION local_option_settings ';'
 ;
 
 interface_definition:

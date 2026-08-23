@@ -475,6 +475,33 @@ set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 #target_link_libraries(cw cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES})
 target_link_libraries(cw cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
 
+enable_testing()
+set(_record_parse ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_parse.cmake)
+set(_record_fix ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/record)
+add_test(NAME record_parse_customer COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/customer.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_view COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/customer_with_address_view.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_table COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/customer_table.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_reject_when COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/reject_when.cw -DEXPECT_RC=2
+  -P ${_record_parse})
+add_test(NAME record_parse_reject_command COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/reject_command.cw -DEXPECT_RC=2
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_key COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_key.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=RECORD
+  -P ${_record_parse})
+add_test(NAME record_parse_no_key COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/no_key.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=KEY
+  -P ${_record_parse})
+
 if (USE_ETHERCAT)
 # Experimental cw with SOEM EtherCAT library support
 if(USE_SOEM)

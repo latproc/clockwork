@@ -28,6 +28,7 @@
 
 static int opt_verbose = 0;
 static int opt_test_only = 0;
+static int opt_parse_only = 0;
 static int opt_mqtt_enabled = 0;
 static int opt_help_only = 0;
 const char *persistent_store_name = 0;
@@ -81,6 +82,10 @@ int verbose() { return opt_verbose; }
 void set_test_only(int trueOrFalse) { opt_test_only = trueOrFalse; }
 
 int test_only() { return opt_test_only; }
+
+void set_parse_only(int trueOrFalse) { opt_parse_only = trueOrFalse; }
+
+int parse_only() { return opt_parse_only; }
 
 void set_mqtt_enabled(int trueOrFalse) { opt_mqtt_enabled = trueOrFalse; }
 

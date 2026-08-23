@@ -821,7 +821,7 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 
 ### Clockwork
 
-1. **RECORD grammar + subprocess parse tests** — `cwlang.lpp`/`.ypp`, `MachineClass` `is_record` + column flags. `cw --parse-only` (or tiny `cw-parse`): loadConfig then exit 0/2. Fixtures `iod/tests/fixtures/record/customer.cw`, `reject_when.cw`, view RECORD. KEY on MACHINE is an error. No dbd/datastore change.
+1. **RECORD grammar + subprocess parse tests** — **landed.** `RECORD` body OPTIONS only; `KEY`/`UNIQUE`/`NOT NULL`; `VIEW`/`TABLE`; `cw --parse-only`; fixtures under `iod/tests/fixtures/record/`. KEY on MACHINE is an error; missing KEY on a table RECORD is an error. No dbd/datastore change.
 2. **`cw-scaffold` + goldens** — `cw-scaffold --from a.cw --out dir/`. `CustomerINTERFACE`; VIEW find/list only; LOCAL omitted; no KEY → non-zero. Parse RECORD + generated file + `tests/db-channel.cw`.
 3. **dbd ZMQ recovery** (with datastore linger 0) — one context, REQ deadline, `forceFullReconnect`, no `exit` on STARTUP. Before persist round-trips.
 4. **dbd maps typed JSON rows onto RECORD OPTIONS** by type+key; skip echo persist. Wants datastore RETURNING/typed replies.

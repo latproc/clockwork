@@ -27,7 +27,7 @@ static bool stringEndsWith(const std::string &str, const std::string &subs) {
 
 MachineClass::MachineClass(const char *class_name)
     : default_state("unknown"), initial_state("INIT"), name(class_name), allow_auto_states(true),
-      token_id(0), plugin(0), polling_delay(0), parent(0) {
+      is_record(false), is_view(false), token_id(0), plugin(0), polling_delay(0), parent(0) {
     addState("INIT", true);
     token_id = Tokeniser::instance()->getTokenId(class_name);
     all_machine_classes.push_back(this);
@@ -103,6 +103,41 @@ MachineClass *MachineClass::find(const char *name) {
 }
 
 void MachineClass::setOption(const std::string &name, const Value &value) { options[name] = value; }
+
+void MachineClass::setColumnFlags(const std::string &option_name, unsigned flags) {
+    column_flags[option_name] |= flags;
+}
+
+unsigned MachineClass::getColumnFlags(const std::string &option_name) const {
+    std::map<std::string, unsigned>::const_iterator it = column_flags.find(option_name);
+    if (it == column_flags.end()) {
+        return COL_NONE;
+    }
+    return it->second;
+}
+
+std::string MachineClass::keyColumn() const {
+    std::map<std::string, unsigned>::const_iterator it = column_flags.begin();
+    while (it != column_flags.end()) {
+        if (it->second & COL_KEY) {
+            return it->first;
+        }
+        ++it;
+    }
+    return std::string();
+}
+
+unsigned MachineClass::keyColumnCount() const {
+    unsigned n = 0;
+    std::map<std::string, unsigned>::const_iterator it = column_flags.begin();
+    while (it != column_flags.end()) {
+        if (it->second & COL_KEY) {
+            ++n;
+        }
+        ++it;
+    }
+    return n;
+}
 
 bool MachineClass::setProperty(const char *name, const Value &val) {
     return properties.add(name, val, SymbolTable::ST_REPLACE);
