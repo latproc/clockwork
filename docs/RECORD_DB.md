@@ -145,6 +145,30 @@ RECORD + one shared **datastore** is how Clockwork can take on that job: a write
 
 ### Architecture
 
+```
+ Grab Clockwork                         Core Clockwork
+┌──────────────────┐                   ┌──────────────────┐
+│ RECORD OPTIONS   │                   │ RECORD OPTIONS   │
+│ LIST             │                   │ LIST             │
+│ dbd              │                   │ dbd              │
+└────────┬─────────┘                   └────────┬─────────┘
+         │ JSON SEND                            │ JSON SEND
+         │ (DATABASE_CHANNEL)                   │
+         └──────────────────┬───────────────────┘
+                            ▼
+                   ┌─────────────────┐
+                   │ dbsvr :5554     │   datastore
+                   │ Store           │   (sqlite now;
+                   │                 │    redis later)
+                   └─────────────────┘
+
+ dbd on each iod applies the JSON reply as PROPERTY
+ onto RECORD OPTIONS (and LIST membership). iod never
+ opens the database file.
+```
+
+GitHub / Markdown preview also has the same picture as mermaid:
+
 ```mermaid
 flowchart LR
   subgraph grab [Grab Clockwork]
