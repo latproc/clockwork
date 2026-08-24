@@ -541,6 +541,15 @@ set_target_properties(test_db_notify PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATO
 target_include_directories(test_db_notify PRIVATE src)
 target_link_libraries(test_db_notify cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
 add_test(NAME test_db_notify COMMAND test_db_notify)
+add_executable(test_two_process_apply tests/test_two_process_apply.cpp src/DbNotify.cpp)
+set_target_properties(test_two_process_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_two_process_apply PRIVATE src tests)
+target_link_libraries(test_two_process_apply cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_two_process_apply COMMAND test_two_process_apply)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
+  set_tests_properties(test_two_process_apply PROPERTIES
+    ENVIRONMENT "DBSVR=${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
+endif()
 add_test(NAME record_scaffold_customer COMMAND ${CMAKE_COMMAND}
   -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
   -DCW=$<TARGET_FILE:cw>

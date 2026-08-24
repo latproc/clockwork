@@ -754,7 +754,7 @@ Clockwork tests are **generic language** (`Customer`, `OrderLine`, `CustomerWith
 - RECORD with OPTIONS parses; WHEN/COMMAND/states in the RECORD body is a parse error.
 - `cw-scaffold` goldens: `CustomerINTERFACE` with create=`insert`, update, find, list, delete; VIEW RECORD emits find/list only; LOCAL omitted.
 - `RECORD_APPLY` fills OPTIONS by type+key; LOCAL skipped; two instances with the same KEY both update; `Class#key` is registered for lookup.
-- PUB notify with a row **array** applies each row (`test_db_notify`); two SUBs both receive (`test_notify`). Update replies include the row.
+- PUB notify with a row **array** applies each row (`test_db_notify`); two SUBs both receive (`test_notify`). Two processes each hold `Customer` and apply the same PUB payload to the same OPTIONS (`test_two_process_apply`). Update replies include the row.
 - `COPY ALL FROM Customer TO list` then `SIZE OF`, `SORT BY PROPERTY`, `TAKE FIRST` (`test_copy_from_record`).
 - Named **VIEW** (not ad-hoc JSON join): `customer_with_city` SELECT + WHERE + ORDER + LIMIT; FK reject; insert returns the row by `rowid`. Queue shape is `select` + `where station` + `order` + `limit` on generic `item`. `station: null` → `IS NULL`; `{"is":"not_null"}` → `IS NOT NULL`; `in` array and bound `like`. COPY ALL FROM a VIEW RECORD class.
 - `QUERY q INTO list` and `QUERY JSON_VALUE { … } INTO list` parse as SEND to `DATABASE_CHANNEL` (`record_parse_query_into`, `record_parse_query_into_json`). LIST fill stays RECORD_APPLY + COPY (`test_record_apply` apply then COPY).
@@ -763,7 +763,7 @@ Clockwork tests are **generic language** (`Customer`, `OrderLine`, `CustomerWith
 - ZMQ: `DeadlineReq` recreate after peer bounce; `test_dbsvr` restarts `dbsvr` and the next find succeeds (linger 0).
 - `cw-migrate generate --sql`; `dbsvr --require-rev` refuses a mismatch and serves when the revision matches.
 
-Still later (not Clockwork unit tests): live two-iod + two-dbd. QUERY INTO still cannot wait for dbsvr inside the scan. Plant names stay out of this repo.
+Still later (not Clockwork unit tests): live two-iod + two-dbd binaries. Two-process RECORD_APPLY from one PUB is in CI. QUERY INTO still cannot wait for dbsvr inside the scan. Plant names stay out of this repo.
 
 C++: datastore `SQLInterface` / Store tests in the datastore repo; dbd apply-OPTIONS tests in `iod/tests/`.
 
@@ -826,7 +826,7 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 2. **`cw-scaffold` + goldens** — **landed.** `cw-scaffold --from a.cw --out dir/ [--sql]`. INTERFACE: create=`insert`; **list** = `COPY ALL FROM Class TO items`; **load** = JSON `find` with empty keys (hydrate from dbsvr). `--sql` writes `CREATE TABLE` for base RECORDs; VIEW classes only get a comment (join SQL is hand-written). LOCAL omitted. Golden `expected_CustomerINTERFACE.lpc` + `expected_Customer.sql`.
 3. **dbd ZMQ recovery** — **landed.** One context; `DeadlineReq` linger 0 + recv deadline + recreate on timeout/EFSM; `--dbsvr` / `--notify`; `forceFullReconnect` on STARTUP (no `exit`); subscriber EFSM/ENOTSOCK reconnects. `test_deadline_req`.
 4. **dbd maps typed JSON rows onto RECORD OPTIONS** — **landed.** `RECORD_APPLY type keys_json row_json` (`RecordApply`) writes per-column OPTIONS by table+KEY, skips LOCAL, creates `Class#key` if none held. dbd sends RECORD_APPLY for dbsvr replies and PUB notify. Blob `respond_to` PROPERTY remains. `test_record_apply`.
-5. **Two Clockworks, one datastore** — **notify path landed.** `dbsvr` PUB after COMMIT. dbd SUB applies. `test_dbsvr` exercises live REQ/REP + PUB. Two plant iods still later.
+5. **Two Clockworks, one datastore** — **notify path landed.** `dbsvr` PUB after COMMIT. dbd SUB applies. `test_dbsvr` exercises live REQ/REP + PUB. `test_two_process_apply` is two RECORD holders in two processes on one PUB; when `DBSVR` is set they also apply a live insert notify. Live two-iod + two-dbd binaries still later.
 6. **COPY ALL FROM RecordClass INTO LIST** — **landed (in-memory).** Table and VIEW RECORD classes. Scaffolder **list** is COPY; **load** still SEND-find so dbd can materialize rows first.
 7. **QUERY INTO** — **parse landed.** `QUERY q INTO list` SENDs JSON property `q` to `DATABASE_CHANNEL` (same as INTERFACE load). `QUERY JSON_VALUE { … } INTO list` SENDs that object. LIST fill is still RECORD_APPLY + COPY; the scan cannot wait for dbsvr.
 
