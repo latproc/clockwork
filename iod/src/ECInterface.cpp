@@ -96,8 +96,9 @@ static bool g_kernel_output_dirty = true;
 static bool g_kernel_outputs_armed = false;
 // Once all valid domains have been armed, re-push plant output defaults once.
 static bool g_output_defaults_after_arm_done = false;
-static std::vector<uint8_t> g_kernel_pub_mask; // cached full-domain publish mask
+static std::vector<uint8_t> g_kernel_pub_mask; // commanded-output bits only (not process/TxPDO)
 static bool g_kernel_pub_mask_valid = false;
+static void fillCommandedOutputPublishMask(std::vector<uint8_t> &pub_mask, size_t dsz);
 // CAP_OUTPUT_LEASE: 0.18 uses timeout_ms + publish/arm refill; no renew loop.
 static bool g_output_lease_enabled = false;
 static uint32_t g_output_lease_timeout_ms = 0;
@@ -1475,24 +1476,8 @@ bool ECInterface::activate() {
                 g_kernel_output_image.resize(pdsz, 0);
                 g_kernel_output_mask.resize(pdsz, 0);
             }
-            std::vector<uint8_t> pub_mask(pdsz, 0xff);
-            uint8_t *proc_mask = IOComponent::getProcessMask();
-            size_t proc_len = 0;
-            if (proc_mask) {
-                int max_off = IOComponent::getMaxIOOffset();
-                if (max_off >= 0) {
-                    proc_len = static_cast<size_t>(max_off) + 1;
-                }
-            }
-            for (size_t i = 0; i < pdsz; ++i) {
-                uint8_t m = g_kernel_output_mask[i];
-                if (proc_mask && i < proc_len) {
-                    m = static_cast<uint8_t>(m | proc_mask[i]);
-                }
-                if (m) {
-                    pub_mask[i] = m;
-                }
-            }
+            std::vector<uint8_t> pub_mask;
+            fillCommandedOutputPublishMask(pub_mask, pdsz);
             struct elc_output_publish pub = {};
             int pret = kernelBus->publishOutput(g_kernel_output_image.data(), pub_mask.data(),
                                                 pdsz, &pub);
@@ -1765,6 +1750,19 @@ void ECInterface::updateDomain(uint32_t size, uint8_t *data, uint8_t *mask) {
     uint8_t *out = g_kernel_output_image.data();
     uint8_t *omask = g_kernel_output_mask.data();
 
+}
+
+// Publish only bits we have commanded as outputs (ANALOGOUTPUT / DirOutput).
+// Do not OR Clockwork process_mask (includes DIGITALVALUE/COUNTER TxPDO) and
+// do not fill empty bytes with 0xff — that publishes zeros over input PDO
+// bytes (0x6041/0x603F) in the kernel domain. Kernel still ANDs this with
+// the output-SM authority mask.
+static void fillCommandedOutputPublishMask(std::vector<uint8_t> &pub_mask, size_t dsz) {
+    pub_mask.assign(dsz, 0);
+    const size_t n = std::min(dsz, g_kernel_output_mask.size());
+    if (n > 0) {
+        memcpy(pub_mask.data(), g_kernel_output_mask.data(), n);
+    }
 }
 
 // Merge commanded outputs into a full-domain snapshot. Kernel snapshots copy
@@ -2356,29 +2354,9 @@ void ECInterface::sendUpdates() {
             return;
         }
 
-        // Cache full-domain publish mask (process I/O | written bits | 0xff).
-        if (!g_kernel_pub_mask_valid || g_kernel_pub_mask.size() != dsz) {
-            g_kernel_pub_mask.assign(dsz, 0);
-            uint8_t *proc_mask = IOComponent::getProcessMask();
-            size_t proc_len = 0;
-            if (proc_mask) {
-                int max_off = IOComponent::getMaxIOOffset();
-                if (max_off >= 0) {
-                    proc_len = static_cast<size_t>(max_off) + 1;
-                }
-            }
-            for (size_t i = 0; i < dsz; ++i) {
-                uint8_t m = g_kernel_output_mask[i];
-                if (proc_mask && i < proc_len) {
-                    m = static_cast<uint8_t>(m | proc_mask[i]);
-                }
-                if (!m) {
-                    m = 0xff;
-                }
-                g_kernel_pub_mask[i] = m;
-            }
-            g_kernel_pub_mask_valid = true;
-        }
+        // Commanded output bits only (not cached process_mask | 0xff).
+        fillCommandedOutputPublishMask(g_kernel_pub_mask, dsz);
+        g_kernel_pub_mask_valid = true;
 
         struct elc_output_publish pub = {};
         int ret = kernelBus->publishOutput(g_kernel_output_image.data(), g_kernel_pub_mask.data(),
