@@ -555,9 +555,15 @@ set_target_properties(test_two_dbd PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR"
 target_include_directories(test_two_dbd PRIVATE src)
 target_link_libraries(test_two_dbd ${ZeroMQ_LIBRARY} pthread)
 add_test(NAME test_two_dbd COMMAND test_two_dbd)
-set_tests_properties(test_two_dbd PROPERTIES
-  ENVIRONMENT "DBD=$<TARGET_FILE:dbd>"
-  TIMEOUT 20)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
+  set_tests_properties(test_two_dbd PROPERTIES
+    ENVIRONMENT "DBD=$<TARGET_FILE:dbd>;DBSVR=${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr"
+    TIMEOUT 30)
+else()
+  set_tests_properties(test_two_dbd PROPERTIES
+    ENVIRONMENT "DBD=$<TARGET_FILE:dbd>"
+    TIMEOUT 20)
+endif()
 add_test(NAME record_scaffold_customer COMMAND ${CMAKE_COMMAND}
   -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
   -DCW=$<TARGET_FILE:cw>
