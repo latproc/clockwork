@@ -754,7 +754,7 @@ Clockwork tests are **generic language** (`Customer`, `OrderLine`, `CustomerWith
 - RECORD with OPTIONS parses; WHEN/COMMAND/states in the RECORD body is a parse error.
 - `cw-scaffold` goldens: `CustomerINTERFACE` with create=`insert`, update, find, list, delete; VIEW RECORD emits find/list only; LOCAL omitted.
 - `RECORD_APPLY` fills OPTIONS by type+key; LOCAL skipped; two instances with the same KEY both update; `Class#key` is registered for lookup.
-- PUB notify with a row **array** applies each row (`test_db_notify`).
+- PUB notify with a row **array** applies each row (`test_db_notify`); two SUBs both receive (`test_notify`). Update replies include the row.
 - `COPY ALL FROM Customer TO list` then `SIZE OF`, `SORT BY PROPERTY`, `TAKE FIRST` (`test_copy_from_record`).
 - Named **VIEW** (not ad-hoc JSON join): `customer_with_city` SELECT + WHERE + ORDER + LIMIT; FK reject; insert returns the row by `rowid`. Queue shape is `select` + `where station` + `order` + `limit` on generic `item`. `station: null` → `IS NULL`; `{"is":"not_null"}` → `IS NOT NULL`. COPY ALL FROM a VIEW RECORD class.
 - WAL: `journal_mode=wal`; rollback leaves no rows.

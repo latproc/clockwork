@@ -4,6 +4,7 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
+#include "DbNotify.h"
 #include "IODCommands.h"
 #include "RecordApply.h"
 #include "ThreadSafeQueue.h"
@@ -102,6 +103,27 @@ int main() {
     if (cust->getValue("name").asString() != "Ned") {
         std::cerr << "command apply missed named instance\n";
         return 6;
+    }
+
+    const char *fanout =
+        "{\"action\":\"update\",\"type\":\"customer\",\"keys\":{},"
+        "\"row\":[{\"id\":1,\"name\":\"One\"},{\"id\":2,\"name\":\"Two\"}]}";
+    std::vector<DbNotifyRow> notes;
+    if (parseDbNotify(fanout, notes) != 2) {
+        std::cerr << "notify parse expected 2 rows\n";
+        return 9;
+    }
+    for (size_t i = 0; i < notes.size(); ++i) {
+        cJSON *keys = cJSON_Parse(notes[i].keys_json.c_str());
+        cJSON *row = cJSON_Parse(notes[i].row_json.c_str());
+        RecordApply::applyRow(notes[i].type, keys, row);
+        cJSON_Delete(keys);
+        cJSON_Delete(row);
+    }
+    if (cust->getValue("name").asString() != "One" ||
+        created->getValue("name").asString() != "Two") {
+        std::cerr << "multi-row notify apply missed holders\n";
+        return 10;
     }
 
     std::cout << "ok\n";
