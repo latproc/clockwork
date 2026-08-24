@@ -4,6 +4,7 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
+#include "Expression.h"
 #include "SetOperationAction.h"
 #include "SortListAction.h"
 #include "ThreadSafeQueue.h"
@@ -52,6 +53,24 @@ int main() {
     machines[b->getName()] = b;
     machines[all->getName()] = all;
     machines[ed->getName()] = ed;
+
+    Predicate where_ann(new Predicate(Value("ITEM.name", Value::t_symbol)), opEQ,
+                        new Predicate(Value("Ann", Value::t_string)));
+    SetOperationActionTemplate tmpl_ann(-1, Value("Customer"), SymbolTable::Null, Value("all"),
+                                        Value(""), soSelect, &where_ann, false);
+    Action *act_ann = tmpl_ann.factory(ed);
+    if ((*act_ann)() != Action::Complete || all->parameters.size() != 1) {
+        std::cerr << "COPY WHERE ITEM.name==Ann expected 1, got " << all->parameters.size()
+                  << "\n";
+        return 10;
+    }
+    if (!all->parameters[0].machine ||
+        all->parameters[0].machine->getValue("name").asString() != "Ann") {
+        std::cerr << "COPY WHERE should keep Ann\n";
+        return 11;
+    }
+    delete act_ann;
+    all->parameters.clear();
 
     SetOperationActionTemplate tmpl(-1, Value("Customer"), SymbolTable::Null, Value("all"),
                                     Value(""), soSelect, 0, false);
