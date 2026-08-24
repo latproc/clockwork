@@ -755,13 +755,14 @@ Clockwork tests are **generic language** (`Customer`, `OrderLine`, `CustomerWith
 - `cw-scaffold` goldens: `CustomerINTERFACE` with create=`insert`, update, find, list, delete; VIEW RECORD emits find/list only; LOCAL omitted.
 - `RECORD_APPLY` fills OPTIONS by type+key; LOCAL skipped; two instances with the same KEY both update; `Class#key` is registered for lookup.
 - PUB notify with a row **array** applies each row (`test_db_notify`).
-- `COPY ALL FROM Customer TO list` (held instances).
+- `COPY ALL FROM Customer TO list` then `SIZE OF`, `SORT BY PROPERTY`, `TAKE FIRST` (`test_copy_from_record`).
 - Named **VIEW** (not ad-hoc JSON join): `customer_with_city` SELECT + WHERE + ORDER + LIMIT; FK reject; insert returns the row by `rowid`. Queue shape is `select` + `where station` + `order` + `limit` on generic `item`. `station: null` → `IS NULL`; `{"is":"not_null"}` → `IS NOT NULL`. COPY ALL FROM a VIEW RECORD class.
 - WAL: `journal_mode=wal`; rollback leaves no rows.
 - `cw-migrate` upgrade/downgrade including `CREATE VIEW`.
-- ZMQ: `DeadlineReq` recreate after peer bounce.
+- ZMQ: `DeadlineReq` recreate after peer bounce; `test_dbsvr` restarts `dbsvr` and the next find succeeds (linger 0).
+- `cw-migrate generate --sql`; `dbsvr --require-rev`.
 
-Still later (not Clockwork unit tests): live two-iod + two-dbd + one-dbsvr; QUERY INTO; `cw-migrate generate`. Plant names stay out of this repo.
+Still later (not Clockwork unit tests): live two-iod + two-dbd; QUERY INTO. Plant names stay out of this repo.
 
 C++: datastore `SQLInterface` / Store tests in the datastore repo; dbd apply-OPTIONS tests in `iod/tests/`.
 

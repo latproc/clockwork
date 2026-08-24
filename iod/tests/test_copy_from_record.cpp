@@ -5,7 +5,9 @@
 #include "MessageLog.h"
 #include "MessagingInterface.h"
 #include "SetOperationAction.h"
+#include "SortListAction.h"
 #include "ThreadSafeQueue.h"
+#include "dynamic_value.h"
 #include "library_globals.cpp"
 #include <boost/thread/mutex.hpp>
 #include <iostream>
@@ -68,6 +70,37 @@ int main() {
         return 3;
     }
     delete act;
+
+    SizeValue sz("all");
+    sz.setScope(ed);
+    const Value &szv = sz();
+    int64_t nsz = 0;
+    if (!szv.asInteger(nsz) || nsz != 2) {
+        std::cerr << "SIZE OF all expected 2\n";
+        return 5;
+    }
+    SortListActionTemplate sortt(Value("all"), Value("name"), true);
+    Action *sorta = sortt.factory(ed);
+    if ((*sorta)() != Action::Complete) {
+        std::cerr << "SORT BY PROPERTY name failed\n";
+        return 6;
+    }
+    delete sorta;
+    if (all->parameters.empty() || !all->parameters[0].machine ||
+        all->parameters[0].machine->getValue("name").asString() != "Ann") {
+        std::cerr << "sorted list should start with Ann\n";
+        return 7;
+    }
+    PopListFrontValue take("all");
+    Value first = take(ed);
+    if (!first.cached_machine || first.cached_machine->getValue("name").asString() != "Ann") {
+        std::cerr << "TAKE FIRST should be Ann\n";
+        return 8;
+    }
+    if (all->parameters.size() != 1) {
+        std::cerr << "TAKE FIRST should leave 1 member\n";
+        return 9;
+    }
 
     MachineClass *view = new MachineClass("CustomerWithCity");
     view->is_record = true;
