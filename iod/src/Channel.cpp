@@ -550,6 +550,10 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
     else if (new_state == ChannelImplementation::ACTIVE) {
         last_client_status_send_us_ = 0;
         pending_client_status_ = false;
+        // DISCONNECTED disables shadows; WAITSTART/CONNECTED may not run
+        // again before ACTIVE (overlapping dual iod start).
+        enableShadows();
+        setNeedsCheck();
     }
     return res;
 }
