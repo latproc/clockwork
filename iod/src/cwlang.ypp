@@ -286,7 +286,7 @@ struct Subcondition {
 %token NOT SET AND OR SQUOTE LOG FLAG
 %token PROPERTY DEFINE COLLECT FROM TEST EXECUTE SPAWN RUN
 %token CALL TRIM LINE OF USING MATCH IN REPLACE WITH INTERPRET
-%token COMMA BEGINPROP ENDPROP PROPSEP STATEMACHINE WHEN TO RECEIVE
+%token COMMA BEGINPROP ENDPROP PROPSEP STATEMACHINE WHEN TO INTO RECEIVE
 %token DURING WAIT WAITFOR TRANSITION TAG INC DEC BY CONCAT
 %token SEND CONDITION INITSTATE IF_ ELSE ENABLE DISABLE BECOMES
 %token GLOBAL GROUP OPTION LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
@@ -299,7 +299,7 @@ struct Subcondition {
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
-%token RECORD UNIQUE VIEW TABLE
+%token RECORD UNIQUE VIEW TABLE QUERY
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
 %token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
@@ -1739,6 +1739,17 @@ SET SYMBOL TO expression error_clause  {
 | SEND STRINGVAL TO SYMBOL /* send a generic message/command */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SendMessageActionTemplate($2, $4);
+}
+| QUERY SYMBOL INTO SYMBOL {
+    /* JSON on DATABASE_CHANNEL; $4 INTO list is filled later by RECORD_APPLY + COPY */
+    (void)$4;
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SendMessageActionTemplate($2, Value("DATABASE_CHANNEL"));
+}
+| QUERY JSONVAL INTO SYMBOL {
+    (void)$4;
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new SendMessageActionTemplate(Value($2), Value("DATABASE_CHANNEL"));
 }
 | THROW SYMBOL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";

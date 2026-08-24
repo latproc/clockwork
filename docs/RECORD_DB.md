@@ -756,13 +756,14 @@ Clockwork tests are **generic language** (`Customer`, `OrderLine`, `CustomerWith
 - `RECORD_APPLY` fills OPTIONS by type+key; LOCAL skipped; two instances with the same KEY both update; `Class#key` is registered for lookup.
 - PUB notify with a row **array** applies each row (`test_db_notify`); two SUBs both receive (`test_notify`). Update replies include the row.
 - `COPY ALL FROM Customer TO list` then `SIZE OF`, `SORT BY PROPERTY`, `TAKE FIRST` (`test_copy_from_record`).
-- Named **VIEW** (not ad-hoc JSON join): `customer_with_city` SELECT + WHERE + ORDER + LIMIT; FK reject; insert returns the row by `rowid`. Queue shape is `select` + `where station` + `order` + `limit` on generic `item`. `station: null` → `IS NULL`; `{"is":"not_null"}` → `IS NOT NULL`. COPY ALL FROM a VIEW RECORD class.
+- Named **VIEW** (not ad-hoc JSON join): `customer_with_city` SELECT + WHERE + ORDER + LIMIT; FK reject; insert returns the row by `rowid`. Queue shape is `select` + `where station` + `order` + `limit` on generic `item`. `station: null` → `IS NULL`; `{"is":"not_null"}` → `IS NOT NULL`; `in` array and bound `like`. COPY ALL FROM a VIEW RECORD class.
+- `QUERY q INTO list` and `QUERY JSON_VALUE { … } INTO list` parse as SEND to `DATABASE_CHANNEL` (`record_parse_query_into`, `record_parse_query_into_json`). LIST fill stays RECORD_APPLY + COPY.
 - WAL: `journal_mode=wal`; rollback leaves no rows.
 - `cw-migrate` upgrade/downgrade including `CREATE VIEW`.
 - ZMQ: `DeadlineReq` recreate after peer bounce; `test_dbsvr` restarts `dbsvr` and the next find succeeds (linger 0).
-- `cw-migrate generate --sql`; `dbsvr --require-rev`.
+- `cw-migrate generate --sql`; `dbsvr --require-rev` refuses a mismatch and serves when the revision matches.
 
-Still later (not Clockwork unit tests): live two-iod + two-dbd; QUERY INTO. Plant names stay out of this repo.
+Still later (not Clockwork unit tests): live two-iod + two-dbd. QUERY INTO still cannot wait for dbsvr inside the scan. Plant names stay out of this repo.
 
 C++: datastore `SQLInterface` / Store tests in the datastore repo; dbd apply-OPTIONS tests in `iod/tests/`.
 
@@ -827,7 +828,7 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 4. **dbd maps typed JSON rows onto RECORD OPTIONS** — **landed.** `RECORD_APPLY type keys_json row_json` (`RecordApply`) writes per-column OPTIONS by table+KEY, skips LOCAL, creates `Class#key` if none held. dbd sends RECORD_APPLY for dbsvr replies and PUB notify. Blob `respond_to` PROPERTY remains. `test_record_apply`.
 5. **Two Clockworks, one datastore** — **notify path landed.** `dbsvr` PUB after COMMIT. dbd SUB applies. `test_dbsvr` exercises live REQ/REP + PUB. Two plant iods still later.
 6. **COPY ALL FROM RecordClass INTO LIST** — **landed (in-memory).** Table and VIEW RECORD classes. Scaffolder **list** is COPY; **load** still SEND-find so dbd can materialize rows first.
-7. **QUERY INTO** — **not started.** v1 uses `select` on a named view (JSON) + `RECORD_APPLY` + COPY. `QUERY json INTO list` would only wrap that SEND; it still cannot wait for dbsvr inside the scan.
+7. **QUERY INTO** — **parse landed.** `QUERY q INTO list` SENDs JSON property `q` to `DATABASE_CHANNEL` (same as INTERFACE load). `QUERY JSON_VALUE { … } INTO list` SENDs that object. LIST fill is still RECORD_APPLY + COPY; the scan cannot wait for dbsvr.
 
 ### Datastore (`../datastore`)
 
@@ -835,7 +836,7 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 0b. **REP linger 0** — **landed.** `ZMQ_LINGER=0` on REP and PUB; EADDRINUSE bind retry; recreate REP on send/recv failure; WAL checkpoint on SIGINT/SIGTERM.
 1. **Typed replies, NULL, RETURNING** — **landed.** Column types from sqlite (`INTEGER`/`REAL`/`TEXT`/`NULL`); JSON null/bool on write; insert/update reply is the row via `SELECT` after write (bundled sqlite 3.7 has no `RETURNING`). `test_typed_json`.
 2. **Bound parameters + identifier allow-list** — **landed for CRUD.** Identifiers `[A-Za-z_][A-Za-z0-9_]*`; values bound (`?`). `action: sql` stays a raw hatch (still rejects BEGIN/COMMIT/ROLLBACK).
-3. **`select` / `order` / `limit` / `where`** — **landed.** Equality, `null`/`is` null, `eq`/`neq`/`gt`/`lt`/`ge`/`le`. `order` identifiers, `-col` DESC, `limit`. Named views are the join path. Delete replies return the keys.
+3. **`select` / `order` / `limit` / `where`** — **landed.** Equality, null, `eq`/`neq`/`gt`/`lt`/`ge`/`le`, `in` (array), `like` (bound). `-col` DESC, `limit`. Named views are the join path. Delete replies return the keys.
 4. **JSON `join` (optional)** — **not started; not needed for v1.** Plant joins are named SQL views (`CREATE VIEW` in `cw-migrate`), same as the API flatten (`bale_with_links_dict`) but without putting wool types in Clockwork tests (`customer_with_city`).
 5. **`cw-migrate`** — **landed.** `current` / `upgrade` / `downgrade`; `generate --sql file` wraps a SQL file (from `cw-scaffold --sql`) as the next revision. `0001_customer.sql` + `0002_customer_with_city.sql`. No `--from-program` parser (that is `cw-scaffold --sql`). No auto-upgrade on `dbsvr` start. `dbsvr --require-rev` refuses a mismatch.
 6. **PUB after COMMIT** — **landed.** `{action,type,keys,row}` on the notify PUB socket. `test_notify` plus `test_dbsvr` (live REP + PUB).
