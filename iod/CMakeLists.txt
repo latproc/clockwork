@@ -550,6 +550,14 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
   set_tests_properties(test_two_process_apply PROPERTIES
     ENVIRONMENT "DBSVR=${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
 endif()
+add_executable(test_two_dbd tests/test_two_dbd.cpp)
+set_target_properties(test_two_dbd PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_two_dbd PRIVATE src)
+target_link_libraries(test_two_dbd ${ZeroMQ_LIBRARY} pthread)
+add_test(NAME test_two_dbd COMMAND test_two_dbd)
+set_tests_properties(test_two_dbd PROPERTIES
+  ENVIRONMENT "DBD=$<TARGET_FILE:dbd>"
+  TIMEOUT 20)
 add_test(NAME record_scaffold_customer COMMAND ${CMAKE_COMMAND}
   -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
   -DCW=$<TARGET_FILE:cw>
@@ -702,6 +710,7 @@ set(CLOCKWORK_RUNTIME_TARGETS cw cw-scaffold iosh iocmd device_connector persist
 add_executable(dbd src/dbd.cpp src/DeadlineReq.cpp src/DbNotify.cpp)
 target_link_libraries(dbd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 list(APPEND CLOCKWORK_RUNTIME_TARGETS dbd)
+add_dependencies(test_two_dbd dbd)
 if (MODBUS_FOUND)
   add_executable(modbusd src/modbusd.cpp )
   target_link_libraries(modbusd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")

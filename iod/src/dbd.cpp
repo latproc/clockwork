@@ -399,12 +399,9 @@ int main(int argc, const char *argv[]) {
                 {iosh_cmd, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0},
                 {(void *)notify_sub, 0, ZMQ_POLLIN, 0},
             };
+            bool channel_up = false;
             try {
-                if (!subscription_manager.checkConnections(items, 4, iosh_cmd)) {
-                    usleep(10000);
-                    exception_count = 0;
-                    continue;
-                }
+                channel_up = subscription_manager.checkConnections(items, 4, iosh_cmd);
                 exception_count = 0;
                 error_count = 0;
             }
@@ -437,12 +434,28 @@ int main(int argc, const char *argv[]) {
                 need_refresh = false;
             }
 
-            if (items[3].revents & ZMQ_POLLIN) {
-                zmq::message_t note;
-                if (notify_sub.recv(&note, ZMQ_DONTWAIT)) {
-                    std::string payload(static_cast<char *>(note.data()), note.size());
-                    apply_notify_payload(payload);
+            /* CHANNEL handshake only polls iosh_cmd while setup/subs are down.
+               Drain dbsvr notify anyway so both iods apply COMMIT (Q6). */
+            {
+                zmq::pollitem_t nitem[] = {{(void *)notify_sub, 0, ZMQ_POLLIN, 0}};
+                try {
+                    zmq::poll(nitem, 1, channel_up ? 0 : 5);
                 }
+                catch (const zmq::error_t &) {
+                }
+                if ((channel_up && (items[3].revents & ZMQ_POLLIN)) ||
+                    (nitem[0].revents & ZMQ_POLLIN)) {
+                    zmq::message_t note;
+                    while (notify_sub.recv(&note, ZMQ_DONTWAIT)) {
+                        std::string payload(static_cast<char *>(note.data()), note.size());
+                        apply_notify_payload(payload);
+                    }
+                }
+            }
+
+            if (!channel_up) {
+                usleep(10000);
+                continue;
             }
 
             if (!(items[1].revents & ZMQ_POLLIN)) {
