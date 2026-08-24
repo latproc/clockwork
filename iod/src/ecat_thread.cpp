@@ -23,7 +23,7 @@
 #include "IOInterface.h"
 #include "MessageLog.h"
 #include "value.h"
-#include <bits/stdint-uintn.h>
+#include <stdint.h>
 #include <ostream>
 #include <sstream>
 #include <stdio.h>
