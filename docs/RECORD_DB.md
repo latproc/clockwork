@@ -757,7 +757,7 @@ Clockwork tests are **generic language** (`Customer`, `OrderLine`, `CustomerWith
 - PUB notify with a row **array** applies each row (`test_db_notify`); two SUBs both receive (`test_notify`). Update replies include the row.
 - `COPY ALL FROM Customer TO list` then `SIZE OF`, `SORT BY PROPERTY`, `TAKE FIRST` (`test_copy_from_record`).
 - Named **VIEW** (not ad-hoc JSON join): `customer_with_city` SELECT + WHERE + ORDER + LIMIT; FK reject; insert returns the row by `rowid`. Queue shape is `select` + `where station` + `order` + `limit` on generic `item`. `station: null` → `IS NULL`; `{"is":"not_null"}` → `IS NOT NULL`; `in` array and bound `like`. COPY ALL FROM a VIEW RECORD class.
-- `QUERY q INTO list` and `QUERY JSON_VALUE { … } INTO list` parse as SEND to `DATABASE_CHANNEL` (`record_parse_query_into`, `record_parse_query_into_json`). LIST fill stays RECORD_APPLY + COPY.
+- `QUERY q INTO list` and `QUERY JSON_VALUE { … } INTO list` parse as SEND to `DATABASE_CHANNEL` (`record_parse_query_into`, `record_parse_query_into_json`). LIST fill stays RECORD_APPLY + COPY (`test_record_apply` apply then COPY).
 - WAL: `journal_mode=wal`; rollback leaves no rows.
 - `cw-migrate` upgrade/downgrade including `CREATE VIEW`.
 - ZMQ: `DeadlineReq` recreate after peer bounce; `test_dbsvr` restarts `dbsvr` and the next find succeeds (linger 0).

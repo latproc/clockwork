@@ -7,6 +7,7 @@
 #include "DbNotify.h"
 #include "IODCommands.h"
 #include "RecordApply.h"
+#include "SetOperationAction.h"
 #include "ThreadSafeQueue.h"
 #include "cJSON.h"
 #include "library_globals.cpp"
@@ -125,6 +126,38 @@ int main() {
         std::cerr << "multi-row notify apply missed holders\n";
         return 10;
     }
+
+    MachineClass *itemc = new MachineClass("Item");
+    itemc->is_record = true;
+    itemc->table_name = "item";
+    itemc->setOption("id", Value(static_cast<int64_t>(0)));
+    itemc->setColumnFlags("id", MachineClass::COL_KEY);
+    itemc->setOption("station", Value("", Value::t_string));
+    MachineClass *listc = new MachineClass("LIST");
+    listc->addState("empty");
+    listc->addState("nonempty");
+    MachineClass *edc = new MachineClass("Editor");
+    MachineInstance *items = MachineInstanceFactory::create("items", "LIST");
+    items->setStateMachine(listc);
+    MachineInstance *ed = MachineInstanceFactory::create("ed", "Editor");
+    ed->setStateMachine(edc);
+    machines[items->getName()] = items;
+    machines[ed->getName()] = ed;
+    cJSON *i1 = cJSON_Parse("{\"id\":1,\"station\":\"A\"}");
+    cJSON *i2 = cJSON_Parse("{\"id\":2,\"station\":\"B\"}");
+    RecordApply::applyRow("item", 0, i1);
+    RecordApply::applyRow("item", 0, i2);
+    cJSON_Delete(i1);
+    cJSON_Delete(i2);
+    SetOperationActionTemplate fill(-1, Value("Item"), SymbolTable::Null, Value("items"), Value(""),
+                                    soSelect, 0, false);
+    Action *fill_act = fill.factory(ed);
+    if ((*fill_act)() != Action::Complete || items->parameters.size() != 2) {
+        std::cerr << "QUERY fill path: COPY after apply expected 2, got "
+                  << items->parameters.size() << "\n";
+        return 11;
+    }
+    delete fill_act;
 
     std::cout << "ok\n";
     return 0;
