@@ -1,6 +1,6 @@
 # Clockwork RECORD and native database
 
-**Status:** Draft (implementation in progress: grammar, scaffold, WAL, dbd reconnect, typed JSON, PUB, RECORD_APPLY, COPY-from-class, cw-migrate)  
+**Status:** Draft (implementation in progress: grammar, scaffold, WAL, dbd reconnect, typed JSON, PUB, RECORD_APPLY, COPY-from-class, cw-migrate). Martin 2026-08-24: query results are not a graph of unlinked machines; Clockwork stays a full language (no Lua/Python).  
 **Date:** 2026-08-24  
 **Author:** (design)  
 **Repos:**
@@ -29,7 +29,7 @@ The next step is a **`RECORD` class** (a parser-restricted MACHINE) plus the **e
 - `dbd` stays the Clockwork adapter: subscribe as `DATABASE_CHANNEL`, forward JSON, apply replies onto machines.
 - **datastore** (`dbsvr`) is the database process. JSON in, JSON out. `SQLInterface` compiles JSON to SQL for the current sqlite `Store`. Other backends (redis, later others) are a Store swap — that was the point of keeping it separate.
 - Clockwork queries stay JSON (Jemalong `action` / `keys` / `fields`). Joins and views are datastore + migrations, not SQL strings inside WHEN.
-- LIST operations work because RECORD instances are ordinary `MachineInstance`s.
+- **Named** RECORD instances are ordinary `MachineInstance`s, so LIST, HMI, and WHEN on machines that take them as parameters already work. A query result is a batch (JSON, then a LIST), not a second graph of unlinked machines.
 
 ---
 
@@ -97,7 +97,7 @@ This is a solid use of the features that existed: the row MACHINE holds fields, 
 What we still want from the runtime, which this layer could not provide yet:
 
 - Apply the result onto the **same OPTIONS** that were sent, so a second read is unnecessary.
-- `find_all` as a LIST of row machines, not a JSON array on one property.
+- `find_all` / query results as a **LIST**, not a JSON blob that the program never walks — but **not** as dynamically created RECORD machines that sit outside the parameter graph (see [Query results and the machine graph](#query-results-and-the-machine-graph)).
 - Schema as versioned migrations rather than a runtime `create` JSON payload (`"wn": "string primary key"`).
 - One receive-message name for results (`dbd` sends `response_changed`; the two INTERFACEs currently listen for slightly different messages).
 - Field copies that stay aligned with `data.*` vs `keys.*` without a hand-maintained mapper.
@@ -124,7 +124,7 @@ RECORD + one shared **datastore** is how Clockwork can take on that job: a write
 2. **Row OPTIONS stay in sync** on Clockworks that hold the row, so a write on Grab is visible on Core without HTTP GET or ChangeCounter.
 3. **JSON in Clockwork; backend ops in datastore.** Extend the existing `action`/`type`/`keys`/`fields` protocol (joins, views, filters). Named views in migrations stand in for today’s API flatten (`bale_instance_with_links`, station queue).
 4. **Alembic-like schema management** for tables *and* views: versioned upgrade/downgrade, revision table, CLI, no silent prod auto-mutate.
-5. **LIST commands work on RECORD instances** (`COPY`, `TAKE FIRST`, `SORT BY PROPERTY`, `CLEAR`, `SIZE OF`, ALL/ANY, SUM/MIN/MAX, `SEND TO list`).
+5. **LIST commands work on named RECORD instances and on query-result LISTs** (`COPY`, `TAKE FIRST`, `SORT BY PROPERTY`, `CLEAR`, `SIZE OF`, ALL/ANY, SUM/MIN/MAX, `SEND TO list`). Reactions to a row go through a **statically declared** RECORD that other machines already depend on, not through `Class#key` instances created at query time.
 6. **Non-blocking iod scan:** iod never opens the database file. `dbd` does not become the SQL engine.
 7. **Standalone `cw-scaffold`:** from RECORD classes, generate operational Clockwork (`create`/`update`/`find`/`list`/`delete` as an INTERFACE MACHINE). Persist stays off the RECORD body.
 8. **Datastore SQLite like the Python API’s connection PRAGMAs:** WAL, `synchronous=NORMAL`, `busy_timeout=5000`, `foreign_keys=ON`; one BEGIN/COMMIT/ROLLBACK per JSON request (Clockwork never sends those).
@@ -140,6 +140,7 @@ RECORD + one shared **datastore** is how Clockwork can take on that job: a write
 - Reimplementing SQL in the Clockwork parser.
 - Automatic rename detection in migrations.
 - Embedding a Python ORM in iod.
+- **Embedding Lua, Python, or any other language in Clockwork.** Clockwork is the language. Query-result processing uses existing LIST operations, states, WHEN, `WAITFOR`, and `COPY PROPERTIES` — not `for` loops in handlers and not a scripting hatch.
 - Plant/wool types in Clockwork source or tests (`WEIGHTNOTE`, bales, Grab/Core). Those stay in application repos.
 - FLAG-style `save`/`load` builtins on RECORD in v1 (generated INTERFACE instead).
 - Schema `action: "create"` as the scaffolder “create” command (that JSON is CREATE TABLE; operational create is `insert`).
@@ -321,11 +322,11 @@ If save/load later become builtins, follow FLAG: FLAG has `turnOn`/`turnOff` as 
 
 Identity:
 
-- **Named instance** (`note WEIGHTNOTE (wn: "C0000")`) is a bound working row.
-- **Registry:** `(database, table, primary_key) → MachineInstance*`. `find_all` / COPY into a LIST **reuses** the instance for a PK. Never two machines for one row.
-- **Anonymous/dynamic instances** created by queries get a stable internal name, e.g. `WEIGHTNOTE#C0000`.
+- **Named instance** (`cust Customer (id: 1)`) is a bound working row. It is declared in the program, so other machines can take it as a parameter. WHEN on those machines is the reaction path.
+- **Registry:** `(database, table, primary_key) → MachineInstance*`. COPY into a LIST **reuses** the named instance for a PK. Never two named machines for one row.
+- **`Class#key` (e.g. `Customer#1`)** is a **cache** `RECORD_APPLY` may create when no named instance holds that key, so PUB can land and `COPY ALL FROM Customer` can see the row in memory. It is **not** a parameter of other machines. Do not attach WHEN to it. Drain it onto a named RECORD if reactions are needed (below).
 
-dbd applying per-column PROPERTY is what makes OPTIONS the row. Machines that depend on those OPTIONS already re-check. The author does **not** issue a second FIND for that.
+dbd applying per-column PROPERTY is what makes OPTIONS the row. Machines that depend on those **named** OPTIONS already re-check. The author does **not** issue a second FIND for that.
 
 ### Writes and “no extra calls”
 
@@ -412,37 +413,78 @@ BaleWithLinks RECORD VIEW "bale_instance_with_links" {
 
 `COPY ALL FROM BaleWithLinks TO grab_queue WHERE …` then works. Writes still go to the base table RECORD (or a documented INSTEAD OF trigger later).
 
-**QUERY** (if added on a MACHINE, not on the RECORD): `QUERY <json> INTO <list>` and `QUERY <json> INTO <record>`. JSON in CW, SQL in datastore.
+**QUERY** (on a MACHINE, not on the RECORD): `QUERY <json> INTO <list>` and `QUERY <json> INTO <record>`. JSON in CW, SQL in datastore. `INTO <list>` is a JSON array that becomes a LIST (`AS LIST` / existing `PUSH ITEMS FROM`). `INTO <record>` applies onto a **named** RECORD.
 
 ### LIST integration
 
-LIST members are `MachineInstance*` (`SetOperationAction`, `PopListAction`, `SortListAction`, `IncludeAction`, `UpdateListItemsAction`, `dynamic_value` SUM/MIN/MAX). RECORD instances participate with **no LIST core changes** once they exist as machines.
+LIST members are `MachineInstance*` (`SetOperationAction`, `PopListAction`, `SortListAction`, `IncludeAction`, `UpdateListItemsAction`, `dynamic_value` SUM/MIN/MAX). **Named** RECORD instances participate with **no LIST core changes**.
 
-What is missing is **materializing a query into a LIST**. Today `COPY ALL FROM src TO dst WHERE predicate` (`cwlang.ypp`) requires `src` to be a LIST.
-
-Extend COPY (and only COPY, v1) so `src` may be a **RECORD class name** (virtual table):
+`COPY ALL FROM RecordClass TO list` copies **held** instances of that class already in this iod (named ones, and any `Class#key` cache). It is **not** a database `find_all`. Hydrate from dbsvr with INTERFACE `load` / `QUERY` first; then COPY.
 
 ```
-weight_notes LIST;
+customers LIST;
 
 NoteEditor MACHINE {
     COMMAND refresh {
-        CLEAR weight_notes;
-        COPY ALL FROM WEIGHTNOTE TO weight_notes;
+        CLEAR customers;
+        COPY ALL FROM Customer TO customers;
     }
-    COMMAND heavy {
-        COPY ALL FROM WEIGHTNOTE TO weight_notes WHERE WEIGHTNOTE.ITEM.bales > 10;
+    COMMAND named_ann {
+        COPY ALL FROM Customer TO customers WHERE Customer.ITEM.name == "Ann";
     }
 }
 ```
 
-`ITEM` already means “the member being considered” in LIST WHERE clauses (`tests/copy.cw`). For a RECORD class source, datastore runs `find`/`select` against the table **or view**. Simple `WHERE` on COPY still maps to JSON `where`. Joins belong in the view or in a `QUERY` JSON `join` list, not in WHEN.
+`ITEM` already means “the member being considered” in LIST WHERE clauses (`tests/copy.cw`). Joins belong in the view or in a `QUERY` JSON `join` list, not in WHEN.
 
-`TAKE FIRST FROM weight_notes` then works unchanged.
+`TAKE FIRST FROM customers` then works unchanged.
 
 **Query subscriptions (the queue case)** stay a later piece of the fan-out question: Warehouse station queues need “this LIST stays the station’s rows” without re-querying every scan cycle.
 
 Instance reuse: COPY INTO a LIST does not destroy a RECORD that is also a named instance or a member of another LIST.
+
+### Query results and the machine graph
+
+The draft line *“`find_all` as a LIST of row machines, not a JSON array on one property”* is still the right *shape* for HMI and LIST commands. It is the **wrong** shape for WHEN.
+
+A machine created at query time (`Customer#1`, or a LIST member that was never declared) is **not a parameter** of any other machine. OPTION changes on it do not re-check WHEN clauses that were compiled against a named `cust`. The program would have to walk the LIST and `CALL` handlers. That is an imperative loop. The next step after that is loops in handlers, then Lua or Python. **That path is closed.** Clockwork is the language.
+
+Process a result set with the operations Clockwork already has. Martin’s sketch, generic names:
+
+```
+cust Customer;          # statically declared; other machines MONITOR / take it as a parameter
+rows LIST;
+monitor Worker cust;    # WHEN / states live here, not on a query-created RECORD
+
+Worker MACHINE input {
+    idle DEFAULT;
+    busy WHEN input.name != "";
+    done STATE;
+    # … dependents of `input` already re-check when COPY PROPERTIES lands
+}
+
+Drain MACHINE rows, input, monitor {
+    COMMAND next {
+        x := TAKE FIRST FROM rows;
+        WAITFOR monitor IS done;          # previous row finished
+        COPY PROPERTIES FROM x TO input;  # named RECORD; WHEN fires
+    }
+}
+```
+
+`WAITFOR` is existing (`tests/test_timer.cw`). `COPY PROPERTIES FROM a TO b` is existing (`tests/copy.cw`). `TAKE FIRST FROM` is existing.
+
+**Generic `json AS LIST`, not RECORD-specific spawn.** Query replies and other JSON arrays should become LISTs the same way, whether or not the objects are RECORD rows. Today that is `PUSH ITEMS FROM json_data TO data` (`tests/json_table.cw`). Prefer a clearer spelling:
+
+```
+rows := result AS LIST;     # JSON array → LIST (values or objects)
+```
+
+or keep `PUSH ITEMS FROM result TO rows`. Do **not** invent a second “query creates RECORD machines” feature. If a LIST member is a JSON object, copy fields onto the named RECORD (`ITEM ${name} OF x` today; `COPY PROPERTIES FROM x TO input` when `x` is a machine or when COPY PROPERTIES is extended to a JSON object).
+
+`RECORD_APPLY` still updates **named** instances that match `(type, key)` (Q6). Creating `Class#key` when nothing is held stays a cache so PUB and `COPY ALL FROM Class` have somewhere to land. It is not a WHEN target. Do not grow a graph of unlinked machines as the query API.
+
+**HMI:** a LIST of held RECORD instances (named or cache) is still useful for panels. Reactions stay on MACHINEs that depend on a named RECORD.
 
 ### Completing `dbd` and datastore (keep the split)
 
@@ -615,10 +657,14 @@ NoteEditor MACHINE note {
     }
 }
 
-# LIST features unchanged once all_notes holds RECORD instances:
+# LIST features on a LIST of held (named) RECORD instances:
 #   TAKE FIRST FROM all_notes
 #   SORT all_notes BY PROPERTY bales
 #   COPY ALL FROM all_notes TO subset WHERE all_notes.ITEM.bales > 0
+# Query INTO list is JSON → AS LIST; drain onto `note` (named) so WHEN fires:
+#   x := TAKE FIRST FROM all_notes
+#   WAITFOR worker IS done
+#   COPY PROPERTIES FROM x TO note
 ```
 
 Parser additions: `RECORD` (reject logic in the body), optional `VIEW "name"` / `TABLE "name"`, `KEY`/`UNIQUE`/`NOT NULL` on OPTION, `COPY ALL FROM` RECORD-class source. Persist COMMANDs are generated (`cw-scaffold` → `<Class>INTERFACE`); `QUERY` lives on MACHINE if added. `FIND` stays the **iosh** command (`IODCommandFind`). Joins are JSON/`CREATE VIEW`, not new WHEN syntax.
@@ -691,7 +737,9 @@ Warehouse `BaleInstance` mapping is **out of v1 schema**; a later PR may declare
 | sqlite in each iod | Two plant machines would split writes; EtherCAT must not block |
 | SQLAlchemy in Python as the only engine | Already works today; does not give RECORD OPTIONS or inter-CW push |
 | Implicit write-through on OPTION assign | Mid-edit writes; dirty loops with inbound PROPERTY; harder HMI |
-| RECORD as JSON_VALUE only (no MachineInstance) | LIST features do not apply; WHEN cannot see columns |
+| RECORD as JSON_VALUE only (no MachineInstance) | LIST features do not apply; WHEN cannot see columns on a named row |
+| Query `find_all` spawns a LIST of unlinked `Class#key` machines as the reaction API | LIST/HMI can hold them; WHEN cannot. Forces TAKE/CALL loops, then handler loops, then an embedded language |
+| `for` / `foreach` in handlers; embed Lua or Python | Clockwork is the language. Drain a LIST with TAKE FIRST, WAITFOR, COPY PROPERTIES onto a named RECORD |
 | Share `bales.db` and run both Alembic and cw-migrate | Dual heads, guaranteed drift |
 
 ---
@@ -726,7 +774,7 @@ Warehouse `BaleInstance` mapping is **out of v1 schema**; a later PR may declare
 | Instance explosion (`find_all` 100k rows) | Medium | COPY is a COMMAND; cap / paging later; warehouse scale is small |
 | PROPERTY storm on wide rows | Medium | Only send changed columns; coalesce per cycle |
 | Parser `RECORD` vs user class named RECORD | Low | Keyword; same as MACHINE |
-| Dynamic instance lifetime / leaks | Medium | Registry + optional LRU for unbound query hits; named instances never evicted |
+| Dynamic instance lifetime / leaks | Medium | `Class#key` is a cache, not a query API. Named instances never evicted. Do not spawn unlinked machines for WHEN |
 | Migration applied on wrong file | High | Refuse mismatch; never auto-upgrade prod |
 | Second iod misses a write | High | `dbsvr` PUB after COMMIT; dbd applies onto held RECORDs. Do not “fix” by merging sqlite into dbd |
 | REQ/REP hang after iod or dbsvr restart | High | Linger 0, REQ deadline, recreate socket, `forceFullReconnect`; do not `exit` on STARTUP |
@@ -757,13 +805,13 @@ Clockwork tests are **generic language** (`Customer`, `OrderLine`, `CustomerWith
 - PUB notify with a row **array** applies each row (`test_db_notify`); two SUBs both receive (`test_notify`). Two processes each hold `Customer` and apply the same PUB payload to the same OPTIONS (`test_two_process_apply`). Update replies include the row.
 - `COPY ALL FROM Customer TO list` then `SIZE OF`, `SORT BY PROPERTY`, `TAKE FIRST` (`test_copy_from_record`).
 - Named **VIEW** (not ad-hoc JSON join): `customer_with_city` SELECT + WHERE + ORDER + LIMIT; FK reject; insert returns the row by `rowid`. Queue shape is `select` + `where station` + `order` + `limit` on generic `item`. `station: null` → `IS NULL`; `{"is":"not_null"}` → `IS NOT NULL`; `in` array and bound `like`. COPY ALL FROM a VIEW RECORD class.
-- `QUERY q INTO list` and `QUERY JSON_VALUE { … } INTO list` parse as SEND to `DATABASE_CHANNEL` (`record_parse_query_into`, `record_parse_query_into_json`). LIST fill stays RECORD_APPLY + COPY (`test_record_apply` apply then COPY).
+- `QUERY q INTO list` and `QUERY JSON_VALUE { … } INTO list` parse as SEND to `DATABASE_CHANNEL` (`record_parse_query_into`, `record_parse_query_into_json`). LIST fill is **not** “spawn unlinked RECORD machines.” Target: JSON array → `AS LIST` / `PUSH ITEMS FROM`, then TAKE FIRST + `COPY PROPERTIES` onto a **named** RECORD. Today RECORD_APPLY still creates `Class#key` as a cache; that is not the reaction path.
 - WAL: `journal_mode=wal`; rollback leaves no rows.
 - `cw-migrate` upgrade/downgrade including `CREATE VIEW`.
 - ZMQ: `DeadlineReq` recreate after peer bounce; `test_dbsvr` restarts `dbsvr` and the next find succeeds (linger 0). Two `dbd` on one PUB both `RECORD_APPLY` (`test_two_dbd`); notify is drained even when CHANNEL is down. `test_cw_system`: two `cw` (cw2cw Link) + two `dbd` + `dbsvr`; insert on A updates `cust` on A and B.
 - `cw-migrate generate --sql`; `dbsvr --require-rev` refuses a mismatch and serves when the revision matches.
 
-Still later: plant iod-elc binaries. Two `cw` + two `dbd` + `dbsvr` is in CI (`test_cw_system`). QUERY INTO still cannot wait for dbsvr inside the scan. Plant names stay out of this repo.
+Still later: plant iod-elc binaries. Two `cw` + two `dbd` + `dbsvr` is in CI (`test_cw_system`). QUERY INTO still cannot wait for dbsvr inside the scan. `json AS LIST` not started. Plant names stay out of this repo.
 
 C++: datastore `SQLInterface` / Store tests in the datastore repo; dbd apply-OPTIONS tests in `iod/tests/`.
 
@@ -780,6 +828,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 5. **QUERY JSON richness in v1:** **named views first** (decided). Ad-hoc `join` arrays later if a view does not exist yet (DS-4). Python SamplingLine joins in application code (`bale_with_links_dict`); Clockwork gets the same shape as a `CREATE VIEW` + `RECORD VIEW "name"`.
 6. ~~Two-Clockwork notify~~ **Decided:** after COMMIT, `dbsvr` **publishes** (table + key, or the row). Every `dbd` that holds that RECORD applies OPTIONS. B must not stay stale. New PUB/SUB uses linger 0 and the same restart rules as dbd REQ. Not a second silent REQ; not poll-until-refresh.
 7. ~~Builtin persist~~ **Decided for v1:** generated `<Class>INTERFACE` (`cw-scaffold`), not FLAG-style `save`/`load` on RECORD.
+8. **Query results vs WHEN (Martin, 2026-08-24):** a LIST of row machines is fine for HMI and LIST commands. Dynamically created RECORDs are **not** linked, so WHEN does not see them. Drain with `TAKE FIRST` / `WAITFOR` / `COPY PROPERTIES` onto a **statically declared** RECORD that already has dependents. Prefer generic `json AS LIST` (or existing `PUSH ITEMS FROM`) over RECORD-specific spawn. **No** loops in handlers; **no** embedded Lua/Python. Clockwork stays the language. Martin still reading the rest of the design.
 
 ---
 
@@ -790,7 +839,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 3. **JSON in Clockwork; Store ops in datastore** (sqlite today, other backends later). LPC does not parse SQL. Named views cover today’s API flatten.
 4. **Explicit persist, not write-through.** Operational CRUD is **generated** by `cw-scaffold` as `<RecordClass>INTERFACE MACHINE record, items`. Scaffolder **create** = JSON `insert`, not schema `create`.
 5. **Per-column PROPERTY after a successful reply** — dbd applies by `(type, key)` registry onto RECORD OPTIONS; blob `respond_to` stays for old INTERFACE. Dependents already run. Datastore insert/update replies must include the row (RETURNING or equivalent).
-6. **`COPY ALL FROM` / `QUERY json INTO list` reuse LIST** — FIND stays iosh; WHEN stays off SQL. Until COPY-from-class exists, generated `list` uses JSON `find` with empty keys.
+6. **`COPY ALL FROM RecordClass` copies held instances; `QUERY` returns JSON.** FIND stays iosh; WHEN stays off SQL. Query results become a LIST via generic `json AS LIST` / `PUSH ITEMS FROM`, then drain onto a named RECORD (`TAKE FIRST`, `WAITFOR`, `COPY PROPERTIES`). Do not treat `Class#key` spawn as the find_all API. Generated `list` is in-memory COPY; `load` still SEND-find.
 7. **Alembic-like revisions including `CREATE VIEW`; no auto-upgrade on start.** `cw-migrate` lives next to datastore.
 8. **Do not share `bales.db` with Python Alembic in v1.**
 9. **Clockwork tests and goldens are generic** (`Customer`, …). Plant Jemalong/Warehouse rewrites are other repos, later.
@@ -798,6 +847,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 11. **Datastore SQLite PRAGMAs** match WoolSamplingLineAPI `app/db.py` (copy PRAGMAs only, not models): `foreign_keys=ON`, `journal_mode=WAL`, `synchronous=NORMAL`, `busy_timeout=5000`. Automatic transaction per JSON request.
 12. **ZMQ restart:** one dbd context; linger 0; REQ deadlines; recreate on EFSM; `forceFullReconnect` on iod CHANNEL; no `exit` on STARTUP; configurable `dbsvr` endpoint. `dbsvr` linger 0 on REP bind.
 13. **Two Clockworks, same RECORD → same OPTIONS.** After COMMIT, `dbsvr` PUBlishes `{type, keys}` or the row; every dbd that holds that instance applies it. Not poll-until-refresh.
+14. **Clockwork is the language.** No Lua, Python, or other embed. No `for` in handlers. Query batches drain with TAKE FIRST / WAITFOR / COPY PROPERTIES onto a named RECORD. Generic `json AS LIST`, not find_all-as-unlinked-machines.
 
 ---
 
@@ -828,7 +878,8 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 4. **dbd maps typed JSON rows onto RECORD OPTIONS** — **landed.** `RECORD_APPLY type keys_json row_json` (`RecordApply`) writes per-column OPTIONS by table+KEY, skips LOCAL, creates `Class#key` if none held. dbd sends RECORD_APPLY for dbsvr replies and PUB notify. Blob `respond_to` PROPERTY remains. `test_record_apply`.
 5. **Two Clockworks, one datastore** — **landed.** `test_cw_system` runs `dbsvr` + two `dbd` + two `cw` (cw2cw `Link` + `DATABASE_CHANNEL`). Insert on A; both `cust.name` become Ann; A sees shadow `ping_b`. Plant iod-elc still later.
 6. **COPY ALL FROM RecordClass INTO LIST** — **landed (in-memory).** Table and VIEW RECORD classes. Scaffolder **list** is COPY; **load** still SEND-find so dbd can materialize rows first.
-7. **QUERY INTO** — **parse landed.** `QUERY q INTO list` SENDs JSON property `q` to `DATABASE_CHANNEL` (same as INTERFACE load). `QUERY JSON_VALUE { … } INTO list` SENDs that object. LIST fill is still RECORD_APPLY + COPY; the scan cannot wait for dbsvr.
+7. **QUERY INTO** — **parse landed.** `QUERY q INTO list` SENDs JSON property `q` to `DATABASE_CHANNEL` (same as INTERFACE load). `QUERY JSON_VALUE { … } INTO list` SENDs that object. The scan cannot wait for dbsvr. **Next (not started):** treat the reply as JSON and fill the LIST with generic `AS LIST` / `PUSH ITEMS FROM`, then copy onto a named RECORD. Do not finish LIST fill by spawning unlinked `Class#key` machines as WHEN targets.
+8. **`json AS LIST`** — **not started.** Existing equivalent: `PUSH ITEMS FROM json TO list` (`tests/json_table.cw`). Add the `AS LIST` spelling if it is clearer; same semantics for any JSON array, not only RECORD rows. Optional: `COPY PROPERTIES FROM` a JSON object onto a named RECORD so field copies are not hand-written `ITEM ${…} OF`.
 
 ### Datastore (`../datastore`)
 
