@@ -1,5 +1,6 @@
 #include "modbus_helpers.h"
 #include <MessagingInterface.h>
+#include <cerrno>
 #include <iostream>
 #include <modbus.h>
 #include <sstream>
@@ -148,4 +149,46 @@ bool isPrintable(const char *str) {
             return false;
         }
     return true;
+}
+
+ModbusIoErrorKind classify_modbus_io_error(int rc, ModbusType mt) {
+    if (rc == EAGAIN || rc == EINTR) {
+        return ModbusIoErrorKind::Transient;
+    }
+    if (rc == EBADF || rc == ECONNRESET || rc == EPIPE) {
+        return ModbusIoErrorKind::LinkDead;
+    }
+    if (rc >= MODBUS_ENOBASE) {
+        return ModbusIoErrorKind::Transient;
+    }
+    // RTU: no slave (mains down) is ETIMEDOUT. Keep /dev/ttyS* open; closing
+    // and reopening every poll wedges the port after a long outage.
+    if (mt == mt_RTU && rc == ETIMEDOUT) {
+        return ModbusIoErrorKind::Transient;
+    }
+    if (mt == mt_RTU && rc == EIO) {
+        return ModbusIoErrorKind::LinkDead;
+    }
+    return ModbusIoErrorKind::LinkDead;
+}
+
+unsigned next_modbus_poll_interval_us(bool cycle_ok, unsigned current_us, unsigned min_us,
+                                      unsigned max_us) {
+    if (min_us == 0) {
+        min_us = 1;
+    }
+    if (max_us < min_us) {
+        max_us = min_us;
+    }
+    if (cycle_ok) {
+        return min_us;
+    }
+    unsigned next = current_us * 2;
+    if (next < min_us) {
+        next = min_us;
+    }
+    if (next > max_us) {
+        next = max_us;
+    }
+    return next;
 }

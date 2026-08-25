@@ -9,6 +9,7 @@
 #include <MessageEncoding.h>
 #include <MessagingInterface.h>
 #include <boost/thread.hpp>
+#include <cerrno>
 #include <iostream>
 #include <libgen.h>
 #include <map>
@@ -20,6 +21,11 @@
 #include <unistd.h>
 #include <value.h>
 #include <zmq.hpp>
+
+namespace {
+const unsigned kPollMinUs = 100000;
+const unsigned kPollMaxUs = 2000000;
+} // namespace
 
 void ModbusClientThread::requestUpdate(int addr, bool which) {
     boost::mutex::scoped_lock lock(work_mutex);
@@ -116,6 +122,7 @@ ModbusClientThread::ModbusClientThread(const ModbusSettings &modbus_settings,
                                        bool &update_status, const char *sock_name)
     : ctx(0), tab_rp_bits(0), tab_ro_bits(0), tab_rq_registers(0), tab_rw_rq_registers(0),
       options(options), update_status(update_status), finished(false), connected(false),
+      slave_silent_cycles(0), poll_interval_us(kPollMinUs), transient_error_logs(0),
       bits_monitor("coils", options), robits_monitor("discrete", options),
       regs_monitor("registers", options), holdings_monitor("holdings", options), mc(modbus_config),
       settings(modbus_settings), cmd_interface(0), iod_cmd_socket_name(sock_name) {
@@ -325,7 +332,10 @@ void ModbusClientThread::close_connection() {
     update_status = true;
 
     boost::mutex::scoped_lock lock(update_mutex);
-    assert(ctx);
+    if (!ctx) {
+        connected = false;
+        return;
+    }
     modbus_flush(ctx);
     modbus_close(ctx);
     modbus_free(ctx);
@@ -334,33 +344,22 @@ void ModbusClientThread::close_connection() {
 }
 
 bool ModbusClientThread::check_error(int rc, const char *msg, int entry, int *retry) {
-    std::cerr << "ERROR: " << msg << " " << entry << " retry: " << *retry << "\n";
-    usleep(250); // TODO: Remove this sleep
+    const ModbusIoErrorKind kind = classify_modbus_io_error(rc, settings.mt);
     auto err_str = show_modbus_error(rc);
-    if (rc == EAGAIN || rc == EINTR) {
-        fprintf(stderr, "%s %s, entry %d retrying %d\n", msg, err_str.c_str(), entry, *retry);
-        return true;
-    }
-    else if (rc == EBADF || rc == ECONNRESET || rc == EPIPE) {
-        fprintf(stderr, "%s %s, entry %d disconnecting %d\n", msg, err_str.c_str(), entry, *retry);
-        if (connected)
-            close_connection();
-        return false;
-    }
-    else if (rc >= MODBUS_ENOBASE) {
-        fprintf(stderr, "%s %s, entry %d retrying\n", msg, err_str.c_str(), entry);
-        return true;
-    }
-    else {
-        fprintf(stderr, "%s %s, entry %d reconnecting %d\n", msg, err_str.c_str(), entry, *retry);
-        if (connected) {
-            close_connection();
+    if (kind == ModbusIoErrorKind::Transient) {
+        ++transient_error_logs;
+        if (transient_error_logs <= 3 || (transient_error_logs % 100) == 0) {
+            fprintf(stderr, "%s %s, entry %d retrying %d (silent #%u)\n", msg, err_str.c_str(),
+                    entry, *retry, transient_error_logs);
         }
-        //assert(ctx == nullptr);
-        ctx = openConnection();
-        return ctx != nullptr;
+        usleep(250);
+        return true;
     }
-    return true;
+    fprintf(stderr, "%s %s, entry %d disconnecting %d\n", msg, err_str.c_str(), entry, *retry);
+    if (connected) {
+        close_connection();
+    }
+    return false;
 }
 
 int ModbusClientThread::setBit(int addr, bool which) {
@@ -471,9 +470,7 @@ void ModbusClientThread::operator()() {
                 modbus_free(ctx);
                 ctx = 0;
             }
-            if (!ctx) {
-                ctx = openConnection();
-            }
+            ctx = openConnection();
             if (ctx) {
                 connected = true;
                 update_status = true;
@@ -481,40 +478,71 @@ void ModbusClientThread::operator()() {
                 // current discrete/register state to clockwork (see BufferMonitor::refresh).
                 refresh();
             }
+            else {
+                poll_interval_us =
+                    next_modbus_poll_interval_us(false, poll_interval_us, kPollMinUs, kPollMaxUs);
+                usleep(poll_interval_us);
+                continue;
+            }
+        }
+
+        performUpdates();
+        const bool resync = (slave_silent_cycles > 0) || update_status;
+        if (resync) {
+            // Slave was missing (or Status left active). Clockwork INPUTBITs were
+            // forced off; edge-only publish would skip unchanged 1-bits. Republish.
+            refresh();
+        }
+        if (update_status) {
+            sendStatus("initialising");
+        }
+
+        bool cycle_ok = true;
+        if (!collect_selected_updates(robits_monitor, 1, tab_ro_bits, mc.monitors,
+                                      "modbus_read_input_bits", modbus_read_input_bits)) {
+            cycle_ok = false;
+        }
+        if (cycle_ok && !collect_selected_updates(bits_monitor, 0, tab_rp_bits, mc.monitors,
+                                                  "modbus_read_bits", modbus_read_bits)) {
+            cycle_ok = false;
+        }
+        if (cycle_ok &&
+            !collect_selected_updates(regs_monitor, 3, tab_rq_registers, mc.monitors,
+                                      "modbus_read_input registers", modbus_read_input_registers)) {
+            cycle_ok = false;
+        }
+        if (cycle_ok &&
+            !collect_selected_updates(holdings_monitor, 4, tab_rw_rq_registers, mc.monitors,
+                                      "modbus_read_registers", modbus_read_registers)) {
+            cycle_ok = false;
+        }
+
+        if (!cycle_ok) {
+            if (slave_silent_cycles == 0) {
+                sendStatus("disconnected");
+                std::cerr << "modbus slave silent — keeping serial open, backing off polls\n";
+            }
+            ++slave_silent_cycles;
+            if (slave_silent_cycles == 1 || (slave_silent_cycles % 50) == 0) {
+                std::cerr << "modbus slave still silent (" << slave_silent_cycles << " cycles)\n";
+            }
         }
         else {
-            performUpdates();
-            if (update_status) {
-                sendStatus("initialising");
-                // Status leaves "active" here → INPUTBITs forced off in clockwork.
-                // Refresh again so this cycle's collect republishes true device state
-                // when we return to active (not only edges vs the pre-disconnect cache).
-                refresh();
+            if (slave_silent_cycles > 0) {
+                std::cerr << "modbus slave returned after " << slave_silent_cycles
+                          << " silent cycles — republished\n";
             }
-            if (!collect_selected_updates(robits_monitor, 1, tab_ro_bits, mc.monitors,
-                                          "modbus_read_input_bits", modbus_read_input_bits)) {
-                std::cerr << "modbus_read_input_bits failed\n";
-            }
-            if (!collect_selected_updates(bits_monitor, 0, tab_rp_bits, mc.monitors,
-                                          "modbus_read_bits", modbus_read_bits)) {
-                std::cerr << "modbus_read_bits failed\n";
-            }
-            if (!collect_selected_updates(regs_monitor, 3, tab_rq_registers, mc.monitors,
-                                          "modbus_read_input registers",
-                                          modbus_read_input_registers)) {
-                std::cerr << "modbus_read_input_registers failed\n";
-            }
-            if (!collect_selected_updates(holdings_monitor, 4, tab_rw_rq_registers, mc.monitors,
-                                          "modbus_read_registers", modbus_read_registers)) {
-                std::cerr << "modbus_read_registers failed\n";
-            }
-            if (update_status) {
+            slave_silent_cycles = 0;
+            transient_error_logs = 0;
+            if (update_status || resync) {
                 sendStatus("active");
                 update_status = false;
             }
         }
 
-        usleep(100000); // TODO: Make this a setting
+        poll_interval_us =
+            next_modbus_poll_interval_us(cycle_ok, poll_interval_us, kPollMinUs, kPollMaxUs);
+        usleep(poll_interval_us);
     }
 }
 
@@ -532,6 +560,8 @@ collect_selected_updates(ModbusClientThread &client, modbus_t *ctx, const Option
     int rc = 0;
     unsigned int min = 100000;
     unsigned int max = 0;
+    bool read_failed = false;
+    int last_fail = 0;
     std::map<std::string, ModbusMonitor>::const_iterator iter = entries.begin();
     while (iter != entries.end()) {
         const std::pair<std::string, ModbusMonitor> &item = *iter++;
@@ -543,9 +573,10 @@ collect_selected_updates(ModbusClientThread &client, modbus_t *ctx, const Option
             if (end > max)
                 max = end;
             int retry = 2;
+            int saved_errno = 0;
             while ((usleep(5000), rc = read_fn(ctx, offset, item.second.length(), dest + offset)) ==
                    -1) {
-                int saved_errno = errno;
+                saved_errno = errno;
                 if (options.verbose)
                     std::cerr << "called: read_fn(ctx, " << offset << ", " << item.second.length()
                               << ", " << dest + offset << "))\n";
@@ -558,11 +589,20 @@ collect_selected_updates(ModbusClientThread &client, modbus_t *ctx, const Option
                 else
                     break;
             }
+            if (rc == -1) {
+                read_failed = true;
+                last_fail = saved_errno ? saved_errno : ETIMEDOUT;
+                break;
+            }
         }
     }
     if (!client.connected) {
         std::cerr << "Lost connection\n";
         result.error = ENXIO;
+        return result;
+    }
+    if (read_failed) {
+        result.error = last_fail;
         return result;
     }
     if (min > max) {
