@@ -434,8 +434,14 @@ bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *pre
             if (!ioc) {
                 continue;
             }
-            // ANALOGINPUT / COUNTER on regular_polls: not a digital edge.
+            // ANALOGINPUT / COUNTER / multi-bit DIGITALVALUE on regular_polls:
+            // not a digital ASAP edge (sampled from handle_io_sampling).
             if (regular_polls.count(ioc) && ioc->address.bitlen > 1) {
+                continue;
+            }
+            // Masked DIGITALVALUE bits (e.g. 0x6041 outside MASK) must not
+            // force an ecat ASAP push; filter leaves VALUE unchanged.
+            if (!ioc->indexedInputBitTriggersWork(idx)) {
                 continue;
             }
             return true;
@@ -583,13 +589,19 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
                         if ((*p & bitmask) != (*q & bitmask)) {
                             // remotely source change on this io
                             if (ioc) {
-                                // Only ANALOGINPUT/COUNTER join regular_polls (bitlen>1).
-                                // POINT / STATUS_FLAG / DIGITALVALUE / 1-bit Input must
-                                // stay on the event path (on_enter/off_enter / setValue).
+                                // Only ANALOGINPUT/COUNTER/multi-bit DIGITALVALUE join
+                                // regular_polls (bitlen>1). POINT / STATUS_FLAG /
+                                // unmasked DIGITALVALUE / 1-bit Input stay on the
+                                // event path. Masked DIGITALVALUE bits still update
+                                // the process image so the next compare is honest,
+                                // but must not enqueue handleChange (VALUE unchanged
+                                // after MASK, IOTIME would still force a full loop).
+                                const size_t idx = static_cast<size_t>(i) * 8 +
+                                                   static_cast<size_t>(j);
                                 if (regular_polls.count(ioc) && ioc->address.bitlen > 1) {
                                     regular_poll_dirty.insert(ioc);
                                 }
-                                else {
+                                else if (ioc->indexedInputBitTriggersWork(idx)) {
                                     //std::cout << " adding " << ioc->io_name << " due to bit change\n";
                                     boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
                                     updatedComponentsIn.insert(ioc);
@@ -1552,6 +1564,29 @@ DigitalValue::DigitalValue(IOAddress addr) : IOComponent(addr) {
     // miss a transition when the first bit of the value is unchanged (e.g.
     // 0x76 → 0x00), leaving Error.VALUE stuck and ClearFault thrashing.
     regular_polls.insert(this);
+}
+
+bool DigitalValue::inputBitTriggersWork(unsigned int relative_bit) const {
+    if (relative_bit >= 64) {
+        return true;
+    }
+    bool found_mask = false;
+    uint64_t combined_mask = 0;
+    for (std::list<MachineInstance *>::const_iterator iter = owners.begin();
+         iter != owners.end(); ++iter) {
+        const MachineInstance *owner = *iter;
+        if (!owner) {
+            continue;
+        }
+        const Value &mask = owner->properties.lookup("MASK");
+        // Match filter(): MASK 0 / non-integer means publish the full word.
+        if (mask.kind != Value::t_integer || mask.iValue == 0) {
+            return true;
+        }
+        found_mask = true;
+        combined_mask |= static_cast<uint64_t>(mask.iValue);
+    }
+    return !found_mask || (combined_mask & (uint64_t{1} << relative_bit)) != 0;
 }
 
 int64_t DigitalValue::filter(int64_t val) {

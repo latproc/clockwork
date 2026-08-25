@@ -366,10 +366,10 @@ void MachineInstance::setNeedsCheck() {
     if (!is_enabled) {
         return;
     }
-    // Already queued for a check: bump the counter only. TIMER predicates that
-    // are slightly overdue (t >= -2000) used to call setNeedsCheck every
-    // evaluation and re-activate thousands of machines → scheduler/processing
-    // storm after mass enable.
+    // Already queued for a check: bump the counter only. Overdue TIMER recovery
+    // (TimerOverduePolicy::RecoverOverdue on matched holds) can call setNeedsCheck
+    // when a due time is already past; do not re-activate if already pending.
+    // False-rule scans use ArmFutureOnly so they do not call setNeedsCheck at all.
     if (needs_check > 0 &&
         (ProcessingThread::is_pending(this) || queuedForStableStateTest() ||
          !active_actions.empty() || !mail_queue.empty())) {
@@ -4241,7 +4241,9 @@ bool MachineInstance::setStableState() {
                                     setValue("TRACE", Value(ss.str(), Value::t_string));
                                 }
                                 if (!ch->check(this)) {
-                                    ptd = ch->condition.predicate->scheduleTimerEvents(ptd, this);
+                                    // Active-state subconditions: recover overdue TIMER.
+                                    ptd = ch->condition.predicate->scheduleTimerEvents(
+                                        ptd, this, TimerOverduePolicy::RecoverOverdue);
                                 }
                             }
                         }
@@ -4249,7 +4251,9 @@ bool MachineInstance::setStableState() {
                             DBG_SCHEDULER << _name << "[" << current_state.getName()
                                           << "] checking condition tests for rule #" << ss_idx
                                           << " state: " << s.state_name << "\n";
-                            ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
+                            // Matched holding rule: recover overdue so late checks re-arm.
+                            ptd = s.condition.predicate->scheduleTimerEvents(
+                                ptd, this, TimerOverduePolicy::RecoverOverdue);
                             if (ptd) {
                                 DBG_M_SCHEDULER << "found timer event " << ptd->label
                                                 << " t: " << ptd->delay << " on rule #" << ss_idx
@@ -4267,6 +4271,9 @@ bool MachineInstance::setStableState() {
                         DBG_SCHEDULER << _name << "[" << current_state.getName()
                                       << "] scheduling condition tests for state " << s.state_name
                                       << "\n";
+                        // False rule: future TIMER arms only (default ArmFutureOnly).
+                        // Do not recover overdue — false `TIMER < N` past due must not
+                        // re-queue every evaluation (load storm).
                         ptd = s.condition.predicate->scheduleTimerEvents(ptd, this);
                         if (ptd) {
                             DBG_M_SCHEDULER << "found timer event " << ptd->label

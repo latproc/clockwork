@@ -124,6 +124,20 @@ struct PredicateTimerDetails {
     }
 };
 
+/*  How scheduleTimerEvents treats a TIMER clause that is already past due
+    (scheduled_time <= current_time).
+
+    ArmFutureOnly — only arm future wakes (t > 0). Do not setNeedsCheck for
+    overdue clauses. Use when scanning *false* stable-state rules: a false
+    `TIMER < N` with TIMER already past would otherwise re-queue the machine
+    every evaluation and storm processing load.
+
+    RecoverOverdue — if already past due, call setNeedsCheck so a late check
+    still re-arms / transitions. Use only on the *matched holding* rule (and
+    its subconditions), not on false rules walked before the match.
+*/
+enum class TimerOverduePolicy { ArmFutureOnly, RecoverOverdue };
+
 class Predicate {
   public:
     Predicate *left_p;
@@ -165,8 +179,8 @@ class Predicate {
     bool usesTimer(Value &val) const; // recursively search for use of TIMER
     void findTimerClauses(std::list<Predicate *> &clauses);
     PredicateTimerDetails *scheduleTimerEvents(
-        PredicateTimerDetails *earliest,
-        MachineInstance *target); // setup timer events that trigger the supplied machine
+        PredicateTimerDetails *earliest, MachineInstance *target,
+        TimerOverduePolicy overdue_policy = TimerOverduePolicy::ArmFutureOnly);
     void clearTimerEvents(
         MachineInstance *target); // clear all timer events scheduled for the supplid machine
 

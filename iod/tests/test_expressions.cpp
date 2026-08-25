@@ -1,5 +1,7 @@
 #include "gtest/gtest.h"
 #include <Expression.h>
+#include <IOComponent.h>
+#include <MachineClass.h>
 #include <MachineInstance.h>
 #include <MessageLog.h>
 #include <cstdlib>
@@ -358,6 +360,95 @@ TEST_F(EvaluatorTest, pcode_rejects_json_subexpr) {
     Predicate pred(dest, opGetSubExpr, src);
     EXPECT_EQ(static_cast<ExpressionPcode *>(0), ExpressionPcode::tryCompile(&pred));
 }
+
+namespace {
+
+MachineInstance *makeEnabledTimerMachine(const char *name) {
+    auto *cls = new MachineClass(name);
+    cls->addState("idle");
+    MachineInstance *mi = MachineInstanceFactory::create(name, name);
+    mi->setStateMachine(cls);
+    mi->enable();
+    mi->resetNeedsCheck();
+    return mi;
+}
+
+TEST(TimerOverduePolicy, ArmFutureOnlyDoesNotRequeueOverdueTimerLt) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_arm_future");
+    scope->start_time = microsecs() - 5000 * 1000; // TIMER ~5000 ms
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opLT, new Predicate(1));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_FALSE(scope->needsCheck());
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, RecoverOverdueRequeuesOverdueTimerLt) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_recover");
+    scope->start_time = microsecs() - 5000 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opLT, new Predicate(1));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::RecoverOverdue);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_TRUE(scope->needsCheck());
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, FutureTimerStillArmsUnderArmFutureOnly) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_future");
+    scope->start_time = microsecs();
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opGE, new Predicate(10));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    ASSERT_NE(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_GT(ptd->delay, 0);
+    EXPECT_FALSE(scope->needsCheck());
+    delete ptd;
+    delete scope;
+}
+
+TEST(DigitalValueMask, UnmaskedBitDoesNotTriggerWork) {
+    IOAddress addr(0, 0, 0, 0, 16);
+    DigitalValue dv(addr);
+    MachineInstance *owner = MachineInstanceFactory::create("dv_owner", "FLAG");
+    owner->properties.add("MASK", Value(0x0001), SymbolTable::ST_REPLACE);
+    dv.addOwner(owner);
+
+    EXPECT_TRUE(dv.inputBitTriggersWork(0));
+    EXPECT_FALSE(dv.inputBitTriggersWork(1));
+    EXPECT_FALSE(dv.inputBitTriggersWork(12));
+    delete owner;
+}
+
+TEST(DigitalValueMask, ZeroMaskMatchesFilterAndWakes) {
+    IOAddress addr(0, 0, 0, 0, 16);
+    DigitalValue dv(addr);
+    MachineInstance *owner = MachineInstanceFactory::create("dv_owner_zero", "FLAG");
+    owner->properties.add("MASK", Value(0), SymbolTable::ST_REPLACE);
+    dv.addOwner(owner);
+
+    EXPECT_TRUE(dv.inputBitTriggersWork(12));
+    delete owner;
+}
+
+TEST(DigitalValueMask, NoMaskWakesOnAnyBit) {
+    IOAddress addr(0, 0, 0, 0, 16);
+    DigitalValue dv(addr);
+    MachineInstance *owner = MachineInstanceFactory::create("dv_owner_nomask", "FLAG");
+    dv.addOwner(owner);
+
+    EXPECT_TRUE(dv.inputBitTriggersWork(12));
+    delete owner;
+}
+
+} // namespace
 
 #include <Dispatcher.h>
 #include <Logger.h>
