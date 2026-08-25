@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 #include "modbus_helpers.h"
+#include <cerrno>
+#include <modbus.h>
 
 TEST(SerialSettings, constructor) {
     SerialSettings settings(2400,7,'E',2);
@@ -50,4 +52,32 @@ TEST(isPrintable, withAPrintableString) {
 
 TEST(isPrintable, withANonPrintableString) {
 	EXPECT_FALSE(isPrintable("this \001 is a test"));
+}
+
+TEST(classify_modbus_io_error, rtuTimeoutIsTransient) {
+    EXPECT_EQ(ModbusIoErrorKind::Transient, classify_modbus_io_error(ETIMEDOUT, mt_RTU));
+    EXPECT_EQ(ModbusIoErrorKind::Transient, classify_modbus_io_error(EAGAIN, mt_RTU));
+    EXPECT_EQ(ModbusIoErrorKind::Transient, classify_modbus_io_error(EINTR, mt_RTU));
+    EXPECT_EQ(ModbusIoErrorKind::Transient,
+              classify_modbus_io_error(MODBUS_ENOBASE + 1, mt_RTU));
+}
+
+TEST(classify_modbus_io_error, rtuBrokenFdIsLinkDead) {
+    EXPECT_EQ(ModbusIoErrorKind::LinkDead, classify_modbus_io_error(EBADF, mt_RTU));
+    EXPECT_EQ(ModbusIoErrorKind::LinkDead, classify_modbus_io_error(EIO, mt_RTU));
+    EXPECT_EQ(ModbusIoErrorKind::LinkDead, classify_modbus_io_error(EPIPE, mt_RTU));
+}
+
+TEST(classify_modbus_io_error, tcpTimeoutIsLinkDead) {
+    EXPECT_EQ(ModbusIoErrorKind::LinkDead, classify_modbus_io_error(ETIMEDOUT, mt_TCP));
+}
+
+TEST(next_modbus_poll_interval_us, restoresMinOnSuccess) {
+    EXPECT_EQ(100000u, next_modbus_poll_interval_us(true, 2000000, 100000, 2000000));
+}
+
+TEST(next_modbus_poll_interval_us, doublesThenCaps) {
+    EXPECT_EQ(200000u, next_modbus_poll_interval_us(false, 100000, 100000, 2000000));
+    EXPECT_EQ(2000000u, next_modbus_poll_interval_us(false, 2000000, 100000, 2000000));
+    EXPECT_EQ(2000000u, next_modbus_poll_interval_us(false, 1500000, 100000, 2000000));
 }

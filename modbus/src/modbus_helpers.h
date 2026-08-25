@@ -71,6 +71,18 @@ int getSettings(const char *str, SerialSettings &settings);
 
 bool isPrintable(const char *str);
 
+// RTU slave missing (timeout / protocol exception) is Transient: keep the
+// serial ctx and retry. LinkDead is a broken fd/socket — close once, then
+// the poll loop reopens with backoff. Never treat slave silence as a reason
+// to exit the process.
+enum class ModbusIoErrorKind { Transient, LinkDead };
+ModbusIoErrorKind classify_modbus_io_error(int rc, ModbusType mt);
+
+// Poll interval while the slave is silent. Double up to max_us; restore min_us
+// on a good cycle. Units are microseconds.
+unsigned next_modbus_poll_interval_us(bool cycle_ok, unsigned current_us, unsigned min_us,
+                                      unsigned max_us);
+
 // ZMQ REQ helpers shared by mbmon and ModbusClientThread. Half-open REQ after
 // timeout/EFSM cannot send again until the socket is recreated.
 constexpr int64_t IOD_CMD_TIMEOUT_MS = 3000;

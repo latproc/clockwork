@@ -42,6 +42,11 @@ class ModbusClientThread {
 
     bool finished;
     bool connected;
+    // Consecutive failed poll cycles while the serial ctx is still open (slave
+    // missing). Not a process restart. Refresh+republish when this drops to 0.
+    unsigned slave_silent_cycles;
+    unsigned poll_interval_us;
+    unsigned transient_error_logs;
 
     BufferMonitor<uint8_t> bits_monitor;      //("bits", options);
     BufferMonitor<uint8_t> robits_monitor;    //("robits", options);
