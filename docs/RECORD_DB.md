@@ -311,6 +311,8 @@ Bare `x Customer;` remains legal for data-only rows. RECORD itself still forbids
 
 Composition without OVER is the same bind, onto `slot.row` if `row` is a RECORD parameter. OVER binds onto `slot` itself (WHEN/EXPORT live there).
 
+**Do not `COPY PROPERTIES` of row OPTIONS from one slot to the next** (prev-exit → enter → exit). That is a second copy of the row in memory; the table never moved. Two slots that should show the same row both **bind** to it (same KEY / same APPLY). A real move updates a column the query uses (e.g. `city` / `station`) with INTERFACE `update`, then **each** loader `load`s and rebinds. Intra-machine enter and exit that are the same row: bind both slots to that one RECORD, do not copy fields between them. Cycle-only OPTIONS (timers, maps that are not columns) can stay on the MACHINE and are not copied as identity.
+
 **EXPORT must be checked at load** (`loadConfig` / `--parse-only`), not left for a live HMI/modbus miss. Today `EXPORT` only records names; it does not test that the OPTION, STATE, or COMMAND exists. OVER makes that worse: column names are not written on the MACHINE, so a typo is easy.
 
 After RECORD OPTIONS are copied onto the MACHINE class:
