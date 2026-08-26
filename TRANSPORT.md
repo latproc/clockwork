@@ -14,6 +14,7 @@ Docs (in source tree):
   /opt/etherlab-cyclic-kmod/docs/uapi.md
   /opt/etherlab-cyclic-kmod/docs/developer-guide.md
   /opt/etherlab-cyclic-kmod/docs/process-image-exchange.md
+  /opt/etherlab-cyclic-kmod/docs/domain-datagram-split.md
   /opt/etherlab-cyclic-kmod/docs/iod-session-handoff.md
   /opt/etherlab-cyclic-kmod/docs/client-slave-recovery.md
   /opt/etherlab-cyclic-kmod/docs/recommended-master-lifecycle.md
