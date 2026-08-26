@@ -301,6 +301,16 @@ cust CustomerPanel (id: 1);
 
 Bare `x Customer;` remains legal for data-only rows. RECORD itself still forbids WHEN/COMMAND/states. Logic stays on the MACHINE; the instance wears both.
 
+**How `cust` gets its row.** Declaring `cust CustomerPanel (id: 1)` does **not** read the database. OPTIONS start at class defaults. A row arrives only by an explicit find (INTERFACE `find` / `load`, or `QUERY`) then `RECORD APPLY` (or `COPY PROPERTIES` from a LIST member). Same as a bare RECORD. Two patterns:
+
+1. **KEY known in the program** — `cust CustomerPanel (id: 1)`. INTERFACE `find` with that KEY. `RECORD APPLY` writes `cust`. The instance name is the slot; the KEY is static.
+
+2. **Slot, KEY from a query** — `slot CustomerPanel;` (no KEY yet). A **loader MACHINE** owns a static selector (e.g. `OPTION city "Perth"`), hydrates (`SEND` find so APPLY fills held rows), `COPY ALL FROM Customer TO occupancy WHERE … city`, then binds: SIZE 0 → `clear` on `slot`; SIZE ≥ 1 → `COPY PROPERTIES` from the pick onto `slot` (or APPLY onto `slot`). `slot` does not know “I am the Perth row”; the loader does. Notify: loader `load`s again and rebinds.
+
+`QUERY` / INTERFACE `load` are SEND; the scan cannot wait for `dbsvr`. The loader uses states / `WAITFOR` for “hydrate done” then bind. Do not treat `COPY ALL FROM Customer` as a database fetch.
+
+Composition without OVER is the same bind, onto `slot.row` if `row` is a RECORD parameter. OVER binds onto `slot` itself (WHEN/EXPORT live there).
+
 **EXPORT must be checked at load** (`loadConfig` / `--parse-only`), not left for a live HMI/modbus miss. Today `EXPORT` only records names; it does not test that the OPTION, STATE, or COMMAND exists. OVER makes that worse: column names are not written on the MACHINE, so a typo is easy.
 
 After RECORD OPTIONS are copied onto the MACHINE class:
@@ -789,7 +799,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 6. ~~Two-Clockwork notify~~ **Decided:** after COMMIT, `dbsvr` **publishes** (table + key, or the row). Every `dbd` that holds that RECORD applies OPTIONS. B must not stay stale. New PUB/SUB uses linger 0 and the same restart rules as dbd REQ. Not a second silent REQ; not poll-until-refresh.
 7. ~~Builtin persist~~ **Decided for v1:** generated `<Class>INTERFACE` (`cw-scaffold`), not FLAG-style `save`/`load` on RECORD.
 8. **Query results vs WHEN (Martin, 2026-08-24):** a LIST of row machines is fine for HMI and LIST commands. Dynamically created RECORDs are **not** linked, so WHEN does not see them. Drain with `TAKE FIRST` / `WAITFOR` / `COPY PROPERTIES` onto a **statically declared** RECORD that already has dependents. Prefer generic `json AS LIST` (or existing `PUSH ITEMS FROM`) over RECORD-specific spawn. **No** loops in handlers; **no** embedded Lua/Python. Clockwork stays the language. Martin still reading the rest of the design.
-9. **MACHINE OVER RECORD (proposal):** one instance that is both the row and the active machine. The MACHINE names a RECORD class (table / template) and does **not** re-list column OPTIONS; those are loaded from the RECORD. Body is states, COMMAND, EXPORT, LOCAL, extra non-column OPTIONS. Alternative is composition (`MACHINE rec`). **EXPORT:** `loadConfig` must **error** if an exported property/state/command does not exist after inherit; **warn** on EXPORT of LOCAL or size/type mismatch. Open: one instance vs composition only; JSON `type` = RECORD class name; extra OPTIONS never columns; at most one OVER class per RECORD; syntax `OVER` vs `INCLUDE RECORD`; `OPTION PERSISTENT` ignored for columns. Not implemented.
+9. **MACHINE OVER RECORD (proposal):** one instance that is both the row and the active machine. The MACHINE names a RECORD class (table / template) and does **not** re-list column OPTIONS; those are loaded from the RECORD. Body is states, COMMAND, EXPORT, LOCAL, extra non-column OPTIONS. Alternative is composition (`MACHINE rec`). **Fill:** declare is not a DB read. KEY-known → INTERFACE `find` + APPLY onto the named instance. Slot → a loader MACHINE with a static selector hydrates, COPY ALL WHERE, bind onto the instance (OVER: onto `slot`; composition: onto `slot.row`). **EXPORT:** `loadConfig` must **error** if an exported property/state/command does not exist after inherit; **warn** on EXPORT of LOCAL or size/type mismatch. Open: one instance vs composition only; JSON `type` = RECORD class name; extra OPTIONS never columns; at most one OVER class per RECORD; syntax `OVER` vs `INCLUDE RECORD`; `OPTION PERSISTENT` ignored for columns. Not implemented.
 
 ---
 
