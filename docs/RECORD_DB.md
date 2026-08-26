@@ -268,6 +268,41 @@ CustomerEditor MACHINE cust {
 
 If save/load later become builtins, follow FLAG: FLAG has `turnOn`/`turnOff` as class transitions, not user WHEN. Do not put `COMMAND save { SAVE SELF }` or `dirty WHEN SELF IS changed` in the RECORD body.
 
+#### MACHINE OVER RECORD (proposal)
+
+Some programs already treat **one MACHINE** as both the row (OPTIONS) and the active object (WHEN, COMMAND, EXPORT, parameters). Composition (`Editor MACHINE cust`) is two instances: HMI and WHEN sit on the editor; `RECORD APPLY` hits `cust`; the author copies or always reads `cust.age`. That is still valid.
+
+**OVER** is for when the existing machine *is* the row. One instance. The RECORD class is the table / template (column OPTIONS). The MACHINE does **not** re-list those OPTIONS; it names which RECORD to load. At parse/load, column OPTIONS are taken from that RECORD class. The MACHINE body adds states, COMMAND, EXPORT, LOCAL, and extra OPTIONS (not columns).
+
+```
+Customer RECORD {
+    OPTION id 0 KEY;
+    OPTION name "";
+    OPTION age 0;
+}
+
+CustomerPanel MACHINE OVER Customer {
+    EXPORT RW name, age;
+    EXPORT STATES idle, active;
+    EXPORT COMMANDS clear;
+    LOCAL OPTION tmp 0;
+    OPTION note "";
+
+    active WHEN age > 0;
+    idle DEFAULT;
+
+    COMMAND clear { name := ""; age := 0; }
+}
+
+cust CustomerPanel (id: 1);
+```
+
+`age` is on `Customer`, not redeclared on `CustomerPanel`. `RECORD APPLY` type `customer` writes this instance. WHEN and EXPORT see the same OPTIONS. `COPY ALL FROM Customer` includes `cust`. JSON `type` is the RECORD class (`customer`), not the skin name. Persist stays explicit (INTERFACE). `OPTION PERSISTENT` is persist.dat and is not a column.
+
+Bare `x Customer;` remains legal for data-only rows. RECORD itself still forbids WHEN/COMMAND/states. Logic stays on the MACHINE; the instance wears both.
+
+Syntax (`OVER` vs `INCLUDE RECORD` vs other) and “at most one OVER class per RECORD” are open. Not implemented.
+
 #### OPTIONS = columns
 
 - Persisted OPTIONS: ordinary `OPTION name default`. Default and Clockwork type (`integer`/`string`/`float`/`boolean`/NULL) map through datastore (sqlite: `INTEGER`/`TEXT`/`REAL`/`INTEGER 0/1`/`NULL`; other Stores map their own types).
@@ -741,6 +776,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 6. ~~Two-Clockwork notify~~ **Decided:** after COMMIT, `dbsvr` **publishes** (table + key, or the row). Every `dbd` that holds that RECORD applies OPTIONS. B must not stay stale. New PUB/SUB uses linger 0 and the same restart rules as dbd REQ. Not a second silent REQ; not poll-until-refresh.
 7. ~~Builtin persist~~ **Decided for v1:** generated `<Class>INTERFACE` (`cw-scaffold`), not FLAG-style `save`/`load` on RECORD.
 8. **Query results vs WHEN (Martin, 2026-08-24):** a LIST of row machines is fine for HMI and LIST commands. Dynamically created RECORDs are **not** linked, so WHEN does not see them. Drain with `TAKE FIRST` / `WAITFOR` / `COPY PROPERTIES` onto a **statically declared** RECORD that already has dependents. Prefer generic `json AS LIST` (or existing `PUSH ITEMS FROM`) over RECORD-specific spawn. **No** loops in handlers; **no** embedded Lua/Python. Clockwork stays the language. Martin still reading the rest of the design.
+9. **MACHINE OVER RECORD (proposal):** one instance that is both the row and the active machine. The MACHINE names a RECORD class (table / template) and does **not** re-list column OPTIONS; those are loaded from the RECORD. Body is states, COMMAND, EXPORT, LOCAL, extra non-column OPTIONS. Alternative is composition (`MACHINE rec`). Open: one instance vs composition only; JSON `type` = RECORD class name; extra OPTIONS never columns; at most one OVER class per RECORD; syntax `OVER` vs `INCLUDE RECORD`; `OPTION PERSISTENT` ignored for columns. Not implemented.
 
 ---
 
