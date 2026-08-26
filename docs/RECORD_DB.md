@@ -301,6 +301,19 @@ cust CustomerPanel (id: 1);
 
 Bare `x Customer;` remains legal for data-only rows. RECORD itself still forbids WHEN/COMMAND/states. Logic stays on the MACHINE; the instance wears both.
 
+**EXPORT must be checked at load** (`loadConfig` / `--parse-only`), not left for a live HMI/modbus miss. Today `EXPORT` only records names; it does not test that the OPTION, STATE, or COMMAND exists. OVER makes that worse: column names are not written on the MACHINE, so a typo is easy.
+
+After RECORD OPTIONS are copied onto the MACHINE class:
+
+| Clause | Error (fail load) | Warning |
+| --- | --- | --- |
+| `EXPORT … name` | `name` is not an OPTION on the RECORD and not an OPTION on the MACHINE | `name` is `LOCAL` (not a row column; odd to export) |
+| `EXPORT … size name` | (same unknown name) | Clockwork type vs export size look wrong (e.g. `32BIT` on a string OPTION) |
+| `EXPORT STATES name` | `name` is not a state on this MACHINE | |
+| `EXPORT COMMANDS name` | `name` is not a COMMAND on this MACHINE | |
+
+Unknown EXPORT is an **error**, same class as a table RECORD with no KEY. A runtime warn after iod is up is too late for panels. Optional extra: if a mapped export is read/written and the property is still missing, log once — the load check is the real gate.
+
 Syntax (`OVER` vs `INCLUDE RECORD` vs other) and “at most one OVER class per RECORD” are open. Not implemented.
 
 #### OPTIONS = columns
@@ -776,7 +789,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 6. ~~Two-Clockwork notify~~ **Decided:** after COMMIT, `dbsvr` **publishes** (table + key, or the row). Every `dbd` that holds that RECORD applies OPTIONS. B must not stay stale. New PUB/SUB uses linger 0 and the same restart rules as dbd REQ. Not a second silent REQ; not poll-until-refresh.
 7. ~~Builtin persist~~ **Decided for v1:** generated `<Class>INTERFACE` (`cw-scaffold`), not FLAG-style `save`/`load` on RECORD.
 8. **Query results vs WHEN (Martin, 2026-08-24):** a LIST of row machines is fine for HMI and LIST commands. Dynamically created RECORDs are **not** linked, so WHEN does not see them. Drain with `TAKE FIRST` / `WAITFOR` / `COPY PROPERTIES` onto a **statically declared** RECORD that already has dependents. Prefer generic `json AS LIST` (or existing `PUSH ITEMS FROM`) over RECORD-specific spawn. **No** loops in handlers; **no** embedded Lua/Python. Clockwork stays the language. Martin still reading the rest of the design.
-9. **MACHINE OVER RECORD (proposal):** one instance that is both the row and the active machine. The MACHINE names a RECORD class (table / template) and does **not** re-list column OPTIONS; those are loaded from the RECORD. Body is states, COMMAND, EXPORT, LOCAL, extra non-column OPTIONS. Alternative is composition (`MACHINE rec`). Open: one instance vs composition only; JSON `type` = RECORD class name; extra OPTIONS never columns; at most one OVER class per RECORD; syntax `OVER` vs `INCLUDE RECORD`; `OPTION PERSISTENT` ignored for columns. Not implemented.
+9. **MACHINE OVER RECORD (proposal):** one instance that is both the row and the active machine. The MACHINE names a RECORD class (table / template) and does **not** re-list column OPTIONS; those are loaded from the RECORD. Body is states, COMMAND, EXPORT, LOCAL, extra non-column OPTIONS. Alternative is composition (`MACHINE rec`). **EXPORT:** `loadConfig` must **error** if an exported property/state/command does not exist after inherit; **warn** on EXPORT of LOCAL or size/type mismatch. Open: one instance vs composition only; JSON `type` = RECORD class name; extra OPTIONS never columns; at most one OVER class per RECORD; syntax `OVER` vs `INCLUDE RECORD`; `OPTION PERSISTENT` ignored for columns. Not implemented.
 
 ---
 
