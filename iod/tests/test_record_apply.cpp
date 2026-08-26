@@ -7,6 +7,7 @@
 #include "DbNotify.h"
 #include "IODCommands.h"
 #include "RecordApply.h"
+#include "RecordClass.h"
 #include "SetOperationAction.h"
 #include "ThreadSafeQueue.h"
 #include "cJSON.h"
@@ -27,10 +28,10 @@ int main() {
     Dispatcher::create(queue);
 
     MachineClass *mc = new MachineClass("Customer");
-    mc->is_record = true;
-    mc->table_name = "customer";
+    RecordClass::mark(mc);
+    RecordClass::setTable(mc, "customer");
     mc->setOption("id", Value(static_cast<int64_t>(0)));
-    mc->setColumnFlags("id", MachineClass::COL_KEY);
+    RecordClass::addKey(mc, "id");
     mc->setOption("name", Value("", Value::t_string));
     mc->local_properties.insert("dirty");
 
@@ -129,10 +130,10 @@ int main() {
     }
 
     MachineClass *itemc = new MachineClass("Item");
-    itemc->is_record = true;
-    itemc->table_name = "item";
+    RecordClass::mark(itemc);
+    RecordClass::setTable(itemc, "item");
     itemc->setOption("id", Value(static_cast<int64_t>(0)));
-    itemc->setColumnFlags("id", MachineClass::COL_KEY);
+    RecordClass::addKey(itemc, "id");
     itemc->setOption("station", Value("", Value::t_string));
     MachineClass *listc = new MachineClass("LIST");
     listc->addState("empty");

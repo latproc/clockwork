@@ -47,6 +47,7 @@
 #include "ResetAction.h"
 #include "LoadPropertiesAction.h"
 #include "UpdateListItemsAction.h"
+#include "RecordClass.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -110,7 +111,7 @@ static void apply_column_annots(const char *option_name) {
         pending_column_flags = 0;
         return;
     }
-    if (!current_machineclass->is_record) {
+    if (!RecordClass::isRecord(current_machineclass)) {
         std::stringstream ss;
         ss << yyfilename << ":" << yylineno
            << " KEY, UNIQUE, and NOT NULL are only valid on RECORD OPTIONS";
@@ -125,7 +126,7 @@ static void apply_column_annots(const char *option_name) {
         ++num_errors;
     }
     else {
-        current_machineclass->setColumnFlags(option_name, pending_column_flags);
+        RecordClass::addFlags(current_machineclass, option_name, pending_column_flags);
     }
     pending_column_flags = 0;
 }
@@ -428,8 +429,8 @@ option_annot
 | option_annots option_annot
 
 option_annot:
-KEY { pending_column_flags |= MachineClass::COL_KEY; }
-| UNIQUE { pending_column_flags |= MachineClass::COL_UNIQUE; }
+KEY { pending_column_flags |= RecordClass::COL_KEY; }
+| UNIQUE { pending_column_flags |= RecordClass::COL_UNIQUE; }
 | NOT SYMBOL {
     if (!$2 || strcmp($2, "NULL") != 0) {
         std::stringstream ss;
@@ -438,7 +439,7 @@ KEY { pending_column_flags |= MachineClass::COL_KEY; }
         ++num_errors;
     }
     else {
-        pending_column_flags |= MachineClass::COL_NOT_NULL;
+        pending_column_flags |= RecordClass::COL_NOT_NULL;
     }
 }
 //| SYMBOL REFERS TO SYMBOL {
@@ -504,16 +505,14 @@ SYMBOL RECORD record_rel parameters {
     DBG_PARSER << " record class " << $1 << "\n";
     check_machine_type($1);
     current_machineclass = new MachineClass($1);
-    current_machineclass->is_record = true;
     current_machineclass->disableAutomaticStateChanges();
-    current_machineclass->table_name = lowercase_copy($1);
+    RecordClass::mark(current_machineclass);
+    RecordClass::setTable(current_machineclass, lowercase_copy($1));
     if (!pending_record_view.empty()) {
-        current_machineclass->is_view = true;
-        current_machineclass->table_name = pending_record_view;
+        RecordClass::setView(current_machineclass, pending_record_view);
     }
     if (!pending_record_table.empty()) {
-        current_machineclass->is_view = false;
-        current_machineclass->table_name = pending_record_table;
+        RecordClass::setTable(current_machineclass, pending_record_table);
     }
     pending_record_view.clear();
     pending_record_table.clear();

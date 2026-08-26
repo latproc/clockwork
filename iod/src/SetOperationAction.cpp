@@ -22,6 +22,7 @@
 #include "Logger.h"
 #include "MachineClass.h"
 #include "MachineInstance.h"
+#include "RecordClass.h"
 
 static void debugParameterChange(MachineInstance *dest_machine) {
     if (!dest_machine->debug()) {
@@ -564,7 +565,7 @@ Action::Status SelectSetOperation::doOperation() {
     int64_t to_copy;
     if (!source_a_machine) {
         MachineClass *mc = MachineClass::find(source_a.asString().c_str());
-        if (mc && mc->is_record) {
+        if (mc && RecordClass::isRecord(mc)) {
             if (!dest_machine) {
                 setError("COPY ALL FROM RECORD: destination not found");
             }

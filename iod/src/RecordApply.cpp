@@ -1,6 +1,7 @@
 #include "RecordApply.h"
 #include "MachineClass.h"
 #include "MachineInstance.h"
+#include "RecordClass.h"
 #include "cJSON.h"
 #include "value.h"
 #include <sstream>
@@ -18,21 +19,14 @@ std::string lowercase(const std::string &s) {
     return out;
 }
 
-std::string tableName(const MachineClass *mc) {
-    if (!mc) {
-        return "";
-    }
-    if (!mc->table_name.empty()) {
-        return mc->table_name;
-    }
-    return lowercase(mc->name);
-}
+std::string tableName(const MachineClass *mc) { return RecordClass::tableName(mc); }
 
 bool typeMatches(const MachineClass *mc, const std::string &type) {
     if (!mc || type.empty()) {
         return false;
     }
-    if (mc->table_name == type || lowercase(mc->name) == lowercase(type) || mc->name == type) {
+    std::string table = RecordClass::tableName(mc);
+    if (table == type || lowercase(mc->name) == lowercase(type) || mc->name == type) {
         return true;
     }
     return false;
@@ -66,7 +60,7 @@ bool keyMatches(MachineInstance *m, const MachineClass *mc, cJSON *keys) {
     if (!m || !mc) {
         return false;
     }
-    std::string keycol = mc->keyColumn();
+    std::string keycol = RecordClass::keyColumn(mc);
     if (keycol.empty()) {
         return false;
     }
@@ -84,7 +78,7 @@ static MachineClass *classForType(const std::string &type) {
     std::list<MachineClass *>::const_iterator it = MachineClass::all_machine_classes.begin();
     while (it != MachineClass::all_machine_classes.end()) {
         MachineClass *mc = *it++;
-        if (mc && mc->is_record && typeMatches(mc, type)) {
+        if (mc && RecordClass::isRecord(mc) && typeMatches(mc, type)) {
             return mc;
         }
     }
@@ -109,7 +103,7 @@ static void applyFields(MachineInstance *m, const MachineClass *mc, cJSON *row) 
 // Cache name only (`Customer#1`). Not a MachineClass field; named instances keep
 // the names they were given in the program.
 static std::string instanceName(const MachineClass *mc, cJSON *keys, cJSON *row) {
-    std::string keycol = mc->keyColumn();
+    std::string keycol = RecordClass::keyColumn(mc);
     cJSON *item = 0;
     if (keys) {
         item = cJSON_GetObjectItem(keys, keycol.c_str());

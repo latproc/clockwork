@@ -242,7 +242,7 @@ Parser today (`cwlang.ypp`): `SYMBOL STATEMACHINE` is `Name MACHINE { ... }` and
 Add:
 
 - Lexer token `RECORD` (like `MACHINE` / `FLAG`).
-- `definition_header: SYMBOL RECORD …` creating a `MachineClass` with `is_record = true` (a flag is enough; optional `token_id`). Table name derived from class name.
+- `definition_header: SYMBOL RECORD …` creating a normal `MachineClass`. Schema is **class properties** (`RECORD`, `TABLE`/`VIEW`, `KEY`, `UNIQUE`, `NOT_NULL`), marked private so they are not row columns. Not extra C++ fields on every MACHINE.
 - Instances are **normal** `MachineInstance`s. LIST, EXPORT, HMI, and dependency tracking apply unchanged.
 - **Reject in a RECORD body:** WHEN, RECEIVE, COMMAND, user states, transitions. OPTIONS only (`KEY` / `LOCAL` / `UNIQUE` / `NOT NULL` as agreed).
 - Optional `VIEW "name"` (or `TABLE "name"`) on the class so a RECORD can sit on a join view, not only a base table.
@@ -848,6 +848,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 12. **ZMQ restart:** one dbd context; linger 0; REQ deadlines; recreate on EFSM; `forceFullReconnect` on iod CHANNEL; no `exit` on STARTUP; configurable `dbsvr` endpoint. `dbsvr` linger 0 on REP bind.
 13. **Two Clockworks, same RECORD → same OPTIONS.** After COMMIT, `dbsvr` PUBlishes `{type, keys}` or the row; every dbd that holds that instance applies it. Not poll-until-refresh.
 14. **Clockwork is the language.** No Lua, Python, or other embed. No `for` in handlers. Query batches drain with TAKE FIRST / WAITFOR / COPY PROPERTIES onto a named RECORD. Generic `json AS LIST`, not find_all-as-unlinked-machines.
+15. **RECORD schema is class properties, not MachineClass fields.** `RECORD` / `TABLE` / `VIEW` / `KEY` / `UNIQUE` / `NOT_NULL` on the class (private). Ordinary machines do not carry table or column metadata.
 
 ---
 
@@ -874,8 +875,8 @@ Code review of the RECORD/dbd slice. Bugs are fixed in the same commit as this n
 | --- | --- |
 | `SubscriptionManager` assumes `command_item = num_items - 1` | **Bug.** dbd had `iosh_cmd` then `notify_sub`, so the command slot was the notify socket. Swapped: setup, subscriber, `notify_sub`, **`iosh_cmd` last**. |
 | `RECORD_APPLY` in iosh | Intended as a **dbd helper** to apply a row onto held RECORD OPTIONS (yes: automatic update of Clockwork RECORDs). Command is now `RECORD APPLY` / `RECORD REMOVE` (same style as `MODBUS EXPORT`). Dropped from iosh HELP. Underscore aliases still dispatch. |
-| MachineClass carries keys, `table_name`, column flags | Parse-time **schema**, same idea as FLAG having no user states. `KEY` / `TABLE` / `VIEW` are grammar, not instance OPTIONS. Empty `table_name` on non-RECORD classes is leftover storage, not a database on every MACHINE. Not moved to properties in this pass (would still be class-level). |
-| “instance name” on MachineClass | **Misread.** `RecordApply::instanceName()` builds the cache name `Customer#1`. It is not a MachineClass field. The KEY column is `MachineClass::keyColumn()`. |
+| MachineClass carries keys, `table_name`, column flags | **Removed.** Schema is class properties (`RECORD`, `TABLE`, `VIEW`, `KEY`, `UNIQUE`, `NOT_NULL`), private so they are not columns. `RecordClass` is a helper over those properties. Ordinary MACHINE classes have no table/key fields. |
+| “instance name” on MachineClass | **Misread.** `RecordApply::instanceName()` builds the cache name `Customer#1`. The KEY column is the class property `KEY`. |
 | “machines have database notify operations” | Pre-existing `notifyDependents` / command-clock (`notify_period`, `command`, `notify_phase`). RECORD apply uses `setValue` + deferred property notify. Not a new dbsvr API on MachineInstance. |
 | Linear scan of all machines on apply | **Fixed.** RECORD instances go on `MachineInstance::record_instances` (same pattern as `command_clocks` / `io_modules`). Apply and COPY-from-class walk that list. A `(type,key)` map is later if RECORD count is large. |
 | Give one machine the entire JSON | Matches the drain path (`PUSH ITEMS FROM` / `AS LIST` then COPY PROPERTIES onto a named RECORD). Keep per-column apply for **named** holders (Q6). |

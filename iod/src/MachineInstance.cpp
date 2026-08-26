@@ -20,6 +20,7 @@
 
 #include "MachineInstance.h"
 #include "CallMethodAction.h"
+#include "RecordClass.h"
 #include "Channel.h"
 #include "ControlSystemMachine.h"
 #include "DebugExtra.h"
@@ -4325,7 +4326,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
         registerCommandClockLocked();
         command_clock_cache_valid = false;
     }
-    if (machine_class && machine_class->is_record) {
+    if (machine_class && RecordClass::isRecord(machine_class)) {
         std::unique_lock<std::mutex> lock(global_lists_mutex);
         bool already = false;
         std::list<MachineInstance *>::iterator it = record_instances.begin();

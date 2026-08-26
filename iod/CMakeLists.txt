@@ -430,6 +430,7 @@ set (Clockwork_SRCS
     src/StallTrace.cpp
     src/RateEstimatorInstance.cpp
     src/RecordApply.cpp
+    src/RecordClass.cpp
     src/read_file.c
     src/ResetAction.cpp
     src/ResumeAction.cpp

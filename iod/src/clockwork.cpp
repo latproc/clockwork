@@ -43,6 +43,7 @@
 #include "Logger.h"
 #include "MachineCommandAction.h"
 #include "MachineInstance.h"
+#include "RecordClass.h"
 #include "Message.h"
 #include "MessageLog.h"
 #include "ModbusInterface.h"
@@ -859,10 +860,10 @@ void semantic_analysis() {
             mc->collectTimerPredicates();
         }
         MachineClass::machine_classes[mc->name] = mc;
-        if (mc->is_record) {
-            unsigned keys = mc->keyColumnCount();
+        if (RecordClass::isRecord(mc)) {
+            unsigned keys = RecordClass::keyColumnCount(mc);
             if (keys == 0) {
-                if (mc->is_view) {
+                if (RecordClass::isView(mc)) {
                     std::cerr << "## - Warning: RECORD " << mc->name << " has no KEY OPTION\n";
                 }
                 else {

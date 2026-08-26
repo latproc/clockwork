@@ -5,6 +5,7 @@
 #include "MessageLog.h"
 #include "MessagingInterface.h"
 #include "Expression.h"
+#include "RecordClass.h"
 #include "SetOperationAction.h"
 #include "SortListAction.h"
 #include "ThreadSafeQueue.h"
@@ -25,10 +26,10 @@ int main() {
     Dispatcher::create(queue);
 
     MachineClass *mc = new MachineClass("Customer");
-    mc->is_record = true;
-    mc->table_name = "customer";
+    RecordClass::mark(mc);
+    RecordClass::setTable(mc, "customer");
     mc->setOption("id", Value(static_cast<int64_t>(0)));
-    mc->setColumnFlags("id", MachineClass::COL_KEY);
+    RecordClass::addKey(mc, "id");
     mc->setOption("name", Value("", Value::t_string));
 
     MachineClass *listc = new MachineClass("LIST");
@@ -137,11 +138,10 @@ int main() {
     }
 
     MachineClass *view = new MachineClass("CustomerWithCity");
-    view->is_record = true;
-    view->is_view = true;
-    view->table_name = "customer_with_city";
+    RecordClass::mark(view);
+    RecordClass::setView(view, "customer_with_city");
     view->setOption("id", Value(static_cast<int64_t>(0)));
-    view->setColumnFlags("id", MachineClass::COL_KEY);
+    RecordClass::addKey(view, "id");
     view->setOption("name", Value("", Value::t_string));
     view->setOption("city", Value("", Value::t_string));
     MachineInstance *v1 = MachineInstanceFactory::create("row_a", "CustomerWithCity");

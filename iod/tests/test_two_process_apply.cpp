@@ -6,6 +6,7 @@
 #include "MessagingInterface.h"
 #include "DbNotify.h"
 #include "RecordApply.h"
+#include "RecordClass.h"
 #include "ThreadSafeQueue.h"
 #include "cJSON.h"
 #include "library_globals.cpp"
@@ -33,10 +34,10 @@ static int run_holder(const char *endpoint, const char *outpath) {
     Dispatcher::create(queue);
 
     MachineClass *mc = new MachineClass("Customer");
-    mc->is_record = true;
-    mc->table_name = "customer";
+    RecordClass::mark(mc);
+    RecordClass::setTable(mc, "customer");
     mc->setOption("id", Value(static_cast<int64_t>(0)));
-    mc->setColumnFlags("id", MachineClass::COL_KEY);
+    RecordClass::addKey(mc, "id");
     mc->setOption("name", Value("", Value::t_string));
 
     MachineInstance *cust = MachineInstanceFactory::create("cust", "Customer");
