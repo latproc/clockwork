@@ -40,6 +40,9 @@ nohup.out
 !iod/tests/fixtures/**/*.sql
 *.dat
 
+# Unpublished application / plant notes (not for the Clockwork repo)
+docs/local/
+
 # local configuration (root / iod tree; product sample is etc/iod.conf)
 /iod.conf
 .vscode/
