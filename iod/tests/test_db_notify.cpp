@@ -24,9 +24,16 @@ int main() {
         return 3;
     }
 
+    const char *del = "{\"action\":\"delete\",\"type\":\"customer\",\"keys\":{\"id\":2}}";
+    if (parseDbNotify(del, rows) != 1 || rows[0].action != "delete" ||
+        rows[0].type != "customer" || rows[0].keys_json.find("2") == std::string::npos) {
+        std::cerr << "delete notify parse failed\n";
+        return 4;
+    }
+
     if (parseDbNotify("not json", rows) != 0) {
         std::cerr << "bad json should yield 0\n";
-        return 4;
+        return 5;
     }
     std::cout << "ok\n";
     return 0;

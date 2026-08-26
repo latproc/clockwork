@@ -25,8 +25,9 @@ static int run_iod(const char *endpoint, const char *outpath) {
             continue;
         }
         std::string body(static_cast<char *>(m.data()), m.size());
-        if (body.find("RECORD_APPLY") != std::string::npos &&
-            body.find("Ann") != std::string::npos) {
+        if (body.find("Ann") != std::string::npos &&
+            (body.find("RECORD_APPLY") != std::string::npos ||
+             body.find("APPLY") != std::string::npos)) {
             std::ofstream out(outpath);
             out << "Ann";
         }

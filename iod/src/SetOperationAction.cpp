@@ -134,6 +134,14 @@ Action::Status SetOperationAction::run() {
             status = doOperation();
         }
         else {
+            std::stringstream ss;
+            if (!dest_machine) {
+                ss << "Copy destination not found: " << dest;
+            }
+            else {
+                ss << "Copy destination must be a LIST or REFERENCE, not " << dest_machine->_type;
+            }
+            setError(ss.str());
             status = Failed;
         }
     }
@@ -508,8 +516,8 @@ static int copyFromRecordClass(MachineInstance *owner, MachineInstance *dest_mac
         dest_machine->locals.push_back(Parameter(Value("ITEM")));
         idx = dest_machine->locals.size() - 1;
     }
-    std::list<MachineInstance *>::iterator it = MachineInstance::begin();
-    while (it != MachineInstance::end()) {
+    std::list<MachineInstance *>::iterator it = MachineInstance::begin_records();
+    while (it != MachineInstance::end_records()) {
         MachineInstance *mi = *it++;
         if (!mi || mi->getStateMachine() != mc) {
             continue;
@@ -556,13 +564,24 @@ Action::Status SelectSetOperation::doOperation() {
     int64_t to_copy;
     if (!source_a_machine) {
         MachineClass *mc = MachineClass::find(source_a.asString().c_str());
-        if (mc && mc->is_record && dest_machine && dest_machine->_type == "LIST") {
-            copyFromRecordClass(owner, dest_machine, mc, condition);
-            status = Complete;
+        if (mc && mc->is_record) {
+            if (!dest_machine) {
+                setError("COPY ALL FROM RECORD: destination not found");
+            }
+            else if (dest_machine->_type != "LIST") {
+                setError("COPY ALL FROM RECORD requires a LIST destination");
+            }
+            else {
+                copyFromRecordClass(owner, dest_machine, mc, condition);
+                status = Complete;
+                owner->stop(this);
+                return status;
+            }
+            status = Failed;
             owner->stop(this);
             return status;
         }
-        error_str = "No source machine for copy";
+        setError("No source machine for copy");
         status = Failed;
         owner->stop(this);
         return status;

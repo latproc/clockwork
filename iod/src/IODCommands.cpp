@@ -526,38 +526,46 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
     }
 }
 
+static size_t recordCommandOffset(const std::vector<Value> &params) {
+    if (!params.empty() && params[0].asString() == "RECORD" && params.size() >= 2) {
+        return 2;
+    }
+    return 1;
+}
+
 bool IODCommandRecordApply::run(std::vector<Value> &params) {
-    if (params.size() < 3) {
-        error_str = "Usage: RECORD_APPLY type [keys_json] row_json";
+    const size_t off = recordCommandOffset(params);
+    if (params.size() < off + 2) {
+        error_str = "Usage: RECORD APPLY type [keys_json] row_json";
         return false;
     }
-    std::string type = params[1].asString();
+    std::string type = params[off].asString();
     cJSON *keys = 0;
     cJSON *row = 0;
     bool own_keys = false;
     bool own_row = false;
-    if (params.size() >= 4) {
-        if (params[2].kind == Value::t_json) {
-            keys = params[2].asJSON();
+    if (params.size() >= off + 3) {
+        if (params[off + 1].kind == Value::t_json) {
+            keys = params[off + 1].asJSON();
         }
         else {
-            keys = cJSON_Parse(params[2].asString().c_str());
+            keys = cJSON_Parse(params[off + 1].asString().c_str());
             own_keys = true;
         }
-        if (params[3].kind == Value::t_json) {
-            row = params[3].asJSON();
+        if (params[off + 2].kind == Value::t_json) {
+            row = params[off + 2].asJSON();
         }
         else {
-            row = cJSON_Parse(params[3].asString().c_str());
+            row = cJSON_Parse(params[off + 2].asString().c_str());
             own_row = true;
         }
     }
     else {
-        if (params[2].kind == Value::t_json) {
-            row = params[2].asJSON();
+        if (params[off + 1].kind == Value::t_json) {
+            row = params[off + 1].asJSON();
         }
         else {
-            row = cJSON_Parse(params[2].asString().c_str());
+            row = cJSON_Parse(params[off + 1].asString().c_str());
             own_row = true;
         }
     }
@@ -565,7 +573,7 @@ bool IODCommandRecordApply::run(std::vector<Value> &params) {
         if (own_keys) {
             cJSON_Delete(keys);
         }
-        error_str = "RECORD_APPLY: invalid row JSON";
+        error_str = "RECORD APPLY: invalid row JSON";
         return false;
     }
     int n = RecordApply::applyRow(type, keys, row);
@@ -574,6 +582,36 @@ bool IODCommandRecordApply::run(std::vector<Value> &params) {
     }
     if (own_row) {
         cJSON_Delete(row);
+    }
+    std::ostringstream ss;
+    ss << "OK " << n;
+    result_str = ss.str();
+    return n >= 0;
+}
+
+bool IODCommandRecordRemove::run(std::vector<Value> &params) {
+    const size_t off = recordCommandOffset(params);
+    if (params.size() < off + 2) {
+        error_str = "Usage: RECORD REMOVE type keys_json";
+        return false;
+    }
+    std::string type = params[off].asString();
+    cJSON *keys = 0;
+    bool own_keys = false;
+    if (params[off + 1].kind == Value::t_json) {
+        keys = params[off + 1].asJSON();
+    }
+    else {
+        keys = cJSON_Parse(params[off + 1].asString().c_str());
+        own_keys = true;
+    }
+    if (!keys) {
+        error_str = "RECORD REMOVE: invalid keys JSON";
+        return false;
+    }
+    int n = RecordApply::removeRow(type, keys);
+    if (own_keys) {
+        cJSON_Delete(keys);
     }
     std::ostringstream ss;
     ss << "OK " << n;
@@ -1295,7 +1333,6 @@ bool IODCommandHelp::run(std::vector<Value> &params) {
        << "MODBUS group address new_value\n"
        << "MODBUS REFRESH\n"
        << "PROPERTY machine_name property new_value\n"
-       << "RECORD_APPLY type [keys_json] row_json\n"
        << "QUIT\n"
        << "RESUME machine_name\n"
        << "SEND command\n"

@@ -20,4 +20,8 @@ bool keyMatches(MachineInstance *m, const MachineClass *mc, cJSON *keys);
 // Does not persist. Returns the number of instances written.
 int applyRow(const std::string &type, cJSON *keys, cJSON *row);
 
+// Delete notify: drop Class#key cache instances that match, unlink them from
+// LISTs. Named (program-declared) instances are left in place.
+int removeRow(const std::string &type, cJSON *keys);
+
 } // namespace RecordApply

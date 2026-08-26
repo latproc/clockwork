@@ -444,8 +444,13 @@ IODCommand *parseCommandString(const char *data) {
     else if (ds == "PROPERTY") {
         command = new IODCommandProperty(data);
     }
-    else if (ds == "RECORD_APPLY") {
+    else if (ds == "RECORD_APPLY" ||
+             (ds == "RECORD" && count >= 2 && params[1].asString() == "APPLY")) {
         command = new IODCommandRecordApply;
+    }
+    else if (ds == "RECORD_REMOVE" ||
+             (ds == "RECORD" && count >= 2 && params[1].asString() == "REMOVE")) {
+        command = new IODCommandRecordRemove;
     }
     else if (ds == "PERSISTENT") {
         command = new IODCommandPersistentState;

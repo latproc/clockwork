@@ -121,6 +121,21 @@ int main() {
         return 9;
     }
 
+    SetOperationActionTemplate bad_dest(-1, Value("Customer"), SymbolTable::Null, Value("cust_a"),
+                                        Value(""), soSelect, 0, false);
+    Action *bad_act = bad_dest.factory(ed);
+    if ((*bad_act)() != Action::Failed) {
+        std::cerr << "COPY ALL FROM RECORD to a non-LIST should fail\n";
+        delete bad_act;
+        return 12;
+    }
+    std::string berr = bad_act->error();
+    delete bad_act;
+    if (berr.find("LIST") == std::string::npos) {
+        std::cerr << "expected LIST destination error, got: " << berr << "\n";
+        return 13;
+    }
+
     MachineClass *view = new MachineClass("CustomerWithCity");
     view->is_record = true;
     view->is_view = true;

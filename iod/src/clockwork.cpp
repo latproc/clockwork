@@ -139,7 +139,7 @@ void usage(int argc, char const *argv[]) {
         << "General:\n"
         << "  -h, --help                 Show this help and exit\n"
         << "  -v                         Verbose logging\n"
-        << "  -t                         Parse/check only (no runtime)\n"
+        << "  -t                         Parse and semantic-check, write modbus map, then exit\n"
         << "  --parse-only               Parse and semantic-check, then exit (no runtime)\n"
         << "  -l FILE                    Log file (use - for stdout)\n"
         << "  -i FILE                    Persistent store\n"
@@ -1252,7 +1252,6 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
         }
         else if (strcmp(argv[i], "--parse-only") == 0) {
             set_parse_only(1);
-            set_test_only(1);
         }
         else if (strcmp(argv[i], "-l") == 0 && i < argc - 1) {
             logfilename = argv[++i];

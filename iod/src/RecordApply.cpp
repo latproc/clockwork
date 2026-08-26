@@ -4,6 +4,7 @@
 #include "cJSON.h"
 #include "value.h"
 #include <sstream>
+#include <vector>
 
 namespace RecordApply {
 
@@ -105,6 +106,8 @@ static void applyFields(MachineInstance *m, const MachineClass *mc, cJSON *row) 
     m->endDeferredPropertyNotify();
 }
 
+// Cache name only (`Customer#1`). Not a MachineClass field; named instances keep
+// the names they were given in the program.
 static std::string instanceName(const MachineClass *mc, cJSON *keys, cJSON *row) {
     std::string keycol = mc->keyColumn();
     cJSON *item = 0;
@@ -128,8 +131,8 @@ int applyRow(const std::string &type, cJSON *keys, cJSON *row) {
         effective_keys = row;
     }
     int n = 0;
-    std::list<MachineInstance *>::iterator it = MachineInstance::begin();
-    while (it != MachineInstance::end()) {
+    std::list<MachineInstance *>::iterator it = MachineInstance::begin_records();
+    while (it != MachineInstance::end_records()) {
         MachineInstance *m = *it++;
         if (!m || !m->getStateMachine() || m->getStateMachine() != mc) {
             continue;
@@ -154,6 +157,69 @@ int applyRow(const std::string &type, cJSON *keys, cJSON *row) {
             applyFields(m, mc, row);
             ++n;
         }
+    }
+    return n;
+}
+
+static bool isCacheInstance(MachineInstance *m, const MachineClass *mc) {
+    if (!m || !mc) {
+        return false;
+    }
+    const std::string prefix = mc->name + "#";
+    const std::string &nm = m->getName();
+    return nm.size() > prefix.size() && nm.compare(0, prefix.size(), prefix) == 0;
+}
+
+static void unlinkFromLists(MachineInstance *target) {
+    if (!target) {
+        return;
+    }
+    std::list<MachineInstance *>::iterator it = MachineInstance::begin();
+    while (it != MachineInstance::end()) {
+        MachineInstance *m = *it++;
+        if (!m || (m->_type != "LIST" && m->_type != "REFERENCE")) {
+            continue;
+        }
+        size_t i = m->parameters.size();
+        while (i > 0) {
+            --i;
+            if (m->parameters[i].machine == target) {
+                if (MachineInstance::polling_delay) {
+                    m->removeParameter(i);
+                }
+                else {
+                    m->parameters.erase(m->parameters.begin() + i);
+                }
+            }
+        }
+    }
+}
+
+int removeRow(const std::string &type, cJSON *keys) {
+    MachineClass *mc = classForType(type);
+    if (!mc || !keys) {
+        return 0;
+    }
+    std::vector<MachineInstance *> hit;
+    std::list<MachineInstance *>::iterator it = MachineInstance::begin_records();
+    while (it != MachineInstance::end_records()) {
+        MachineInstance *m = *it++;
+        if (!m || m->getStateMachine() != mc) {
+            continue;
+        }
+        if (keyMatches(m, mc, keys)) {
+            hit.push_back(m);
+        }
+    }
+    int n = 0;
+    for (size_t i = 0; i < hit.size(); ++i) {
+        MachineInstance *m = hit[i];
+        unlinkFromLists(m);
+        if (isCacheInstance(m, mc)) {
+            machines.erase(m->getName());
+            m->unregisterRecord();
+        }
+        ++n;
     }
     return n;
 }

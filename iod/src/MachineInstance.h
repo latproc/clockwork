@@ -295,6 +295,11 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     static MachineInstance *find(const char *name);
     static std::list<MachineInstance *>::iterator begin() { return all_machines.begin(); }
     static std::list<MachineInstance *>::iterator end() { return all_machines.end(); }
+    static std::list<MachineInstance *>::iterator begin_records() {
+        return record_instances.begin();
+    }
+    static std::list<MachineInstance *>::iterator end_records() { return record_instances.end(); }
+    void unregisterRecord();
 
     static std::list<MachineInstance *>::iterator io_modules_begin() { return io_modules.begin(); }
     static std::list<MachineInstance *>::iterator io_modules_end() { return io_modules.end(); }
@@ -498,6 +503,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     MachineInstance &operator=(const MachineInstance &orig);
     MachineInstance(const MachineInstance &other);
     static std::list<MachineInstance *> all_machines;
+    static std::list<MachineInstance *> record_instances;
     static std::list<MachineInstance *> command_clocks;
     void registerCommandClockLocked();
     void refreshCommandClockCache();

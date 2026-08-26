@@ -93,12 +93,13 @@ int main() {
 
     IODCommandRecordApply cmd;
     std::vector<Value> params;
-    params.push_back(Value("RECORD_APPLY", Value::t_symbol));
+    params.push_back(Value("RECORD", Value::t_symbol));
+    params.push_back(Value("APPLY", Value::t_symbol));
     params.push_back(Value("customer", Value::t_string));
     params.push_back(Value("{\"id\":1}", Value::t_string));
     params.push_back(Value("{\"id\":1,\"name\":\"Ned\"}", Value::t_string));
     if (cmd(params) != IODCommand::Success) {
-        std::cerr << "RECORD_APPLY command failed: " << cmd.error() << "\n";
+        std::cerr << "RECORD APPLY command failed: " << cmd.error() << "\n";
         return 5;
     }
     if (cust->getValue("name").asString() != "Ned") {
@@ -158,6 +159,33 @@ int main() {
         return 11;
     }
     delete fill_act;
+
+    cJSON *delkeys = cJSON_Parse("{\"id\":2}");
+    n = RecordApply::removeRow("customer", delkeys);
+    cJSON_Delete(delkeys);
+    if (n < 1 || MachineInstance::find("Customer#2")) {
+        std::cerr << "removeRow did not drop Customer#2 cache n=" << n << "\n";
+        return 12;
+    }
+    if (!MachineInstance::find("cust")) {
+        std::cerr << "removeRow must not destroy named instances\n";
+        return 13;
+    }
+
+    IODCommandRecordRemove rmc;
+    std::vector<Value> rmparams;
+    rmparams.push_back(Value("RECORD", Value::t_symbol));
+    rmparams.push_back(Value("REMOVE", Value::t_symbol));
+    rmparams.push_back(Value("item", Value::t_string));
+    rmparams.push_back(Value("{\"id\":1}", Value::t_string));
+    if (rmc(rmparams) != IODCommand::Success) {
+        std::cerr << "RECORD REMOVE command failed: " << rmc.error() << "\n";
+        return 14;
+    }
+    if (MachineInstance::find("Item#1")) {
+        std::cerr << "RECORD REMOVE left Item#1 in the map\n";
+        return 15;
+    }
 
     std::cout << "ok\n";
     return 0;

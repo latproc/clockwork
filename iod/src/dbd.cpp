@@ -184,6 +184,22 @@ static void apply_rows_to_records(cJSON *request, cJSON *reply) {
         return;
     }
     cJSON *keys = cJSON_GetObjectItem(request, "keys");
+    cJSON *action_json = cJSON_GetObjectItem(request, "action");
+    const char *action =
+        (action_json && action_json->type == cJSON_String) ? action_json->valuestring : "";
+    if (action && strcmp(action, "delete") == 0) {
+        char *keys_s = keys ? cJSON_PrintUnformatted(keys) : strdup("{}");
+        if (keys_s) {
+            auto cmd = MessageEncoding::encodeCommand("RECORD",
+                                                      Value("REMOVE", Value::t_string),
+                                                      Value(type, Value::t_string),
+                                                      Value(keys_s, Value::t_string));
+            std::string reply_s;
+            sendIodCommand(cmd, reply_s);
+        }
+        free(keys_s);
+        return;
+    }
     auto send_apply = [&](cJSON *row) {
         if (!row) {
             return;
@@ -191,7 +207,8 @@ static void apply_rows_to_records(cJSON *request, cJSON *reply) {
         char *keys_s = keys ? cJSON_PrintUnformatted(keys) : strdup("{}");
         char *row_s = cJSON_PrintUnformatted(row);
         if (keys_s && row_s) {
-            auto cmd = MessageEncoding::encodeCommand("RECORD_APPLY",
+            auto cmd = MessageEncoding::encodeCommand("RECORD",
+                                                      Value("APPLY", Value::t_string),
                                                       Value(type, Value::t_string),
                                                       Value(keys_s, Value::t_string),
                                                       Value(row_s, Value::t_string));
@@ -217,10 +234,20 @@ static void apply_notify_payload(const std::string &payload) {
     std::vector<DbNotifyRow> rows;
     parseDbNotify(payload, rows);
     for (size_t i = 0; i < rows.size(); ++i) {
-        auto cmd = MessageEncoding::encodeCommand("RECORD_APPLY",
-                                                  Value(rows[i].type, Value::t_string),
-                                                  Value(rows[i].keys_json, Value::t_string),
-                                                  Value(rows[i].row_json, Value::t_string));
+        std::string cmd;
+        if (rows[i].action == "delete") {
+            cmd = MessageEncoding::encodeCommand("RECORD",
+                                                 Value("REMOVE", Value::t_string),
+                                                 Value(rows[i].type, Value::t_string),
+                                                 Value(rows[i].keys_json, Value::t_string));
+        }
+        else {
+            cmd = MessageEncoding::encodeCommand("RECORD",
+                                                 Value("APPLY", Value::t_string),
+                                                 Value(rows[i].type, Value::t_string),
+                                                 Value(rows[i].keys_json, Value::t_string),
+                                                 Value(rows[i].row_json, Value::t_string));
+        }
         std::string reply_s;
         sendIodCommand(cmd, reply_s);
     }
@@ -393,11 +420,14 @@ int main(int argc, const char *argv[]) {
         int exception_count = 0;
         int error_count = 0;
         while (program_state != s_finished) {
+            /* SubscriptionManager::checkConnections assumes the command
+               socket is last (command_item = num_items - 1). Do not put
+               notify_sub after iosh_cmd. */
             zmq::pollitem_t items[] = {
                 {(void *)subscription_manager.setup(), 0, ZMQ_POLLIN, 0},
                 {(void *)subscription_manager.subscriber(), 0, ZMQ_POLLIN, 0},
-                {iosh_cmd, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0},
                 {(void *)notify_sub, 0, ZMQ_POLLIN, 0},
+                {iosh_cmd, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0},
             };
             bool channel_up = false;
             try {
@@ -443,7 +473,7 @@ int main(int argc, const char *argv[]) {
                 }
                 catch (const zmq::error_t &) {
                 }
-                if ((channel_up && (items[3].revents & ZMQ_POLLIN)) ||
+                if ((channel_up && (items[2].revents & ZMQ_POLLIN)) ||
                     (nitem[0].revents & ZMQ_POLLIN)) {
                     zmq::message_t note;
                     while (notify_sub.recv(&note, ZMQ_DONTWAIT)) {

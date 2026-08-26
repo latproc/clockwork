@@ -302,6 +302,7 @@ std::map<std::string, MachineInstance *> machines;
 // All machine instances automatically join and leave this list.
 // During the poll process, all machines in this list have their idle() called.
 std::list<MachineInstance *> MachineInstance::all_machines;
+std::list<MachineInstance *> MachineInstance::record_instances;
 std::list<MachineInstance *> MachineInstance::command_clocks;
 std::list<MachineInstance *> MachineInstance::io_modules;
 std::list<MachineInstance *> MachineInstance::automatic_machines;
@@ -949,9 +950,16 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
     }
 }
 
+void MachineInstance::unregisterRecord() {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
+    record_instances.remove(this);
+    all_machines.remove(this);
+}
+
 MachineInstance::~MachineInstance() {
     std::unique_lock<std::mutex> lock(global_lists_mutex);
     all_machines.remove(this);
+    record_instances.remove(this);
     command_clocks.remove(this);
     automatic_machines.remove(this);
     active_machines.remove(this);
@@ -981,6 +989,7 @@ void MachineInstance::remove_pending() {
         {
             std::unique_lock<std::mutex> lock(global_lists_mutex);
             all_machines.remove(m);
+            record_instances.remove(m);
             command_clocks.remove(m);
             automatic_machines.remove(m);
             active_machines.remove(m);
@@ -4085,7 +4094,7 @@ void MachineInstance::updateLastEvaluationTime() {
         if (state_machine && state_machine->polling_delay) {
             next_poll = last_state_evaluation_time + state_machine->polling_delay;
         }
-        else {
+        else if (MachineInstance::polling_delay) {
             next_poll = last_state_evaluation_time + MachineInstance::polling_delay->iValue;
         }
     }
@@ -4315,6 +4324,20 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
         std::unique_lock<std::mutex> lock(global_lists_mutex);
         registerCommandClockLocked();
         command_clock_cache_valid = false;
+    }
+    if (machine_class && machine_class->is_record) {
+        std::unique_lock<std::mutex> lock(global_lists_mutex);
+        bool already = false;
+        std::list<MachineInstance *>::iterator it = record_instances.begin();
+        while (it != record_instances.end()) {
+            if (*it++ == this) {
+                already = true;
+                break;
+            }
+        }
+        if (!already) {
+            record_instances.push_back(this);
+        }
     }
     if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states &&
         (machine_class->stable_states.size() || machine_class->name == "LIST" ||

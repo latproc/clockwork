@@ -637,6 +637,7 @@ int main(int argc, char const *argv[]) {
         return load_result;
     }
     if (parse_only()) {
+        /* loadConfig already parsed and semantic-checked. No runtime, no modbus map. */
         return 0;
     }
 
