@@ -100,7 +100,7 @@ Two Clockworks that both hold a RECORD should see the same OPTIONS after a commi
 
 ### Goals
 
-1. **`RECORD` class** — MACHINE with no user handlers or states. OPTIONS are columns of a table **or a view**. Parser (lex/bison) enforces the limitation. Existing OPTION-change logic updates dependents.
+1. **`RECORD` class** — MACHINE with no user WHEN/COMMAND. OPTIONS are columns of a table **or a view**. Parser (lex/bison) enforces the limitation. Existing OPTION-change logic updates dependents. System states `empty`/`dirty`/`clean` are set by iod/dbd (proposal).
 2. **Row OPTIONS stay in sync** on Clockworks that hold the row, so a write on process A is visible on process B without a follow-up GET.
 3. **JSON in Clockwork; backend ops in datastore.** Extend the existing `action`/`type`/`keys`/`fields` protocol (joins, views, filters). Named views in migrations stand in for joined query shapes.
 4. **Alembic-like schema management** for tables *and* views: versioned upgrade/downgrade, revision table, CLI, no silent prod auto-mutate.
@@ -221,7 +221,7 @@ Add:
 - `KEY` is already a lexer token (CHANNEL). Add `UNIQUE`, `VIEW`, `TABLE`. Do **not** add a `NULL` keyword: `OPTION x NULL` is the symbol `"NULL"` folded to `Value::t_empty` (`tests/null.cw`). Parse `NOT NULL` as `NOT` + symbol `"NULL"`.
 - Prefer a separate `record_body` production (OPTIONS only). `COMMAND` inside RECORD is a syntax error.
 - `KEY`/`UNIQUE`/`NOT NULL` on a non-RECORD OPTION is an error.
-- Disable automatic state changes (like FLAG). Builtin `INIT` stays; no user `on`/`off`.
+- Disable automatic state changes (like FLAG). Builtin `INIT` stays; no user `on`/`off`. RECORD still has **system states** `empty`, `dirty`, `clean` (below).
 
 Grammar:
 
@@ -234,11 +234,14 @@ record_header_tail: /* empty */ | VIEW STRINGVAL | TABLE STRINGVAL
 record_body:
   OPTION option_settings ';'
 | LOCAL OPTION local_option_settings ';'
+| PERSISTENT OPTION persistent_option_settings ';'
 
 option_setting:
   SYMBOL value
 | SYMBOL value option_annots   # KEY | UNIQUE | NOT NULL
 ```
+
+`PERSISTENT` and `LOCAL` are mutually exclusive (parse error). `KEY` / `UNIQUE` / `NOT NULL` belong on a bare `OPTION` (database column), not on `PERSISTENT OPTION` or `LOCAL OPTION`.
 
 Clockwork fixture (generic):
 
@@ -248,12 +251,23 @@ Customer RECORD {
     OPTION name "";
     OPTION email "";
     OPTION age 0;
-    LOCAL OPTION dirty false;
 }
 cust Customer;
 ```
 
-Persist stays the proven path until a later comment specifies builtins: INTERFACE + JSON templates + `SEND … TO DATABASE_CHANNEL`. Logic that reacts to the row lives on a **MACHINE** that depends on the RECORD:
+Looking at `cust` from outside, its Clockwork state is **`empty`**, **`dirty`**, or **`clean`**. Those are **not** WHEN clauses in the RECORD body. iod/dbd set them, the same way CHANNEL sets `DISCONNECTED` / `CONNECTED` / `ACTIVE` and EtherCAT MODULE / `ETHERCAT_LINKSTATUS` set `UP` / `DOWN` (`disableAutomaticStateChanges`; C++ `setState`). The author does not write `dirty WHEN …`.
+
+| State | Who sets it | Meaning |
+| --- | --- | --- |
+| `empty` | runtime (declare, `RECORD REMOVE`, clear) | no row bound; OPTIONS are class defaults |
+| `dirty` | runtime on a local column assign | OPTIONS changed here; not COMMITted |
+| `clean` | runtime after APPLY / successful insert-or-update reply | OPTIONS match the last dbsvr row |
+
+`LOCAL OPTION` on a RECORD is still allowed for ephemeral flags the author needs, but the lifecycle is the **state**, not a `state` OPTION. Do not put `COMMAND save` or `dirty WHEN SELF IS changed` in the RECORD body.
+
+`Customer` is the Clockwork **class**. Datastore JSON `type` is the **table or view name** (default lowercase class, here `customer`; override with `TABLE "…"` / `VIEW "…"`). Do not store that name on an ordinary OPTION — OPTIONS are columns, and `OPTION type "piston"` is already a discriminator in existing programs.
+
+Persist stays the proven path until a later comment specifies builtins: INTERFACE + JSON templates + `SEND … TO DATABASE_CHANNEL`. Logic that reacts to the row lives on a **MACHINE** that depends on the RECORD, **or** on a MACHINE that *is* the row (next section):
 
 ```
 CustomerEditor MACHINE cust {
@@ -266,27 +280,35 @@ CustomerEditor MACHINE cust {
 }
 ```
 
-If save/load later become builtins, follow FLAG: FLAG has `turnOn`/`turnOff` as class transitions, not user WHEN. Do not put `COMMAND save { SAVE SELF }` or `dirty WHEN SELF IS changed` in the RECORD body.
+If save/load later become builtins, follow FLAG: FLAG has `turnOn`/`turnOff` as class transitions, not user WHEN.
 
-#### MACHINE OVER RECORD (proposal)
+#### MACHINE bound to a table (proposal)
 
-Some programs already treat **one MACHINE** as both the row (OPTIONS) and the active object (WHEN, COMMAND, EXPORT, parameters). Composition (`Editor MACHINE cust`) is two instances: HMI and WHEN sit on the editor; `RECORD APPLY` hits `cust`; the author copies or always reads `cust.age`. That is still valid.
+A MACHINE can **look like a RECORD** (same KEY, same column OPTIONS, same APPLY/COMMIT) and still have **author WHEN / COMMAND** (`Idle` / `InCycle`, …).
 
-**OVER** is for when the existing machine *is* the row. One instance. The RECORD class is the table / template (column OPTIONS). The MACHINE does **not** re-list those OPTIONS; it names which RECORD to load. At parse/load, column OPTIONS are taken from that RECORD class. The MACHINE body adds states, COMMAND, EXPORT, LOCAL, and extra OPTIONS (not columns).
+RECORD states are **passive** (runtime owns the state slot). MACHINE states are **active** (WHEN owns the state slot). The runtime therefore **cannot** `setState(empty|dirty|clean)` on that MACHINE without fighting WHEN. The row lifecycle on a MACHINE is a **`LOCAL OPTION state`** string; the Clockwork STATE stays the author's.
+
+Do **not** use `OPTION type "Customer"` for the relation name (`type` is a common column/discriminator; `"Customer"` is the class, not the JSON `type`). Bind with a class property `TABLE "…"` or `VIEW "…"`, same as RECORD. List every column the instance should hold. APPLY is a **projection**: set OPTIONS that exist on the machine; ignore extra fields in the row.
 
 ```
-Customer RECORD {
+Customer RECORD TABLE "customer" {
     OPTION id 0 KEY;
     OPTION name "";
+    OPTION email "";
     OPTION age 0;
 }
 
-CustomerPanel MACHINE OVER Customer {
+CustomerPanel MACHINE TABLE "customer" {
+    OPTION id 0 KEY;
+    OPTION name "";
+    OPTION age 0;                 # projection — email is on the table, not here
+    LOCAL OPTION state "empty";   # row lifecycle; Clockwork STATE is idle/active
+    LOCAL OPTION tmp 0;           # logic only; not a column, not APPLY, not persist.dat
+    OPTION note "";               # extra OPTION: not a column unless the table has it
+
     EXPORT RW name, age;
     EXPORT STATES idle, active;
     EXPORT COMMANDS clear;
-    LOCAL OPTION tmp 0;
-    OPTION note "";
 
     active WHEN age > 0;
     idle DEFAULT;
@@ -297,45 +319,189 @@ CustomerPanel MACHINE OVER Customer {
 cust CustomerPanel (id: 1);
 ```
 
-`age` is on `Customer`, not redeclared on `CustomerPanel`. `RECORD APPLY` type `customer` writes this instance. WHEN and EXPORT see the same OPTIONS. `COPY ALL FROM Customer` includes `cust`. JSON `type` is the RECORD class (`customer`), not the skin name. Persist stays explicit (INTERFACE). `OPTION PERSISTENT` is persist.dat and is not a column.
+JSON `type` is `customer`. `RECORD APPLY` matches `(type, key)` onto this instance. WHEN and EXPORT sit on `cust` itself. Bare `x Customer;` remains legal for data-only rows.
 
-Bare `x Customer;` remains legal for data-only rows. RECORD itself still forbids WHEN/COMMAND/states. Logic stays on the MACHINE; the instance wears both.
+A RECORD class is still the place for **canonical schema** (`cw-scaffold`, migrations). It is **not** required for the bind: any MACHINE with `TABLE`/`VIEW` + `OPTION … KEY` is a row. Two machines may bind the same `(type, key)` (two windows on one row).
 
-**How `cust` gets its row.** Declaring `cust CustomerPanel (id: 1)` does **not** read the database. OPTIONS start at class defaults. A row arrives only by an explicit find (INTERFACE `find` / `load`, or `QUERY`) then `RECORD APPLY` (or `COPY PROPERTIES` from a LIST member). Same as a bare RECORD. Two patterns:
+**Fill** is the same as a RECORD. Declaring `cust CustomerPanel (id: 1)` does **not** read the database. OPTIONS start at class defaults; `state` is `empty`. A row arrives only by an explicit find (INTERFACE `find` / `load`, or `QUERY`) then `RECORD APPLY` (or `COPY PROPERTIES` from a LIST member). Two patterns:
 
-1. **KEY known in the program** — `cust CustomerPanel (id: 1)`. INTERFACE `find` with that KEY. `RECORD APPLY` writes `cust`. The instance name is the slot; the KEY is static.
+1. **KEY known in the program** — `cust CustomerPanel (id: 1)`. INTERFACE `find` with that KEY. `RECORD APPLY` writes `cust` and sets `state` to `clean`.
+2. **Slot, KEY from a query** — `slot CustomerPanel;`. A **loader MACHINE** owns a static selector (e.g. `OPTION city "Perth"`), hydrates (`SEND` find so APPLY fills held rows), `COPY ALL FROM Customer TO occupancy WHERE … city`, then binds: SIZE 0 → `clear` on `slot` (`state` `empty`); SIZE ≥ 1 → `COPY PROPERTIES` / APPLY onto `slot` (`state` `clean`). Notify: loader `load`s again and rebinds.
 
-2. **Slot, KEY from a query** — `slot CustomerPanel;` (no KEY yet). A **loader MACHINE** owns a static selector (e.g. `OPTION city "Perth"`), hydrates (`SEND` find so APPLY fills held rows), `COPY ALL FROM Customer TO occupancy WHERE … city`, then binds: SIZE 0 → `clear` on `slot`; SIZE ≥ 1 → `COPY PROPERTIES` from the pick onto `slot` (or APPLY onto `slot`). `slot` does not know “I am the Perth row”; the loader does. Notify: loader `load`s again and rebinds.
+`QUERY` / INTERFACE `load` are SEND; the scan cannot wait for `dbsvr`. The loader uses its own WHEN / `WAITFOR` for “hydrate done” then bind. Do not treat `COPY ALL FROM Customer` as a database fetch.
 
-`QUERY` / INTERFACE `load` are SEND; the scan cannot wait for `dbsvr`. The loader uses states / `WAITFOR` for “hydrate done” then bind. Do not treat `COPY ALL FROM Customer` as a database fetch.
+Composition (`Editor MACHINE cust`) is still valid: two instances; APPLY hits `cust`; HMI/WHEN sit on the editor. Table-bound MACHINE binds onto `slot` itself.
 
-Composition without OVER is the same bind, onto `slot.row` if `row` is a RECORD parameter. OVER binds onto `slot` itself (WHEN/EXPORT live there).
+**Do not `COPY PROPERTIES` of row OPTIONS from one slot to the next** (prev-exit → enter → exit). That is a second copy of the row in memory; the table never moved. Two slots that should show the same row both **bind** to it (same KEY / same APPLY). A real move updates a column the query uses (e.g. `city` / `station`) with INTERFACE `update`, then **each** loader `load`s and rebinds. Cycle-only OPTIONS (`LOCAL`, timers, maps that are not columns) stay on the MACHINE and are not copied as identity.
 
-**Do not `COPY PROPERTIES` of row OPTIONS from one slot to the next** (prev-exit → enter → exit). That is a second copy of the row in memory; the table never moved. Two slots that should show the same row both **bind** to it (same KEY / same APPLY). A real move updates a column the query uses (e.g. `city` / `station`) with INTERFACE `update`, then **each** loader `load`s and rebinds. Intra-machine enter and exit that are the same row: bind both slots to that one RECORD, do not copy fields between them. Cycle-only OPTIONS (timers, maps that are not columns) can stay on the MACHINE and are not copied as identity.
+**EXPORT must be checked at load** (`loadConfig` / `--parse-only`). Unknown OPTION / STATE / COMMAND is an **error**. `EXPORT` of a `LOCAL OPTION` is a **warning** (not a row column). Size/type mismatch is a warning.
 
-**EXPORT must be checked at load** (`loadConfig` / `--parse-only`), not left for a live HMI/modbus miss. Today `EXPORT` only records names; it does not test that the OPTION, STATE, or COMMAND exists. OVER makes that worse: column names are not written on the MACHINE, so a typo is easy.
+Not implemented.
 
-After RECORD OPTIONS are copied onto the MACHINE class:
+#### MACHINE OVER RECORD (earlier proposal)
 
-| Clause | Error (fail load) | Warning |
-| --- | --- | --- |
-| `EXPORT … name` | `name` is not an OPTION on the RECORD and not an OPTION on the MACHINE | `name` is `LOCAL` (not a row column; odd to export) |
-| `EXPORT … size name` | (same unknown name) | Clockwork type vs export size look wrong (e.g. `32BIT` on a string OPTION) |
-| `EXPORT STATES name` | `name` is not a state on this MACHINE | |
-| `EXPORT COMMANDS name` | `name` is not a COMMAND on this MACHINE | |
+Kept as an alternative: the MACHINE **names** a RECORD class and does **not** re-list column OPTIONS; those are copied from the RECORD at load. Body is WHEN, COMMAND, EXPORT, LOCAL, extra non-column OPTIONS. Fill, bind, and “do not COPY slot-to-slot” are the same as above.
 
-Unknown EXPORT is an **error**, same class as a table RECORD with no KEY. A runtime warn after iod is up is too late for panels. Optional extra: if a mapped export is read/written and the property is still missing, log once — the load check is the real gate.
+```
+CustomerPanel MACHINE OVER Customer {
+    EXPORT RW name, age;
+    LOCAL OPTION tmp 0;
+    active WHEN age > 0;
+    idle DEFAULT;
+}
+```
 
-Syntax (`OVER` vs `INCLUDE RECORD` vs other) and “at most one OVER class per RECORD” are open. Not implemented.
+OVER inherits every column, so the MACHINE cannot project a subset (the table-bound listing can). OVER also makes EXPORT typos easier because column names are not written on the MACHINE. Syntax (`OVER` vs `INCLUDE RECORD`) and “at most one OVER class per RECORD” are open. Not implemented.
+
+#### Using the examples
+
+`CustomerINTERFACE` is `cw-scaffold` output. `QUERY` / INTERFACE are SEND.
+
+`WAITFOR` has **no timeout** (`WaitForAction::checkComplete` stays `Running` until the predicate is true). A silent dbd/`dbsvr` miss never unblocks it. `ABORT`/`RETURN` later in the same COMMAND do not run while WAITFOR is blocked. `CALL … ON TIMEOUT msg` is parsed (`tests/call.lpc`) but `CallMethodAction` does not schedule a timer — the source comment is “hangs forever”; `timeout_msg` only fires if the CALL **Fails**. `ON TIMEOUT` / `MachineCommand::timeout` / `timeout_trigger` are unused. `tests/abort.cw` is marked known-fail.
+
+The pattern that **is** written and tested is WHEN + TIMER, then DISABLE (see `tests/arith.cw`, `tests/unit/command_guards.cw`, `tests/test_web_request.cw`):
+
+```
+CustomerEditor MACHINE cust, db {
+    OPTION timeout 5000;
+    missing WHEN cust IS empty;
+    unsaved WHEN cust IS dirty;
+    ready WHEN cust IS clean;
+    error WHEN SELF IS waiting AND TIMER >= timeout;
+    waiting DEFAULT;
+
+    COMMAND load { CALL find ON db; }          # no WAITFOR; ready WHEN fires on APPLY
+    COMMAND abort { DISABLE SELF; ENABLE SELF; }
+    ENTER error { CALL abort ON SELF; }
+}
+```
+
+Ask Martin whether WAITFOR should grow a timeout, or whether RECORD examples should stay on WHEN/TIMER. Below still uses WAITFOR as in his drain sketch.
+
+```
+# --- named RECORD (passive states empty/dirty/clean) ---
+cust Customer (id: 1);
+customers LIST;
+db CustomerINTERFACE cust, customers;
+
+CustomerEditor MACHINE cust, db {
+    missing WHEN cust IS empty;
+    unsaved WHEN cust IS dirty;
+    ready WHEN cust IS clean;
+    waiting DEFAULT;
+
+    COMMAND load {
+        CALL find ON db;
+        WAITFOR cust IS clean;
+    }
+    COMMAND save {
+        CALL update ON db;
+        WAITFOR cust IS clean;
+    }
+    COMMAND rename {
+        cust.name := "Ann";     # local; cust → dirty
+        CALL update ON db;      # persist; APPLY → clean
+    }
+    COMMAND make {
+        cust.name := "Ann";
+        cust.email := "ann@example.com";
+        cust.age := 20;
+        CALL create ON db;      # insert
+        WAITFOR cust IS clean;
+    }
+}
+ed CustomerEditor cust, db;
+
+
+# --- same row on a MACHINE (active WHEN; lifecycle is panel.state) ---
+panel CustomerPanel (id: 1);
+
+# find on db APPLYs type=customer key=1 onto *both* cust and panel:
+#   cust gets id, name, email, age
+#   panel gets id, name, age (email ignored). panel.state = "clean"
+#   panel is idle/active from WHEN age — not empty/dirty/clean
+
+PanelUser MACHINE panel, db {
+    COMMAND load {
+        CALL find ON db;
+        WAITFOR panel.state == "clean";
+    }
+    COMMAND bump {
+        panel.age := panel.age + 1;   # panel.state "dirty"; WHEN may go active
+        CALL update ON db;
+        WAITFOR panel.state == "clean";
+    }
+    COMMAND wipe { CALL clear ON panel; }    # author COMMAND, not DELETE
+}
+u PanelUser panel, db;
+
+
+# --- QUERY list, drain onto the named RECORD (WHEN lives on ed, not Customer#…) ---
+Drain MACHINE customers, cust {
+    COMMAND queue {
+        QUERY JSON_VALUE {
+            "action": "select", "from": "customer",
+            "where": { "age": { "gt": 0 } }, "order": ["name"]
+        } INTO customers;
+    }
+    COMMAND next {
+        x := TAKE FIRST FROM customers;
+        COPY PROPERTIES FROM x TO cust;
+        WAITFOR cust IS clean;
+    }
+}
+drain Drain customers, cust;
+
+
+# --- slot: KEY from a query; two windows, one row; never COPY slot-to-slot ---
+enter CustomerPanel;
+exit  CustomerPanel;
+occupancy LIST;
+
+SlotLoader MACHINE slot, occupancy {
+    idle DEFAULT;
+    occupied WHEN SIZE OF occupancy >= 1;
+    vacant WHEN SIZE OF occupancy == 0;
+
+    COMMAND refresh {
+        QUERY JSON_VALUE {
+            "action": "find", "type": "customer", "auth": "xxx",
+            "keys": { "id": 1 }
+        } INTO occupancy;
+    }
+    ENTER occupied {
+        x := TAKE FIRST FROM occupancy;
+        COPY PROPERTIES FROM x TO slot;     # bind; slot.state "clean"
+    }
+    ENTER vacant {
+        CALL clear ON slot;                 # slot.state "empty"
+    }
+}
+in_loader  SlotLoader enter, occupancy;
+out_loader SlotLoader exit, occupancy;      # same occupancy / same KEY
+
+# rebind enter to another KEY. never COPY PROPERTIES FROM enter TO exit
+Rebind MACHINE enter, db {
+    COMMAND show_two {
+        enter.id := 2;
+        CALL find ON db;                    # APPLY (type, 2) onto enter
+        WAITFOR enter.state == "clean";
+    }
+}
+```
 
 #### OPTIONS = columns
 
-- Persisted OPTIONS: ordinary `OPTION name default`. Default and Clockwork type (`integer`/`string`/`float`/`boolean`/NULL) map through datastore (sqlite: `INTEGER`/`TEXT`/`REAL`/`INTEGER 0/1`/`NULL`; other Stores map their own types).
-- `LOCAL OPTION` is **not** a column (ephemeral, same as today).
-- `OPTION PERSISTENT` on a RECORD class is ignored or illegal: the table (or Store) is the persistence.
+- **Bare `OPTION name default`:** a database column if the class is a RECORD or a `TABLE`/`VIEW` MACHINE. Default and Clockwork type (`integer`/`string`/`float`/`boolean`/NULL) map through datastore (sqlite: `INTEGER`/`TEXT`/`REAL`/`INTEGER 0/1`/`NULL`; other Stores map their own types).
+- **`LOCAL OPTION`:** not a column, not APPLY, not COMMIT payload, not persist.dat. Use this for logic that must not be pushed around (scratch, timers, maps, the MACHINE row-lifecycle `state` string). Same as today.
+- **`PERSISTENT OPTION`:** persist.dat via persistd, **only that field**. Mutually exclusive with `LOCAL`. Not a database column. `KEY` is not valid here.
+- **`OPTION PERSISTENT true`:** existing **machine flag** (reserved name `PERSISTENT`): persistd dumps **all** non-LOCAL properties. Keep for current plugins. If the class lists any `PERSISTENT OPTION`, only those fields go to persistd (`OPTION PERSISTENT true` is then redundant/illegal). A table-bound class must not persist the same columns through both persistd and dbsvr.
+- **`OPTION PERSISTENT` on a RECORD / `TABLE` class** for a column is ignored or illegal: the table (or Store) is the persistence.
+- There is **no `PRIVATE OPTION`**. The lexer token `PRIVATE` already errors and tells the author to use `LOCAL`. CONSTANT still supports `(private:true)` to hide a value from HMI/describe; that is display, not “not a column.” Schema names `RECORD` / `TABLE` / `VIEW` / `KEY` are class properties marked private in C++ so they are not treated as columns — that is not a language `PRIVATE`.
 - JSON_VALUE OPTIONS are allowed as text storing JSON (escape hatch, not the primary row model).
-- `KEY` / `UNIQUE` / `NOT NULL` annotations on OPTION (new grammar). First `KEY` is the primary key. Composite keys: later if needed; v1 is single-column KEY.
+- `KEY` / `UNIQUE` / `NOT NULL` annotations on a bare OPTION (new grammar). First `KEY` is the primary key. Composite keys: later if needed; v1 is single-column KEY.
 - `NULL` is a real Value, so a `NULL CONSTANT ""` stand-in is no longer needed.
+- **APPLY is a projection.** Only OPTIONS listed on the instance are written. Extra fields in the JSON row are ignored. The instance never grows OPTIONS from the table.
 
 Identity:
 
@@ -801,13 +967,15 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 6. ~~Two-Clockwork notify~~ **Decided:** after COMMIT, `dbsvr` **publishes** (table + key, or the row). Every `dbd` that holds that RECORD applies OPTIONS. B must not stay stale. New PUB/SUB uses linger 0 and the same restart rules as dbd REQ. Not a second silent REQ; not poll-until-refresh.
 7. ~~Builtin persist~~ **Decided for v1:** generated `<Class>INTERFACE` (`cw-scaffold`), not FLAG-style `save`/`load` on RECORD.
 8. **Query results vs WHEN (Martin, 2026-08-24):** a LIST of row machines is fine for HMI and LIST commands. Dynamically created RECORDs are **not** linked, so WHEN does not see them. Drain with `TAKE FIRST` / `WAITFOR` / `COPY PROPERTIES` onto a **statically declared** RECORD that already has dependents. Prefer generic `json AS LIST` (or existing `PUSH ITEMS FROM`) over RECORD-specific spawn. **No** loops in handlers; **no** embedded Lua/Python. Clockwork stays the language. Martin still reading the rest of the design.
-9. **MACHINE OVER RECORD (proposal):** one instance that is both the row and the active machine. The MACHINE names a RECORD class (table / template) and does **not** re-list column OPTIONS; those are loaded from the RECORD. Body is states, COMMAND, EXPORT, LOCAL, extra non-column OPTIONS. Alternative is composition (`MACHINE rec`). **Fill:** declare is not a DB read. KEY-known → INTERFACE `find` + APPLY onto the named instance. Slot → a loader MACHINE with a static selector hydrates, COPY ALL WHERE, bind onto the instance (OVER: onto `slot`; composition: onto `slot.row`). **EXPORT:** `loadConfig` must **error** if an exported property/state/command does not exist after inherit; **warn** on EXPORT of LOCAL or size/type mismatch. Open: one instance vs composition only; JSON `type` = RECORD class name; extra OPTIONS never columns; at most one OVER class per RECORD; syntax `OVER` vs `INCLUDE RECORD`; `OPTION PERSISTENT` ignored for columns. Not implemented.
+9. **RECORD system states `empty` / `dirty` / `clean` (proposal):** set by iod/dbd, not WHEN. Same pattern as CHANNEL and EtherCAT MODULE (`disableAutomaticStateChanges` + C++ `setState`). RECORD body still has no user WHEN/COMMAND.
+10. **MACHINE bound to a table (proposal):** `MACHINE TABLE "customer"` (or `VIEW`) + `OPTION id … KEY` + listed column OPTIONS. Full WHEN/COMMAND. APPLY is a projection (ignore extra fields). Row lifecycle on the MACHINE is `LOCAL OPTION state`, because WHEN owns the Clockwork STATE; RECORD uses the real state slot. Do not use `OPTION type "Customer"` for the relation (collides with existing `OPTION type`; class ≠ JSON `type`). JSON `type` = table/view name. Fill/bind/no slot-to-slot COPY as for RECORD. `PERSISTENT OPTION` is persist.dat; `LOCAL OPTION` is logic-only; no `PRIVATE OPTION` (lexer already maps `PRIVATE` → use `LOCAL`). **OVER RECORD** remains the inherit-all-columns alternative. Not implemented.
+11. **WAITFOR vs connection failure (ask Martin):** `WAITFOR cust IS clean` after SEND/QUERY never exits if dbd/`dbsvr` never APPLYs. No WAITFOR timeout in the grammar or `WaitForAction`. `CALL … ON TIMEOUT` is parsed, not implemented (CALL hangs). Working escape is WHEN `TIMER >= timeout` then DISABLE (`tests/arith.cw`). Prefer that in RECORD examples? Or add WAITFOR timeout?
 
 ---
 
 ## Key decisions
 
-1. **`RECORD` is MACHINE with a lex/bison limit (no user handlers or states).** OPTIONS are columns of a table or view. No new instance type. Builtin `INIT` remains (constructor); no user states.
+1. **`RECORD` is MACHINE with a lex/bison limit (no user WHEN/COMMAND).** OPTIONS are columns of a table or view. No new instance type. Builtin `INIT` remains. **System states** `empty` / `dirty` / `clean` are set by iod/dbd (CHANNEL/MODULE pattern), not by WHEN. A MACHINE that binds the same table keeps its own WHEN states and holds the row lifecycle in `LOCAL OPTION state`.
 2. **Keep datastore as the database server; keep `dbd` as the channel adapter.** Do not fold sqlite into `dbd`.
 3. **JSON in Clockwork; Store ops in datastore** (sqlite today, other backends later). LPC does not parse SQL. Named views cover joined query shapes.
 4. **Explicit persist, not write-through.** Operational CRUD is **generated** by `cw-scaffold` as `<RecordClass>INTERFACE MACHINE record, items`. Scaffolder **create** = JSON `insert`, not schema `create`.
@@ -821,7 +989,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 12. **ZMQ restart:** one dbd context; linger 0; REQ deadlines; recreate on EFSM; `forceFullReconnect` on iod CHANNEL; no `exit` on STARTUP; configurable `dbsvr` endpoint. `dbsvr` linger 0 on REP bind.
 13. **Two Clockworks, same RECORD → same OPTIONS.** After COMMIT, `dbsvr` PUBlishes `{type, keys}` or the row; every dbd that holds that instance applies it. Not poll-until-refresh.
 14. **Clockwork is the language.** No Lua, Python, or other embed. No `for` in handlers. Query batches drain with TAKE FIRST / WAITFOR / COPY PROPERTIES onto a named RECORD. Generic `json AS LIST`, not find_all-as-unlinked-machines.
-15. **RECORD schema is class properties, not MachineClass fields.** `RECORD` / `TABLE` / `VIEW` / `KEY` / `UNIQUE` / `NOT_NULL` on the class (private). Ordinary machines do not carry table or column metadata.
+15. **RECORD schema is class properties, not MachineClass fields.** `RECORD` / `TABLE` / `VIEW` / `KEY` / `UNIQUE` / `NOT_NULL` on the class (private so they are not columns). Ordinary machines do not carry that metadata unless they opt in with `TABLE`/`VIEW` + `KEY` (MACHINE-bound-to-a-table proposal).
 
 ---
 
@@ -843,7 +1011,7 @@ Code review of the RECORD/dbd slice. Bugs are fixed in the same commit as this n
 | --- | --- |
 | `SubscriptionManager` assumes `command_item = num_items - 1` | **Bug.** dbd had `iosh_cmd` then `notify_sub`, so the command slot was the notify socket. Swapped: setup, subscriber, `notify_sub`, **`iosh_cmd` last**. |
 | `RECORD_APPLY` in iosh | Intended as a **dbd helper** to apply a row onto held RECORD OPTIONS (yes: automatic update of Clockwork RECORDs). Command is now `RECORD APPLY` / `RECORD REMOVE` (same style as `MODBUS EXPORT`). Dropped from iosh HELP. Underscore aliases still dispatch. |
-| MachineClass carries keys, `table_name`, column flags | **Removed.** Schema is class properties (`RECORD`, `TABLE`, `VIEW`, `KEY`, `UNIQUE`, `NOT_NULL`), private so they are not columns. `RecordClass` is a helper over those properties. Ordinary MACHINE classes have no table/key fields. |
+| MachineClass carries keys, `table_name`, column flags | **Removed.** Schema is class properties (`RECORD`, `TABLE`, `VIEW`, `KEY`, `UNIQUE`, `NOT_NULL`), private so they are not columns. `RecordClass` is a helper over those properties. Ordinary MACHINE classes have no table/key C++ fields. A later proposal lets a MACHINE opt in with the same class properties (`TABLE`/`VIEW` + `KEY` OPTION) without putting fields back on MachineClass. |
 | “instance name” on MachineClass | **Misread.** `RecordApply::instanceName()` builds the cache name `Customer#1`. The KEY column is the class property `KEY`. |
 | “machines have database notify operations” | Pre-existing `notifyDependents` / command-clock (`notify_period`, `command`, `notify_phase`). RECORD apply uses `setValue` + deferred property notify. Not a new dbsvr API on MachineInstance. |
 | Linear scan of all machines on apply | **Fixed.** RECORD instances go on `MachineInstance::record_instances` (same pattern as `command_clocks` / `io_modules`). Apply and COPY-from-class walk that list. A `(type,key)` map is later if RECORD count is large. |
