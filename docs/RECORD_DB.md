@@ -490,6 +490,177 @@ Rebind MACHINE enter, db {
 }
 ```
 
+**HMI edit is local until save.** Several PROPERTY writes → `dirty`. No JSON until `update`.
+
+```
+# panel is exported; humid writes name, then age.
+# after first write: panel.state "dirty", still idle if age==0
+# after age := 21: WHEN → active, still not in sqlite
+# CALL update ON db: JSON data is name+age (+id key). email, note, tmp omitted.
+```
+
+**LOCAL / extra OPTION are not columns.**
+
+```
+WhatPersists MACHINE panel, db {
+    COMMAND touch {
+        panel.tmp := 1;          # LOCAL: not APPLY, not update payload
+        panel.note := "hello";   # not in table "customer" → not a column
+        panel.name := "Ann";     # column → dirty; only this (and KEY) go on update
+        CALL update ON db;
+    }
+}
+```
+
+**Delete vs clear.** `delete` removes the sqlite row. The named instance stays (program-owned) and goes `empty`. `RECORD REMOVE` drops `Customer#key` cache and unlinks LISTs.
+
+```
+DeleteDemo MACHINE cust, db, customers {
+    COMMAND forget {
+        CALL delete ON db;
+        WAITFOR cust IS empty;       # named cust still exists; OPTIONS are defaults
+        CALL list ON db;             # COPY ALL FROM Customer TO customers — cache gone
+    }
+    COMMAND wipe_only {
+        cust.name := "";
+        cust.age := 0;               # dirty, row still in sqlite until update/delete
+    }
+}
+```
+
+**In-memory list is not find_all.** `load` hydrates from dbsvr (APPLY, including `Customer#key` cache). `list` copies what this iod already holds.
+
+```
+ListDemo MACHINE db, customers {
+    COMMAND hydrate { CALL load ON db; }     # SEND find keys={}
+    COMMAND show {
+        CALL list ON db;                     # CLEAR + COPY ALL FROM Customer TO customers
+    }
+}
+# HMI binds to `customers`. Do not WHEN on customers.ITEM — drain onto `cust`.
+```
+
+**Two named holders, one KEY.** One APPLY writes both. Same on the other Clockwork after PUB.
+
+```
+# iod A
+cust_a Customer (id: 1);
+panel_a CustomerPanel (id: 1);
+db_a CustomerINTERFACE cust_a, customers;
+
+# iod B  (same dbsvr; own dbd SUB)
+cust_b Customer (id: 1);
+panel_b CustomerPanel (id: 1);
+
+# on A:
+cust_a.name := "Ann";
+CALL update ON db_a;
+# after COMMIT, dbsvr PUB {type:customer, keys:{id:1}, …}
+# dbd B: RECORD APPLY → cust_b.name "Ann", panel_b.name "Ann" (no email on panel)
+# cust_a and cust_b both clean. No poll, no second find.
+```
+
+**VIEW is read-only.** Writes go to the base table RECORD.
+
+```
+CustomerWithCity RECORD VIEW "customer_with_city" {
+    OPTION id 0 KEY;
+    OPTION name "";
+    OPTION city "";
+}
+
+row CustomerWithCity (id: 1);
+cust Customer (id: 1);
+cities LIST;
+
+ViewDemo MACHINE row, cust, db {
+    COMMAND show_perth {
+        QUERY JSON_VALUE {
+            "action": "select", "from": "customer_with_city",
+            "where": { "city": "Perth" }
+        } INTO cities;
+    }
+    COMMAND load_row { CALL find ON db; }    # APPLY onto cust; view row filled if same KEY
+    COMMAND rename {
+        cust.name := "Ann";                  # write the table
+        CALL update ON db;
+    }
+}
+```
+
+**Move is an UPDATE of a column, then loaders rebind.** Not COPY along a line. (`station` is a column on this RECORD.)
+
+```
+Pallet RECORD {
+    OPTION id 0 KEY;
+    OPTION station "";
+    OPTION name "";
+}
+
+here Pallet;
+there Pallet;
+all LIST;
+here_list LIST;
+there_list LIST;
+
+StationLoader MACHINE slot, occupancy, all {
+    OPTION station "";
+    hydrating WHEN SIZE OF all == 0 AND TIMER < 2000;
+    vacant WHEN SIZE OF occupancy == 0;
+    occupied WHEN SIZE OF occupancy >= 1;
+    COMMAND refresh {
+        QUERY JSON_VALUE {
+            "action": "find", "type": "pallet", "auth": "xxx", "keys": {}
+        } INTO all;
+    }
+    ENTER occupied {
+        x := TAKE FIRST FROM occupancy;
+        COPY PROPERTIES FROM x TO slot;
+    }
+    ENTER vacant { slot.station := ""; slot.name := ""; }
+    # after QUERY APPLYs Pallet rows, filter this station:
+    COMMAND bind {
+        CLEAR occupancy;
+        COPY ALL FROM Pallet TO occupancy WHERE Pallet.ITEM.station == station;
+    }
+}
+
+at_here  StationLoader here, here_list, all (station: "HERE");
+at_there StationLoader there, there_list, all (station: "THERE");
+
+MovePallet MACHINE here, db, at_here, at_there {
+    COMMAND advance {
+        here.station := "THERE";
+        CALL update ON db;           # one row moved
+        CALL refresh ON at_here; CALL bind ON at_here;     # HERE empty
+        CALL refresh ON at_there; CALL bind ON at_there;   # THERE binds that KEY
+        # never COPY PROPERTIES FROM here TO there
+    }
+}
+```
+
+**persist.dat is not the database.** `PERSISTENT OPTION` survives iod restart via persistd. Table OPTIONS survive via dbsvr.
+
+```
+Setpoint MACHINE {
+    PERSISTENT OPTION sp 0;      # persist.dat only
+    OPTION pv 0;                 # RAM (unless this class is TABLE-bound)
+}
+# Do not mark the same field PERSISTENT OPTION and a table column.
+```
+
+**Composition still works** if you want WHEN off the RECORD.
+
+```
+Watcher MACHINE cust {
+    quiet WHEN cust IS empty;
+    hold WHEN cust IS dirty;
+    live WHEN cust IS clean;
+}
+w Watcher cust;
+# APPLY/PUB still hit `cust`. w only re-checks.
+```
+
 #### OPTIONS = columns
 
 - **Bare `OPTION name default`:** a database column if the class is a RECORD or a `TABLE`/`VIEW` MACHINE. Default and Clockwork type (`integer`/`string`/`float`/`boolean`/NULL) map through datastore (sqlite: `INTEGER`/`TEXT`/`REAL`/`INTEGER 0/1`/`NULL`; other Stores map their own types).
