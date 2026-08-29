@@ -1180,6 +1180,46 @@ Code review of the RECORD/dbd slice. Bugs are fixed in the same commit as this n
 
 ---
 
+## Implementation review notes (2026-08-29)
+
+Open findings from a code scan across `iod` and `../datastore`. These are not yet fixed and supplement [Clockwork PR 9](#clockwork-pr-9-record-states-and-apply-projection) (states + projection) and [Q11](#open-questions) (WAITFOR timeout).
+
+### iod
+
+| # | Location | Finding | Type |
+| --- | --- | --- | --- |
+| iod-1 | `src/RecordApply.cpp` `removeRow` | Cache (`Class#key`) instances are `machines.erase()`d and `unregisterRecord()`ed but never `delete`d, so every delete notify orphans a heap `MachineInstance`. Named instances stay registered for process lifetime; this is a new churn path on top of the named-never-evicted model. | Bug (leak) |
+| iod-2 | `RecordApply.cpp` `keyMatches` / `removeRow` | Delete notify matches on the KEY column only. A delete with empty or partial keys (`{action:delete,type:customer}` or `keys:{age:20}`) removes sqlite rows but matches no cache instance, leaving `Customer#N` showing deleted rows. `dbsvr` publishes `{}` for the delete-all case (`db_server.cpp keysForNotify`). | Bug |
+| iod-3 | `RecordApply.cpp` `applyFields` | No projection: writes every non-LOCAL JSON key, so undeclared columns (`email`) or stray keys become properties. PR 9 item A. | PR 9 gap |
+| iod-4 | `RecordApply.cpp` `instanceName` | If neither `keys` nor `row` carries the KEY column, the cache name is `Class#` (empty key), colliding distinct rows into one instance. | Bug |
+| iod-5 | `RecordApply.cpp` `typeMatches` | `mc->name == type` is redundant with the case-insensitive check on the same line. | Cleanup |
+| iod-6 | `RecordApply.cpp` `removeRow` | Named instances are unlinked from LISTs but never reset to `empty` + non-KEY defaults. PR 9 item B. | PR 9 gap |
+| iod-7 | `RecordClass.cpp` `mark` | RECORD has no `empty`/`dirty`/`clean` states yet and the grammar already calls `disableAutomaticStateChanges()`, so a RECORD currently has an empty state set; `cust IS empty` in the examples cannot evaluate until PR 9 adds the states. | PR 9 gap |
+| iod-8 | `MachineClass.cpp` `addPrivateProperty` | Private schema props (`RECORD`/`TABLE`/`VIEW`/`KEY`/`UNIQUE`/`NOT_NULL`) and `LOCAL OPTION` share the `local_properties` set, so `propertyIsLocal(KEY)` is true. PR 9's projection (`getOptions()` vs `propertyIsLocal`) must keep private-hidden-schema and LOCAL-not-a-column apart. | Model gap |
+| iod-9 | `cwlang.ypp` `record_section` | `PERSISTENT OPTION` is not accepted in a RECORD body, though the grammar sketch and OPTIONS = columns describe its semantics. | Doc drift |
+| iod-10 | `cwlang.ypp` `QUERY … INTO` | The `INTO` target is discarded (`(void)$4`); the SEND goes out but the named LIST is never filled. | Gap |
+| iod-11 | `cwlang.ypp` `record_definition_header` | `RecordClass::setTable(lowercase_copy($1))` is redundant; `mark()` already sets TABLE to the lowercase class name. | Cleanup |
+| iod-12 | `src/dbd.cpp` | Logs the full outgoing request (`sending: …`, includes `auth` + row data) and the full `dbsvr` reply to stdout unconditionally. | Security/logging |
+| iod-13 | `dbd.cpp` | Two parallel iod connections: `g_iodcmd` (MessagingInterface) and `g_iod_req` (DeadlineReq), both to `:5555`. | Cleanup |
+| iod-14 | `dbd.cpp` `send_response_to_clockwork` | `respond_to` with no `.` sets machine and property both to the whole string. | Bug (edge) |
+| iod-15 | `dbd.cpp` | dbsvr request failure (timeout) drops the request with no error back to Clockwork; this is the Q11 `WAITFOR` hang. | Q11 |
+| iod-16 | `dbd.cpp` | `notify_sub` is polled twice (main `checkConnections` items[2] and a second standalone poll). | Cleanup |
+
+### datastore (`../datastore`)
+
+| # | Location | Finding | Type |
+| --- | --- | --- | --- |
+| ds-1 | `dbmock/sql_interface.cpp` `buildSQL` | Prints the full request JSON (including `auth`) to stdout unconditionally. | Security/logging |
+| ds-2 | `dbmock/db_server.cpp` `performRequestMessage` | Prints SQL, response, and reply to stdout unconditionally. | Security/logging |
+| ds-3 | `cw-migrate.cpp` downgrade | `downgrade --rev <id>` with `<id>` ahead of the current revision downgrades below the target to `none` instead of no-op/error. | Bug |
+| ds-4 | `dbmock/sql_interface.cpp` `collectFieldNamesAndTypes` | `create` concatenates schema type strings unbound into `CREATE TABLE`; `catalogAllows` skips `create` entirely. Accepted surface, but unvalidated SQL. | Security (accepted) |
+| ds-5 | `cw-migrate.cpp` `set_rev` | Inserts the revision id by string concatenation, not a bound value. | Cleanup |
+| ds-6 | `dbmock/db_server.cpp` `fetchReturning` | Update reply relies on the original keys; changing the key column, or updating with no keys, returns nothing / the whole table. | Bug (edge) |
+| ds-7 | `dbmock/store.cpp` `getInstance` | Singleton ignores a later `db_name`. | Cleanup |
+| ds-8 | `dbmock/` | Dead legacy code: file-blob methods (`importFile`/`getFile`/`deleteFile`/`listFiles`, `base64`) and the `collectValuesString(quoted=true)` interpolation path are unused by the JSON API; `server.c` is a leftover echo server. | Cleanup |
+
+---
+
 ## PR Plan
 
 Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice does not need `dbsvr`.
