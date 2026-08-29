@@ -116,6 +116,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     class SharedCache;
     class Cache;
     static ThreadSafeList<MachineInstance *> to_remove;
+    static ThreadSafeList<MachineInstance *> to_delete;
 
   public:
     virtual ~MachineInstance();
@@ -123,6 +124,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     static void prepare_to_remove(MachineInstance *m) { to_remove.push_back(m); }
     static void remove_pending();
+    static void delete_later(MachineInstance *m) { to_delete.push_back(m); }
+    static void delete_pending();
 
     void triggerFired(Trigger *trig);
 

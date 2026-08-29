@@ -318,6 +318,7 @@ std::mutex global_lists_mutex;
 // The above lists need to be reorganised.. in the meantime
 // this is a temporary list of machines that need to be removed
 ThreadSafeList<MachineInstance *> MachineInstance::to_remove;
+ThreadSafeList<MachineInstance *> MachineInstance::to_delete;
 
 /* Factory methods */
 
@@ -1008,6 +1009,21 @@ void MachineInstance::remove_pending() {
             std::lock_guard<std::mutex> lock(pending_state_change_mutex);
             pending_state_change.erase(m);
         }
+    }
+}
+
+void MachineInstance::delete_pending() {
+    if (to_delete.is_empty()) { return; }
+    std::vector<MachineInstance *> copy_of_to_delete;
+    MachineInstance *m = nullptr;
+    while (to_delete.try_pop_front(m)) {
+        copy_of_to_delete.push_back(m);
+    }
+    // Safe point: ProcessingThread runs this between scans, so no receiver
+    // iteration is in flight. The destructor removes the instance from the
+    // lists and the Dispatcher.
+    for (size_t i = 0; i < copy_of_to_delete.size(); ++i) {
+        delete copy_of_to_delete[i];
     }
 }
 

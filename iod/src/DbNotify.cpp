@@ -39,10 +39,17 @@ int parseDbNotify(const std::string &payload, std::vector<DbNotifyRow> &out) {
         push_row(0);
     }
     else if (row->type == cJSON_Array) {
-        cJSON *child = row->child;
-        while (child) {
-            push_row(child);
-            child = child->next;
+        if (row->child) {
+            cJSON *child = row->child;
+            while (child) {
+                push_row(child);
+                child = child->next;
+            }
+        }
+        else {
+            // Empty row array on delete means delete-all; still emit one row so
+            // the caller sends RECORD REMOVE with empty keys.
+            push_row(0);
         }
     }
     else {

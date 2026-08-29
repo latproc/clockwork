@@ -129,6 +129,14 @@ int main() {
         return 10;
     }
 
+    const char *delall =
+        "{\"action\":\"delete\",\"type\":\"customer\",\"keys\":{},\"row\":[]}";
+    std::vector<DbNotifyRow> delnotes;
+    if (parseDbNotify(delall, delnotes) != 1 || delnotes[0].action != "delete") {
+        std::cerr << "delete-all notify should parse as one delete row\n";
+        return 20;
+    }
+
     MachineClass *itemc = new MachineClass("Item");
     RecordClass::mark(itemc);
     RecordClass::setTable(itemc, "item");
@@ -173,6 +181,34 @@ int main() {
         return 13;
     }
 
+    // delete-all: empty keys clears every cache instance of the class but
+    // leaves named instances in place.
+    cJSON *r3 = cJSON_Parse("{\"id\":3,\"name\":\"C3\"}");
+    RecordApply::applyRow("customer", 0, r3);
+    cJSON_Delete(r3);
+    cJSON *r4 = cJSON_Parse("{\"id\":4,\"name\":\"C4\"}");
+    RecordApply::applyRow("customer", 0, r4);
+    cJSON_Delete(r4);
+    if (!MachineInstance::find("Customer#3") || !MachineInstance::find("Customer#4")) {
+        std::cerr << "delete-all setup failed\n";
+        return 16;
+    }
+    cJSON *empty = cJSON_Parse("{}");
+    n = RecordApply::removeRow("customer", empty);
+    cJSON_Delete(empty);
+    if (n < 2) {
+        std::cerr << "delete-all removed " << n << " (expected >=2)\n";
+        return 17;
+    }
+    if (MachineInstance::find("Customer#3") || MachineInstance::find("Customer#4")) {
+        std::cerr << "delete-all did not clear cache instances\n";
+        return 18;
+    }
+    if (!MachineInstance::find("cust")) {
+        std::cerr << "delete-all must not destroy named instances\n";
+        return 19;
+    }
+
     IODCommandRecordRemove rmc;
     std::vector<Value> rmparams;
     rmparams.push_back(Value("RECORD", Value::t_symbol));
@@ -187,6 +223,8 @@ int main() {
         std::cerr << "RECORD REMOVE left Item#1 in the map\n";
         return 15;
     }
+
+    MachineInstance::delete_pending();
 
     std::cout << "ok\n";
     return 0;

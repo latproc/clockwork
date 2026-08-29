@@ -191,9 +191,12 @@ static void unlinkFromLists(MachineInstance *target) {
 
 int removeRow(const std::string &type, cJSON *keys) {
     MachineClass *mc = classForType(type);
-    if (!mc || !keys) {
+    if (!mc) {
         return 0;
     }
+    // Empty/absent keys means "delete all rows of this type": clear every held
+    // cache instance. Named instances are program-owned and stay (only unlinked).
+    const bool delete_all = !keys || keys->type != cJSON_Object || !keys->child;
     std::vector<MachineInstance *> hit;
     std::list<MachineInstance *>::iterator it = MachineInstance::begin_records();
     while (it != MachineInstance::end_records()) {
@@ -201,7 +204,7 @@ int removeRow(const std::string &type, cJSON *keys) {
         if (!m || m->getStateMachine() != mc) {
             continue;
         }
-        if (keyMatches(m, mc, keys)) {
+        if (delete_all || keyMatches(m, mc, keys)) {
             hit.push_back(m);
         }
     }
@@ -212,6 +215,7 @@ int removeRow(const std::string &type, cJSON *keys) {
         if (isCacheInstance(m, mc)) {
             machines.erase(m->getName());
             m->unregisterRecord();
+            MachineInstance::delete_later(m);
         }
         ++n;
     }
