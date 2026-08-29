@@ -545,14 +545,18 @@ int main(int argc, const char *argv[]) {
             if (!json_request) {
                 continue;
             }
-            std::cout << "sending: " << &data[0] << "\n";
+            if (DEBUG_BASIC) {
+                std::cout << "sending: " << &data[0] << "\n";
+            }
             std::string dbsvr_reply;
             if (!dbsvr_req.request(&data[0], dbsvr_reply, DBSVR_TIMEOUT_MS)) {
                 std::cerr << "dbsvr request failed; will retry with a new socket\n";
                 cJSON_Delete(json_request);
                 continue;
             }
-            std::cout << dbsvr_reply << "\n";
+            if (DEBUG_BASIC) {
+                std::cout << dbsvr_reply << "\n";
+            }
             send_response_to_clockwork(json_request, dbsvr_reply.c_str());
             cJSON *parsed_reply = cJSON_Parse(dbsvr_reply.c_str());
             apply_rows_to_records(json_request, parsed_reply);
