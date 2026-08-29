@@ -63,8 +63,9 @@ JSON protocol:
 { "action": "update", "auth": "...", "type": "customer", "keys": { "name": "Fred" }, "data": {"age":20} }
 { "action": "delete", "auth": "...", "type": "customer", "keys": { "name": "Bill" } }
 { "action": "create", "auth": "...", "type": "customer", "schema": { "name": "string primary key" } }
-{ "action": "sql", "auth": "...", "sql": "…" }
 ```
+
+`action: "create"` is **CREATE TABLE** (`schema`), not a row insert. Operational create is `insert`. `action: "sql"` is **rejected** on the JSON API (use `cw-migrate` or the sqlite CLI).
 
 Replies: `{ "status": 0|1|2, "request": "…", "response": … }`. Auth token placeholder is `"xxx"` (restrictions intended later).
 
@@ -337,21 +338,6 @@ Composition (`Editor MACHINE cust`) is still valid: two instances; APPLY hits `c
 **EXPORT must be checked at load** (`loadConfig` / `--parse-only`). Unknown OPTION / STATE / COMMAND is an **error**. `EXPORT` of a `LOCAL OPTION` is a **warning** (not a row column). Size/type mismatch is a warning.
 
 Not implemented.
-
-#### MACHINE OVER RECORD (earlier proposal)
-
-Kept as an alternative: the MACHINE **names** a RECORD class and does **not** re-list column OPTIONS; those are copied from the RECORD at load. Body is WHEN, COMMAND, EXPORT, LOCAL, extra non-column OPTIONS. Fill, bind, and “do not COPY slot-to-slot” are the same as above.
-
-```
-CustomerPanel MACHINE OVER Customer {
-    EXPORT RW name, age;
-    LOCAL OPTION tmp 0;
-    active WHEN age > 0;
-    idle DEFAULT;
-}
-```
-
-OVER inherits every column, so the MACHINE cannot project a subset (the table-bound listing can). OVER also makes EXPORT typos easier because column names are not written on the MACHINE. Syntax (`OVER` vs `INCLUDE RECORD`) and “at most one OVER class per RECORD” are open. Not implemented.
 
 #### Using the examples
 
@@ -822,31 +808,31 @@ Today `dbd` parses JSON, `client.connect("tcp://127.0.0.1:5554")`, `makeRemoteRe
 - Map a successful row (or rows) onto OPTIONS per column, not only `respond_to` as one JSON property.
 - Skip-dirty / no echo persist on inbound PROPERTY.
 
-**datastore next:**
+**datastore remaining:** none of the original D1–D15 list. This slice closed D8–D10 (README, reject `action: "sql"`, identifier catalog).
 
-- Parameterized SQL (today `SQLInterface` concatenates; tighten with an identifier allow-list and bound values).
-- Richer JSON: `select` / `join` / `view` / `order` / `limit`.
+**datastore later (not this slice):**
+
+- JSON `join` arrays — **not v1.** Joins are named SQL views (`CREATE VIEW` in `cw-migrate`).
 - Store remains sqlite3 until a Redis (or other) Store is written. Clockwork does not care.
-- Notify-after-commit: PUB table+key (or row) so every dbd that holds the RECORD applies OPTIONS.
 
 Do **not** open sqlite from `dbd`. Do **not** fold `dbsvr` into the Clockwork tree as “the SQL worker”.
 
-**Datastore gaps today** (generic `customer` tests in that repo):
+**Datastore gaps** (generic `customer` tests in that repo):
 
-| # | Issue | Where |
+| # | Issue | Status |
 | --- | --- | --- |
-| D1 | SQL concatenated; `db_server` **rejects** bind parameters | `sql_interface.cpp`; `db_server.cpp` ~103–106 |
-| D2 | Every column is a JSON string; NULL `sqlite3_column_text` is unsafe | `db_server.cpp` ~124–127 |
-| D3 | insert/update/delete do not return the row (need `RETURNING` or equivalent) | `performRequestMessage` |
-| D4 | JSON null / boolean not emitted as SQL | `collectValuesString` |
-| D5–D6 | No `select`/`join`/`order`/`limit`; WHERE is equality-AND only | `buildSQL` |
-| D7 | ZMQ REP only today — add PUB after COMMIT (Q6 decided) | `dbsvr.cpp` |
-| D8 | `action: "create"` is CREATE TABLE (README is wrong) | `buildSQL` |
-| D9 | `action: "sql"` unsandboxed | `buildSQL` |
-| D10 | No identifier catalog | new |
-| D11 | No test target in CMake | `CMakeLists.txt` |
-| D13 | `char buf[1000]` truncates | `buildSQL` |
-| D15 | No WAL, no busy timeout, no request transaction | `store.cpp` `connect` |
+| D1 | SQL concatenated; binds rejected | **Landed.** `?` placeholders + `bindAll` |
+| D2 | Every column a JSON string; NULL text unsafe | **Landed.** `columnToJson` by sqlite type |
+| D3 | insert/update/delete do not return the row | **Landed.** `SELECT` after write (no `RETURNING` on sqlite 3.7); delete returns keys |
+| D4 | JSON null / boolean not emitted as SQL | **Landed.** `bindFromJson` |
+| D5–D6 | No `select`/`join`/`order`/`limit`; WHERE equality-AND only | **Landed** except JSON `join`. `select` + `order`/`limit` + WHERE `eq`/`neq`/`gt`/`lt`/`ge`/`le`/`in`/`like`/`is`. Joins = named views |
+| D7 | ZMQ REP only — add PUB after COMMIT | **Landed.** PUB `--notify-port` (default 5556) |
+| D8 | `action: "create"` is CREATE TABLE (README is wrong) | **Landed.** `create` stays CREATE TABLE; README documents that. Row create is `insert` |
+| D9 | `action: "sql"` unsandboxed | **Landed.** JSON API rejects `action: "sql"`. Migrations = `cw-migrate`; operator SQL = sqlite CLI |
+| D10 | No identifier catalog | **Landed.** Table/view in `sqlite_master`; columns in `PRAGMA table_info`. `create` is lexical-only |
+| D11 | No test target in CMake | **Landed.** `test_store_wal`, `test_typed_json`, `test_notify`, `test_select_view`, `test_cw_migrate`, `test_dbsvr` |
+| D13 | `char buf[1000]` truncates | **Landed.** Buffer is `sql.size() + 1` |
+| D15 | No WAL, busy timeout, or request transaction | **Landed.** Four PRAGMAs; `BEGIN IMMEDIATE` / `DEFERRED`; checkpoint on shutdown |
 
 **SQLite PRAGMAs** on every connect:
 
@@ -863,7 +849,7 @@ One JSON request = one HTTP request: writes `BEGIN IMMEDIATE` … `COMMIT` / `RO
 
 ### ZMQ channels and process restarts
 
-humid/modbusd/persistd already recover CHANNEL setup (`forceFullReconnect`, linger 0, `sendWithDeadline`). **`dbd` does not.** `dbsvr` linger is commented out. Persist will hang or exit on the first bounce unless this is fixed before round-trip tests.
+humid/modbusd/persistd already recover CHANNEL setup (`forceFullReconnect`, linger 0, `sendWithDeadline`). **dbd and `dbsvr` restart: landed** (one dbd context, `DeadlineReq`, linger 0 on REP/PUB, recreate on EFSM, STARTUP reconnects, `--dbsvr` / `--notify`). The original defect was:
 
 ```
 iod DATABASE_CHANNEL
@@ -925,7 +911,7 @@ Rules:
 - Rename → explicit revision only.
 - Production does **not** auto-upgrade on iod/dbd/dbsvr start. Operator runs `cw-migrate upgrade`. Mismatch = startup error with expected vs found revision.
 - Runtime `"action": "create", "schema": {…}` becomes `cw-migrate` revisions, including `CREATE VIEW` for joined shapes.
-- Raw `action: "sql"` is not the migration tool; it may remain a debug hatch.
+- `action: "sql"` is not on the JSON API (rejected). Migrations are `cw-migrate`; operator SQL is the sqlite CLI.
 
 **Two-migration-system hazard:** do not run `cw-migrate` on a sqlite file owned by another tool. v1: a Clockwork database file of its own.
 
@@ -1056,8 +1042,8 @@ Do not persist a MACHINE state name on a RECORD: RECORD has no user states.
 ## Security and privacy
 
 - Auth: CHANNEL `KEY` already exists (`database_channel.lpc`). Datastore’s JSON `auth` placeholder can stay on the shim until token restrictions land.
-- JSON → SQL uses an identifier allow-list (tables, views, columns from the catalog) and bound parameters. No concatenated SQL from LPC.
-- Raw `action: "sql"` if kept is operator-only and still parameterized; not used for migrations.
+- JSON → SQL uses a lexical identifier allow-list (`[A-Za-z_][A-Za-z0-9_]*`) **and** a catalog: table/view in `sqlite_master`, columns in `PRAGMA table_info`. Values are bound. No concatenated SQL from LPC.
+- `action: "sql"` is rejected on the JSON API. Not used for migrations.
 - Database file permissions = user that runs **datastore**, not iod.
 - Do not log full row payloads at default debug.
 
@@ -1139,7 +1125,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 7. ~~Builtin persist~~ **Decided for v1:** generated `<Class>INTERFACE` (`cw-scaffold`), not FLAG-style `save`/`load` on RECORD.
 8. **Query results vs WHEN (Martin, 2026-08-24):** a LIST of row machines is fine for HMI and LIST commands. Dynamically created RECORDs are **not** linked, so WHEN does not see them. Drain with `TAKE FIRST` / `WAITFOR` / `COPY PROPERTIES` onto a **statically declared** RECORD that already has dependents. Prefer generic `json AS LIST` (or existing `PUSH ITEMS FROM`) over RECORD-specific spawn. **No** loops in handlers; **no** embedded Lua/Python. Clockwork stays the language. Martin still reading the rest of the design.
 9. **RECORD system states `empty` / `dirty` / `clean` (proposal):** set by iod/dbd, not WHEN. Same pattern as CHANNEL and EtherCAT MODULE (`disableAutomaticStateChanges` + C++ `setState`). RECORD body still has no user WHEN/COMMAND.
-10. **MACHINE bound to a table (proposal):** `MACHINE TABLE "customer"` (or `VIEW`) + `OPTION id … KEY` + listed column OPTIONS. Full WHEN/COMMAND. APPLY is a projection (ignore extra fields). Row lifecycle on the MACHINE is `LOCAL OPTION state`, because WHEN owns the Clockwork STATE; RECORD uses the real state slot. Do not use `OPTION type "Customer"` for the relation (collides with existing `OPTION type`; class ≠ JSON `type`). JSON `type` = table/view name. Fill/bind/no slot-to-slot COPY as for RECORD. `PERSISTENT OPTION` is persist.dat; `LOCAL OPTION` is logic-only; no `PRIVATE OPTION` (lexer already maps `PRIVATE` → use `LOCAL`). **OVER RECORD** remains the inherit-all-columns alternative. Not implemented.
+10. **MACHINE bound to a table (proposal):** `MACHINE TABLE "customer"` (or `VIEW`) + `OPTION id … KEY` + listed column OPTIONS. Full WHEN/COMMAND. APPLY is a projection (ignore extra fields). Row lifecycle on the MACHINE is `LOCAL OPTION state`, because WHEN owns the Clockwork STATE; RECORD uses the real state slot. Do not use `OPTION type "Customer"` for the relation (collides with existing `OPTION type`; class ≠ JSON `type`). JSON `type` = table/view name. Fill/bind/no slot-to-slot COPY as for RECORD. `PERSISTENT OPTION` is persist.dat; `LOCAL OPTION` is logic-only; no `PRIVATE OPTION` (lexer already maps `PRIVATE` → use `LOCAL`). Not implemented.
 11. **WAITFOR vs connection failure (ask Martin):** `WAITFOR cust IS clean` after SEND/QUERY never exits if dbd/`dbsvr` never APPLYs. No WAITFOR timeout in the grammar or `WaitForAction`. `CALL … ON TIMEOUT` is parsed, not implemented (CALL hangs). Working escape is WHEN `TIMER >= timeout` then DISABLE (`tests/arith.cw`). Prefer that in RECORD examples? Or add WAITFOR timeout?
 
 ---
@@ -1211,10 +1197,10 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 
 ### Datastore (`../datastore`)
 
-0. **WAL + busy timeout + automatic transactions** — **landed in datastore.** Four PRAGMAs on connect; writable open CREATE; `BEGIN IMMEDIATE` on writes / `BEGIN DEFERRED` on reads; ROLLBACK on error. `test_store_wal` checks `journal_mode=wal` and insert+rollback leaves no rows. `action: sql` may not include BEGIN/COMMIT/ROLLBACK.
+0. **WAL + busy timeout + automatic transactions** — **landed in datastore.** Four PRAGMAs on connect; writable open CREATE; `BEGIN IMMEDIATE` on writes / `BEGIN DEFERRED` on reads; ROLLBACK on error. `test_store_wal` checks `journal_mode=wal` and insert+rollback leaves no rows. Clockwork never sends BEGIN.
 0b. **REP linger 0** — **landed.** `ZMQ_LINGER=0` on REP and PUB; EADDRINUSE bind retry; recreate REP on send/recv failure; WAL checkpoint on SIGINT/SIGTERM.
 1. **Typed replies, NULL, RETURNING** — **landed.** Column types from sqlite (`INTEGER`/`REAL`/`TEXT`/`NULL`); JSON null/bool on write; insert/update reply is the row via `SELECT` after write (bundled sqlite 3.7 has no `RETURNING`). `test_typed_json`.
-2. **Bound parameters + identifier allow-list** — **landed for CRUD.** Identifiers `[A-Za-z_][A-Za-z0-9_]*`; values bound (`?`). `action: sql` stays a raw hatch (still rejects BEGIN/COMMIT/ROLLBACK).
+2. **Bound parameters + identifier catalog** — **landed.** Identifiers `[A-Za-z_][A-Za-z0-9_]*`; values bound (`?`). Table/view must exist in `sqlite_master`; columns in `PRAGMA table_info` (`create` is the exception). `action: sql` is rejected. README: `create` = CREATE TABLE.
 3. **`select` / `order` / `limit` / `where`** — **landed.** Equality, null, `eq`/`neq`/`gt`/`lt`/`ge`/`le`, `in` (array), `like` (bound). `-col` DESC, `limit`. Named views are the join path. Delete replies return the keys.
 4. **JSON `join` (optional)** — **not started; not needed for v1.** Joins are named SQL views (`CREATE VIEW` in `cw-migrate`). Clockwork tests use generic `customer_with_city`.
 5. **`cw-migrate`** — **landed.** `current` / `upgrade` / `downgrade`; `generate --sql file` wraps a SQL file (from `cw-scaffold --sql`) as the next revision. `0001_customer.sql` + `0002_customer_with_city.sql`. No `--from-program` parser (that is `cw-scaffold --sql`). No auto-upgrade on `dbsvr` start. `dbsvr --require-rev` refuses a mismatch.
