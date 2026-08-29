@@ -27,10 +27,7 @@ bool typeMatches(const MachineClass *mc, const std::string &type) {
         return false;
     }
     std::string table = RecordClass::tableName(mc);
-    if (table == type || lowercase(mc->name) == lowercase(type) || mc->name == type) {
-        return true;
-    }
-    return false;
+    return table == type || lowercase(mc->name) == lowercase(type);
 }
 
 Value jsonToValue(cJSON *item) {
@@ -118,6 +115,9 @@ static std::string instanceName(const MachineClass *mc, cJSON *keys, cJSON *row)
     if (!item && row) {
         item = cJSON_GetObjectItem(row, keycol.c_str());
     }
+    if (!item) {
+        return ""; // no key column present; cannot name a cache instance
+    }
     Value v = jsonToValue(item);
     return mc->name + "#" + v.asString();
 }
@@ -145,6 +145,9 @@ int applyRow(const std::string &type, cJSON *keys, cJSON *row) {
     }
     if (n == 0 && row) {
         std::string name = instanceName(mc, effective_keys, row);
+        if (name.empty()) {
+            return 0; // row has no key column; cannot build a cache instance
+        }
         MachineInstance *existing = MachineInstance::find(name.c_str());
         MachineInstance *m = existing;
         if (!m) {

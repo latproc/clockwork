@@ -508,7 +508,6 @@ SYMBOL RECORD record_rel parameters {
     current_machineclass = new MachineClass($1);
     current_machineclass->disableAutomaticStateChanges();
     RecordClass::mark(current_machineclass);
-    RecordClass::setTable(current_machineclass, lowercase_copy($1));
     if (!pending_record_view.empty()) {
         RecordClass::setView(current_machineclass, pending_record_view);
     }
