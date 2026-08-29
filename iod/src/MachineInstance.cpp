@@ -1204,7 +1204,18 @@ void MachineInstance::describe(std::ostream &out) {
     }
     if (properties.size()) {
         out << "properties:\n  ";
-        if (!private_constant) {
+        bool redact_any = private_constant;
+        if (!redact_any && state_machine) {
+            SymbolTableConstIterator probe = properties.begin();
+            while (probe != properties.end()) {
+                if (state_machine->propertyIsPrivate((*probe).first)) {
+                    redact_any = true;
+                    break;
+                }
+                ++probe;
+            }
+        }
+        if (!redact_any) {
             out << properties;
         }
         else {
@@ -1213,7 +1224,8 @@ void MachineInstance::describe(std::ostream &out) {
             while (property != properties.end()) {
                 const std::pair<std::string, Value> item = *property++;
                 out << separator << item.first << ": ";
-                if (item.first == "VALUE") {
+                if ((private_constant && item.first == "VALUE") ||
+                    (state_machine && state_machine->propertyIsPrivate(item.first))) {
                     out << "<private>";
                 }
                 else {

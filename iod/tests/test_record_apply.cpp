@@ -14,6 +14,7 @@
 #include "library_globals.cpp"
 #include <boost/thread/mutex.hpp>
 #include <iostream>
+#include <sstream>
 #include <vector>
 #include <zmq.hpp>
 
@@ -94,6 +95,12 @@ int main() {
     if (!mc->propertyIsPrivate("password") || mc->propertyIsLocal("password")) {
         std::cerr << "PRIVATE flag wrong\n";
         return 35;
+    }
+    std::ostringstream desc;
+    cust->describe(desc);
+    if (desc.str().find("secret") != std::string::npos) {
+        std::cerr << "PRIVATE column leaked in describe\n";
+        return 36;
     }
 
     cJSON *row2 = cJSON_Parse("{\"id\":2,\"name\":\"Ada\"}");
