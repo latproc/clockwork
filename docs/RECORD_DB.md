@@ -1367,6 +1367,8 @@ DS-0 can start in parallel with Clockwork 1. DS-1 before Clockwork 4. DS-3 befor
 
 2. **ZMQ client helper blocks on `recv` with no deadline (reconnect hang).** `makeRemoteRequest` in `dbmock/db_server.cpp` (used by `zmq_send` and the in-repo tests) does a blocking `recv` with no deadline and does not recreate the socket when the peer restarts. `dbd` already uses `DeadlineReq` (linger 0 + deadline + recreate on EFSM); this helper should follow the same pattern.
 
+3. **MachineCommand handlers leak per instance.** `setStateMachine()` allocates a `MachineCommand` for every `receives_functions` and `enter_functions` entry, but `~MachineInstance()` never frees them (raw pointers held in `std::map`s). Affects every machine that declares RECEIVE handlers or ENTER functions.
+
 ### Later, other repos (not Clockwork CI)
 
 Application programs may use RECORD. Not Clockwork tests.
