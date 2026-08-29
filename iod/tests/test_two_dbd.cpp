@@ -66,16 +66,6 @@ static bool file_is_ann(const char *path) {
     return s == "Ann";
 }
 
-static bool wait_ann(const char *path_a, const char *path_b) {
-    for (int i = 0; i < 50; ++i) {
-        if (file_is_ann(path_a) && file_is_ann(path_b)) {
-            return true;
-        }
-        usleep(100000);
-    }
-    return false;
-}
-
 static void kill_wait(pid_t a, pid_t b, pid_t c = 0, pid_t d = 0) {
     pid_t pids[] = {a, b, c, d};
     for (int i = 0; i < 4; ++i) {
@@ -160,9 +150,14 @@ int main(int argc, char **argv) {
         "\"row\":{\"id\":1,\"name\":\"Ann\"}}";
     zmq::message_t m(std::strlen(payload));
     std::memcpy(m.data(), payload, std::strlen(payload));
-    pub.send(m, 0);
-
-    bool ok = wait_ann(path_a, path_b);
+    // ZMQ PUB drops messages to not-yet-connected subscribers ("slow joiner").
+    // Re-publish until both dbd processes apply the row (idempotent payload).
+    bool ok = false;
+    for (int i = 0; i < 50 && !ok; ++i) {
+        pub.send(m, 0);
+        usleep(100000);
+        ok = file_is_ann(path_a) && file_is_ann(path_b);
+    }
     kill_wait(dbd_a, dbd_b, iod_a, iod_b);
     unlink(path_a);
     unlink(path_b);
@@ -219,14 +214,30 @@ int main(int argc, char **argv) {
         const char *ins =
             "{\"action\":\"insert\",\"auth\":\"xxx\",\"type\":\"customer\","
             "\"data\":{\"id\":1,\"name\":\"Ann\"}}";
-        if (!req(client, create, reply, 40) || !req(client, ins, reply, 10) ||
-            reply.find("Ann") == std::string::npos) {
-            std::cerr << "live dbsvr insert failed: " << reply << "\n";
+        if (!req(client, create, reply, 40)) {
+            std::cerr << "live dbsvr create failed: " << reply << "\n";
             kill_wait(ldbd_a, ldbd_b, liod_a, liod_b);
             kill_wait(svr, 0);
             return 6;
         }
-        bool live_ok = wait_ann(lpath_a, lpath_b);
+        // dbsvr PUBs the notify after commit; a dbd that subscribed late misses
+        // it. Re-trigger with an idempotent update until both dbd apply the row.
+        const char *upd =
+            "{\"action\":\"update\",\"auth\":\"xxx\",\"type\":\"customer\","
+            "\"keys\":{\"id\":1},\"data\":{\"name\":\"Ann\"}}";
+        bool live_ok = false;
+        for (int i = 0; i < 50 && !live_ok; ++i) {
+            std::string r;
+            bool got = req(client, i == 0 ? ins : upd, r, 10);
+            if (i == 0 && (!got || r.find("Ann") == std::string::npos)) {
+                std::cerr << "live dbsvr insert failed: " << r << "\n";
+                kill_wait(ldbd_a, ldbd_b, liod_a, liod_b);
+                kill_wait(svr, 0);
+                return 6;
+            }
+            usleep(100000);
+            live_ok = file_is_ann(lpath_a) && file_is_ann(lpath_b);
+        }
         kill_wait(ldbd_a, ldbd_b, liod_a, liod_b);
         kill_wait(svr, 0);
         unlink(lpath_a);
