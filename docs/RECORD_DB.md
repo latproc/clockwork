@@ -1361,6 +1361,12 @@ Spec-first is this section. Then code + tests in one Clockwork commit (or two: p
 
 DS-0 can start in parallel with Clockwork 1. DS-1 before Clockwork 4. DS-3 before COPY-from-class (or COPY finds all and filters in iod).
 
+### Common issues (shared code, portable to other branches — `[common]`)
+
+1. **MachineInstance removal never frees the object (memory leak).** `prepare_to_remove()` / `remove_pending()` unlink an instance from `all_machines` / `record_instances` / `command_clocks` / `automatic_machines` / `active_machines` and erase it from the `machines` map, but never `delete` it. `delete_pending()` (added for the RECORD cache) frees only cache instances; the general removal path still leaks. Affects every branch.
+
+2. **ZMQ client helper blocks on `recv` with no deadline (reconnect hang).** `makeRemoteRequest` in `dbmock/db_server.cpp` (used by `zmq_send` and the in-repo tests) does a blocking `recv` with no deadline and does not recreate the socket when the peer restarts. `dbd` already uses `DeadlineReq` (linger 0 + deadline + recreate on EFSM); this helper should follow the same pattern.
+
 ### Later, other repos (not Clockwork CI)
 
 Application programs may use RECORD. Not Clockwork tests.
