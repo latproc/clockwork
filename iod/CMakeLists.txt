@@ -522,6 +522,13 @@ add_test(NAME record_parse_query_into COMMAND ${CMAKE_COMMAND}
 add_test(NAME record_parse_query_into_json COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/query_into_json.cw -DEXPECT_RC=0
   -P ${_record_parse})
+add_test(NAME record_parse_private COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/record_private.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_private COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_private.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=RECORD
+  -P ${_record_parse})
 add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)
 set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_record_apply PRIVATE src tests)

@@ -172,12 +172,7 @@ SERIALISE			return SERIALISE;
 SERIALIZE			return SERIALISE;
 STATE_CHANGES		return STATE_CHANGES;
 SUM					return SUM;
-PRIVATE				{
-	char buf[100];
-	snprintf(buf, 100, "Error at line %d PRIVATE semantics are changing. Use LOCAL instead\n", yylineno);
-	yyerror(buf);
-	return LOCAL;
-}
+PRIVATE				return PRIVATE;
 PROPERTY_CHANGES	return PROPERTY_CHANGES;
 RO                  return READONLY;
 ROUTE               return ROUTE;

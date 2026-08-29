@@ -1855,7 +1855,9 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
         return;
     }
     std::string channel_name = machine->fullName();
-    if (machine->getStateMachine() && machine->getStateMachine()->propertyIsLocal(key)) {
+    if (machine->getStateMachine() &&
+        (machine->getStateMachine()->propertyIsLocal(key) ||
+         machine->getStateMachine()->propertyIsPrivate(key))) {
         return;
     }
     std::map<std::string, Channel *>::iterator iter = all->begin();
@@ -1884,7 +1886,8 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
             else {
                 if (chn->definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges) ||
                     (machine->getStateMachine() &&
-                     !machine->getStateMachine()->propertyIsLocal(key))) {
+                     !machine->getStateMachine()->propertyIsLocal(key) &&
+                     !machine->getStateMachine()->propertyIsPrivate(key))) {
                     chn->sendPropertyChangeMessage(machine, machine->getName(), key, val,
                                                    authority);
                 }

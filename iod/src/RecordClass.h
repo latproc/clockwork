@@ -9,7 +9,7 @@ class MachineClass;
 // not treated as row columns.
 namespace RecordClass {
 
-enum ColumnFlag { COL_NONE = 0, COL_KEY = 1, COL_UNIQUE = 2, COL_NOT_NULL = 4 };
+enum ColumnFlag { COL_NONE = 0, COL_KEY = 1, COL_UNIQUE = 2, COL_NOT_NULL = 4, COL_PRIVATE = 8 };
 
 void mark(MachineClass *mc);
 void setTable(MachineClass *mc, const std::string &name);

@@ -39,6 +39,7 @@ class MachineClass {
 
   public:
     std::set<std::string> local_properties;
+    std::set<std::string> private_properties;
     std::vector<Parameter> parameters;
     std::vector<Parameter> locals;
     std::list<State *> states;
@@ -95,6 +96,10 @@ class MachineClass {
     bool propertyIsLocal(const char *name) const;
     bool propertyIsLocal(const std::string &name) const;
     bool propertyIsLocal(const Value &name) const;
+    bool propertyIsPrivate(const char *name) const { return private_properties.count(name) > 0; }
+    bool propertyIsPrivate(const std::string &name) const { return private_properties.count(name) > 0; }
+    bool propertyIsPrivate(const Value &name) const { return private_properties.count(name.asString()) > 0; }
+    void addPrivateColumn(const std::string &name) { private_properties.insert(name); }
 
     State default_state;
     State initial_state;

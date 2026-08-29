@@ -1348,6 +1348,38 @@ Do not add iod-elc or two-iod tests here. `test_cw_system` should keep passing (
 
 Spec-first is this section. Then code + tests in one Clockwork commit (or two: projection, then states) if the diff is large.
 
+### Clockwork PR 10: PRIVATE columns
+
+**Repo:** this one (`iod`). No datastore change.
+
+**Problem:** `LOCAL OPTION` removes a value from *both* the database and iosh/sampler publishing. There is no way to keep a value as a database column while hiding it from iosh/sampler (credentials, PII). The `PRIVATE` lexer token currently errors and maps to `LOCAL`.
+
+**Add:** `OPTION <name> <default> PRIVATE;` on a RECORD (same slot as `KEY`/`UNIQUE`/`NOT NULL`).
+
+- `PRIVATE` is a **column**: APPLYed, committed by the scaffolder, persisted.
+- `PRIVATE` is **not published**: the Channel property-change path and iosh `describe` skip it.
+- `LOCAL` keeps its meaning (not a column, not published).
+
+| | DB column | published/sampled |
+| --- | --- | --- |
+| `OPTION` | yes | yes |
+| `OPTION ... PRIVATE` | yes | no |
+| `LOCAL OPTION` | no | no |
+
+**Files:**
+
+- `cwlang.lpp` — `PRIVATE` returns a token instead of erroring to `LOCAL`.
+- `cwlang.ypp` — `%token PRIVATE`; `option_annot: PRIVATE` sets `COL_PRIVATE`.
+- `RecordClass.h/.cpp` — `COL_PRIVATE` flag; `addFlags` records private columns.
+- `MachineClass.h` — new `private_properties` set + `propertyIsPrivate()`/`addPrivateColumn()` (separate from `local_properties`; resolves iod-8).
+- `Channel.cpp` — property-change publish skips `propertyIsPrivate()`.
+- `MachineInstance::describe` — hides `propertyIsPrivate()` columns.
+
+**Tests:**
+
+- Parse: `OPTION x 0 PRIVATE` parses on a RECORD; errors on a non-RECORD OPTION.
+- `test_record_apply`: a `PRIVATE` column is APPLYed (written) but not published.
+
 ### Datastore (`../datastore`)
 
 0. **WAL + busy timeout + automatic transactions** — **landed in datastore.** Four PRAGMAs on connect; writable open CREATE; `BEGIN IMMEDIATE` on writes / `BEGIN DEFERRED` on reads; ROLLBACK on error. `test_store_wal` checks `journal_mode=wal` and insert+rollback leaves no rows. Clockwork never sends BEGIN.

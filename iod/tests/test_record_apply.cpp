@@ -33,6 +33,8 @@ int main() {
     mc->setOption("id", Value(static_cast<int64_t>(0)));
     RecordClass::addKey(mc, "id");
     mc->setOption("name", Value("", Value::t_string));
+    mc->setOption("password", Value("", Value::t_string));
+    mc->addPrivateColumn("password");
     mc->local_properties.insert("tmp");
 
     MachineInstance *cust = MachineInstanceFactory::create("cust", "Customer");
@@ -59,7 +61,7 @@ int main() {
     }
     machines[cust->getName()] = cust;
 
-    cJSON *row = cJSON_Parse("{\"id\":1,\"name\":\"Fred\",\"tmp\":false}");
+    cJSON *row = cJSON_Parse("{\"id\":1,\"name\":\"Fred\",\"tmp\":false,\"password\":\"secret\"}");
     int n = RecordApply::applyRow("customer", 0, row);
     cJSON_Delete(row);
     if (n < 1) {
@@ -84,6 +86,14 @@ int main() {
     if (std::string(cust->getCurrentStateString()) != "clean") {
         std::cerr << "cust not clean after APPLY: " << cust->getCurrentStateString() << "\n";
         return 33;
+    }
+    if (cust->getValue("password").asString() != "secret") {
+        std::cerr << "PRIVATE column was not applied\n";
+        return 34;
+    }
+    if (!mc->propertyIsPrivate("password") || mc->propertyIsLocal("password")) {
+        std::cerr << "PRIVATE flag wrong\n";
+        return 35;
     }
 
     cJSON *row2 = cJSON_Parse("{\"id\":2,\"name\":\"Ada\"}");

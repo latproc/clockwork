@@ -114,7 +114,7 @@ static void apply_column_annots(const char *option_name) {
     if (!RecordClass::isRecord(current_machineclass)) {
         std::stringstream ss;
         ss << yyfilename << ":" << yylineno
-           << " KEY, UNIQUE, and NOT NULL are only valid on RECORD OPTIONS";
+           << " KEY, UNIQUE, NOT NULL, and PRIVATE are only valid on RECORD OPTIONS";
         error_messages.push_back(ss.str());
         ++num_errors;
     }
@@ -300,7 +300,7 @@ struct Subcondition {
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
-%token RECORD UNIQUE VIEW TABLE QUERY
+%token RECORD UNIQUE VIEW TABLE QUERY PRIVATE
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
 %token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
@@ -442,6 +442,7 @@ KEY { pending_column_flags |= RecordClass::COL_KEY; }
         pending_column_flags |= RecordClass::COL_NOT_NULL;
     }
 }
+| PRIVATE { pending_column_flags |= RecordClass::COL_PRIVATE; }
 //| SYMBOL REFERS TO SYMBOL {
 //  std::string name($1);
 //  Value v($4);

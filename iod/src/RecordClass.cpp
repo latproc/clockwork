@@ -141,6 +141,9 @@ void addFlags(MachineClass *mc, const std::string &column, unsigned flags) {
     if (flags & COL_NOT_NULL) {
         addNotNull(mc, column);
     }
+    if (flags & COL_PRIVATE) {
+        mc->addPrivateColumn(column);
+    }
 }
 
 bool isRecord(const MachineClass *mc) {
@@ -181,6 +184,9 @@ unsigned columnFlags(const MachineClass *mc, const std::string &column) {
     }
     if (csvHas(prop(mc, kNotNull), column)) {
         flags |= COL_NOT_NULL;
+    }
+    if (mc->propertyIsPrivate(column)) {
+        flags |= COL_PRIVATE;
     }
     return flags;
 }
