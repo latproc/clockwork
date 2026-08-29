@@ -1184,6 +1184,8 @@ Code review of the RECORD/dbd slice. Bugs are fixed in the same commit as this n
 
 Open findings from a code scan across `iod` and `../datastore`. These are not yet fixed and supplement [Clockwork PR 9](#clockwork-pr-9-record-states-and-apply-projection) (states + projection) and [Q11](#open-questions) (WAITFOR timeout).
 
+Commit convention: fixes to common code (shared infrastructure, memory leaks, ZMQ reconnect) are committed with a `[common]` prefix so they can be cherry-picked onto other branches, e.g. `iod-elc`. Changes that touch dbd/RECORD/datastore stay on this branch unmarked. No `[common]` fixes have landed yet; the payload-logging gating (iod-12, ds-1, ds-2) and the `test_two_dbd` de-flake are dbd-specific.
+
 ### iod
 
 | # | Location | Finding | Type |
