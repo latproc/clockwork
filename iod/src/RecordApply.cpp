@@ -4,6 +4,7 @@
 #include "RecordClass.h"
 #include "cJSON.h"
 #include "value.h"
+#include <map>
 #include <sstream>
 #include <vector>
 
@@ -89,15 +90,21 @@ static void applyFields(MachineInstance *m, const MachineClass *mc, cJSON *row) 
     if (!m || !mc || !row || row->type != cJSON_Object) {
         return;
     }
+    // Projection: write only declared non-LOCAL OPTIONs (ignore extra fields).
+    const std::map<std::string, Value> &opts = mc->getOptions();
+    m->setRecordApplyMode(true);
     m->beginDeferredPropertyNotify();
     cJSON *f = row->child;
     while (f) {
-        if (f->string && !mc->propertyIsLocal(f->string)) {
+        if (f->string && opts.find(f->string) != opts.end() &&
+            !mc->propertyIsLocal(f->string)) {
             m->setValue(f->string, jsonToValue(f));
         }
         f = f->next;
     }
     m->endDeferredPropertyNotify();
+    m->setRecordApplyMode(false);
+    m->setRecordSystemState("clean");
 }
 
 // Cache name only (`Customer#1`). Not a MachineClass field; named instances keep

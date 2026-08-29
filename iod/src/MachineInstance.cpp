@@ -886,7 +886,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
       owner_channel(0), cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
       cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
       command_fanout_skip(0), command_fanout_pending(false), property_notify_defer(0),
-      deferred_property_notify(false), expected_authority(0) {
+      deferred_property_notify(false), record_apply_mode(false), expected_authority(0) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -925,7 +925,7 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
       cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
       cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
       command_fanout_skip(0), command_fanout_pending(false), property_notify_defer(0),
-      deferred_property_notify(false), expected_authority(0) {
+      deferred_property_notify(false), record_apply_mode(false), expected_authority(0) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -4355,6 +4355,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
         if (!already) {
             record_instances.push_back(this);
         }
+        setState(machine_class->initial_state);
     }
     if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states &&
         (machine_class->stable_states.size() || machine_class->name == "LIST" ||
@@ -5330,6 +5331,10 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         }
         if (!was_changed) {
             return true; // value was ok but was already the same
+        }
+        if (RecordClass::isRecord(state_machine) && !record_apply_mode &&
+            !state_machine->propertyIsLocal(property) && current_state.getName() != "dirty") {
+            setState("dirty");
         }
         // calcAdjust temps: one notify at endDeferredPropertyNotify.
         // Never defer VALUE / IO (outputs, plugins, analog owners).

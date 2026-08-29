@@ -33,16 +33,33 @@ int main() {
     mc->setOption("id", Value(static_cast<int64_t>(0)));
     RecordClass::addKey(mc, "id");
     mc->setOption("name", Value("", Value::t_string));
-    mc->local_properties.insert("dirty");
+    mc->local_properties.insert("tmp");
 
     MachineInstance *cust = MachineInstanceFactory::create("cust", "Customer");
     cust->setStateMachine(mc);
+    if (std::string(cust->getCurrentStateString()) != "empty") {
+        std::cerr << "cust not empty after declare: " << cust->getCurrentStateString() << "\n";
+        return 30;
+    }
+    // constructor params (id) must not dirty
+    cust->setRecordApplyMode(true);
     cust->setValue("id", Value(static_cast<int64_t>(1)));
     cust->setValue("name", Value("", Value::t_string));
-    cust->setValue("dirty", Value(true));
+    cust->setValue("tmp", Value(true));
+    cust->setRecordApplyMode(false);
+    if (std::string(cust->getCurrentStateString()) != "empty") {
+        std::cerr << "constructor params dirtied cust: " << cust->getCurrentStateString() << "\n";
+        return 31;
+    }
+    // live column assign -> dirty
+    cust->setValue("name", Value("Ann", Value::t_string));
+    if (std::string(cust->getCurrentStateString()) != "dirty") {
+        std::cerr << "live column assign did not dirty: " << cust->getCurrentStateString() << "\n";
+        return 32;
+    }
     machines[cust->getName()] = cust;
 
-    cJSON *row = cJSON_Parse("{\"id\":1,\"name\":\"Fred\",\"dirty\":false}");
+    cJSON *row = cJSON_Parse("{\"id\":1,\"name\":\"Fred\",\"tmp\":false}");
     int n = RecordApply::applyRow("customer", 0, row);
     cJSON_Delete(row);
     if (n < 1) {
@@ -58,11 +75,15 @@ int main() {
         }
         return 2;
     }
-    bool dirty = false;
-    cust->getValue("dirty").asBoolean(dirty);
-    if (!dirty) {
-        std::cerr << "LOCAL dirty was overwritten\n";
+    bool tmp = false;
+    cust->getValue("tmp").asBoolean(tmp);
+    if (!tmp) {
+        std::cerr << "LOCAL tmp was overwritten\n";
         return 3;
+    }
+    if (std::string(cust->getCurrentStateString()) != "clean") {
+        std::cerr << "cust not clean after APPLY: " << cust->getCurrentStateString() << "\n";
+        return 33;
     }
 
     cJSON *row2 = cJSON_Parse("{\"id\":2,\"name\":\"Ada\"}");

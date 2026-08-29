@@ -187,6 +187,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     // command body (calcAdjust). Nested. IO / dotted VALUE still notify now.
     void beginDeferredPropertyNotify();
     void endDeferredPropertyNotify();
+    void setRecordApplyMode(bool on) { record_apply_mode = on; }
+    bool recordApplyMode() const { return record_apply_mode; }
+    void setRecordSystemState(const char *name) { setState(name); }
     const Value *resolve(
         std::string
             property); // provides a pointer to the value of an object that can be evaluated in the future
@@ -524,6 +527,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     bool command_fanout_pending;
     int property_notify_defer;
     bool deferred_property_notify;
+    bool record_apply_mode;
 
   protected:
     static std::list<MachineInstance *>

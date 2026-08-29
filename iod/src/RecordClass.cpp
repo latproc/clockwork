@@ -100,6 +100,12 @@ void mark(MachineClass *mc) {
     if (prop(mc, kTable).empty()) {
         mc->setProperty(kTable, Value(lowercase(mc->name).c_str(), Value::t_string));
     }
+    // System states owned by iod/dbd (setState), not by author WHEN.
+    mc->addState("empty", true);
+    mc->addState("dirty", true);
+    mc->addState("clean", true);
+    mc->initial_state = State("empty");
+    mc->default_state = State("empty");
 }
 
 void setTable(MachineClass *mc, const std::string &name) {
