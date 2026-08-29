@@ -224,6 +224,21 @@ int removeRow(const std::string &type, cJSON *keys) {
             m->unregisterRecord();
             MachineInstance::delete_later(m);
         }
+        else {
+            // Named instance: reset to empty + non-KEY columns to class defaults.
+            m->setRecordApplyMode(true);
+            const std::map<std::string, Value> &opts = mc->getOptions();
+            std::map<std::string, Value>::const_iterator oi = opts.begin();
+            while (oi != opts.end()) {
+                if (!mc->propertyIsLocal(oi->first) &&
+                    !(RecordClass::columnFlags(mc, oi->first) & RecordClass::COL_KEY)) {
+                    m->setValue(oi->first, oi->second);
+                }
+                ++oi;
+            }
+            m->setRecordApplyMode(false);
+            m->setRecordSystemState("empty");
+        }
         ++n;
     }
     return n;

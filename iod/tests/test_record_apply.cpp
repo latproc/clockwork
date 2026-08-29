@@ -246,6 +246,15 @@ int main() {
         std::cerr << "delete-all must not destroy named instances\n";
         return 19;
     }
+    if (std::string(cust->getCurrentStateString()) != "empty") {
+        std::cerr << "delete-all did not reset named instance to empty: "
+                  << cust->getCurrentStateString() << "\n";
+        return 37;
+    }
+    if (cust->getValue("name").asString() != "") {
+        std::cerr << "delete-all did not reset name to default\n";
+        return 38;
+    }
 
     IODCommandRecordRemove rmc;
     std::vector<Value> rmparams;

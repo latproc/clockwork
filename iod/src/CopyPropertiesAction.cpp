@@ -22,6 +22,7 @@
 #include "Logger.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
+#include "RecordClass.h"
 
 CopyPropertiesActionTemplate::CopyPropertiesActionTemplate(Value source, Value destination)
     : source_name(source.asString()), dest_name(destination.asString()) {}
@@ -81,14 +82,20 @@ Action::Status CopyPropertiesAction::run() {
     dest_machine = owner->lookup(dest);
     if (source_machine && dest_machine) {
         size_t count = 0; // how many direct symbol updates did we do?
+        MachineClass *dest_class = dest_machine->getStateMachine();
+        const bool dest_is_record = dest_class && RecordClass::isRecord(dest_class);
+        if (dest_is_record) {
+            dest_machine->setRecordApplyMode(true);
+        }
         if (property_list.empty()) {
             //dest_machine->properties.add(source_machine->properties);
             SymbolTableConstIterator iter = source_machine->properties.begin();
             while (iter != source_machine->properties.end()) {
                 const std::string &prop = (*iter).first;
                 if (prop != "STATE" && prop != "NAME" &&
-                    (!dest_machine->getStateMachine() ||
-                     !dest_machine->getStateMachine()->propertyIsLocal(prop))) {
+                    (!dest_class || !dest_class->propertyIsLocal(prop)) &&
+                    (!dest_is_record ||
+                     dest_class->getOptions().find(prop) != dest_class->getOptions().end())) {
                     dest_machine->setValue(prop, (*iter).second);
                     ++count;
                 }
@@ -110,6 +117,10 @@ Action::Status CopyPropertiesAction::run() {
                     }
                 }
             }
+        }
+        if (dest_is_record) {
+            dest_machine->setRecordApplyMode(false);
+            dest_machine->setRecordSystemState("clean");
         }
         if (count) {
             dest_machine->setNeedsCheck();
