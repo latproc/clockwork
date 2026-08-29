@@ -188,16 +188,35 @@ static void apply_rows_to_records(cJSON *request, cJSON *reply) {
     const char *action =
         (action_json && action_json->type == cJSON_String) ? action_json->valuestring : "";
     if (action && strcmp(action, "delete") == 0) {
-        char *keys_s = keys ? cJSON_PrintUnformatted(keys) : strdup("{}");
-        if (keys_s) {
-            auto cmd = MessageEncoding::encodeCommand("RECORD",
-                                                      Value("REMOVE", Value::t_string),
-                                                      Value(type, Value::t_string),
-                                                      Value(keys_s, Value::t_string));
-            std::string reply_s;
-            sendIodCommand(cmd, reply_s);
+        // The reply carries the rows actually deleted. Remove each by its own
+        // key; a delete-all (empty keys, no rows) clears every held instance.
+        bool removed_any = false;
+        auto send_remove = [&](cJSON *row) {
+            char *row_s = row ? cJSON_PrintUnformatted(row) : strdup("{}");
+            if (row_s) {
+                auto cmd = MessageEncoding::encodeCommand("RECORD",
+                                                          Value("REMOVE", Value::t_string),
+                                                          Value(type, Value::t_string),
+                                                          Value(row_s, Value::t_string));
+                std::string reply_s;
+                sendIodCommand(cmd, reply_s);
+                removed_any = true;
+            }
+            free(row_s);
+        };
+        if (response->type == cJSON_Array) {
+            cJSON *row = response->child;
+            while (row) {
+                send_remove(row);
+                row = row->next;
+            }
         }
-        free(keys_s);
+        else if (response->type == cJSON_Object) {
+            send_remove(response);
+        }
+        if (!removed_any && (!keys || !keys->child)) {
+            send_remove(0);
+        }
         return;
     }
     auto send_apply = [&](cJSON *row) {
@@ -236,10 +255,12 @@ static void apply_notify_payload(const std::string &payload) {
     for (size_t i = 0; i < rows.size(); ++i) {
         std::string cmd;
         if (rows[i].action == "delete") {
+            const std::string &k =
+                rows[i].row_json.empty() ? rows[i].keys_json : rows[i].row_json;
             cmd = MessageEncoding::encodeCommand("RECORD",
                                                  Value("REMOVE", Value::t_string),
                                                  Value(rows[i].type, Value::t_string),
-                                                 Value(rows[i].keys_json, Value::t_string));
+                                                 Value(k, Value::t_string));
         }
         else {
             cmd = MessageEncoding::encodeCommand("RECORD",

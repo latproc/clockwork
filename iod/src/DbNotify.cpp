@@ -46,9 +46,10 @@ int parseDbNotify(const std::string &payload, std::vector<DbNotifyRow> &out) {
                 child = child->next;
             }
         }
-        else {
-            // Empty row array on delete means delete-all; still emit one row so
-            // the caller sends RECORD REMOVE with empty keys.
+        else if (is_delete && !(keys && keys->child)) {
+            // Empty row array on delete-all (empty keys) => emit one row so the
+            // caller sends RECORD REMOVE with empty keys. A keyed delete that
+            // matched nothing (non-empty keys) emits no rows.
             push_row(0);
         }
     }
