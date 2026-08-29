@@ -101,7 +101,7 @@ Two Clockworks that both hold a RECORD should see the same OPTIONS after a commi
 
 ### Goals
 
-1. **`RECORD` class** — MACHINE with no user WHEN/COMMAND. OPTIONS are columns of a table **or a view**. Parser (lex/bison) enforces the limitation. Existing OPTION-change logic updates dependents. System states `empty`/`dirty`/`clean` are set by iod/dbd (proposal).
+1. **`RECORD` class** — MACHINE with no user WHEN/COMMAND. OPTIONS are columns of a table **or a view**. Parser (lex/bison) enforces the limitation. Existing OPTION-change logic updates dependents. System states `empty`/`dirty`/`clean` are set by iod/dbd ([Clockwork PR 9](#clockwork-pr-9-record-states-and-apply-projection)).
 2. **Row OPTIONS stay in sync** on Clockworks that hold the row, so a write on process A is visible on process B without a follow-up GET.
 3. **JSON in Clockwork; backend ops in datastore.** Extend the existing `action`/`type`/`keys`/`fields` protocol (joins, views, filters). Named views in migrations stand in for joined query shapes.
 4. **Alembic-like schema management** for tables *and* views: versioned upgrade/downgrade, revision table, CLI, no silent prod auto-mutate.
@@ -1124,7 +1124,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 6. ~~Two-Clockwork notify~~ **Decided:** after COMMIT, `dbsvr` **publishes** (table + key, or the row). Every `dbd` that holds that RECORD applies OPTIONS. B must not stay stale. New PUB/SUB uses linger 0 and the same restart rules as dbd REQ. Not a second silent REQ; not poll-until-refresh.
 7. ~~Builtin persist~~ **Decided for v1:** generated `<Class>INTERFACE` (`cw-scaffold`), not FLAG-style `save`/`load` on RECORD.
 8. **Query results vs WHEN (Martin, 2026-08-24):** a LIST of row machines is fine for HMI and LIST commands. Dynamically created RECORDs are **not** linked, so WHEN does not see them. Drain with `TAKE FIRST` / `WAITFOR` / `COPY PROPERTIES` onto a **statically declared** RECORD that already has dependents. Prefer generic `json AS LIST` (or existing `PUSH ITEMS FROM`) over RECORD-specific spawn. **No** loops in handlers; **no** embedded Lua/Python. Clockwork stays the language. Martin still reading the rest of the design.
-9. **RECORD system states `empty` / `dirty` / `clean` (proposal):** set by iod/dbd, not WHEN. Same pattern as CHANNEL and EtherCAT MODULE (`disableAutomaticStateChanges` + C++ `setState`). RECORD body still has no user WHEN/COMMAND.
+9. **RECORD system states `empty` / `dirty` / `clean`:** set by iod/dbd, not WHEN. Same pattern as CHANNEL and EtherCAT MODULE (`disableAutomaticStateChanges` + C++ `setState`). RECORD body still has no user WHEN/COMMAND. **Next:** [Clockwork PR 9](#clockwork-pr-9-record-states-and-apply-projection).
 10. **MACHINE bound to a table (proposal):** `MACHINE TABLE "customer"` (or `VIEW`) + `OPTION id … KEY` + listed column OPTIONS. Full WHEN/COMMAND. APPLY is a projection (ignore extra fields). Row lifecycle on the MACHINE is `LOCAL OPTION state`, because WHEN owns the Clockwork STATE; RECORD uses the real state slot. Do not use `OPTION type "Customer"` for the relation (collides with existing `OPTION type`; class ≠ JSON `type`). JSON `type` = table/view name. Fill/bind/no slot-to-slot COPY as for RECORD. `PERSISTENT OPTION` is persist.dat; `LOCAL OPTION` is logic-only; no `PRIVATE OPTION` (lexer already maps `PRIVATE` → use `LOCAL`). Not implemented.
 11. **WAITFOR vs connection failure (ask Martin):** `WAITFOR cust IS clean` after SEND/QUERY never exits if dbd/`dbsvr` never APPLYs. No WAITFOR timeout in the grammar or `WaitForAction`. `CALL … ON TIMEOUT` is parsed, not implemented (CALL hangs). Working escape is WHEN `TIMER >= timeout` then DISABLE (`tests/arith.cw`). Prefer that in RECORD examples? Or add WAITFOR timeout?
 
@@ -1194,6 +1194,117 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 6. **COPY ALL FROM RecordClass INTO LIST** — **landed (in-memory).** Table and VIEW RECORD classes. Scaffolder **list** is COPY; **load** still SEND-find so dbd can materialize rows first.
 7. **QUERY INTO** — **parse landed.** `QUERY q INTO list` SENDs JSON property `q` to `DATABASE_CHANNEL` (same as INTERFACE load). `QUERY JSON_VALUE { … } INTO list` SENDs that object. The scan cannot wait for dbsvr. **Next (not started):** treat the reply as JSON and fill the LIST with generic `AS LIST` / `PUSH ITEMS FROM`, then copy onto a named RECORD. Do not finish LIST fill by spawning unlinked `Class#key` machines as WHEN targets.
 8. **`json AS LIST`** — **not started.** Existing equivalent: `PUSH ITEMS FROM json TO list` (`tests/json_table.cw`). Add the `AS LIST` spelling if it is clearer; same semantics for any JSON array, not only RECORD rows. Optional: `COPY PROPERTIES FROM` a JSON object onto a named RECORD so field copies are not hand-written `ITEM ${…} OF`.
+9. **RECORD APPLY projection + system states `empty`/`dirty`/`clean` + skip-dirty persist** — **next (this PR).** See [Clockwork PR 9](#clockwork-pr-9-record-states-and-apply-projection). Unblocks MACHINE TABLE (lifecycle on that MACHINE is `LOCAL OPTION state`, not `setState`).
+
+### Clockwork PR 9: RECORD states and APPLY projection
+
+**Repo:** this one (`iod`). No datastore change. Generic fixtures only (`Customer`). Subprocess parse tests; C++ `test_record_apply`.
+
+**Done when:** a named `Customer` is `empty` at declare, `dirty` after a column assign, `clean` after `RECORD APPLY`; extra JSON fields are ignored; APPLY does not dirty and does not persist. `cust IS empty` / `dirty` / `clean` works from a Watcher MACHINE (examples in this spec become true).
+
+#### Non-goals (later PRs)
+
+- MACHINE `TABLE`/`VIEW` + `KEY` (PR after this; WHEN owns STATE; lifecycle is `LOCAL OPTION state`).
+- `PERSISTENT OPTION` (per-field persist.dat).
+- EXPORT load-time checks.
+- `json AS LIST` / QUERY INTO fill.
+- WAITFOR timeout (Q11, Martin).
+- `(type,key)` map; iod-elc.
+
+#### A. APPLY is a projection
+
+**Today:** `RecordApply::applyFields` `setValue`s every JSON key that is not LOCAL. That can create properties that are not columns (`email` on a class that only listed `id`,`name`,`age`).
+
+**Rule:** write a JSON field only if it is a **declared non-LOCAL OPTION** on the class (`MachineClass::getOptions()`, and not `propertyIsLocal`). Skip everything else, including schema class properties (`RECORD`/`TABLE`/`VIEW`/`KEY`/`UNIQUE`/`NOT_NULL`) and unknown keys.
+
+Same rule when `COPY PROPERTIES` lands on a RECORD: copy only dest columns; skip LOCAL; skip names the dest class does not list.
+
+#### B. RECORD Clockwork states (Q9)
+
+Same pattern as CHANNEL / MODULE: `disableAutomaticStateChanges()` (already on the RECORD header) + C++ `setState`. The author does **not** write `dirty WHEN …` in the RECORD body.
+
+`RecordClass::mark()` (parser already calls it) also:
+
+```
+addState("empty", true);
+addState("dirty", true);
+addState("clean", true);
+initial_state = empty;
+default_state = empty;
+```
+
+`MachineClass` still constructs with `INIT`; RECORD must not stay there. After `mark`, initial/default are `empty`.
+
+| Event | State | Notes |
+| --- | --- | --- |
+| Instance constructed / `setStateMachine` | `empty` | Class option defaults. Constructor params e.g. `(id: 1)` set KEY and **must not** go `dirty` (still no row). |
+| Column `setValue` from program/HMI/iosh PROPERTY | `dirty` | Only if the name is a non-LOCAL OPTION, value actually changed, and the write is **not** APPLY / not `COPY PROPERTIES` onto this RECORD / not class-init. LOCAL assign does not dirty. Assign on `empty` → `dirty` (user edited an unbound slot). |
+| `RECORD APPLY` (reply or PUB) | `clean` | After projected fields. Named match **and** `Class#key` cache. |
+| `COPY PROPERTIES` onto a RECORD | `clean` | Bind, not a local edit. Apply-mode for the copy (no per-field dirty), then `clean` if any column was written. |
+| `RECORD REMOVE` of a **named** instance | `empty` | Instance stays (program-owned). Non-KEY columns reset to class option defaults. **KEY is left** so the window still has identity (`cust Customer (id: 1)` still has `id` 1). |
+| `RECORD REMOVE` of `Class#key` | (destroyed) | Unlink LISTs; unchanged. |
+
+Do **not** `setState` on a MACHINE that has WHEN. This PR only touches `RecordClass::isRecord`.
+
+**Init vs live:** `setValue` during `setStateMachine` (copy class options) and instantiation parameters must not dirty. Use an instance flag (`initializing` / apply-mode) around those paths. `RecordApply::applyFields` already uses `beginDeferredPropertyNotify` — keep that, and set apply-mode so dirty is skipped, then `setState(clean)` after the row.
+
+Fixture clash: `iod/tests/fixtures/record/customer.cw` has `LOCAL OPTION dirty false`. Lifecycle is the **state** `dirty`, not an OPTION. Rename that LOCAL to `tmp` (and the same LOCAL in `test_record_apply.cpp`). `cust IS dirty` means Clockwork state.
+
+#### C. Skip-dirty / no echo persist
+
+**Spec:** inbound APPLY / dbd PROPERTY of a datastore reply must not mark dirty and must not bounce to persistd.
+
+**Today:** `applyFields` already `beginDeferredPropertyNotify()`, and `setValue` returns before `Channel::sendPropertyChange` while deferred — so APPLY already skips the persist channel. Keep that. Do not remove the defer.
+
+Still required this PR:
+
+- APPLY-mode must not set `dirty` (B).
+- iosh `PROPERTY` on a RECORD column **does** dirty (HMI/program). That is a local edit, not a datastore reply.
+- dbd uses `RECORD APPLY` for rows (not PROPERTY of each column). Blob `respond_to` PROPERTY stays for old INTERFACE JSON; it is not a RECORD column and is out of scope except “do not change that path.”
+
+No persistd change if APPLY never `sendPropertyChange`s. `OPTION PERSISTENT true` shutdown dump can still write current OPTIONS; that is not echo persist.
+
+#### Files
+
+| File | Change |
+| --- | --- |
+| `iod/src/RecordClass.cpp` / `.h` | `mark()`: states `empty`/`dirty`/`clean`; initial/default `empty`. |
+| `iod/src/RecordApply.cpp` | Projection via `getOptions()`; apply-mode; `setState("clean")` after write. `removeRow`: named → `empty` + non-KEY defaults; cache still destroyed. |
+| `iod/src/MachineInstance.cpp` | RECORD column `setValue` → `dirty` unless initializing/apply-mode/LOCAL/unchanged. Flag around `setStateMachine` option copy. |
+| `iod/src/CopyPropertiesAction.cpp` | Onto a RECORD: projection + apply-mode + `clean`. |
+| `iod/src/cwlang.ypp` | No RECORD-body WHEN/COMMAND change (already rejected). |
+| `iod/tests/fixtures/record/customer.cw` | `LOCAL OPTION tmp 0` instead of `dirty`. |
+| `iod/tests/test_record_apply.cpp` | Projection, states, LOCAL skip, REMOVE named vs cache. |
+| `iod/tests/fixtures/record/` | Parse: Watcher `WHEN cust IS empty` (legal). RECORD body still cannot WHEN. |
+
+#### Tests
+
+Subprocess (`cw --parse-only`):
+
+- Existing RECORD fixtures still parse. `customer.cw` after LOCAL rename.
+- New (or extend): a MACHINE with `quiet WHEN cust IS empty;` parses. RECORD body with `dirty WHEN …` still fails (already `reject_when`).
+
+`test_record_apply` (in-process, no dbsvr):
+
+1. `cust` after `setStateMachine` is `empty`; `id` from `setValue` during init stays `empty`.
+2. Live `cust.setValue("name", "Ann")` → `dirty`; `name` is Ann.
+3. APPLY `{"id":1,"name":"Fred","email":"x"}` onto a class **without** `email` → `name` Fred, no `email` property, state `clean`. LOCAL `tmp` unchanged.
+4. APPLY still skips LOCAL (rename the current `dirty` LOCAL test).
+5. APPLY creates `Customer#2` in `clean`.
+6. `RECORD REMOVE` of `Customer#2` destroys cache. REMOVE of named `cust` leaves `cust`, state `empty`, `name` default, `id` still 1.
+7. `COPY PROPERTIES` from `Customer#2` onto `cust` → `clean`, projected columns only.
+
+Do not add iod-elc or two-iod tests here. `test_cw_system` should keep passing (APPLY still writes `name`).
+
+#### Order inside the PR
+
+1. Projection in `applyFields` + tests (no state yet; LOCAL rename in fixture/test).
+2. `mark()` states; initial `empty`; initializing flag so constructor KEY does not dirty.
+3. Live column `setValue` → `dirty`; APPLY → `clean`; REMOVE named → `empty`.
+4. `COPY PROPERTIES` onto RECORD.
+5. Confirm APPLY still deferred-notify (no persist channel).
+
+Spec-first is this section. Then code + tests in one Clockwork commit (or two: projection, then states) if the diff is large.
 
 ### Datastore (`../datastore`)
 
