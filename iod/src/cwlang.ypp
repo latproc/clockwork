@@ -1455,7 +1455,12 @@ serialisable:
 ;
 
 action_list:
-action  {
+regular_list
+| block_list
+;
+
+regular_list:
+simple_action {
 	current_actions_stack.push_back(current_actions);
 	current_actions = new std::list<ActionTemplate*>;
 	DBG_PARSER << "** created new action stack\n";
@@ -1464,14 +1469,31 @@ action  {
 		current_action = 0;
 	}
 }
-| action_list ';' action
+| regular_list ';' simple_action
+| block_list ';' simple_action
+| block_list simple_action
 | error ';'
 | error '}'
 ;
 
+block_list:
+block_action {
+	current_actions_stack.push_back(current_actions);
+	current_actions = new std::list<ActionTemplate*>;
+	DBG_PARSER << "** created new action stack\n";
+    if (current_action) {
+		current_actions->push_back(current_action);
+		current_action = 0;
+	}
+}
+| regular_list ';' block_action
+| block_list ';' block_action
+| block_list block_action
+| error ';'
+| error '}'
 ;
 
-action:
+simple_action:
 SET SYMBOL TO expression error_clause  {
     DBG_PARSER << "set action: set " << $2 << " to " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
@@ -1951,7 +1973,16 @@ SET SYMBOL TO expression error_clause  {
     current_action = new LogActionTemplate($2);
     //delete $2; no delete, ownership is passed to the current_action;
 }
-| IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
+|
+;
+
+action:
+simple_action
+| block_action
+;
+
+block_action:
+IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
    DBG_PARSER << " IF action: " << *$3 << "\n";
     if (current_action) {
 		current_actions->push_back(current_action);
@@ -1990,7 +2021,6 @@ SET SYMBOL TO expression error_clause  {
 | '{' action_list '}' {
     if (current_action) current_actions->push_back(current_action); current_action = 0;
 }
-|
 ;
 
 /* TBD fix this to only allow one generic error and one timeout clause.
