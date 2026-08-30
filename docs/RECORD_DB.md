@@ -1216,7 +1216,7 @@ Commit convention: fixes to common code (shared infrastructure, memory leaks, ZM
 | ds-3 | `cw-migrate.cpp` downgrade | `downgrade --rev <id>` with `<id>` ahead of the current revision downgrades below the target to `none` instead of no-op/error. | Bug |
 | ds-4 | `dbmock/sql_interface.cpp` `collectFieldNamesAndTypes` | `create` concatenates schema type strings unbound into `CREATE TABLE`; `catalogAllows` skips `create` entirely. Accepted surface, but unvalidated SQL. | Security (accepted) |
 | ds-5 | `cw-migrate.cpp` `set_rev` | Inserts the revision id by string concatenation, not a bound value. | Cleanup |
-| ds-6 | `dbmock/db_server.cpp` `fetchReturning` | Update reply relies on the original keys; changing the key column, or updating with no keys, returns nothing / the whole table. | Bug (edge) |
+| ds-6 | `dbmock/db_server.cpp` `fetchReturning` | Update reply relies on the original keys; changing the key column, or updating with no keys, returns nothing / the whole table. **Unfixable** without `RETURNING` (bundled sqlite 3.7 lacks it; `INTEGER PRIMARY KEY` *is* the rowid, so a key update changes the rowid). | Bug (documented limitation) |
 | ds-7 | `dbmock/store.cpp` `getInstance` | Singleton ignores a later `db_name`. | Cleanup |
 | ds-8 | `dbmock/` | Dead legacy code: file-blob methods (`importFile`/`getFile`/`deleteFile`/`listFiles`, `base64`) and the `collectValuesString(quoted=true)` interpolation path are unused by the JSON API; `server.c` is a leftover echo server. | Cleanup |
 
