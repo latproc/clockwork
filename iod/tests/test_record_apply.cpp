@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "MachineClass.h"
 #include "MachineCommandAction.h"
+#include "Channel.h"
 #include "CopyPropertiesAction.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
@@ -103,6 +104,13 @@ int main() {
     if (desc.str().find("secret") != std::string::npos) {
         std::cerr << "PRIVATE column leaked in describe\n";
         return 36;
+    }
+    // Channel publish gate: PRIVATE and LOCAL columns must not be published.
+    if (!Channel::isLocalOrPrivate(cust, Value("password", Value::t_string)) ||
+        !Channel::isLocalOrPrivate(cust, Value("tmp", Value::t_string)) ||
+        Channel::isLocalOrPrivate(cust, Value("name", Value::t_string))) {
+        std::cerr << "Channel publish gate wrong for PRIVATE/LOCAL column\n";
+        return 21;
     }
 
     cJSON *row2 = cJSON_Parse("{\"id\":2,\"name\":\"Ada\"}");
