@@ -1401,6 +1401,8 @@ DS-0 can start in parallel with Clockwork 1. DS-1 before Clockwork 4. DS-3 befor
 
 3. **MachineCommand handlers leak per instance.** `setStateMachine()` allocates a `MachineCommand` for every `receives_functions` and `enter_functions` entry, but `~MachineInstance()` never frees them (raw pointers held in `std::map`s). Affects every machine that declares RECEIVE handlers or ENTER functions.
 
+Landed: item 2 (`makeRemoteRequest` deadline, datastore) and item 3 (`~MachineInstance()` now frees the three command maps). Item 1's dynamic case is fixed via `delete_pending()`; named instances remain long-lived by design.
+
 ### Later, other repos (not Clockwork CI)
 
 Application programs may use RECORD. Not Clockwork tests.
