@@ -110,6 +110,20 @@ static bool wait_get(zmq::socket_t &s, const char *machine, const char *prop,
     return false;
 }
 
+static bool wait_name_not(zmq::socket_t &s, const char *machine, const char *notwant, int tries) {
+    std::string msg = MessageEncoding::encodeCommand("GET", Value(machine), Value("name"));
+    for (int i = 0; i < tries; ++i) {
+        std::string reply;
+        if (cw_cmd(s, msg, reply, 2) && reply.find(notwant) == std::string::npos &&
+            reply.find("Error") == std::string::npos &&
+            reply.find("Unknown") == std::string::npos) {
+            return true;
+        }
+        usleep(100000);
+    }
+    return false;
+}
+
 int main() {
     const char *cwbin = getenv("CW");
     const char *dbd = getenv("DBD");
@@ -166,6 +180,13 @@ int main() {
                "    };\n"
                "    COMMAND insert {\n"
                "        SEND q TO DATABASE_CHANNEL;\n"
+               "    }\n"
+               "    OPTION qdel JSON_VALUE {\n"
+               "        \"action\": \"delete\", \"auth\": \"xxx\", \"type\": \"customer\",\n"
+               "        \"keys\": {\"id\": 1}\n"
+               "    };\n"
+               "    COMMAND delete {\n"
+               "        SEND qdel TO DATABASE_CHANNEL;\n"
                "    }\n"
                "}\n");
 
@@ -318,6 +339,23 @@ int main() {
         std::cerr << "cw2cw Link shadow ping_b not idle on A (RECORD still matched)\n";
         kill_all(pids);
         return 7;
+    }
+
+    // delete path: request + notify propagate RECORD REMOVE to both iods.
+    std::string del =
+        MessageEncoding::encodeCommand("SEND", Value("delete"), Value("TO"), Value("ed"));
+    if (!cw_cmd(iod_a, del, reply, 10)) {
+        std::cerr << "SEND delete TO ed failed: " << reply << "\n";
+        kill_all(pids);
+        return 8;
+    }
+    bool del_a = wait_name_not(iod_a, "cust", "Ann", 50);
+    bool del_b = wait_name_not(iod_b, "cust", "Ann", 50);
+    if (!del_a || !del_b) {
+        std::cerr << "both cw must reset cust.name after delete a=" << del_a << " b=" << del_b
+                  << "\n";
+        kill_all(pids);
+        return 9;
     }
 
     kill_all(pids);
