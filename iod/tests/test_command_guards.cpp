@@ -86,25 +86,25 @@ TEST(CommandGuardsTest, MachineClassOverlapFindsReceiveVariant) {
 // COMMANDCLOCK notify skips the dependant when this is false.
 // Mirrors tests/unit/command_guards.cw (listed, gated, ping fallback, calcAdjust).
 
+void ensureDispatcher() {
+    static boost::condition_variable_any cond;
+    static boost::shared_mutex mutex;
+    static SharedThreadSafeQueue<Package *> queue(cond, mutex);
+    static bool created = false;
+    if (!created) {
+        Logger::instance();
+        Dispatcher::create(queue);
+        created = true;
+    }
+}
+
 class CommandAcceptTest : public ::testing::Test {
   protected:
     MachineClass *cls = nullptr;
     MachineInstance *mi = nullptr;
 
-    static void EnsureDispatcher() {
-        static boost::condition_variable_any cond;
-        static boost::shared_mutex mutex;
-        static SharedThreadSafeQueue<Package *> queue(cond, mutex);
-        static bool created = false;
-        if (!created) {
-            Logger::instance();
-            Dispatcher::create(queue);
-            created = true;
-        }
-    }
-
     void SetUp() override {
-        EnsureDispatcher();
+        ensureDispatcher();
         cls = new MachineClass("CommandAcceptSubject");
         cls->addState("a");
         cls->addState("b");
@@ -265,6 +265,28 @@ TEST_F(CommandAcceptTest, RegistersOnlyCommandClockInstances) {
     EXPECT_EQ(MachineInstance::commandClockCount(), before);
     delete other;
     EXPECT_EQ(MachineInstance::commandClockCount(), before);
+}
+
+// MachineCommand leak fix: an instance with COMMAND/RECEIVE/ENTER handlers must
+// be destroyed cleanly (the destructor releases the per-instance command maps
+// with the right refcounts; a mistake here is a double-free / crash).
+class CommandDestructionTest : public ::testing::Test {
+  protected:
+    void SetUp() override { ensureDispatcher(); }
+};
+
+TEST_F(CommandDestructionTest, InstanceWithHandlersDestroysCleanly) {
+    MachineClass *cmdc = new MachineClass("WithCommands");
+    cmdc->addState("idle", true);
+    cmdc->initial_state = State("idle");
+    cmdc->commands.insert(
+        std::make_pair("clear", new MachineCommandTemplate("clear", "idle")));
+    cmdc->receives.insert(
+        std::make_pair(Message("foo"), new MachineCommandTemplate("on_foo", "idle")));
+    cmdc->enter_functions[Message("idle")] = new MachineCommandTemplate("enter_idle", "idle");
+    MachineInstance *cm = MachineInstanceFactory::create("cm_destroy", "WithCommands");
+    cm->setStateMachine(cmdc);
+    delete cm;  // destructor releases receives/enter/commands maps; double-free would crash
 }
 
 } // namespace
