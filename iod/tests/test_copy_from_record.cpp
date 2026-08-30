@@ -6,7 +6,10 @@
 #include "MessagingInterface.h"
 #include "Expression.h"
 #include "RecordClass.h"
+#include "ClearListAction.h"
+#include "IncludeAction.h"
 #include "SetOperationAction.h"
+#include "cJSON.h"
 #include "SortListAction.h"
 #include "ThreadSafeQueue.h"
 #include "dynamic_value.h"
@@ -163,6 +166,35 @@ int main() {
         return 4;
     }
     delete vact;
+
+    // AS LIST: JSON array -> LIST members (ClearListAction + IncludeAction expand)
+    {
+        cJSON *arr = cJSON_Parse("[{\"id\":1,\"name\":\"Ann\"},{\"id\":2,\"name\":\"Bob\"}]");
+        if (!arr) {
+            std::cerr << "AS LIST: failed to parse json\n";
+            return 14;
+        }
+        Value json_val(arr);
+        ed->setValue("result", json_val);
+        ClearListActionTemplate clear_tmpl(Value("all"));
+        Action *cact = clear_tmpl.factory(ed);
+        if ((*cact)() != Action::Complete) {
+            std::cerr << "AS LIST: clear failed\n";
+            return 15;
+        }
+        IncludeActionTemplate fill_tmpl("all", Value("result"), -1, false, true);
+        Action *fact = fill_tmpl.factory(ed);
+        if ((*fact)() != Action::Complete || all->parameters.size() != 2) {
+            std::cerr << "AS LIST: expected 2 items, got " << all->parameters.size() << "\n";
+            return 16;
+        }
+        if (all->parameters[0].machine || all->parameters[1].machine ||
+            all->parameters[0].val.kind != Value::t_json ||
+            all->parameters[1].val.kind != Value::t_json) {
+            std::cerr << "AS LIST: members are not json objects\n";
+            return 17;
+        }
+    }
 
     std::cout << "ok\n";
     return 0;
