@@ -823,7 +823,7 @@ Do **not** open sqlite from `dbd`. Do **not** fold `dbsvr` into the Clockwork tr
 | --- | --- | --- |
 | D1 | SQL concatenated; binds rejected | **Landed.** `?` placeholders + `bindAll` |
 | D2 | Every column a JSON string; NULL text unsafe | **Landed.** `columnToJson` by sqlite type |
-| D3 | insert/update/delete do not return the row | **Landed.** `SELECT` after write (no `RETURNING` on sqlite 3.7); delete returns keys |
+| D3 | insert/update/delete do not return the row | **Landed.** `INSERT`/`UPDATE`/`DELETE … RETURNING *` (bundled sqlite upgraded to 3.46) |
 | D4 | JSON null / boolean not emitted as SQL | **Landed.** `bindFromJson` |
 | D5–D6 | No `select`/`join`/`order`/`limit`; WHERE equality-AND only | **Landed** except JSON `join`. `select` + `order`/`limit` + WHERE `eq`/`neq`/`gt`/`lt`/`ge`/`le`/`in`/`like`/`is`. Joins = named views |
 | D7 | ZMQ REP only — add PUB after COMMIT | **Landed.** PUB `--notify-port` (default 5556) |
@@ -1216,7 +1216,7 @@ Commit convention: fixes to common code (shared infrastructure, memory leaks, ZM
 | ds-3 | `cw-migrate.cpp` downgrade | `downgrade --rev <id>` with `<id>` ahead of the current revision downgrades below the target to `none` instead of no-op/error. | Bug | **Landed** (refuses target ahead of current) |
 | ds-4 | `dbmock/sql_interface.cpp` `collectFieldNamesAndTypes` | `create` concatenates schema type strings unbound into `CREATE TABLE`; `catalogAllows` skips `create` entirely. Accepted surface, but unvalidated SQL. | Security (accepted) | **Accepted** — create is lexical-only |
 | ds-5 | `cw-migrate.cpp` `set_rev` | Inserts the revision id by string concatenation, not a bound value. | Cleanup | **Landed** (bound value) |
-| ds-6 | `dbmock/db_server.cpp` `fetchReturning` | Update reply relies on the original keys; changing the key column, or updating with no keys, returns nothing / the whole table. **Unfixable** without `RETURNING` (bundled sqlite 3.7 lacks it; `INTEGER PRIMARY KEY` *is* the rowid, so a key update changes the rowid). | Bug (documented limitation) | **Unfixable** (no `RETURNING` on sqlite 3.7) |
+| ds-6 | `dbmock/db_server.cpp` (was `fetchReturning`) | Update reply relied on the original keys; changing the key column, or updating with no keys, returned nothing / the whole table (`INTEGER PRIMARY KEY` *is* the rowid, so the old rowid-capture workaround could not work). | Bug | **Landed** — sqlite upgraded to 3.46; writes use `RETURNING *` |
 | ds-7 | `dbmock/store.cpp` `getInstance` | Singleton ignores a later `db_name`. | Cleanup | **Open** — one DB per process is intentional; decide warn-vs-error |
 | ds-8 | `dbmock/` | Dead legacy code: file-blob methods (`importFile`/`getFile`/`deleteFile`/`listFiles`, `base64`) and the `collectValuesString(quoted=true)` interpolation path are unused by the JSON API; `server.c` is a leftover echo server. | Cleanup | **Open** (tidy) |
 
@@ -1386,7 +1386,7 @@ Spec-first is this section. Then code + tests in one Clockwork commit (or two: p
 
 0. **WAL + busy timeout + automatic transactions** — **landed in datastore.** Four PRAGMAs on connect; writable open CREATE; `BEGIN IMMEDIATE` on writes / `BEGIN DEFERRED` on reads; ROLLBACK on error. `test_store_wal` checks `journal_mode=wal` and insert+rollback leaves no rows. Clockwork never sends BEGIN.
 0b. **REP linger 0** — **landed.** `ZMQ_LINGER=0` on REP and PUB; EADDRINUSE bind retry; recreate REP on send/recv failure; WAL checkpoint on SIGINT/SIGTERM.
-1. **Typed replies, NULL, RETURNING** — **landed.** Column types from sqlite (`INTEGER`/`REAL`/`TEXT`/`NULL`); JSON null/bool on write; insert/update reply is the row via `SELECT` after write (bundled sqlite 3.7 has no `RETURNING`). `test_typed_json`.
+1. **Typed replies, NULL, RETURNING** — **landed.** Column types from sqlite (`INTEGER`/`REAL`/`TEXT`/`NULL`); JSON null/bool on write; insert/update/delete replies are the affected rows via `RETURNING *` (bundled sqlite upgraded to 3.46; `fetchReturning`/`captureRowsToDelete` removed). `test_typed_json` covers key-change and no-keys updates.
 2. **Bound parameters + identifier catalog** — **landed.** Identifiers `[A-Za-z_][A-Za-z0-9_]*`; values bound (`?`). Table/view must exist in `sqlite_master`; columns in `PRAGMA table_info` (`create` is the exception). `action: sql` is rejected. README: `create` = CREATE TABLE.
 3. **`select` / `order` / `limit` / `where`** — **landed.** Equality, null, `eq`/`neq`/`gt`/`lt`/`ge`/`le`, `in` (array), `like` (bound). `-col` DESC, `limit`. Named views are the join path. Delete replies return the keys.
 4. **JSON `join` (optional)** — **not started; not needed for v1.** Joins are named SQL views (`CREATE VIEW` in `cw-migrate`). Clockwork tests use generic `customer_with_city`.
