@@ -751,12 +751,31 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
 }
 
 MachineInstance::~MachineInstance() {
-    std::unique_lock<std::mutex> lock(global_lists_mutex);
-    all_machines.remove(this);
-    automatic_machines.remove(this);
-    active_machines.remove(this);
-    Dispatcher::instance()->removeReceiver(this);
-    delete cache;
+    {
+        std::unique_lock<std::mutex> lock(global_lists_mutex);
+        all_machines.remove(this);
+        automatic_machines.remove(this);
+        active_machines.remove(this);
+        Dispatcher::instance()->removeReceiver(this);
+        delete cache;
+    }
+    // Free per-instance command handlers allocated in setStateMachine().
+    // receives_functions: new without retain (refs == 1); enter_functions and
+    // commands: new + retain (refs == 2).
+    for (auto &p : receives_functions) {
+        p.second->release();
+    }
+    receives_functions.clear();
+    for (auto &p : enter_functions) {
+        p.second->release();
+        p.second->release();
+    }
+    enter_functions.clear();
+    for (auto &p : commands) {
+        p.second->release();
+        p.second->release();
+    }
+    commands.clear();
 }
 
 void MachineInstance::remove_pending() {
