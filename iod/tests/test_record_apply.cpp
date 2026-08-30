@@ -1,6 +1,7 @@
 #include "Dispatcher.h"
 #include "Logger.h"
 #include "MachineClass.h"
+#include "MachineCommandAction.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
@@ -269,6 +270,23 @@ int main() {
     if (MachineInstance::find("Item#1")) {
         std::cerr << "RECORD REMOVE left Item#1 in the map\n";
         return 15;
+    }
+
+    // MachineCommand leak fix: an instance with COMMAND/RECEIVE/ENTER handlers
+    // must be destroyed cleanly (no double-free / crash).
+    {
+        MachineClass *cmdc = new MachineClass("WithCommands");
+        cmdc->addState("idle", true);
+        cmdc->initial_state = State("idle");
+        cmdc->commands.insert(
+            std::make_pair("clear", new MachineCommandTemplate("clear", "idle")));
+        cmdc->receives.insert(
+            std::make_pair(Message("foo"), new MachineCommandTemplate("on_foo", "idle")));
+        cmdc->enter_functions[Message("idle")] = new MachineCommandTemplate("enter_idle", "idle");
+        MachineInstance *cm = MachineInstanceFactory::create("cm", "WithCommands");
+        cm->setStateMachine(cmdc);
+        MachineInstance::delete_later(cm);
+        MachineInstance::delete_pending();
     }
 
     MachineInstance::delete_pending();

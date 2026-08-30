@@ -1226,6 +1226,8 @@ Commit convention: fixes to common code (shared infrastructure, memory leaks, ZM
 
 Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice does not need `dbsvr`.
 
+**Testing requirement:** every change in this repo must ship with a test (parse test, unit test, or a case in `test_record_apply` / the datastore suite) so regressions and lifecycle mistakes are caught. The `MachineCommand` leak fix added a COMMAND/RECEIVE/ENTER destruction test to `test_record_apply` to guard against double-free.
+
 ### Clockwork
 
 1. **RECORD grammar + subprocess parse tests** — **landed.** `RECORD` body OPTIONS only; `KEY`/`UNIQUE`/`NOT NULL`; `VIEW`/`TABLE`; `cw --parse-only`; fixtures under `iod/tests/fixtures/record/`. KEY on MACHINE is an error; missing KEY on a table RECORD is an error. No dbd/datastore change.
