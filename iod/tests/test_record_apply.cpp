@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "MachineClass.h"
 #include "MachineCommandAction.h"
+#include "CopyPropertiesAction.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
@@ -270,6 +271,41 @@ int main() {
     if (MachineInstance::find("Item#1")) {
         std::cerr << "RECORD REMOVE left Item#1 in the map\n";
         return 15;
+    }
+
+    // COPY PROPERTIES onto a RECORD: projection + clean (not dirty).
+    {
+        MachineInstance *src = MachineInstanceFactory::create("src", "Customer");
+        src->setStateMachine(mc);
+        src->setRecordApplyMode(true);
+        src->setValue("id", Value(static_cast<int64_t>(9)));
+        src->setValue("name", Value("Copied", Value::t_string));
+        src->setRecordApplyMode(false);
+        machines[src->getName()] = src;
+
+        MachineInstance *dst = MachineInstanceFactory::create("dst", "Customer");
+        dst->setStateMachine(mc);
+        dst->setRecordApplyMode(true);
+        dst->setValue("id", Value(static_cast<int64_t>(9)));
+        dst->setRecordApplyMode(false);
+        machines[dst->getName()] = dst;
+
+        CopyPropertiesActionTemplate cpt(Value("src"), Value("dst"));
+        Action *cp_act = cpt.factory(ed);
+        if ((*cp_act)() != Action::Complete) {
+            std::cerr << "COPY PROPERTIES onto RECORD failed\n";
+            return 41;
+        }
+        if (dst->getValue("name").asString() != "Copied") {
+            std::cerr << "COPY PROPERTIES did not copy name\n";
+            return 42;
+        }
+        if (std::string(dst->getCurrentStateString()) != "clean") {
+            std::cerr << "COPY PROPERTIES did not set clean: "
+                      << dst->getCurrentStateString() << "\n";
+            return 43;
+        }
+        delete cp_act;
     }
 
     // MachineCommand leak fix: an instance with COMMAND/RECEIVE/ENTER handlers
