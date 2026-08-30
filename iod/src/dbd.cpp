@@ -140,8 +140,15 @@ static void send_response_to_clockwork(cJSON *json_request, const char *buf) {
     if (respond_to && respond_to->type == cJSON_String && respond_to->valuestring) {
         std::string respond_to_str = respond_to->valuestring;
         size_t dot = respond_to_str.rfind('.');
-        target.machine = Value{respond_to_str.substr(0, dot)};
-        target.property = Value{dot == std::string::npos ? respond_to_str : respond_to_str.substr(dot + 1)};
+        if (dot != std::string::npos) {
+            target.machine = Value{respond_to_str.substr(0, dot)};
+            target.property = Value{respond_to_str.substr(dot + 1)};
+        }
+        else {
+            // No dot: treat the whole string as the machine name; property
+            // stays the default "response".
+            target.machine = Value{respond_to_str};
+        }
     }
     cJSON *msg = cJSON_Parse(buf);
     if (!msg) {
