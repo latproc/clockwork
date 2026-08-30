@@ -1202,7 +1202,7 @@ Commit convention: fixes to common code (shared infrastructure, memory leaks, ZM
 | iod-10 | `cwlang.ypp` `QUERY … INTO` | The `INTO` target is discarded (`(void)$4`); the SEND goes out but the named LIST is never filled. | Gap | **Open** (PR 7 reply fill) |
 | iod-11 | `cwlang.ypp` `record_definition_header` | `RecordClass::setTable(lowercase_copy($1))` is redundant; `mark()` already sets TABLE to the lowercase class name. | Cleanup | **Landed** (`6ea6ed38`) |
 | iod-12 | `src/dbd.cpp` | Logs the full outgoing request (`sending: …`, includes `auth` + row data) and the full `dbsvr` reply to stdout unconditionally. | Security/logging | **Landed** (gated behind `DEBUG_BASIC`) |
-| iod-13 | `dbd.cpp` | Two parallel iod connections: `g_iodcmd` (MessagingInterface) and `g_iod_req` (DeadlineReq), both to `:5555`. | Cleanup | **Open** (ZMQ surgery; needs a reconnect test) |
+| iod-13 | `dbd.cpp` | Two parallel iod connections: `g_iodcmd` (MessagingInterface) and `g_iod_req` (DeadlineReq), both to `:5555`. | Cleanup | **Landed** — single `DeadlineReq` to iod; dead `MessagingInterface` client + `sendIOD`/`sendIODMessage`/`getIODSyncCommand` MODBUS helpers removed |
 | iod-14 | `dbd.cpp` `send_response_to_clockwork` | `respond_to` with no `.` sets machine and property both to the whole string. | Bug (edge) | **Landed** (machine name only) |
 | iod-15 | `dbd.cpp` | dbsvr request failure (timeout) drops the request with no error back to Clockwork; this is the Q11 `WAITFOR` hang. | Q11 | **Open** (needs WAITFOR timeout; ask Martin) |
 | iod-16 | `dbd.cpp` | `notify_sub` is polled twice (main `checkConnections` items[2] and a second standalone poll). | Cleanup | **Intentional** — drains dbsvr notify while the CHANNEL handshake is down |

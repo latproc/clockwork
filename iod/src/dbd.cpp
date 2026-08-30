@@ -77,54 +77,19 @@ static unsigned long start_t = 0;
 static const int64_t DBSVR_TIMEOUT_MS = 5000;
 static const int64_t IOD_CMD_TIMEOUT_MS = 3000;
 
-MessagingInterface *g_iodcmd;
 DeadlineReq *g_iod_req = 0;
 DeadlineReq *g_dbsvr_req = 0;
-
-std::string getIODSyncCommand(int group, int addr, int new_value);
-char *sendIOD(int group, int addr, int new_value);
-char *sendIODMessage(const std::string &s);
 
 std::ostream &timestamp(std::ostream &out) {
     unsigned long t = microsecs() - start_t;
     return out << (t / 1000);
 }
 
-std::string getIODSyncCommand(int group, int addr, int new_value) {
-    auto msg = MessageEncoding::encodeCommand("MODBUS", Value{group}, Value{addr}, Value{new_value});
-    sendIODMessage(msg);
-    return msg;
-}
-
-char *sendIOD(int group, int addr, int new_value) {
-    std::string s(getIODSyncCommand(group, addr, new_value));
-    if (g_iodcmd) {
-        return g_iodcmd->send(s.c_str());
-    }
-    return strdup("IOD interface not ready\n");
-}
-
-char *sendIODMessage(const std::string &s) {
-    if (g_iodcmd) {
-        return g_iodcmd->send(s.c_str());
-    }
-    return strdup("IOD interface not ready\n");
-}
-
 static bool sendIodCommand(const std::string &cmd, std::string &reply) {
     if (g_iod_req) {
         return g_iod_req->request(cmd, reply, IOD_CMD_TIMEOUT_MS);
     }
-    if (!g_iodcmd) {
-        return false;
-    }
-    char *r = g_iodcmd->send(cmd.c_str());
-    if (!r) {
-        return false;
-    }
-    reply = r;
-    free(r);
-    return true;
+    return false;
 }
 
 static void send_response_to_clockwork(cJSON *json_request, const char *buf) {
@@ -412,9 +377,6 @@ int main(int argc, const char *argv[]) {
     std::cout << "-------- Starting Command Interface ---------\n" << std::flush;
     std::cout << "connecting to clockwork on " << host << ":" << cw_port << "\n";
     std::cout << "dbsvr " << dbsvr_endpoint << " notify " << notify_endpoint << "\n";
-    g_iodcmd = MessagingInterface::create(host, cw_port);
-    g_iodcmd->start();
-
     std::ostringstream iod_ep;
     iod_ep << "tcp://" << host << ":" << cw_port;
     DeadlineReq iod_req(context, iod_ep.str());
