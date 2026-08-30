@@ -242,7 +242,7 @@ option_setting:
 | SYMBOL value option_annots   # KEY | UNIQUE | NOT NULL
 ```
 
-`PERSISTENT` and `LOCAL` are mutually exclusive (parse error). `KEY` / `UNIQUE` / `NOT NULL` belong on a bare `OPTION` (database column), not on `PERSISTENT OPTION` or `LOCAL OPTION`.
+`PERSISTENT` and `LOCAL` are mutually exclusive (parse error). `KEY` / `UNIQUE` / `NOT NULL` belong on a bare `OPTION` (database column), not on `PERSISTENT OPTION` or `LOCAL OPTION`. `PERSISTENT OPTION` in a RECORD body is a **later PR**: the current parser accepts only `OPTION` and `LOCAL OPTION` (iod-9).
 
 Clockwork fixture (generic):
 
@@ -1198,7 +1198,7 @@ Commit convention: fixes to common code (shared infrastructure, memory leaks, ZM
 | iod-6 | `RecordApply.cpp` `removeRow` | Named instances are unlinked from LISTs but never reset to `empty` + non-KEY defaults. PR 9 item B. | PR 9 gap | **Landed** (PR 9 named reset) |
 | iod-7 | `RecordClass.cpp` `mark` | RECORD has no `empty`/`dirty`/`clean` states yet and the grammar already calls `disableAutomaticStateChanges()`, so a RECORD currently has an empty state set; `cust IS empty` in the examples cannot evaluate until PR 9 adds the states. | PR 9 gap | **Landed** (PR 9 states) |
 | iod-8 | `MachineClass.cpp` `addPrivateProperty` | Private schema props (`RECORD`/`TABLE`/`VIEW`/`KEY`/`UNIQUE`/`NOT_NULL`) and `LOCAL OPTION` share the `local_properties` set, so `propertyIsLocal(KEY)` is true. PR 9's projection (`getOptions()` vs `propertyIsLocal`) must keep private-hidden-schema and LOCAL-not-a-column apart. | Model gap | **Landed** (PR 10 `private_properties`) |
-| iod-9 | `cwlang.ypp` `record_section` | `PERSISTENT OPTION` is not accepted in a RECORD body, though the grammar sketch and OPTIONS = columns describe its semantics. | Doc drift | **Open** — implement in grammar, or document unsupported |
+| iod-9 | `cwlang.ypp` `record_section` | `PERSISTENT OPTION` is not accepted in a RECORD body, though the grammar sketch and OPTIONS = columns describe its semantics. | Doc drift | **Deferred** — later PR; v1 grammar accepts only `OPTION` and `LOCAL OPTION` |
 | iod-10 | `cwlang.ypp` `QUERY … INTO` | The `INTO` target is discarded (`(void)$4`); the SEND goes out but the named LIST is never filled. | Gap | **Open** (PR 7 reply fill) |
 | iod-11 | `cwlang.ypp` `record_definition_header` | `RecordClass::setTable(lowercase_copy($1))` is redundant; `mark()` already sets TABLE to the lowercase class name. | Cleanup | **Landed** (`6ea6ed38`) |
 | iod-12 | `src/dbd.cpp` | Logs the full outgoing request (`sending: …`, includes `auth` + row data) and the full `dbsvr` reply to stdout unconditionally. | Security/logging | **Landed** (gated behind `DEBUG_BASIC`) |
