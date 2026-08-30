@@ -114,6 +114,17 @@ endif()
 FIND_PACKAGE(Mosquitto)
 FIND_PACKAGE(MODBUS)
 FIND_PACKAGE(LibXml2)
+# CMake 3.5 FindLibXml2 caches LIBXML2_LIBRARIES; 3.12+ caches LIBXML2_LIBRARY
+# and sets LIBRARIES as a non-cache alias. Normalize so iod-elc can use the
+# same variables on Linux panels and macOS.
+if(LIBXML2_FOUND)
+  if(NOT LIBXML2_LIBRARIES AND LIBXML2_LIBRARY)
+    set(LIBXML2_LIBRARIES ${LIBXML2_LIBRARY})
+  endif()
+  if(NOT LIBXML2_INCLUDE_DIRS AND LIBXML2_INCLUDE_DIR)
+    set(LIBXML2_INCLUDE_DIRS ${LIBXML2_INCLUDE_DIR})
+  endif()
+endif()
 FIND_PACKAGE(ZeroMQ REQUIRED)
 FIND_PACKAGE(OpenSSL REQUIRED)
 
@@ -484,9 +495,6 @@ target_link_directories_compat(cw_ecat "${CW_ETHERCAT_DIR}")
 target_link_libraries(cw_ecat cw_interpreter cw_client dl ${CW_ETHERCAT_LIB} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} "pthread")
 endif()
 
-INCLUDE_DIRECTORIES(${LIBXML2_INCLUDE_DIR})
-LINK_DIRECTORIES("LIBXML2_LIBRARIES")
-
 # Kernel transport controller (only plant iod on this branch).
 if(BUILD_IOD_ELC)
   # Prefer make install-lib → /usr/local; fall back to /opt/elc.
@@ -503,9 +511,14 @@ if(BUILD_IOD_ELC)
       "elcethercat not found; skipping iod-elc. "
       "Install libelcethercat (pkg-config elcethercat) to build the plant controller. "
       "cw and the other RELEASE_TARGETS still build.")
+  elseif(NOT LIBXML2_FOUND)
+    message(WARNING
+      "LibXml2 not found; skipping iod-elc. "
+      "Install libxml2 (headers + library) to build the plant controller. "
+      "cw and the other RELEASE_TARGETS still build.")
   endif()
 endif()
-if(BUILD_IOD_ELC AND ELC_FOUND)
+if(BUILD_IOD_ELC AND ELC_FOUND AND LIBXML2_FOUND)
   include_directories(${ELC_INCLUDE_DIRS})
 
   add_executable(iod-elc
@@ -519,6 +532,7 @@ if(BUILD_IOD_ELC AND ELC_FOUND)
     src/ElcSetupRecipe.cpp
     ${Clockwork_SRCS}
   )
+  target_include_directories(iod-elc PRIVATE ${LIBXML2_INCLUDE_DIRS})
   # Plant iod: kernel elc transport only.
   target_compile_definitions(iod-elc PRIVATE
     USE_ETHERCAT=1
@@ -539,7 +553,7 @@ if(BUILD_IOD_ELC AND ELC_FOUND)
   target_link_libraries(iod-elc
     cw_client
     ${ELC_LIBRARIES}
-    dl ${ZeroMQ_LIBRARY} xml2 ${Boost_LIBRARIES} "mosquitto" "pthread" ${_iod_elc_extra_libs} curl OpenSSL::Crypto
+    dl ${ZeroMQ_LIBRARY} ${LIBXML2_LIBRARIES} ${Boost_LIBRARIES} "mosquitto" "pthread" ${_iod_elc_extra_libs} curl OpenSSL::Crypto
   )
   install(TARGETS iod-elc RUNTIME DESTINATION ${PROJECT_SOURCE_DIR})
   message(STATUS "Building iod-elc with libelcethercat (${ELC_VERSION}) include=${ELC_INCLUDE_DIRS}")

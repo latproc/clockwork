@@ -150,7 +150,8 @@ if (FALSE AND USE_ETHERCAT)
             COMMAND ${CMAKE_COMMAND} -E copy
                     ${PROJECT_SOURCE_DIR}/tests/test.xml
                     ${CMAKE_CURRENT_BINARY_DIR}/test.xml)
-    target_link_libraries(test_ecat_xml gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} xml2 pthread)
+    target_include_directories(test_ecat_xml PRIVATE ${LIBXML2_INCLUDE_DIRS})
+    target_link_libraries(test_ecat_xml gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${LIBXML2_LIBRARIES} pthread)
     include_directories("${PROJECT_SOURCE_DIR}/tests")
     add_test(NAME test_ecat_xml COMMAND test_ecat_xml)
 endif()
