@@ -1226,7 +1226,7 @@ Commit convention: fixes to common code (shared infrastructure, memory leaks, ZM
 
 Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice does not need `dbsvr`.
 
-**Testing requirement:** every change in this repo must ship with a test (parse test, unit test, or a case in `test_record_apply` / the datastore suite) so regressions and lifecycle mistakes are caught. The `MachineCommand` leak fix added a COMMAND/RECEIVE/ENTER destruction test to `test_record_apply` to guard against double-free.
+**Testing requirement:** every change in this repo must ship with a test (parse test, unit test, or a case in `test_record_apply` / the datastore suite) so regressions and lifecycle mistakes are caught. The `MachineCommand` leak fix added a COMMAND/RECEIVE/ENTER destruction test to `test_record_apply` to guard against double-free. Coverage: `test_record_apply` (states, projection, PRIVATE flag + describe, delete-all, named-reset, COPY PROPERTIES, command destruction), `test_copy_from_record` (COPY/SORT/TAKE/VIEW), `test_db_notify` (parse), `test_deadline_req` (deadline + recreate), `test_two_dbd`/`test_two_process_apply` (PUB fan-out), `test_cw_system` (insert **and** delete fan-out), plus 13 parse and 2 scaffold goldens. The only uncovered branch is `Channel::sendPropertyChange`'s PRIVATE gate — guarded by the `propertyIsPrivate` flag test (it mirrors the long-standing `propertyIsLocal` gate).
 
 ### Clockwork
 
