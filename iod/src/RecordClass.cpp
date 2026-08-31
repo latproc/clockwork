@@ -152,6 +152,14 @@ bool isRecord(const MachineClass *mc) {
 
 bool isView(const MachineClass *mc) { return mc && !prop(mc, kView).empty(); }
 
+// A class is a "row" if it is a RECORD or a MACHINE explicitly bound to a
+// table/view. Plain MACHINEs (no TABLE/VIEW) are not rows.
+bool hasTableBinding(const MachineClass *mc) {
+    return mc && (!prop(mc, kTable).empty() || !prop(mc, kView).empty());
+}
+
+bool isRow(const MachineClass *mc) { return isRecord(mc) || hasTableBinding(mc); }
+
 std::string tableName(const MachineClass *mc) {
     if (!mc) {
         return "";

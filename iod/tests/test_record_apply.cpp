@@ -333,6 +333,42 @@ int main() {
         MachineInstance::delete_pending();
     }
 
+    // MACHINE TABLE binding: a table-bound MACHINE receives APPLY by (type,key)
+    // with projection, and APPLY does NOT setState on it (WHEN owns state).
+    {
+        MachineClass *panelc = new MachineClass("CustomerPanel");
+        RecordClass::setTable(panelc, "customer");
+        panelc->setOption("id", Value(static_cast<int64_t>(0)));
+        RecordClass::addKey(panelc, "id");
+        panelc->setOption("name", Value("", Value::t_string));
+        panelc->local_properties.insert("state");
+        panelc->setOption("state", Value("empty", Value::t_string));
+        panelc->addState("idle", true);
+        panelc->addState("active");
+        panelc->initial_state = State("idle");
+        panelc->default_state = State("idle");
+        MachineInstance *panel = MachineInstanceFactory::create("panel", "CustomerPanel");
+        panel->setStateMachine(panelc);
+        panel->setValue("id", Value(static_cast<int64_t>(1)));
+        machines[panel->getName()] = panel;
+
+        cJSON *prow = cJSON_Parse("{\"id\":1,\"name\":\"Ann\",\"email\":\"x\"}");
+        int pn = RecordApply::applyRow("customer", 0, prow);
+        cJSON_Delete(prow);
+        if (pn < 1) {
+            std::cerr << "MACHINE TABLE apply wrote " << pn << " instances\n";
+            return 50;
+        }
+        if (panel->getValue("name").asString() != "Ann") {
+            std::cerr << "MACHINE TABLE name not applied\n";
+            return 51;
+        }
+        if (std::string(panel->getCurrentStateString()) == "clean") {
+            std::cerr << "MACHINE TABLE state was set to clean by APPLY\n";
+            return 52;
+        }
+    }
+
     MachineInstance::delete_pending();
 
     std::cout << "ok\n";

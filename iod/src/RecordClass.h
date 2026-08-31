@@ -21,6 +21,8 @@ void addFlags(MachineClass *mc, const std::string &column, unsigned flags);
 
 bool isRecord(const MachineClass *mc);
 bool isView(const MachineClass *mc);
+bool hasTableBinding(const MachineClass *mc);
+bool isRow(const MachineClass *mc);
 std::string tableName(const MachineClass *mc);
 std::string keyColumn(const MachineClass *mc);
 unsigned keyColumnCount(const MachineClass *mc);

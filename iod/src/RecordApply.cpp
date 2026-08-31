@@ -72,17 +72,6 @@ bool keyMatches(MachineInstance *m, const MachineClass *mc, cJSON *keys) {
     return valuesMatch(m->getValue(keycol), jsonToValue(item));
 }
 
-static MachineClass *classForType(const std::string &type) {
-    std::list<MachineClass *>::const_iterator it = MachineClass::all_machine_classes.begin();
-    while (it != MachineClass::all_machine_classes.end()) {
-        MachineClass *mc = *it++;
-        if (mc && RecordClass::isRecord(mc) && typeMatches(mc, type)) {
-            return mc;
-        }
-    }
-    return 0;
-}
-
 static void applyFields(MachineInstance *m, const MachineClass *mc, cJSON *row) {
     if (!m || !mc || !row || row->type != cJSON_Object) {
         return;
@@ -101,7 +90,9 @@ static void applyFields(MachineInstance *m, const MachineClass *mc, cJSON *row) 
     }
     m->endDeferredPropertyNotify();
     m->setRecordApplyMode(false);
-    m->setRecordSystemState("clean");
+    if (RecordClass::isRecord(mc)) {
+        m->setRecordSystemState("clean");
+    }
 }
 
 // Cache name only (`Customer#1`). Not a MachineClass field; named instances keep
@@ -123,44 +114,51 @@ static std::string instanceName(const MachineClass *mc, cJSON *keys, cJSON *row)
 }
 
 int applyRow(const std::string &type, cJSON *keys, cJSON *row) {
-    MachineClass *mc = classForType(type);
-    if (!mc) {
-        return 0;
-    }
     cJSON *effective_keys = keys;
     if ((!effective_keys || !effective_keys->child) && row && row->type == cJSON_Object) {
         effective_keys = row;
     }
     int n = 0;
-    std::list<MachineInstance *>::iterator it = MachineInstance::begin_records();
-    while (it != MachineInstance::end_records()) {
-        MachineInstance *m = *it++;
-        if (!m || !m->getStateMachine() || m->getStateMachine() != mc) {
+    // A table may have several row classes (the RECORD plus any table-bound
+    // MACHINEs); apply the row to every matching instance.
+    std::list<MachineClass *>::const_iterator cit = MachineClass::all_machine_classes.begin();
+    while (cit != MachineClass::all_machine_classes.end()) {
+        MachineClass *mc = *cit++;
+        if (!mc || !RecordClass::isRow(mc) || !typeMatches(mc, type)) {
             continue;
         }
-        if (keyMatches(m, mc, effective_keys)) {
-            applyFields(m, mc, row);
-            ++n;
-        }
-    }
-    if (n == 0 && row) {
-        std::string name = instanceName(mc, effective_keys, row);
-        if (name.empty()) {
-            return 0; // row has no key column; cannot build a cache instance
-        }
-        MachineInstance *existing = MachineInstance::find(name.c_str());
-        MachineInstance *m = existing;
-        if (!m) {
-            m = MachineInstanceFactory::create(name.c_str(), mc->name.c_str());
-            if (m) {
-                m->setStateMachine(mc);
-                machines[name] = m;
+        int class_hits = 0;
+        std::list<MachineInstance *>::iterator it = MachineInstance::begin_records();
+        while (it != MachineInstance::end_records()) {
+            MachineInstance *m = *it++;
+            if (!m || !m->getStateMachine() || m->getStateMachine() != mc) {
+                continue;
+            }
+            if (keyMatches(m, mc, effective_keys)) {
+                applyFields(m, mc, row);
+                ++class_hits;
             }
         }
-        if (m) {
-            applyFields(m, mc, row);
-            ++n;
+        // Only RECORD classes materialise a cache instance for a missing row.
+        if (class_hits == 0 && row && RecordClass::isRecord(mc)) {
+            std::string name = instanceName(mc, effective_keys, row);
+            if (!name.empty()) {
+                MachineInstance *existing = MachineInstance::find(name.c_str());
+                MachineInstance *m = existing;
+                if (!m) {
+                    m = MachineInstanceFactory::create(name.c_str(), mc->name.c_str());
+                    if (m) {
+                        m->setStateMachine(mc);
+                        machines[name] = m;
+                    }
+                }
+                if (m) {
+                    applyFields(m, mc, row);
+                    ++class_hits;
+                }
+            }
         }
+        n += class_hits;
     }
     return n;
 }
@@ -200,49 +198,54 @@ static void unlinkFromLists(MachineInstance *target) {
 }
 
 int removeRow(const std::string &type, cJSON *keys) {
-    MachineClass *mc = classForType(type);
-    if (!mc) {
-        return 0;
-    }
     // Empty/absent keys means "delete all rows of this type": clear every held
     // cache instance. Named instances are program-owned and stay (only unlinked).
     const bool delete_all = !keys || keys->type != cJSON_Object || !keys->child;
-    std::vector<MachineInstance *> hit;
-    std::list<MachineInstance *>::iterator it = MachineInstance::begin_records();
-    while (it != MachineInstance::end_records()) {
-        MachineInstance *m = *it++;
-        if (!m || m->getStateMachine() != mc) {
+    int n = 0;
+    std::list<MachineClass *>::const_iterator cit = MachineClass::all_machine_classes.begin();
+    while (cit != MachineClass::all_machine_classes.end()) {
+        MachineClass *mc = *cit++;
+        if (!mc || !RecordClass::isRow(mc) || !typeMatches(mc, type)) {
             continue;
         }
-        if (delete_all || keyMatches(m, mc, keys)) {
-            hit.push_back(m);
-        }
-    }
-    int n = 0;
-    for (size_t i = 0; i < hit.size(); ++i) {
-        MachineInstance *m = hit[i];
-        unlinkFromLists(m);
-        if (isCacheInstance(m, mc)) {
-            machines.erase(m->getName());
-            m->unregisterRecord();
-            MachineInstance::delete_later(m);
-        }
-        else {
-            // Named instance: reset to empty + non-KEY columns to class defaults.
-            m->setRecordApplyMode(true);
-            const std::map<std::string, Value> &opts = mc->getOptions();
-            std::map<std::string, Value>::const_iterator oi = opts.begin();
-            while (oi != opts.end()) {
-                if (!mc->propertyIsLocal(oi->first) &&
-                    !(RecordClass::columnFlags(mc, oi->first) & RecordClass::COL_KEY)) {
-                    m->setValue(oi->first, oi->second);
-                }
-                ++oi;
+        std::vector<MachineInstance *> hit;
+        std::list<MachineInstance *>::iterator it = MachineInstance::begin_records();
+        while (it != MachineInstance::end_records()) {
+            MachineInstance *m = *it++;
+            if (!m || m->getStateMachine() != mc) {
+                continue;
             }
-            m->setRecordApplyMode(false);
-            m->setRecordSystemState("empty");
+            if (delete_all || keyMatches(m, mc, keys)) {
+                hit.push_back(m);
+            }
         }
-        ++n;
+        for (size_t i = 0; i < hit.size(); ++i) {
+            MachineInstance *m = hit[i];
+            unlinkFromLists(m);
+            if (isCacheInstance(m, mc)) {
+                machines.erase(m->getName());
+                m->unregisterRecord();
+                MachineInstance::delete_later(m);
+            }
+            else {
+                // Named instance: reset to empty + non-KEY columns to class defaults.
+                m->setRecordApplyMode(true);
+                const std::map<std::string, Value> &opts = mc->getOptions();
+                std::map<std::string, Value>::const_iterator oi = opts.begin();
+                while (oi != opts.end()) {
+                    if (!mc->propertyIsLocal(oi->first) &&
+                        !(RecordClass::columnFlags(mc, oi->first) & RecordClass::COL_KEY)) {
+                        m->setValue(oi->first, oi->second);
+                    }
+                    ++oi;
+                }
+                m->setRecordApplyMode(false);
+                if (RecordClass::isRecord(mc)) {
+                    m->setRecordSystemState("empty");
+                }
+            }
+            ++n;
+        }
     }
     return n;
 }

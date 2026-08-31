@@ -111,10 +111,10 @@ static void apply_column_annots(const char *option_name) {
         pending_column_flags = 0;
         return;
     }
-    if (!RecordClass::isRecord(current_machineclass)) {
+    if (!RecordClass::isRow(current_machineclass)) {
         std::stringstream ss;
         ss << yyfilename << ":" << yylineno
-           << " KEY, UNIQUE, NOT NULL, and PRIVATE are only valid on RECORD OPTIONS";
+           << " KEY, UNIQUE, NOT NULL, and PRIVATE are only valid on RECORD or table-bound MACHINE OPTIONS";
         error_messages.push_back(ss.str());
         ++num_errors;
     }
@@ -794,14 +794,18 @@ SYMBOL value {
 
 
 definition_header:
-SYMBOL STATEMACHINE parameters {
+SYMBOL STATEMACHINE record_rel parameters {
     DBG_PARSER << " machine class "  << $1 << "\n";
     check_machine_type($1);
     current_machineclass = new MachineClass($1);
+    if (!pending_record_view.empty()) { RecordClass::setView(current_machineclass, pending_record_view); }
+    if (!pending_record_table.empty()) { RecordClass::setTable(current_machineclass, pending_record_table); }
+    pending_record_view.clear();
+    pending_record_table.clear();
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
     current_parameters.clear();
 }
-| SYMBOL STATEMACHINE property_block parameters  {
+| SYMBOL STATEMACHINE property_block record_rel parameters  {
     DBG_PARSER << " machine class (with properties)  "  << $1 << "\n";
     check_machine_type($1);
     current_machineclass = new MachineClass($1);
@@ -809,6 +813,10 @@ SYMBOL STATEMACHINE parameters {
     property_stack.pop_back();
     current_machineclass->setProperties(properties);
     properties.clear();
+    if (!pending_record_view.empty()) { RecordClass::setView(current_machineclass, pending_record_view); }
+    if (!pending_record_table.empty()) { RecordClass::setTable(current_machineclass, pending_record_table); }
+    pending_record_view.clear();
+    pending_record_table.clear();
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
     current_parameters.clear();
 }

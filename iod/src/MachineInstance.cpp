@@ -4373,7 +4373,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
         registerCommandClockLocked();
         command_clock_cache_valid = false;
     }
-    if (machine_class && RecordClass::isRecord(machine_class)) {
+    if (machine_class && RecordClass::isRow(machine_class)) {
         std::unique_lock<std::mutex> lock(global_lists_mutex);
         bool already = false;
         std::list<MachineInstance *>::iterator it = record_instances.begin();
@@ -4386,7 +4386,11 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
         if (!already) {
             record_instances.push_back(this);
         }
-        setState(machine_class->initial_state);
+        // RECORD owns empty/dirty/clean (runtime setState); a table-bound MACHINE
+        // owns its own state via WHEN, so do not setState on it.
+        if (RecordClass::isRecord(machine_class)) {
+            setState(machine_class->initial_state);
+        }
     }
     if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states &&
         (machine_class->stable_states.size() || machine_class->name == "LIST" ||

@@ -337,7 +337,7 @@ Composition (`Editor MACHINE cust`) is still valid: two instances; APPLY hits `c
 
 **EXPORT must be checked at load** (`loadConfig` / `--parse-only`). Unknown OPTION / STATE / COMMAND is an **error**. `EXPORT` of a `LOCAL OPTION` is a **warning** (not a row column). Size/type mismatch is a warning.
 
-Not implemented.
+**Implemented (2026-08-30):** `TABLE`/`VIEW` on a MACHINE header and `KEY`/`UNIQUE`/`NOT NULL`/`PRIVATE` on a table-bound MACHINE OPTION are parsed; a MACHINE with `TABLE`/`VIEW` + `KEY` is a row. `RECORD APPLY`/`RECORD REMOVE` iterate **all** row classes for a table (RECORD plus any bound MACHINEs), project onto each, and do **not** `setState` on a MACHINE (its STATE stays WHEN-owned; the row lifecycle is the author's `LOCAL OPTION state`). EXPORT load-time checks are still a later item.
 
 #### Using the examples
 
@@ -1248,7 +1248,7 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 
 #### Non-goals (later PRs)
 
-- MACHINE `TABLE`/`VIEW` + `KEY` (PR after this; WHEN owns STATE; lifecycle is `LOCAL OPTION state`).
+- ~~MACHINE `TABLE`/`VIEW` + `KEY`~~ — **landed** (see [MACHINE bound to a table](#machine-bound-to-a-table-proposal)).
 - `PERSISTENT OPTION` (per-field persist.dat).
 - EXPORT load-time checks.
 - `json AS LIST` / QUERY INTO fill.
