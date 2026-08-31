@@ -1431,6 +1431,13 @@ So the work is to let a blocking action reach one of these outcomes when its tim
 
 5. **Tests** — parse test for `ON TIMEOUT ABORT` / `RETURN` / `THROW <msg>` on WAITFOR and CALL; runtime tests that a never-replying CALL reaches each outcome (ABORT re-evaluates WHEN; RETURN completes; THROW fires the CATCH handler).
 
+**Testing burden (pre-existing gaps):** the exception machinery this builds on is essentially untested today, so this PR is heavier than it looks:
+
+- `tests/exceptions.cw` exercises `THROW` / `CATCH` / `ABORT` / `RETURN` but is **not wired into any runner** — it is absent from `run_tests.cw`'s `all_tests` list (which runs only `arith`, `bitset`, `anyon`, `prop`, `test_set_prop`, `command_guards`) and from the CTest suite (`iod/CMakeLists.txt`).
+- `tests/abort.cw` documents a **pre-existing bug**: `ABORT` nested inside an `IF` only exits the block, not the whole handler. It is marked "known to fail" and is likewise not wired into a runner.
+
+So PR 11 must first **land a baseline**: wire `exceptions.cw` + `abort.cw` into the suite (and fix the `ABORT`-in-`IF` bug so `abort.cw` passes), and add a C++ unit test for `AbortAction`'s three outcomes (`Abort` / `Return` / `Throw Exception`) before layering the timeout on top. The timeout tests then cover the new `ON TIMEOUT` grammar plus the three outcomes end-to-end.
+
 **Related idea (Martin, larger):** a block-level `TRY { … } WHEN TIMER >= timeout { ABORT | THROW | RETURN }` with `CATCH <msg>`. `CATCH` already exists; `TRY` is **not** a token yet, and block-level timeout scoping is a bigger grammar + runtime change. Worth its own PR after the per-statement `ON TIMEOUT` lands.
 
 **Zero-code alternative (already works):** the WHEN + TIMER + DISABLE pattern (`error WHEN SELF IS waiting AND TIMER >= timeout` + `ENTER error { … }`, `tests/arith.cw`). If the RECORD examples stay on WHEN/TIMER, document that and close Q11 without a grammar change.
