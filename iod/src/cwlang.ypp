@@ -42,6 +42,7 @@
 #include "MessageLog.h"
 #include "Channel.h"
 #include "AbortAction.h"
+#include "TryAction.h"
 #include "SDOEntry.h"
 #include "MachineInterface.h"
 #include "ResetAction.h"
@@ -354,7 +355,7 @@ struct Subcondition {
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
 %token RECORD UNIQUE VIEW TABLE QUERY PRIVATE ASLIST
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
-%token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
+%token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT TRY
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
 %token FLOAT32 SUM ABS SQRT MIN MAX MEAN
@@ -2222,6 +2223,29 @@ IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
 	current_actions_stack.pop_back();
 	DBG_PARSER << "** popped old action list\n";
     current_action = new IfElseCommandActionTemplate($3, mc2, mc) ;
+}
+| TRY '{' action_list '}' WHEN predicate '{' action_list '}' {
+    DBG_PARSER << " TRY action: " << *$6 << "\n";
+    if (current_action) {
+        current_actions->push_back(current_action);
+        current_action = 0;
+    }
+    // After the second { action_list }, current_actions holds the handler and
+    // the stack holds [outer, body]. Capture handler, then body.
+    MachineCommandTemplate *handler_mc = new MachineCommandTemplate("try_handler", "");
+    handler_mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    MachineCommandTemplate *body_mc = new MachineCommandTemplate("try_body", "");
+    body_mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    DBG_PARSER << "** popped action lists for TRY\n";
+    current_action = new TryActionTemplate($6, body_mc, handler_mc);
 }
 | '{' action_list '}' {
     if (current_action) current_actions->push_back(current_action); current_action = 0;

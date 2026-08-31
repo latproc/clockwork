@@ -208,6 +208,7 @@ TIMEOUT				return TIMEOUT;
 TO                  return TO;
 INTO                return INTO;
 TRANSITION          return TRANSITION;
+TRY                 return TRY;
 UNIQUE              return UNIQUE;
 UNLOCK				return UNLOCK;
 UPDATES             return UPDATES;

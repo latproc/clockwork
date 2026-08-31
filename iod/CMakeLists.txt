@@ -459,6 +459,7 @@ set (Clockwork_SRCS
     src/SyncRemoteStatesAction.cpp
     src/Transition.cpp
     src/Trigger.cpp
+    src/TryAction.cpp
     src/UnlockAction.cpp
     src/UpdateListItemsAction.cpp
     src/WaitAction.cpp
@@ -577,6 +578,12 @@ add_test(NAME parse_waitfor_timeout COMMAND ${CMAKE_COMMAND}
 add_test(NAME runtime_waitfor_timeout COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/waitfor_timeout_runtime.cw
   --must-contain "waitfor timed out")
+
+# Part B/4: TRY { } WHEN TIMER >= timeout { } (parse; see RECORD_DB.md for the
+# runtime limitation around nested blocking actions).
+add_test(NAME parse_try_catch COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/try_catch.cw -DEXPECT_RC=0
+  -P ${_record_parse})
 
 add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)
 set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
