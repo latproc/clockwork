@@ -541,6 +541,13 @@ int main(int argc, const char *argv[]) {
             std::string dbsvr_reply;
             if (!dbsvr_req.request(&data[0], dbsvr_reply, DBSVR_TIMEOUT_MS)) {
                 std::cerr << "dbsvr request failed; will retry with a new socket\n";
+                // iod-15: report the failure back to Clockwork rather than
+                // silently dropping it, so the author's ON ERROR / CATCH /
+                // WAITFOR-timeout path can observe it instead of hanging
+                // (see RECORD_DB.md Q11).
+                static const char *error_reply =
+                    "{\"status\":1,\"request\":\"\",\"response\":\"dbsvr request failed (timeout)\"}";
+                send_response_to_clockwork(json_request, error_reply);
                 cJSON_Delete(json_request);
                 continue;
             }
