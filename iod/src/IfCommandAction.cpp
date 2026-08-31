@@ -62,6 +62,12 @@ Action::Status IfCommandAction::run() {
                       << "\n";
     }
     status = (*command)();
+    if (command->aborted()) {
+        // ABORT/THROW/RETURN inside the block propagates to this action so the
+        // enclosing command list stops, not just the block. `status` carries the
+        // Failed (ABORT/THROW) vs Complete (RETURN) distinction.
+        abort();
+    }
     if (status == Complete || status == Failed) {
         owner->stop(this);
     }
@@ -115,11 +121,17 @@ Action::Status IfElseCommandAction::run() {
     if (condition(owner)) {
         //DBG_MSG << "false" << "\n";
         status = (*command)();
+        if (command->aborted()) {
+            abort();
+        }
     }
     else
     //DBG_MSG << "true" << "\n";
     {
         status = (*else_command)();
+        if (else_command->aborted()) {
+            abort();
+        }
     }
     if (status == Complete || status == Failed) {
         owner->stop(this);

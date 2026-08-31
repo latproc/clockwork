@@ -556,6 +556,20 @@ add_test(NAME record_parse_export_unknown_option COMMAND ${CMAKE_COMMAND}
 add_test(NAME record_parse_export_local_option COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/export_local_option.cw -DEXPECT_RC=0
   -P ${_record_parse})
+
+# Runtime tests for the exception machinery (ABORT/RETURN/THROW/CATCH). These
+# programs do not SHUTDOWN, so pass/fail is checked via log markers under a
+# bounded run (see tests/run_cw_runtime.sh, which SIGTERMs cw so its log flushes).
+set(_runtime ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_runtime.sh)
+set(_runtime_tests ${CMAKE_CURRENT_SOURCE_DIR}/../tests)
+add_test(NAME runtime_abort COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/abort.cw
+  --must-not-contain "check should have aborted but continued")
+add_test(NAME runtime_exceptions COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/exceptions.cw
+  --must-contain "Overrun detected"
+  --must-not-contain "should not be displayed")
+
 add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)
 set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_record_apply PRIVATE src tests)
@@ -566,6 +580,11 @@ set_target_properties(test_copy_from_record PROPERTIES COMPILE_DEFINITIONS "EC_S
 target_include_directories(test_copy_from_record PRIVATE src tests)
 target_link_libraries(test_copy_from_record cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
 add_test(NAME test_copy_from_record COMMAND test_copy_from_record)
+add_executable(test_abort_action tests/test_abort_action.cpp)
+set_target_properties(test_abort_action PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_abort_action PRIVATE src tests)
+target_link_libraries(test_abort_action cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_abort_action COMMAND test_abort_action)
 add_executable(test_deadline_req tests/test_deadline_req.cpp src/DeadlineReq.cpp)
 set_target_properties(test_deadline_req PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_deadline_req PRIVATE src)

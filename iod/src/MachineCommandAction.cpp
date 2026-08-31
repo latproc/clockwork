@@ -294,10 +294,11 @@ Action::Status MachineCommand::runActions() {
         DBG_M_ACTIONS << owner->getName() << " about to execute " << *a << "\n";
         Action::Status stat = (*a)();
 
-        // An abort action needs special processing to cause the action pointer
-        // to immediately move to the end of the action list
-        auto aa = dynamic_cast<AbortAction *>(a);
-        if (aa) {
+        // An abort (a direct AbortAction, or an abort propagated up from a
+        // nested block) needs special processing to immediately move to the end
+        // of the action list. RETURN completes successfully; ABORT/THROW fail,
+        // which the caller uses to trigger a WHEN re-evaluation.
+        if (a->aborted()) {
             std::stringstream ss;
             ss << "ABORTING: " << *this << " at action " << *a << "\n";
             abort();
@@ -319,7 +320,7 @@ Action::Status MachineCommand::runActions() {
                 owner->stop(a);
             }
             a->release();
-            return Complete;
+            return stat;
         }
         if (stat == Action::Failed) {
             std::stringstream ss;
