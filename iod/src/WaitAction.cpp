@@ -155,8 +155,11 @@ std::ostream &WaitAction::operator<<(std::ostream &out) const {
     }
 }
 
-WaitForActionTemplate::WaitForActionTemplate(CStringHolder targ, Value value)
-    : target(targ), value(value) {}
+WaitForActionTemplate::WaitForActionTemplate(CStringHolder targ, Value value,
+                                             TimeoutAction timeout_action, long timeout,
+                                             CStringHolder timeout_message)
+    : target(targ), value(value), timeout_action(timeout_action), timeout(timeout),
+      timeout_message(timeout_message) {}
 
 Action::Status WaitForAction::run() {
     owner->start(this);
@@ -168,6 +171,10 @@ Action::Status WaitForAction::run() {
 Action::Status WaitForAction::checkComplete() {
     if (status == Complete || status == Failed) {
         return status;
+    }
+    if (timeout_action != TimeoutAction::None && timeout > 0 &&
+        age() >= (uint64_t)timeout * 1000) {
+        return timedOut(timeout_action, timeout_message);
     }
     const Value &target_prop = owner->getValue(target.get());
     if (!target_prop.isNull()) {

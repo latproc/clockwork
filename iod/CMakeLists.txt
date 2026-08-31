@@ -570,6 +570,14 @@ add_test(NAME runtime_exceptions COMMAND sh ${_runtime}
   --must-contain "Overrun detected"
   --must-not-contain "should not be displayed")
 
+# Part B: WAITFOR / CALL ON TIMEOUT ABORT|RETURN|THROW <msg> with TIMEOUT <ms>.
+add_test(NAME parse_waitfor_timeout COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/waitfor_timeout.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME runtime_waitfor_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/waitfor_timeout_runtime.cw
+  --must-contain "waitfor timed out")
+
 add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)
 set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_record_apply PRIVATE src tests)

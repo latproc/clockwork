@@ -5,6 +5,7 @@
 #include "Logger.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
+#include "SendMessageAction.h"
 #include <boost/thread/mutex.hpp>
 #include <iostream>
 
@@ -133,6 +134,25 @@ void Action::release() {
 void Action::setError(const std::string &err) {
     char *buf = strdup(err.c_str());
     error_str = buf;
+}
+
+Action::Status Action::timedOut(TimeoutAction action, const CStringHolder &message) {
+    abort();
+    if (action == TimeoutAction::Return) {
+        status = Complete;
+    }
+    else {
+        if (action == TimeoutAction::Throw && message.get() && message.get()[0]) {
+            SendMessageActionTemplate smat(message.get(), owner);
+            Action *sma = smat.factory(owner);
+            (*sma)();
+            delete sma;
+        }
+        status = Failed;
+        setError("timed out");
+    }
+    owner->stop(this);
+    return status;
 }
 
 bool Action::complete() {

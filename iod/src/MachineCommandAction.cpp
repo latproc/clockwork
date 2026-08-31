@@ -470,6 +470,7 @@ Action::Status MachineCommand::checkComplete() {
         else if (a->getStatus() == Failed) {
             NB_MSG << command_name.get() << " " << a->error() << "\n";
             owner->stop(this);
+            status = Failed;
             return status; // an action failed
         }
         else if (a->getStatus() == Running || a->getStatus() == Suspended) {
@@ -477,6 +478,7 @@ Action::Status MachineCommand::checkComplete() {
                 if (a->getStatus() == Failed) {
                     NB_MSG << command_name.get() << " " << a->error() << "\n";
                     owner->stop(this);
+                    status = Failed;
                     return status; // an action failed
                 }
                 else {

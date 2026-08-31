@@ -28,6 +28,10 @@
 typedef std::vector<std::string> ActionParameterList;
 class MachineInstance;
 
+// How a blocking action (WAITFOR / CALL) should complete when its timeout
+// fires. None means "no timeout / no ON TIMEOUT clause".
+enum class TimeoutAction { None, Abort, Return, Throw };
+
 class Action;
 class ActionTemplate {
   public:
@@ -70,6 +74,11 @@ class Action : public TriggerOwner {
     void setError(const std::string &err);
 
     enum Status { New, Running, Complete, Failed, Suspended, NeedsRetry };
+
+    // Complete a blocking action whose timeout fired (WAITFOR / CALL ON TIMEOUT).
+    // Abort/Throw -> Failed, Return -> Complete; Throw also sends `message` to
+    // the owner (SELF), where a CATCH/RECEIVE handler can pick it up.
+    Status timedOut(TimeoutAction action, const CStringHolder &message);
 
     Status operator()();
     bool complete();
