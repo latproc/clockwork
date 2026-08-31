@@ -1126,7 +1126,7 @@ These do not block Clockwork RECORD or datastore WAL/ZMQ work.
 8. **Query results vs WHEN (Martin, 2026-08-24):** a LIST of row machines is fine for HMI and LIST commands. Dynamically created RECORDs are **not** linked, so WHEN does not see them. Drain with `TAKE FIRST` / `WAITFOR` / `COPY PROPERTIES` onto a **statically declared** RECORD that already has dependents. Prefer generic `json AS LIST` (or existing `PUSH ITEMS FROM`) over RECORD-specific spawn. **No** loops in handlers; **no** embedded Lua/Python. Clockwork stays the language. Martin still reading the rest of the design.
 9. **RECORD system states `empty` / `dirty` / `clean`:** set by iod/dbd, not WHEN. Same pattern as CHANNEL and EtherCAT MODULE (`disableAutomaticStateChanges` + C++ `setState`). RECORD body still has no user WHEN/COMMAND. **Next:** [Clockwork PR 9](#clockwork-pr-9-record-states-and-apply-projection).
 10. **MACHINE bound to a table (proposal):** `MACHINE TABLE "customer"` (or `VIEW`) + `OPTION id … KEY` + listed column OPTIONS. Full WHEN/COMMAND. APPLY is a projection (ignore extra fields). Row lifecycle on the MACHINE is `LOCAL OPTION state`, because WHEN owns the Clockwork STATE; RECORD uses the real state slot. Do not use `OPTION type "Customer"` for the relation (collides with existing `OPTION type`; class ≠ JSON `type`). JSON `type` = table/view name. Fill/bind/no slot-to-slot COPY as for RECORD. `PERSISTENT OPTION` is persist.dat; `LOCAL OPTION` is logic-only; no `PRIVATE OPTION` (lexer already maps `PRIVATE` → use `LOCAL`). Not implemented.
-11. **WAITFOR vs connection failure (ask Martin):** `WAITFOR cust IS clean` after SEND/QUERY never exits if dbd/`dbsvr` never APPLYs. No WAITFOR timeout in the grammar or `WaitForAction`. `CALL … ON TIMEOUT` is parsed, not implemented (CALL hangs). Working escape is WHEN `TIMER >= timeout` then DISABLE (`tests/arith.cw`). Prefer that in RECORD examples? Or add WAITFOR timeout?
+11. **WAITFOR vs connection failure (ask Martin):** `WAITFOR cust IS clean` after SEND/QUERY never exits if dbd/`dbsvr` never APPLYs. No WAITFOR timeout in the grammar or `WaitForAction`. `CALL … ON TIMEOUT` is parsed, not implemented (CALL hangs). Working escape is WHEN `TIMER >= timeout` then DISABLE (`tests/arith.cw`). Prefer that in RECORD examples? Or add WAITFOR timeout? **Plan (proposed):** [Clockwork PR 11](#clockwork-pr-11-waitfor--call-timeout-q11-iod-15--proposed) — wire the parsed-but-unused `ON TIMEOUT` / `ON ERROR` fail path into the blocking actions.
 
 ---
 
@@ -1204,7 +1204,7 @@ Commit convention: fixes to common code (shared infrastructure, memory leaks, ZM
 | iod-12 | `src/dbd.cpp` | Logs the full outgoing request (`sending: …`, includes `auth` + row data) and the full `dbsvr` reply to stdout unconditionally. | Security/logging | **Landed** (gated behind `DEBUG_BASIC`) |
 | iod-13 | `dbd.cpp` | Two parallel iod connections: `g_iodcmd` (MessagingInterface) and `g_iod_req` (DeadlineReq), both to `:5555`. | Cleanup | **Landed** — single `DeadlineReq` to iod; dead `MessagingInterface` client + `sendIOD`/`sendIODMessage`/`getIODSyncCommand` MODBUS helpers removed |
 | iod-14 | `dbd.cpp` `send_response_to_clockwork` | `respond_to` with no `.` sets machine and property both to the whole string. | Bug (edge) | **Landed** (machine name only) |
-| iod-15 | `dbd.cpp` | dbsvr request failure (timeout) drops the request with no error back to Clockwork; this is the Q11 `WAITFOR` hang. | Q11 | **Open** (needs WAITFOR timeout; ask Martin) |
+| iod-15 | `dbd.cpp` | dbsvr request failure (timeout) drops the request with no error back to Clockwork; this is the Q11 `WAITFOR` hang. | Q11 | **Open** — blocked on [Clockwork PR 11](#clockwork-pr-11-waitfor--call-timeout-q11-iod-15--proposed) (WAITFOR timeout; ask Martin) |
 | iod-16 | `dbd.cpp` | `notify_sub` is polled twice (main `checkConnections` items[2] and a second standalone poll). | Cleanup | **Intentional** — drains dbsvr notify while the CHANNEL handshake is down |
 
 ### datastore (`../datastore`)
@@ -1381,6 +1381,43 @@ Spec-first is this section. Then code + tests in one Clockwork commit (or two: p
 
 - Parse: `OPTION x 0 PRIVATE` parses on a RECORD; errors on a non-RECORD OPTION.
 - `test_record_apply`: a `PRIVATE` column is APPLYed (written) but not published.
+
+### Clockwork PR 11: WAITFOR / CALL timeout (Q11, iod-15) — proposed
+
+**Repo:** this one (`iod`). No datastore change — the hang is in Clockwork's blocking actions, not in `dbsvr` (the dbd request-drop side is iod-15, noted below).
+
+**Problem (Q11 / iod-15):** `WAITFOR cust IS clean` after a SEND/`QUERY`/`CALL` never exits if dbd/`dbsvr` never APPLYs the row (silent miss, request timeout, reconnect drop). The blocking actions stay `Running` forever, so `ABORT`/`RETURN` later in the same COMMAND never run and the machine is wedged. There is no WAITFOR timeout in the grammar or in `WaitForAction`; `CALL … ON TIMEOUT msg` is parsed (`tests/call.lpc`) but `CallMethodAction` schedules no timer — `timeout_msg` only fires if the CALL **Fails**.
+
+**What already exists (parsed but unwired):**
+
+- `error_clause` — `ON ERROR <msg>`, `ON TIMEOUT <msg>`, `IGNORE ERRORS` — is parsed (`cwlang.ypp` `error_clause`) and threaded into `CallMethodActionTemplate(msg, dest, timeout_msg, error_msg)`.
+- `Action::operator()` (`Action.cpp`) already, when `run()` returns `Failed`, enqueues `AbortAction(error_msg)` / `AbortAction(timeout_msg)`. The **fail path is wired** — it just never fires because the blocking actions never return `Failed`.
+- `Action::age()` already returns elapsed microseconds since `start_time` (set in `operator()`).
+
+The gap is exactly the one the author named: `CallMethodAction::checkComplete()` and `WaitForAction::checkComplete()` return `New`/`Running`/`Complete` but never `Failed`, so `timeout_msg` is never sent and the author's `ENTER`/RECEIVE fail handler never runs.
+
+**Approach:** make the blocking actions **fail on a timeout**, reusing the existing `timeout_msg → AbortAction → ENTER/RECEIVE` path. This is the "conditional fail path" the language already has but has not used.
+
+**Concrete changes:**
+
+1. **Grammar** — give `error_clause` a duration: `ON TIMEOUT <msg> WITHIN <milliseconds>` (plain `ON TIMEOUT <msg>` keeps a default). Thread the duration into `CallMethodActionTemplate`. Add an `error_clause` to the `WAITFOR` production, which today has none.
+2. **Runtime** — in `CallMethodAction::checkComplete()` and `WaitForAction::checkComplete()`, if `timeout_msg` is set and `age()/1000 >= timeout_ms`, set `status = Failed` and `owner->stop(this)`. `Action::operator()` then enqueues `AbortAction(timeout_msg)`, which triggers the machine's `ENTER`/RECEIVE handler for that message.
+3. **Author-facing pattern** (documented, not forced):
+
+   ```
+   COMMAND load { CALL find ON db ON TIMEOUT db_miss WITHIN 5000; }
+   ENTER db_miss { CALL abort ON SELF; }   # or DISABLE/ENABLE, or error WHEN ...
+   ```
+
+4. **Tests** — parse test for `ON TIMEOUT … WITHIN …` (CALL and WAITFOR); a runtime test where a CALL to a machine that never replies `Failed`s and fires the timeout handler, plus a WAITFOR variant.
+
+**Decisions to confirm before coding (Martin):**
+
+1. **Duration source** — `WITHIN <ms>` clause (explicit, local) vs un-deprecating the existing `TIMEOUT` OPTION vs a fixed default. Leaning `WITHIN <ms>`.
+2. **Scope** — `CALL` only (already parses `ON TIMEOUT`) vs `CALL` **and** `WAITFOR` (WAITFOR has no `error_clause`, so it needs a grammar addition). The drain sketch uses `WAITFOR`, so covering both is the complete fix.
+3. **Timeout semantics** — on timeout, `Failed` (fires the existing abort path) is the simplest; a distinct "timed out" state is possible but more invasive.
+
+**Zero-code alternative (already works):** the WHEN + TIMER + DISABLE pattern (`error WHEN SELF IS waiting AND TIMER >= timeout` + `ENTER error { … }`, `tests/arith.cw`). If the RECORD examples stay on WHEN/TIMER, document that and close Q11 without a grammar change.
 
 ### Datastore (`../datastore`)
 
