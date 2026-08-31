@@ -16,7 +16,7 @@ TimeoutTest MACHINE {
     COMMAND run_abort (TIMEOUT : 200) {
         WAITFOR never == 1 ON TIMEOUT ABORT;
     }
-    COMMAND run_return (TIMEOUT : 200) {
+    COMMAND run_return (TIMEOUT 200) {
         WAITFOR never == 1 ON TIMEOUT RETURN;
     }
     COMMAND run_throw (TIMEOUT : 200) {

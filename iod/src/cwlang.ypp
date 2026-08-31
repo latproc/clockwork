@@ -2678,6 +2678,13 @@ SYMBOL PROPSEP value
     properties.add("TIMEOUT", *$3);
     delete $3;
 }
+| TIMEOUT value {
+    // Part B: also allow the bare `(TIMEOUT <ms>)` form, matching OPTION's
+    // `name value` style.
+    DBG_PARSER << "property: TIMEOUT = " << *$2 << "\n";
+    properties.add("TIMEOUT", *$2);
+    delete $2;
+}
 ;
 
 feature_list:
