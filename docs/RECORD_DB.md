@@ -1420,7 +1420,7 @@ So the work is to let a blocking action reach one of these outcomes when its tim
 
 1. **Grammar** — give `WAITFOR` an optional `ON TIMEOUT` clause choosing the outcome: `ON TIMEOUT ABORT` / `ON TIMEOUT RETURN` / `ON TIMEOUT THROW <msg>` (and the same on `CALL`, which already has an `error_clause`). Thread the chosen outcome into `WaitForActionTemplate` / `CallMethodActionTemplate`. `WAITFOR` today has no `error_clause` at all.
 2. **Runtime** — in `WaitForAction::checkComplete()` / `CallMethodAction::checkComplete()`, once the timeout duration has elapsed, stop the action and enqueue the matching `AbortAction` (or set `Failed`/`Complete` directly). `Action::operator()`'s existing `Failed → AbortAction` path then fires the WHEN re-evaluation or the `THROW`/`CATCH` message.
-3. **Duration source (one open sub-decision):** Martin's form has no `WITHIN <ms>`, so the timeout comes from either (a) the deprecated `TIMEOUT` property / `MachineCommand::timeout` (parsed at `cwlang.ypp` 1056, currently a warning and unused), or (b) a fixed default. Leaning (a): un-deprecate `TIMEOUT` and use `MachineCommand::timeout`.
+3. **Duration source (decided, Martin):** `TIMEOUT <ms>` — un-deprecate the existing `TIMEOUT` property and use `MachineCommand::timeout` (milliseconds). It is already parsed (`cwlang.ypp` 1056) but currently only warns and is unused; the work is to stop warning and actually thread `mc->timeout` into the blocking actions.
 4. **Author-facing pattern** (documented, not forced):
 
    ```
@@ -1437,6 +1437,8 @@ So the work is to let a blocking action reach one of these outcomes when its tim
 - `tests/abort.cw` documents a **pre-existing bug**: `ABORT` nested inside an `IF` only exits the block, not the whole handler. It is marked "known to fail" and is likewise not wired into a runner.
 
 So PR 11 must first **land a baseline**: wire `exceptions.cw` + `abort.cw` into the suite (and fix the `ABORT`-in-`IF` bug so `abort.cw` passes), and add a C++ unit test for `AbortAction`'s three outcomes (`Abort` / `Return` / `Throw Exception`) before layering the timeout on top. The timeout tests then cover the new `ON TIMEOUT` grammar plus the three outcomes end-to-end.
+
+**Baseline landed (2026-08-31, `[common]`):** the `ABORT`-in-`IF` bug is fixed — `AbortAction::run()` now returns `Failed` for `abort_fail` (vs `Complete` for `RETURN`), and `MachineCommand::runActions()` / `IfCommandAction`/`IfElseCommandAction` propagate the abort up through nested blocks. `tests/exceptions.cw` + `tests/abort.cw` are wired into CTest as `runtime_exceptions` / `runtime_abort` (via `tests/run_cw_runtime.sh`, which SIGTERMs `cw` so its log flushes), and `tests/test_abort_action.cpp` covers the three outcomes.
 
 **Related idea (Martin, larger):** a block-level `TRY { … } WHEN TIMER >= timeout { ABORT | THROW | RETURN }` with `CATCH <msg>`. `CATCH` already exists; `TRY` is **not** a token yet, and block-level timeout scoping is a bigger grammar + runtime change. Worth its own PR after the per-statement `ON TIMEOUT` lands.
 
