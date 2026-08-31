@@ -579,11 +579,41 @@ add_test(NAME runtime_waitfor_timeout COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/waitfor_timeout_runtime.cw
   --must-contain "waitfor timed out")
 
-# Part B/4: TRY { } WHEN TIMER >= timeout { } (parse; see RECORD_DB.md for the
-# runtime limitation around nested blocking actions).
+# Part B/4: TRY { } WHEN TIMER >= timeout { } — parse + runtime.
 add_test(NAME parse_try_catch COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/try_catch.cw -DEXPECT_RC=0
   -P ${_record_parse})
+
+# Blocking body + timeout -> THROW (caught by CATCH).
+add_test(NAME runtime_try_throw COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_catch.cw
+  --must-contain "try timed out")
+# Blocking body + timeout -> RETURN (statement after TRY runs).
+add_test(NAME runtime_try_return COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_return.cw
+  --must-contain "returned normally")
+# Blocking body + timeout -> ABORT (statement after TRY must NOT run).
+add_test(NAME runtime_try_abort COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_abort.cw
+  --must-not-contain "should not run")
+# Body completes before timeout (handler must NOT run).
+add_test(NAME runtime_try_body_completes COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_body_completes.cw
+  --must-contain "body done"
+  --must-not-contain "timed out")
+# Synchronous body (handler must NOT run).
+add_test(NAME runtime_try_sync COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_sync.cw
+  --must-contain "body ran"
+  --must-not-contain "timed out")
+# Timeout predicate already true (fires immediately).
+add_test(NAME runtime_try_immediate COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_immediate.cw
+  --must-contain "immediate timeout")
+# Empty handler: TRY completes on timeout, statement after TRY runs.
+add_test(NAME runtime_try_empty_handler COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_empty_handler.cw
+  --must-contain "completed via empty handler")
 
 add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)
 set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")

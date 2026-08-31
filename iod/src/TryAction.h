@@ -27,11 +27,27 @@ class MachineCommandTemplate;
 class MachineCommand;
 class MachineInstance;
 
+struct TryAction;
+
+// Scheduled by a TryAction when its body blocks, so the timeout predicate
+// (e.g. TIMER >= timeout) can interrupt the body even though the body's nested
+// blocking action sits above the TryAction on the machine's action stack.
+struct TryTimeoutAction : public Action {
+    TryTimeoutAction(MachineInstance *mi, TryAction *ta);
+    ~TryTimeoutAction() override;
+    Status run() override;
+    Status checkComplete() override;
+    std::ostream &operator<<(std::ostream &out) const override;
+
+    TryAction *try_action;
+};
+
 // TRY { <body> } WHEN <predicate> { <handler> }
 //
-// Runs <body>. If <body> finishes before the predicate (e.g. TIMER >= timeout)
-// becomes true, the action completes with the body's status. If the predicate
-// fires first, <body> is aborted and <handler> runs — the handler's
+// Runs <body>. If <body> finishes before the predicate becomes true, the action
+// completes with the body's status. If the predicate fires first (via a
+// Scheduler timer interrupt, or because it is already true when the body
+// blocks), <body> is aborted and <handler> runs — the handler's
 // ABORT / THROW / RETURN determines the outcome (see AbortAction).
 
 struct TryActionTemplate : public ActionTemplate {
@@ -52,8 +68,15 @@ struct TryAction : public Action {
     Status checkComplete() override;
     std::ostream &operator<<(std::ostream &out) const override;
 
+    // Called by TryTimeoutAction when the timer fires: abort the body and flag
+    // that the handler must run (checkComplete() does the actual handler run).
+    void timeoutTriggered();
+    void scheduleTimeout();
+    void runHandler();
+
     Condition condition;
     MachineCommand *body;
     MachineCommand *handler;
     bool handler_started = false;
+    bool timeout_triggered = false;
 };

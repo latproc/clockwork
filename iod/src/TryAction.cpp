@@ -21,6 +21,7 @@
 #include "TryAction.h"
 #include "MachineCommandAction.h"
 #include "MachineInstance.h"
+#include "Scheduler.h"
 
 TryActionTemplate::TryActionTemplate(Predicate *pred, MachineCommandTemplate *body,
                                      MachineCommandTemplate *handler)
@@ -39,6 +40,39 @@ Action *TryActionTemplate::factory(MachineInstance *mi) { return new TryAction(m
 
 std::ostream &TryActionTemplate::operator<<(std::ostream &out) const {
     return out << "TRY body=" << *body << " handler=" << *handler;
+}
+
+TryTimeoutAction::TryTimeoutAction(MachineInstance *mi, TryAction *ta) : Action(mi), try_action(ta) {
+    // Keep the TryAction alive until this interrupt fires (or is dropped), so a
+    // body that completes before the timeout does not leave a dangling pointer.
+    if (try_action) {
+        try_action->retain();
+    }
+}
+
+TryTimeoutAction::~TryTimeoutAction() {
+    if (try_action) {
+        try_action->release();
+    }
+}
+
+Action::Status TryTimeoutAction::run() {
+    owner->start(this);
+    if (try_action) {
+        try_action->timeoutTriggered();
+    }
+    status = Complete;
+    owner->stop(this);
+    return status;
+}
+
+Action::Status TryTimeoutAction::checkComplete() {
+    assert(status == Complete);
+    return status;
+}
+
+std::ostream &TryTimeoutAction::operator<<(std::ostream &out) const {
+    return out << "TryTimeoutAction";
 }
 
 TryAction::TryAction(MachineInstance *mi, TryActionTemplate *t)
@@ -60,13 +94,16 @@ Action::Status TryAction::run() {
     status = (*body)();
     if (status == Complete || status == Failed) {
         owner->stop(this);
+        return status;
     }
-    else {
-        // The body is blocking (Running or Suspended). Keep this action Running
-        // (not Suspended) so checkComplete() is called each tick and can watch
-        // the timeout predicate.
-        status = Running;
+    // Body is blocking (Running or Suspended).
+    if (condition(owner)) {
+        // The timeout predicate is already true: run the handler immediately.
+        runHandler();
+        return status;
     }
+    scheduleTimeout();
+    status = Running; // keep this action Running so it stays re-checked
     return status;
 }
 
@@ -74,27 +111,57 @@ Action::Status TryAction::checkComplete() {
     if (status == Complete || status == Failed) {
         return status;
     }
-    // Timeout fired while the body is still running: abort the body and run the
-    // handler (ABORT / THROW / RETURN).
-    if (condition(owner)) {
-        body->abort();
-        status = (*handler)();
-        if (handler->aborted()) {
-            // Propagate the handler's ABORT/THROW/RETURN up (like IfCommandAction).
-            abort();
-        }
-        if (status == Complete || status == Failed) {
-            owner->stop(this);
-        }
+    if (timeout_triggered) {
+        runHandler();
         return status;
     }
-    // Body finished on its own: propagate its status.
+    // Fallback for the case where the timer interrupt is not scheduled (the
+    // predicate was already true, or is not a TIMER clause we can schedule).
+    if (condition(owner)) {
+        runHandler();
+        return status;
+    }
     if (body->complete()) {
         status = body->getStatus();
         owner->stop(this);
         return status;
     }
     return Running;
+}
+
+void TryAction::timeoutTriggered() {
+    if (status == Complete || status == Failed) {
+        return;
+    }
+    body->abortCommand();
+    timeout_triggered = true;
+    // The machine's tick loop now reaches this action (it is the top of the
+    // stack after the body is removed), and checkComplete() runs the handler.
+}
+
+void TryAction::scheduleTimeout() {
+    if (!condition.predicate) {
+        return;
+    }
+    PredicateTimerDetails *ptd = condition.predicate->scheduleTimerEvents(0, owner);
+    if (ptd) {
+        TryTimeoutAction *tta = new TryTimeoutAction(owner, this);
+        Scheduler::instance()->add(new ScheduledItem(ptd->delay, tta));
+        delete ptd;
+    }
+}
+
+void TryAction::runHandler() {
+    timeout_triggered = true;
+    handler_started = true;
+    status = (*handler)();
+    if (handler->aborted()) {
+        // Propagate the handler's ABORT/THROW/RETURN up (like IfCommandAction).
+        abort();
+    }
+    if (status == Complete || status == Failed) {
+        owner->stop(this);
+    }
 }
 
 std::ostream &TryAction::operator<<(std::ostream &out) const {

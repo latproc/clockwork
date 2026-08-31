@@ -171,6 +171,18 @@ MachineCommand::~MachineCommand() {
 
 void MachineCommand::addAction(Action *a, ActionParameterList *params) { actions.push_back(a); }
 
+void MachineCommand::abortCommand() {
+    abort();
+    // Stop nested actions first (they sit above this command on the owner's
+    // action stack), then this command itself.
+    for (Action *a : actions) {
+        if (a->started()) {
+            owner->stop(a);
+        }
+    }
+    owner->stop(this);
+}
+
 void MachineCommand::setActions(std::list<Action *> &new_actions) {
     std::copy(new_actions.begin(), new_actions.end(), back_inserter(actions));
 }

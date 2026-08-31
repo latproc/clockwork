@@ -90,6 +90,9 @@ class MachineCommand : public Action {
     void addAction(Action *a, ActionParameterList *params);
     Status checkAction(Action *a, Status stat);
     Status runActions();
+    // Abort this command and stop any nested actions it has running on the
+    // owner's action stack (used by TRY's timeout interrupt).
+    void abortCommand();
     bool canRunFast() const;
     bool runFastBody();
     Status run();
