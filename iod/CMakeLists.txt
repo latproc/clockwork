@@ -535,6 +535,16 @@ add_test(NAME record_parse_as_list COMMAND ${CMAKE_COMMAND}
 add_test(NAME record_parse_machine_table COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_table.cw -DEXPECT_RC=0
   -P ${_record_parse})
+add_test(NAME record_parse_export_valid COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/export_valid.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_export_unknown_option COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/export_unknown_option.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=EXPORT
+  -P ${_record_parse})
+add_test(NAME record_parse_export_local_option COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/export_local_option.cw -DEXPECT_RC=0
+  -P ${_record_parse})
 add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)
 set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_record_apply PRIVATE src tests)

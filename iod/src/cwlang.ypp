@@ -131,6 +131,51 @@ static void apply_column_annots(const char *option_name) {
     pending_column_flags = 0;
 }
 
+// EXPORT must be checked at load: unknown OPTION/STATE/COMMAND is an error;
+// EXPORT of a LOCAL OPTION is a warning (not a row column).
+static void validate_exports(MachineClass *mc) {
+    if (!mc) {
+        return;
+    }
+    for (auto &exp : mc->exports) {
+        const std::string &name = exp.property_name;
+        if (mc->getOptions().find(name) == mc->getOptions().end()) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " EXPORT of unknown OPTION " << name;
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+        else if (mc->propertyIsLocal(name)) {
+            std::cerr << yyfilename << ":" << yylineno << " Warning: EXPORT of LOCAL OPTION " << name
+                      << " is not a row column\n";
+        }
+    }
+    for (const std::string &name : mc->state_exports) {
+        if (mc->state_names.find(name) == mc->state_names.end()) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " EXPORT of unknown STATE " << name;
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+    }
+    for (const std::string &name : mc->state_exports_rw) {
+        if (mc->state_names.find(name) == mc->state_names.end()) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " EXPORT of unknown STATE " << name;
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+    }
+    for (const std::string &name : mc->command_exports) {
+        if (mc->commands.find(name) == mc->commands.end()) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " EXPORT of unknown COMMAND " << name;
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+    }
+}
+
 static MachineInstance *addMachine(const char *name, const char *type,
             MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE) {
 	MachineInstance *machine = MachineInstanceFactory::create(CStringHolder(name), type, instance_type);
@@ -485,6 +530,7 @@ definition_header '{' definition_body '}' {
         DBG_PARSER << "states: " << current_machineclass->states.size() << "\n";
         DBG_PARSER << "num transitions: " << current_machineclass->transitions.size() << "\n";
 
+        validate_exports(current_machineclass);
         current_machineclass = NULL;
     }
 }
