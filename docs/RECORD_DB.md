@@ -362,7 +362,7 @@ CustomerEditor MACHINE cust, db {
 }
 ```
 
-Ask Martin whether WAITFOR should grow a timeout, or whether RECORD examples should stay on WHEN/TIMER. Below still uses WAITFOR as in his drain sketch.
+~~Ask Martin whether WAITFOR should grow a timeout, or whether RECORD examples should stay on WHEN/TIMER.~~ **Decided (2026-08-31):** WAITFOR grows a timeout with `ON TIMEOUT ABORT | RETURN | THROW <msg>` (see [Clockwork PR 11](#clockwork-pr-11-waitfor--call-timeout-q11-iod-15--proposed)). Below still uses WAITFOR as in his drain sketch.
 
 ```
 # --- named RECORD (passive states empty/dirty/clean) ---
@@ -1396,26 +1396,42 @@ Spec-first is this section. Then code + tests in one Clockwork commit (or two: p
 
 The gap is exactly the one the author named: `CallMethodAction::checkComplete()` and `WaitForAction::checkComplete()` return `New`/`Running`/`Complete` but never `Failed`, so `timeout_msg` is never sent and the author's `ENTER`/RECEIVE fail handler never runs.
 
-**Approach:** make the blocking actions **fail on a timeout**, reusing the existing `timeout_msg → AbortAction → ENTER/RECEIVE` path. This is the "conditional fail path" the language already has but has not used.
+**Approach:** make a blocking action reach one of three outcomes on timeout, reusing the existing `AbortAction` machinery — not inventing new control flow.
+
+**Martin's design (2026-08-31):** the timeout outcome is one of three **existing verbs** — no new "timed out" state:
+
+```
+WAITFOR <expr> ON TIMEOUT ABORT;          # logs an error, continues → WHEN re-evaluates
+WAITFOR <expr> ON TIMEOUT RETURN;         # completes successfully; no re-evaluation
+WAITFOR <expr> ON TIMEOUT THROW message;  # aborts and sends a message to a CATCH handler
+```
+
+These map 1:1 onto machinery the language **already has** (they are not new semantics):
+
+- `ABORT` / `RETURN` / `THROW <msg>` are existing statements (`cwlang.ypp` 1671 / 1676 / 1836 / 1842). `THROW <msg>` already sends the message to SELF (`SendMessageAction`) then aborts, and `CATCH <msg> { … }` already registers the handler (`receive_command`, `cwlang.ypp` 1546) — identical to `RECEIVE`.
+- `AbortAction` already encodes all three outcomes, and its `operator<<` literally prints `Abort` / `Return` / `Throw Exception (<msg>)`:
+  - `ABORT` → `AbortActionTemplate()` (`abort_fail=true`, no message) → failure + WHEN re-evaluation.
+  - `RETURN` → `AbortActionTemplate(false)` (`abort_fail=false`) → success, no re-evaluation.
+  - `THROW <msg>` → `AbortActionTemplate(true, <msg>)` → sends the message, then fails.
+
+So the work is to let a blocking action reach one of these outcomes when its timer expires.
 
 **Concrete changes:**
 
-1. **Grammar** — give `error_clause` a duration: `ON TIMEOUT <msg> WITHIN <milliseconds>` (plain `ON TIMEOUT <msg>` keeps a default). Thread the duration into `CallMethodActionTemplate`. Add an `error_clause` to the `WAITFOR` production, which today has none.
-2. **Runtime** — in `CallMethodAction::checkComplete()` and `WaitForAction::checkComplete()`, if `timeout_msg` is set and `age()/1000 >= timeout_ms`, set `status = Failed` and `owner->stop(this)`. `Action::operator()` then enqueues `AbortAction(timeout_msg)`, which triggers the machine's `ENTER`/RECEIVE handler for that message.
-3. **Author-facing pattern** (documented, not forced):
+1. **Grammar** — give `WAITFOR` an optional `ON TIMEOUT` clause choosing the outcome: `ON TIMEOUT ABORT` / `ON TIMEOUT RETURN` / `ON TIMEOUT THROW <msg>` (and the same on `CALL`, which already has an `error_clause`). Thread the chosen outcome into `WaitForActionTemplate` / `CallMethodActionTemplate`. `WAITFOR` today has no `error_clause` at all.
+2. **Runtime** — in `WaitForAction::checkComplete()` / `CallMethodAction::checkComplete()`, once the timeout duration has elapsed, stop the action and enqueue the matching `AbortAction` (or set `Failed`/`Complete` directly). `Action::operator()`'s existing `Failed → AbortAction` path then fires the WHEN re-evaluation or the `THROW`/`CATCH` message.
+3. **Duration source (one open sub-decision):** Martin's form has no `WITHIN <ms>`, so the timeout comes from either (a) the deprecated `TIMEOUT` property / `MachineCommand::timeout` (parsed at `cwlang.ypp` 1056, currently a warning and unused), or (b) a fixed default. Leaning (a): un-deprecate `TIMEOUT` and use `MachineCommand::timeout`.
+4. **Author-facing pattern** (documented, not forced):
 
    ```
-   COMMAND load { CALL find ON db ON TIMEOUT db_miss WITHIN 5000; }
-   ENTER db_miss { CALL abort ON SELF; }   # or DISABLE/ENABLE, or error WHEN ...
+   OPTION timeout 5000;
+   COMMAND load { CALL find ON db ON TIMEOUT THROW db_miss; }
+   CATCH db_miss { LOG "db find timed out"; CALL abort ON SELF; }
    ```
 
-4. **Tests** — parse test for `ON TIMEOUT … WITHIN …` (CALL and WAITFOR); a runtime test where a CALL to a machine that never replies `Failed`s and fires the timeout handler, plus a WAITFOR variant.
+5. **Tests** — parse test for `ON TIMEOUT ABORT` / `RETURN` / `THROW <msg>` on WAITFOR and CALL; runtime tests that a never-replying CALL reaches each outcome (ABORT re-evaluates WHEN; RETURN completes; THROW fires the CATCH handler).
 
-**Decisions to confirm before coding (Martin):**
-
-1. **Duration source** — `WITHIN <ms>` clause (explicit, local) vs un-deprecating the existing `TIMEOUT` OPTION vs a fixed default. Leaning `WITHIN <ms>`.
-2. **Scope** — `CALL` only (already parses `ON TIMEOUT`) vs `CALL` **and** `WAITFOR` (WAITFOR has no `error_clause`, so it needs a grammar addition). The drain sketch uses `WAITFOR`, so covering both is the complete fix.
-3. **Timeout semantics** — on timeout, `Failed` (fires the existing abort path) is the simplest; a distinct "timed out" state is possible but more invasive.
+**Related idea (Martin, larger):** a block-level `TRY { … } WHEN TIMER >= timeout { ABORT | THROW | RETURN }` with `CATCH <msg>`. `CATCH` already exists; `TRY` is **not** a token yet, and block-level timeout scoping is a bigger grammar + runtime change. Worth its own PR after the per-statement `ON TIMEOUT` lands.
 
 **Zero-code alternative (already works):** the WHEN + TIMER + DISABLE pattern (`error WHEN SELF IS waiting AND TIMER >= timeout` + `ENTER error { … }`, `tests/arith.cw`). If the RECORD examples stay on WHEN/TIMER, document that and close Q11 without a grammar change.
 
