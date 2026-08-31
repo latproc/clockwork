@@ -1184,7 +1184,7 @@ Code review of the RECORD/dbd slice. Bugs are fixed in the same commit as this n
 
 Findings from a code scan across `iod` and `../datastore`, supplementing [Clockwork PR 9](#clockwork-pr-9-record-states-and-apply-projection) (states + projection), [Clockwork PR 10](#clockwork-pr-10-private-columns), and [Q11](#open-questions) (WAITFOR timeout). Status is tracked per row.
 
-Commit convention: fixes to common code (shared infrastructure, memory leaks, ZMQ reconnect) are committed with a `[common]` prefix so they can be cherry-picked onto other branches, e.g. `iod-elc`. Changes that touch dbd/RECORD/datastore stay on this branch unmarked. No `[common]` fixes have landed yet.
+Commit convention: fixes to common code (shared infrastructure, memory leaks, ZMQ reconnect) are committed with a `[common]` prefix so they can be cherry-picked onto other branches, e.g. `iod-elc`. Changes that touch dbd/RECORD/datastore stay on this branch unmarked. First `[common]` fix landed 2026-08-31 (LibXml2/iod-elc build); the WAITFOR/CALL timeout (PR 11) and the exception-machinery fixes it needs are also `[common]`.
 
 ### iod
 
@@ -1384,7 +1384,7 @@ Spec-first is this section. Then code + tests in one Clockwork commit (or two: p
 
 ### Clockwork PR 11: WAITFOR / CALL timeout (Q11, iod-15) — proposed
 
-**Repo:** this one (`iod`). No datastore change — the hang is in Clockwork's blocking actions, not in `dbsvr` (the dbd request-drop side is iod-15, noted below).
+**Repo:** this one (`iod`). No datastore change — the hang is in Clockwork's blocking actions, not in `dbsvr` (the dbd request-drop side is iod-15, noted below). **`[common]`:** the grammar, runtime, and tests are core Clockwork language (`WAITFOR`/`CALL`/`ABORT`/`RETURN`/`THROW`/`CATCH`), so they are committed `[common]` and cherry-picked onto the other branches (`iod-elc`, `prod-experimental-mqtt-fix`). Only the dbd-side (iod-15) and this design doc stay on this branch.
 
 **Problem (Q11 / iod-15):** `WAITFOR cust IS clean` after a SEND/`QUERY`/`CALL` never exits if dbd/`dbsvr` never APPLYs the row (silent miss, request timeout, reconnect drop). The blocking actions stay `Running` forever, so `ABORT`/`RETURN` later in the same COMMAND never run and the machine is wedged. There is no WAITFOR timeout in the grammar or in `WaitForAction`; `CALL … ON TIMEOUT msg` is parsed (`tests/call.lpc`) but `CallMethodAction` schedules no timer — `timeout_msg` only fires if the CALL **Fails**.
 
