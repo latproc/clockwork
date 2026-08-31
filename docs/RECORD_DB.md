@@ -362,7 +362,7 @@ CustomerEditor MACHINE cust, db {
 }
 ```
 
-~~Ask Martin whether WAITFOR should grow a timeout, or whether RECORD examples should stay on WHEN/TIMER.~~ **Decided (2026-08-31):** WAITFOR grows a timeout with `ON TIMEOUT ABORT | RETURN | THROW <msg>` (see [Clockwork PR 11](#clockwork-pr-11-waitfor--call-timeout-q11-iod-15--proposed)). Below still uses WAITFOR as in his drain sketch.
+~~Ask Martin whether WAITFOR should grow a timeout, or whether RECORD examples should stay on WHEN/TIMER.~~ **Decided (2026-08-31):** WAITFOR grows a per-statement timeout `ON TIMEOUT <ms> ABORT | RETURN | THROW <msg>` (see [Clockwork PR 11](#clockwork-pr-11-waitfor--call-timeout-q11-iod-15--proposed)). Below still uses WAITFOR as in his drain sketch.
 
 ```
 # --- named RECORD (passive states empty/dirty/clean) ---
@@ -1398,12 +1398,24 @@ The gap is exactly the one the author named: `CallMethodAction::checkComplete()`
 
 **Approach:** make a blocking action reach one of three outcomes on timeout, reusing the existing `AbortAction` machinery — not inventing new control flow.
 
-**Martin's design (2026-08-31):** the timeout outcome is one of three **existing verbs** — no new "timed out" state:
+**Decided syntax (2026-08-31):** the timeout duration lives **on the statement**, next to the outcome — no command-level property:
 
 ```
-WAITFOR <expr> ON TIMEOUT ABORT;          # logs an error, continues → WHEN re-evaluates
-WAITFOR <expr> ON TIMEOUT RETURN;         # completes successfully; no re-evaluation
-WAITFOR <expr> ON TIMEOUT THROW message;  # aborts and sends a message to a CATCH handler
+CALL  find ON db ON TIMEOUT 5000 THROW db_miss;   # send db_miss to CATCH after 5 s
+CALL  find ON db ON TIMEOUT 5000 ABORT;           # fail + WHEN re-evaluates after 5 s
+CALL  find ON db ON TIMEOUT 5000 RETURN;          # succeed after 5 s
+WAITFOR cust IS clean ON TIMEOUT 2000 ABORT;      # same form works on WAITFOR
+```
+
+The duration is a `basic_value` — a literal (milliseconds) **or** a variable. An undefined or non-integer variable is a **load-time error**:
+
+```
+OPTION timeout 5000;
+COMMAND load {
+    CALL find ON db ON TIMEOUT timeout THROW db_miss;   # variable -> 5000 ms
+    WAITFOR cust IS clean ON TIMEOUT 3000 ABORT;        # literal
+}
+CATCH db_miss { LOG "db find timed out"; }
 ```
 
 These map 1:1 onto machinery the language **already has** (they are not new semantics):
@@ -1418,18 +1430,21 @@ So the work is to let a blocking action reach one of these outcomes when its tim
 
 **Concrete changes:**
 
-1. **Grammar** — give `WAITFOR` an optional `ON TIMEOUT` clause choosing the outcome: `ON TIMEOUT ABORT` / `ON TIMEOUT RETURN` / `ON TIMEOUT THROW <msg>` (and the same on `CALL`, which already has an `error_clause`). Thread the chosen outcome into `WaitForActionTemplate` / `CallMethodActionTemplate`. `WAITFOR` today has no `error_clause` at all.
-2. **Runtime** — in `WaitForAction::checkComplete()` / `CallMethodAction::checkComplete()`, once the timeout duration has elapsed, stop the action and enqueue the matching `AbortAction` (or set `Failed`/`Complete` directly). `Action::operator()`'s existing `Failed → AbortAction` path then fires the WHEN re-evaluation or the `THROW`/`CATCH` message.
-3. **Duration source (decided, Martin):** `TIMEOUT <ms>` — un-deprecate the existing `TIMEOUT` property and use `MachineCommand::timeout` (milliseconds). It is already parsed (`cwlang.ypp` 1056) but currently only warns and is unused; the work is to stop warning and actually thread `mc->timeout` into the blocking actions.
-4. **Author-facing pattern** (documented, not forced):
+1. **Grammar** — `ON TIMEOUT <basic_value> ABORT | RETURN | THROW <msg>` on `WAITFOR` and `CALL`. `<basic_value>` is the duration (a literal or a variable, **milliseconds**). Thread the outcome + duration `Value` into `WaitForActionTemplate` / `CallMethodActionTemplate`. Drop the legacy `ON TIMEOUT <msg>` form (it was parsed-but-dead) and the command-level `(TIMEOUT <ms>)` property.
+2. **Runtime** — resolve the duration `Value` (integer literal, or `owner->getValue(<symbol>)` for a variable); in `checkComplete()`, once `Action::age() >= timeout_ms * 1000`, reach the outcome via `Action::timedOut()`.
+3. **Load-time error** — an `ON TIMEOUT <symbol>` whose symbol is undefined, or not an integer, is a parse/load error (`error_messages` / `num_errors`), not a silent no-op.
+4. **Author-facing pattern**:
 
    ```
    OPTION timeout 5000;
-   COMMAND load { CALL find ON db ON TIMEOUT THROW db_miss; }
+   COMMAND load {
+       CALL find ON db ON TIMEOUT timeout THROW db_miss;
+       WAITFOR cust IS clean ON TIMEOUT 3000 ABORT;
+   }
    CATCH db_miss { LOG "db find timed out"; CALL abort ON SELF; }
    ```
 
-5. **Tests** — parse test for `ON TIMEOUT ABORT` / `RETURN` / `THROW <msg>` on WAITFOR and CALL; runtime tests that a never-replying CALL reaches each outcome (ABORT re-evaluates WHEN; RETURN completes; THROW fires the CATCH handler).
+5. **Tests** — parse test for the three `ON TIMEOUT <ms> …` forms (literal + variable + undefined-variable error); runtime tests that a never-replying CALL reaches each outcome (ABORT re-evaluates WHEN; RETURN completes; THROW fires the CATCH handler).
 
 **Testing burden (pre-existing gaps):** the exception machinery this builds on is essentially untested today, so this PR is heavier than it looks:
 
@@ -1440,7 +1455,7 @@ So PR 11 must first **land a baseline**: wire `exceptions.cw` + `abort.cw` into 
 
 **Baseline landed (2026-08-31, `[common]`):** the `ABORT`-in-`IF` bug is fixed — `AbortAction::run()` now returns `Failed` for `abort_fail` (vs `Complete` for `RETURN`), and `MachineCommand::runActions()` / `IfCommandAction`/`IfElseCommandAction` propagate the abort up through nested blocks. `tests/exceptions.cw` + `tests/abort.cw` are wired into CTest as `runtime_exceptions` / `runtime_abort` (via `tests/run_cw_runtime.sh`, which SIGTERMs `cw` so its log flushes), and `tests/test_abort_action.cpp` covers the three outcomes.
 
-**Part B landed (2026-08-31, `[common]`):** `WAITFOR … ON TIMEOUT ABORT | RETURN | THROW <msg>` (and `CALL`, and the legacy `ON TIMEOUT <msg>` = `THROW`) is implemented. Duration comes from the command property block `(TIMEOUT <ms>)` (or `(TIMEOUT : <ms>)`) — `TIMEOUT` now parses as a property name (`property: TIMEOUT value` and `property: TIMEOUT PROPSEP value`) and `current_timeout_ms` is captured in the `property_block` reduction and threaded into `WaitForAction`/`CallMethodAction`; their `checkComplete()` compares `Action::age()` against the deadline and reaches the outcome via `Action::timedOut()`. This exposed and fixed a latent bug in `MachineCommand::checkComplete()` (returned `Running` instead of `Failed` on an action failure, re-logging forever). Tests: `parse_waitfor_timeout` + `runtime_waitfor_timeout` (a never-satisfied `WAITFOR` fires `THROW`, caught by `CATCH`, then `SHUTDOWN`). Grammar conflict count unchanged (106 S/R + 100 R/R).
+**Part B landed (2026-08-31, `[common]`):** the three `ON TIMEOUT` outcomes (`ABORT`/`RETURN`/`THROW`) are implemented via `Action::timedOut()` (Abort/Throw → `Failed`, Return → `Complete`), plus a latent `MachineCommand::checkComplete()` fix (returned `Running` instead of `Failed`, re-logging forever). **Syntax note:** the first cut took the duration from the command property `(TIMEOUT <ms>)`; the decided form moves it onto the statement — `ON TIMEOUT <ms> <outcome>` — with an undefined/non-integer variable a load-time error (see "Decided syntax" above). That grammar rework is **in progress**. Tests: `parse_waitfor_timeout` + `runtime_waitfor_timeout` (a never-satisfied `WAITFOR` fires `THROW`, caught by `CATCH`, then `SHUTDOWN`). Grammar conflict count unchanged (106 S/R + 100 R/R).
 
 **Related idea (Martin, larger):** a block-level `TRY { … } WHEN TIMER >= timeout { ABORT | THROW | RETURN }` with `CATCH <msg>`. **Landed (2026-08-31, `[common]`):** `TRY` is a token, the grammar `TRY { body } WHEN predicate { handler }` parses, and `TryAction` handles both synchronous and **blocking** bodies. The blocking case uses a timer interrupt: when the body blocks, `TryAction::scheduleTimeout()` computes the `TIMER >= timeout` delay via `Predicate::scheduleTimerEvents` and schedules a `TryTimeoutAction` on the `Scheduler`; when it fires, `TryAction::timeoutTriggered()` aborts the body (`MachineCommand::abortCommand()` stops the body and its nested blocking action) and the handler runs on the next tick. A body that completes before the timeout simply makes the (retained) interrupt a no-op. Tests (`parse_try_catch`, `runtime_try_throw`/`_return`/`_abort`/`_body_completes`/`_sync`/`_immediate`/`_empty_handler`) cover THROW→CATCH, RETURN, ABORT, body-completes-first, synchronous body, already-elapsed timeout, and empty handler.
 
