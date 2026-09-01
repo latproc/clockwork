@@ -213,6 +213,23 @@ Customer RECORD {
 cust Customer;                    # a named instance (program-owned)
 ```
 
+A named RECORD has three built-in **system states** (you do not write them —
+they are set by the runtime):
+
+| state | when |
+| --- | --- |
+| `empty` | just declared; nothing loaded |
+| `dirty` | a program/HMI edit changed a column OPTION |
+| `clean` | a row was applied (APPLY / `COPY PROPERTIES`) |
+
+```clockwork
+Watcher MACHINE cust {
+    quiet WHEN cust IS empty;
+    live  WHEN cust IS clean;
+}
+w Watcher cust;
+```
+
 Column flags: `KEY`, `UNIQUE`, `NOT NULL`, `PRIVATE` (a column that is stored but
 not published), and `LOCAL OPTION` (not a column at all).
 
@@ -539,7 +556,8 @@ values are typed JSON (numbers, strings, or null — not all strings).
 
 ## 5. Copying rows into a LIST or RECORD
 
-`COPY ALL FROM <RecordClass> TO <list>` copies the held RECORD instances:
+`COPY ALL FROM <RecordClass> TO <list>` copies the RECORD instances currently
+held in memory (the ones `RECORD APPLY` materialized):
 
 ```clockwork
 CustomerINTERFACE MACHINE record, items {
@@ -550,8 +568,45 @@ CustomerINTERFACE MACHINE record, items {
 }
 ```
 
-`COPY PROPERTIES FROM <row> TO <record>` binds a query result row onto a named
-RECORD (projecting only declared columns).
+Filter while copying with `WHERE`:
+
+```clockwork
+COMMAND named_ann {
+    CLEAR items;
+    COPY ALL FROM Customer TO items WHERE ITEM.name == "Ann";
+}
+```
+
+A query-result LIST is an ordinary LIST — the normal LIST commands work on it:
+
+```clockwork
+COMMAND newest {
+    SORT items BY PROPERTY name;         # ascending
+    SORT items BY PROPERTY name DESC;    # descending
+    row := TAKE FIRST FROM items;        # take and remove the first member
+    IF (SIZE OF items > 0) { LOG "more rows left"; }
+}
+```
+
+`COPY PROPERTIES FROM <row> TO <record>` binds one row onto a **named** RECORD,
+projecting only the declared columns (extra fields ignored) and leaving it
+`clean`:
+
+```clockwork
+row := TAKE FIRST FROM items;
+COPY PROPERTIES FROM row TO cust;        # cust gets id/name/age; cust is clean
+```
+
+Reactions go through a statically-declared RECORD that other machines already
+depend on — `WHEN` fires when its state/OPTIONS change:
+
+```clockwork
+Watcher MACHINE cust {
+    live    WHEN cust IS clean;
+    changed WHEN cust IS dirty;
+}
+w Watcher cust;
+```
 
 ## 6. `cw-scaffold` — generated INTERFACE
 
@@ -567,6 +622,39 @@ cw-scaffold --from customer.cw --out dir/ --sql    # + CREATE TABLE SQL
 
 ## 7. Two Clockworks, one datastore
 
-After a commit, `dbsvr` publishes the changed row on its notify socket; every
-`dbd` that holds that RECORD applies it onto its OPTIONS, so all Clockworks stay
-in sync without polling.
+Several Clockwork processes can share one `dbsvr`. After a commit, `dbsvr`
+publishes the changed row on its notify socket, and **every** `dbd` that holds
+that RECORD applies it onto its OPTIONS — so all Clockworks stay in sync with no
+polling and no second `find`.
+
+```
+                ┌──────────────┐         ┌──────────────┐
+                │   iod A      │         │   iod B      │
+                └──────┬───────┘         └──────┬───────┘
+                       │ (RECORD APPLY)         │ (RECORD APPLY)
+                ┌──────┴───────┐         ┌──────┴───────┐
+                │    dbd A     │         │    dbd B     │
+                └──────┬───────┘         └──────┬───────┘
+                       │                        │
+                       └──────────┬─────────────┘
+                                  │ (SUB on notify :5556)
+                         ┌────────┴────────┐
+                         │     dbsvr       │   PUB {action,type,keys,row}
+                         └─────────────────┘
+```
+
+1. `iod A` edits a row and `insert`s/`update`s it (via its INTERFACE).
+2. `dbsvr` commits and PUBs `{ action, type, keys, row }` on the notify socket.
+3. `dbd A` **and** `dbd B` both receive it and send `RECORD APPLY` to their iod.
+4. Both `cust.name` (and any bound MACHINE windows) update, and their `WHEN`
+   dependents re-check.
+
+```clockwork
+# same Customer RECORD on both programs:
+#   cust Customer (id: 1);
+# After A inserts Ann, cust.name is "Ann" on B too — no find, no poll.
+```
+
+Deletes are the same, except `dbsvr` PUBs `action: delete` and `dbd` sends
+`RECORD REMOVE` (a `Class#key` cache is dropped and unlinked from LISTs; a
+**named** instance stays and resets to `empty` with non-KEY defaults).
