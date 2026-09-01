@@ -356,6 +356,19 @@ static void wrap_current_actions_in_timed_scope() {
     with_timeout_present = false;
 }
 
+// timeout-spec.md: handler types whose runtime timeout is not wired yet still
+// parse the clause, but emit a warning and ignore the deadline.
+static void warn_handler_timeout_unimplemented(const char *kind) {
+    if (!with_timeout_present) {
+        return;
+    }
+    std::cerr << yyfilename << ":" << yylineno << " Warning: WITH TIMEOUT/AFTER on " << kind
+              << " handler is parsed but not yet implemented (timeout ignored)\n";
+    current_timeout_value = Value();
+    current_timeout_handler = nullptr;
+    with_timeout_present = false;
+}
+
 static bool check_machine_type(const std::string &name) {
     if (all_machine_types.count(name) > 0) {
         std::stringstream ss;
@@ -463,6 +476,7 @@ struct Subcondition {
 %nonassoc AS
 %left IFX
 %left IFELSE
+%nonassoc AFTER
 
 %type <expr> expression
 %type <expr> predicate
@@ -1578,8 +1592,9 @@ ENTER SYMBOL /* state name */ action with_timeout_opt
 ;
 
 leave_command:
-LEAVE SYMBOL action
+LEAVE SYMBOL action with_timeout_opt
 {
+    warn_handler_timeout_unimplemented("LEAVE");
 #ifndef DISABLE_LEAVE_FUNCTIONS
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
@@ -1626,7 +1641,8 @@ CATCH SYMBOL action {
 	current_actions->clear();
 }
 |
-RECEIVE SYMBOL /* message */ error_clause action  {
+RECEIVE SYMBOL /* message */ error_clause action with_timeout_opt {
+    warn_handler_timeout_unimplemented("RECEIVE");
     DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
     BOOST_FOREACH(ActionTemplate *at, *current_actions) {
         DBG_PARSER << *at << ", ";
@@ -2326,8 +2342,9 @@ with_timeout_opt:
     delete $3;
     with_timeout_present = true;
 }
-| AFTER basic_value '{' action_list '}' {
+| AFTER basic_value '{' action_list '}' %prec AFTER {
     // AFTER <duration> { … } == WITH TIMEOUT <duration> ON TIMEOUT { … } (handler).
+    // %prec AFTER keeps this distinct from the ADD … AFTER LAST/ITEM … forms.
     validate_timeout_value($2);
     current_timeout_value = *$2;
     delete $2;
