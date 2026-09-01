@@ -251,10 +251,183 @@ CustomerPanel MACHINE TABLE "customer" {
 cust CustomerPanel (id: 1);
 ```
 
-## 3. Querying with `QUERY` and JSON
+## 3. Creating a database
 
-`QUERY` sends a JSON request property to `DATABASE_CHANNEL`; the reply is turned
-into a LIST with `AS LIST` (or `PUSH ITEMS FROM`).
+A database is created and migrated by **tools**, not by a running program. The
+RECORD classes are the model; `cw-scaffold` turns them into `CREATE TABLE` SQL;
+`cw-migrate` versions and applies that SQL; `dbsvr` serves the resulting file.
+Operational row writes are `insert` requests, never schema changes.
+
+### Step 1 — define the model (RECORD classes)
+
+Every bare `OPTION` on a RECORD is a column. `KEY` is the single-column primary
+key; `UNIQUE` / `NOT NULL` add constraints; `PRIVATE` is a column that is stored
+but not published; `LOCAL OPTION` and `PERSISTENT OPTION` are not columns.
+
+```clockwork
+Customer RECORD {
+    OPTION id 0 KEY;
+    OPTION name "";
+    OPTION email "";
+    OPTION age 0 NOT NULL;
+    LOCAL OPTION tmp false;      # logic only, not a column
+}
+```
+
+A Clockwork value maps to a sqlite type as follows (other Stores map their own
+types):
+
+| Clockwork default | sqlite column |
+| --- | --- |
+| `0` (integer) | `INTEGER` |
+| `""` (string) | `TEXT` |
+| `0.0` (float) | `REAL` |
+| `true` / `false` | `INTEGER` (0/1) |
+| NULL | `NULL` |
+
+`KEY` becomes `PRIMARY KEY`; `NOT NULL` becomes `NOT NULL DEFAULT <default>`.
+`UNIQUE` adds a `UNIQUE` constraint.
+
+### Step 2 — generate `CREATE TABLE`
+
+`cw-scaffold --sql` writes the table DDL from the RECORD class:
+
+```
+cw-scaffold --from customer.cw --out dir/ --sql
+```
+
+For the class above it emits (in `dir/expected_Customer.sql`):
+
+```sql
+CREATE TABLE customer (
+  age INTEGER NOT NULL DEFAULT 0,
+  email TEXT DEFAULT '',
+  id INTEGER PRIMARY KEY,
+  name TEXT DEFAULT ''
+);
+```
+
+A `VIEW` class only gets a comment — its join SQL is written by hand and applied
+through `cw-migrate` as a `CREATE VIEW` revision.
+
+### Step 3 — version and apply (`cw-migrate`)
+
+Schema lives in SQL revision files, not in the program. `cw-migrate` keeps a
+`cw_revision` table and applies/rolls back revisions in order.
+
+A revision file (`db/versions/0001_customer.sql`):
+
+```sql
+-- revision: 0001
+-- down_revision: none
+-- upgrade
+CREATE TABLE customer (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  age INTEGER NOT NULL DEFAULT 0
+);
+-- downgrade
+DROP TABLE customer;
+```
+
+Commands:
+
+```
+cw-migrate current --db clockwork.db                        # print the applied revision
+cw-migrate generate --dir versions --sql 0002.sql           # wrap a SQL file as the next revision
+cw-migrate upgrade --db clockwork.db --dir versions         # apply pending revisions
+cw-migrate downgrade --db clockwork.db --dir versions --rev 1   # roll back to revision 1
+```
+
+Rules: adding a column is `ALTER TABLE … ADD COLUMN`; removing or renaming a
+column is an explicit revision (never auto-applied by loading a program). `dbsvr`
+does **not** auto-upgrade on start — the operator runs `cw-migrate upgrade`, and a
+mismatch is a startup error.
+
+### Step 4 — start `dbsvr`
+
+`dbsvr` is the datastore server. It opens the database named in its config and
+serves JSON over ZMQ:
+
+```
+dbsvr --config db.conf        # binds tcp://*:5554 (REP) + notify :5556 (PUB)
+```
+
+On connect it sets `journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`,
+and `busy_timeout=5000`; each JSON request runs as one transaction. Never send
+`BEGIN`/`COMMIT`/`ROLLBACK` yourself.
+
+### Worked example
+
+```console
+$ cw-scaffold --from customer.cw --out db/ --sql     # CustomerINTERFACE.lpc + Customer.sql
+$ cw-migrate generate --dir db/versions --sql db/Customer.sql   # -> 0001_customer.sql
+$ cw-migrate upgrade --db clockwork.db --dir db/versions         # CREATE TABLE customer
+$ dbsvr --config db.conf                             # serve the database
+```
+
+Now `customer` exists and a Clockwork program can `insert`, `find`, `update`, and
+`delete` rows on it.
+
+## 4. The query process
+
+All database access is a JSON request sent to `DATABASE_CHANNEL`. `dbd` forwards
+it to `dbsvr` (`tcp://127.0.0.1:5554`), `dbsvr` compiles it to SQL and runs it
+against the `Store`, and the reply comes back the same way. SQL never appears in
+a `.cw`/`.lpc` file.
+
+### 4.1 Request format
+
+A request is an object with an `action`, a `type` (the table or view), and
+action-specific fields. `auth` is the token (placeholder `"xxx"`).
+
+| action | purpose | extra fields |
+| --- | --- | --- |
+| `insert` | add one row | `data` |
+| `find` | matching rows (by `keys`) | `keys`, `fields` |
+| `select` | matching rows (rich filter) | `where`, `order`, `limit`, `fields` |
+| `update` | update matching rows | `keys`, `data` |
+| `delete` | delete matching rows | `keys` (omit to delete all) |
+| `create` | **CREATE TABLE** (schema), not a row | `schema` |
+
+`insert` is the operational "create a row"; `action: "create"` is DDL (and is
+normally superseded by `cw-migrate`). `action: "sql"` is rejected.
+
+```json
+{ "action": "insert", "auth": "xxx", "type": "customer",
+  "data": { "name": "Fred" } }
+
+{ "action": "find", "auth": "xxx", "type": "customer",
+  "keys": { "name": "Fred" }, "fields": ["age"] }
+
+{ "action": "update", "auth": "xxx", "type": "customer",
+  "keys": { "name": "Fred" }, "data": { "age": 20 } }
+
+{ "action": "delete", "auth": "xxx", "type": "customer",
+  "keys": { "name": "Bill" } }
+
+{ "action": "select", "auth": "xxx", "type": "customer",
+  "where": { "age": { "gt": 18 } }, "order": ["name"], "limit": 10 }
+```
+
+### 4.2 Selecting rows (`where`, `order`, `limit`, `fields`)
+
+`select` (and `find`) support filtering and shaping:
+
+- **Equality** — `"where": { "age": 18 }`.
+- **Comparisons** — `{ "age": { "gt": 18 } }` with `eq`, `neq`, `gt`, `lt`,
+  `ge`, `le`.
+- **Set membership** — `{ "age": { "in": [18, 20, 22] } }`.
+- **Pattern** — `{ "name": { "like": "%Fred%" } }` (bound, not interpolated).
+- **Null** — `{ "age": null }`.
+- **`order`** — `["name"]` ascending, `["-name"]` descending.
+- **`limit`** — an integer cap.
+- **`fields`** — the columns to return.
+
+Joined shapes are named SQL views (created by `cw-migrate` as `CREATE VIEW`),
+referenced with `type` / `VIEW "name"` — not ad-hoc joins in a request.
+
+### 4.3 The round trip
 
 ```clockwork
 Customer RECORD { OPTION id 0 KEY; OPTION name ""; }
@@ -262,24 +435,42 @@ all LIST;
 
 ed MACHINE {
     OPTION q JSON_VALUE {
-        "action": "find", "type": "customer", "auth": "xxx", "keys": {}
+        "action": "select", "type": "customer", "auth": "xxx",
+        "where": { "age": { "gt": 18 } }, "order": ["name"]
     };
     COMMAND refresh {
-        QUERY q INTO all;          # SEND q to DATABASE_CHANNEL
+        QUERY q INTO all;        # SEND q to DATABASE_CHANNEL
     }
 }
-
-# the reply (a JSON array) becomes a LIST:
-#   all := reply AS LIST;
 ```
 
-`AS LIST` turns any JSON array into a LIST:
+1. `QUERY q INTO all` SENDs the JSON property `q` to `DATABASE_CHANNEL`.
+   (`QUERY { ... } INTO all` sends a literal object.)
+2. `dbd` (subscribed as `DATABASE_CHANNEL`) forwards the payload to `dbsvr`.
+3. `dbsvr` compiles it to SQL (`SQLInterface` → `Store`), runs it in one
+   transaction, and returns a JSON reply.
+4. `dbd` applies the reply: a row reply becomes `RECORD APPLY` (per-column
+   OPTION writes on held RECORDs) or the legacy blob `respond_to` PROPERTY.
+5. The program turns the reply JSON into a LIST and drains it:
 
 ```clockwork
-all := result AS LIST;
+all := reply AS LIST;             # a JSON array becomes a LIST
 ```
 
-## 4. Copying rows into a LIST or RECORD
+`AS LIST` is `CLEAR list` + `PUSH ITEMS FROM json TO list`, for any JSON array.
+
+### 4.4 Responses
+
+```json
+{ "status": 0, "request": "{…}", "response": [ { "age": 21, "name": "Fred" } ] }
+```
+
+`status` is `0` (success), `1` (error), or `2` (unauthorized). `response` is the
+result data (or an error message). `insert`/`update`/`delete` replies include the
+affected rows (sqlite `RETURNING *`); `delete` includes the deleted rows. Column
+values are typed JSON (numbers, strings, or null — not all strings).
+
+## 5. Copying rows into a LIST or RECORD
 
 `COPY ALL FROM <RecordClass> TO <list>` copies the held RECORD instances:
 
@@ -295,31 +486,20 @@ CustomerINTERFACE MACHINE record, items {
 `COPY PROPERTIES FROM <row> TO <record>` binds a query result row onto a named
 RECORD (projecting only declared columns).
 
-## 5. `cw-scaffold` — generated CRUD
+## 6. `cw-scaffold` — generated INTERFACE
 
 `cw-scaffold` generates a `<Class>INTERFACE MACHINE record, items` with
 `create`/`update`/`delete`/`find`/`load`/`list` commands. `create` maps to a JSON
-`insert` (a row insert, not a schema create).
+`insert` (a row insert, not a schema create); `list` is `COPY ALL FROM <Class>`;
+`load` is a `find` with empty keys so `dbd` materializes the rows first.
 
 ```
 cw-scaffold --from customer.cw --out dir/          # generate the INTERFACE
 cw-scaffold --from customer.cw --out dir/ --sql    # + CREATE TABLE SQL
 ```
 
-## 6. `cw-migrate` — versioned schema
-
-Schema (including `CREATE VIEW`) is versioned and applied by `cw-migrate`, not by
-`dbd` or on `dbsvr` start.
-
-```
-cw-migrate current
-cw-migrate upgrade
-cw-migrate downgrade --rev 1
-cw-migrate generate --sql 0002_customer_with_city.sql
-```
-
 ## 7. Two Clockworks, one datastore
 
-After a commit, `dbsvr` publishes the changed row; every `dbd` that holds that
-RECORD applies it onto its OPTIONS, so all Clockworks stay in sync without
-polling.
+After a commit, `dbsvr` publishes the changed row on its notify socket; every
+`dbd` that holds that RECORD applies it onto its OPTIONS, so all Clockworks stay
+in sync without polling.
