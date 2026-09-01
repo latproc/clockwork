@@ -900,6 +900,10 @@ INTEGERVAL   {
 | SYMBOL {
     $$ = new Value($1);
 }
+| TIMEOUT {
+    // timeout-spec.md: TIMEOUT is a read-only contextual value inside ON TIMEOUT.
+    $$ = new Value("TIMEOUT", Value::t_symbol);
+}
 ;
 
 chn_option_settings:
@@ -1368,6 +1372,10 @@ INTEGERVAL   {
 }
 | SYMBOL {
     $$ = new Value($1);
+}
+| TIMEOUT {
+    // timeout-spec.md: TIMEOUT is a read-only contextual value inside ON TIMEOUT.
+    $$ = new Value("TIMEOUT", Value::t_symbol);
 }
 | ABS SYMBOL {
 	$$ = new Value(new AbsoluteValue($2));

@@ -4672,6 +4672,11 @@ const Value *MachineInstance::resolve(std::string property) {
         // try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
         const Value *res = 0;
         Value property_val(property); // tokenise the property
+        if (property == "TIMEOUT") {
+            // timeout-spec.md: TIMEOUT is a read-only contextual value, valid
+            // only while executing an ON TIMEOUT block.
+            return getTimeoutContextValue();
+        }
         if (property_val.token_id == ClockworkToken::TIMER) {
             // we do not use the precalculated timer here since this may be being accessed
             // within an action handler of a nother machine and will not have been updated

@@ -32,6 +32,13 @@ class MachineInstance;
 // fires. None means "no timeout / no ON TIMEOUT clause".
 enum class TimeoutAction { None, Abort, Return, Throw };
 
+// timeout-spec.md: the read-only TIMEOUT contextual value (milliseconds), scoped
+// to the currently-executing ON TIMEOUT block. It is stored on the execution
+// stack, not as a machine property.
+void setTimeoutContext(long timeout_ms);
+long getTimeoutContext();
+const Value *getTimeoutContextValue();
+
 class Action;
 class ActionTemplate {
   public:

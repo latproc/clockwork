@@ -160,7 +160,11 @@ void TryAction::runTimeoutHandler() {
     timeout_triggered = true;
     if (timeout_handler) {
         handler_started = true;
+        // timeout-spec.md: TIMEOUT is readable inside the ON TIMEOUT block.
+        long saved_context = getTimeoutContext();
+        setTimeoutContext(timeout_ms);
         status = (*timeout_handler)();
+        setTimeoutContext(saved_context);
         if (timeout_handler->aborted()) {
             // Propagate the handler's ABORT/THROW/RETURN up (like IfCommandAction).
             abort();

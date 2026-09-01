@@ -586,6 +586,10 @@ add_test(NAME parse_handler_timeout COMMAND ${CMAKE_COMMAND}
 add_test(NAME runtime_handler_timeout COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/handler_timeout_runtime.cw
   --must-contain "init timed out")
+# TIMEOUT is a read-only contextual value (ms) inside ON TIMEOUT.
+add_test(NAME runtime_timeout_value COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/timeout_value_runtime.cw
+  --must-contain "timed out after 500ms")
 
 # Part B/4: TRY { } WHEN TIMER >= timeout { } — parse + runtime.
 add_test(NAME parse_try_catch COMMAND ${CMAKE_COMMAND}

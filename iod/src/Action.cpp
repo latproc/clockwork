@@ -11,6 +11,19 @@
 
 void ActionTemplate::toC(std::ostream &out, std::ostream &vars) const { operator<<(out); }
 
+// timeout-spec.md: read-only TIMEOUT contextual value (milliseconds), scoped to
+// the currently-executing ON TIMEOUT block (thread-local so nested machine
+// timeout recovery does not clobber it).
+static thread_local long g_timeout_context = 0;
+static thread_local Value g_timeout_context_value;
+
+void setTimeoutContext(long timeout_ms) { g_timeout_context = timeout_ms; }
+long getTimeoutContext() { return g_timeout_context; }
+const Value *getTimeoutContextValue() {
+    g_timeout_context_value = Value(static_cast<int64_t>(g_timeout_context));
+    return &g_timeout_context_value;
+}
+
 Action::Action(MachineInstance *m)
     : refs(1), owner(m), error_str(""), result_str(""), status(New), saved_status(Running),
       blocked(0), trigger(0), started_(false), timeout_msg(0), error_msg(0) {}
