@@ -78,7 +78,9 @@ struct TryAction : public Action {
     void abortActive() override;
 
     Value timeout_value;
-    long timeout_ms = 0; // resolved from timeout_value in run()
+    long timeout_ms = 0;        // resolved from timeout_value in run()
+    uint64_t deadline_us = 0;   // absolute deadline (µs) once the body suspends
+    uint64_t completion_us = 0; // body completion time (µs), recorded once
     MachineCommand *body;
     MachineCommand *timeout_handler;
     bool handler_started = false;

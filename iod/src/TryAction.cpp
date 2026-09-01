@@ -134,8 +134,25 @@ Action::Status TryAction::checkComplete() {
         return status;
     }
     if (body->complete()) {
-        status = body->getStatus();
-        owner->stop(this);
+        if (body->getStatus() == Failed) {
+            status = Failed;
+            owner->stop(this);
+            return status;
+        }
+        // Body completed. Record its completion time (once) and compare against
+        // the absolute deadline: completion succeeds only if it is strictly
+        // earlier; completion at or after the deadline loses to the timeout.
+        // This closes the window where the scheduler's interrupt has not been
+        // dequeued yet even though the deadline has already passed.
+        if (completion_us == 0) {
+            completion_us = microsecs();
+        }
+        if (deadline_us == 0 || completion_us < deadline_us) {
+            status = body->getStatus();
+            owner->stop(this);
+            return status;
+        }
+        runTimeoutHandler();
         return status;
     }
     return Running;
@@ -152,8 +169,13 @@ void TryAction::timeoutTriggered() {
 }
 
 void TryAction::scheduleTimeout() {
+    // Record the absolute deadline so checkComplete() can decide a completion
+    // race against it rather than against whichever event the scheduler dequeues
+    // first (timeout-spec.md "Completion Races").
+    uint64_t start_us = microsecs();
+    deadline_us = start_us + timeout_ms * 1000;
     TryTimeoutAction *tta = new TryTimeoutAction(owner, this);
-    Scheduler::instance()->add(new ScheduledItem(timeout_ms * 1000, tta));
+    Scheduler::instance()->add(new ScheduledItem(start_us, timeout_ms * 1000, tta));
 }
 
 void TryAction::abortActive() {
