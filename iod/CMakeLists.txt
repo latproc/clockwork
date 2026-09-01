@@ -662,6 +662,18 @@ add_test(NAME runtime_try_on_error_cascade COMMAND sh ${_runtime}
 add_test(NAME runtime_handler_on_error COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/handler_on_error.cw
   --must-contain "handler error caught")
+# WAIT ... WITH TIMEOUT (statement form).
+add_test(NAME runtime_wait_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/wait_timeout_runtime.cw
+  --must-contain "wait timed out")
+# RECEIVE handler runtime deadline.
+add_test(NAME runtime_receive_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/receive_timeout_runtime.cw
+  --must-contain "receive timed out")
+# SET ... WITH TIMEOUT (parse-only; a synchronous SET has no observable deadline).
+add_test(NAME parse_set_timeout COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/set_timeout.cw -DEXPECT_RC=0
+  -P ${_record_parse})
 
 add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)
 set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")

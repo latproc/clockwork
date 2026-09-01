@@ -1759,10 +1759,11 @@ block_action {
 ;
 
 simple_action:
-SET SYMBOL TO expression error_clause  {
+SET SYMBOL TO expression error_clause with_timeout_opt {
     DBG_PARSER << "set action: set " << $2 << " to " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetStateActionTemplate($2, $4);
+    ActionTemplate *set = new SetStateActionTemplate($2, $4);
+    current_action = with_timeout_present ? make_timed_scope(set) : set;
 	cleanupErrorClause(true);
 }
 | ABORT {
@@ -1775,10 +1776,11 @@ SET SYMBOL TO expression error_clause  {
 	if (current_action) current_actions->push_back(current_action);
 	current_action = new AbortActionTemplate(false); // do not regard this as an action failure
 }
-| WAIT value /* wait for timer */ {
+| WAIT value with_timeout_opt /* wait for timer */ {
     DBG_PARSER << " wait action: wait " << *$2 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new WaitActionTemplate(*$2);
+    ActionTemplate *wa = new WaitActionTemplate(*$2);
+    current_action = with_timeout_present ? make_timed_scope(wa) : wa;
     delete $2;
 }
 | LOCK SYMBOL /* obtain a lock on a machine */ {
