@@ -52,32 +52,22 @@ struct WaitAction : public Action {
 };
 
 struct WaitForActionTemplate : public ActionTemplate {
-    WaitForActionTemplate(CStringHolder target, Value value,
-                          TimeoutAction timeout_action = TimeoutAction::None,
-                          long timeout = 0, CStringHolder timeout_message = "");
+    WaitForActionTemplate(CStringHolder target, Value value);
     Action *factory(MachineInstance *mi) override;
     std::ostream &operator<<(std::ostream &out) const override {
         return out << target.get() << " to be " << value;
     }
     CStringHolder target;
     Value value;
-    TimeoutAction timeout_action;
-    long timeout;
-    CStringHolder timeout_message;
 };
 
 struct WaitForAction : public Action {
     WaitForAction(MachineInstance *mi, WaitForActionTemplate &wat)
-        : Action(mi), target(wat.target), value(wat.value),
-          timeout_action(wat.timeout_action), timeout(wat.timeout),
-          timeout_message(wat.timeout_message) {}
+        : Action(mi), target(wat.target), value(wat.value) {}
     Status run() override;
     Status checkComplete() override;
     std::ostream &operator<<(std::ostream &out) const override;
     CStringHolder target;
     Value value;
     MachineInstance *machine = nullptr;
-    TimeoutAction timeout_action;
-    long timeout;
-    CStringHolder timeout_message;
 };

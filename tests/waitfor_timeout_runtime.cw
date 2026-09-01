@@ -1,6 +1,5 @@
-# Runtime test: a WAITFOR that never completes fires ON TIMEOUT THROW, and the
-# message is caught by CATCH. The command's `(TIMEOUT : 300)` supplies the
-# duration (ms).
+# Runtime test: a WAITFOR that never completes fires ON TIMEOUT, and the THROW
+# message is caught by CATCH. The WITH TIMEOUT <duration> is inline (ms).
 #
 # Pass: "waitfor timed out" is logged (then SHUTDOWN).
 # Fail: the message never appears (WAITFOR hangs).
@@ -15,8 +14,8 @@ TimeoutRuntime MACHINE {
 
     idle DEFAULT;
 
-    COMMAND run (TIMEOUT : 300) {
-        WAITFOR never == 1 ON TIMEOUT THROW tmo;
+    COMMAND run {
+        WAITFOR never == 1 WITH TIMEOUT 300 ON TIMEOUT { THROW tmo; }
     }
 
     ENTER INIT {

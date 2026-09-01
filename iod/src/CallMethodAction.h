@@ -29,17 +29,13 @@ class MachineInstance;
 
 struct CallMethodActionTemplate : public ActionTemplate {
     CallMethodActionTemplate(CStringHolder msg, CStringHolder dest,
-                             TimeoutAction timeout_action = TimeoutAction::None,
-                             long timeout_ms = 0,
-                             CStringHolder timeout_message = "",
+                             CStringHolder timeout = "CALL_TIMEOUT",
                              CStringHolder error = "CALL_ERROR");
     Action *factory(MachineInstance *mi) override;
     std::ostream &operator<<(std::ostream &out) const override;
     CStringHolder message;
     CStringHolder target;
-    TimeoutAction timeout_action;
-    long timeout_ms;
-    CStringHolder timeout_message;
+    CStringHolder timeout_symbol; // legacy ON TIMEOUT <msg> message name
     CStringHolder error_symbol;
 };
 
@@ -51,9 +47,6 @@ struct CallMethodAction : public Action {
     CStringHolder message;
     CStringHolder target;
     MachineInstance *target_machine;
-    TimeoutAction timeout_action;
-    long timeout_ms;
-    CStringHolder timeout_message;
 };
 
 #endif

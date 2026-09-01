@@ -81,14 +81,13 @@ PredicateOperator current_op;
 
 static char *error_message_name = 0;
 static char *timeout_message_name = 0;
-// Part B: WAITFOR/CALL ON TIMEOUT outcome and duration (from the command's
-// TIMEOUT <ms> property). current_timeout_action is set by the ON TIMEOUT
-// clause; current_timeout_ms is set by the property_block reduction.
-static TimeoutAction current_timeout_action = TimeoutAction::None;
-static long current_timeout_ms = 0;
 // timeout-spec.md: an ON TIMEOUT { … } block captured by timeout_handler_opt,
 // passed to the enclosing TRY / timed statement.
 static MachineCommandTemplate *current_timeout_handler = nullptr;
+// timeout-spec.md: WITH TIMEOUT <duration> captured by with_timeout_opt, plus a
+// flag so the enclosing production knows whether the clause was present.
+static Value current_timeout_value;
+static bool with_timeout_present = false;
 
 MachineInstance *current_machine = 0;
 MachineClass *current_machineclass = 0;
@@ -265,7 +264,6 @@ static bool registerCommandHandler(const char *name, std::vector<std::string> wi
     current_machineclass->receives.insert(std::make_pair(Message(name), mc));
     current_machineclass->commands.insert(std::make_pair(name, mc));
     current_actions->clear();
-    current_timeout_ms = 0; // Part B: command-level timeout does not leak across commands
     return true;
 }
 
@@ -301,7 +299,6 @@ static void cleanupErrorClause(bool deallocate) {
 		if (deallocate) free(error_message_name);
 		error_message_name = 0;
 	}
-	current_timeout_action = TimeoutAction::None;
 }
 
 // timeout-spec.md: WITH TIMEOUT <duration> — the duration must be an integer (a
@@ -337,6 +334,14 @@ static void validate_timeout_value(const Value *v) {
        << "(milliseconds), got " << *v;
     error_messages.push_back(ss.str());
     ++num_errors;
+}
+
+// timeout-spec.md: wrap a single action (e.g. a CALL/WAITFOR) in a timed scope
+// so its WITH TIMEOUT deadline and ON TIMEOUT handler apply to that statement.
+static ActionTemplate *make_timed_scope(ActionTemplate *inner) {
+    MachineCommandTemplate *body = new MachineCommandTemplate("timed_body", "");
+    body->setActionTemplate(inner);
+    return new TryActionTemplate(current_timeout_value, body, current_timeout_handler);
 }
 
 static bool check_machine_type(const std::string &name) {
@@ -1099,20 +1104,12 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
     properties = property_stack.back();
     property_stack.pop_back();
-    if (properties.exists("TIMEOUT")) {
-        const Value &t = properties.lookup("TIMEOUT");
-        int64_t timeout;
-        if (t.asInteger(timeout)) {
-            mc->timeout = timeout;
-        }
-    }
     properties.clear();
     MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
     mc->action_templates.push_back(state_change);
     current_machineclass->commands.insert(std::make_pair($3, mc));
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
-    current_timeout_ms = 0; // Part B: command-level timeout does not leak across commands
 	cleanupErrorClause(true);
 }
 ;
@@ -1537,9 +1534,6 @@ COMMAND SYMBOL /* command name */ action {
     registerCommandHandler($2, std::move(within), $4);
 }
 | COMMAND SYMBOL /* command name */ property_block action {
-    // Part B: the property_block reduction captured TIMEOUT into
-    // current_timeout_ms; drop the block from the stack (it was previously
-    // ignored and leaked here).
     if (!property_stack.empty()) {
         properties = property_stack.back();
         property_stack.pop_back();
@@ -1802,12 +1796,11 @@ SET SYMBOL TO expression error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ShutdownActionTemplate();
 }
-| WAITFOR SYMBOL EQ basic_value error_clause /* wait for object to be in a state */ {
+| WAITFOR SYMBOL EQ basic_value with_timeout_opt /* wait for object to be in a state */ {
     DBG_PARSER << " wait for action: wait for " << $2 << " to be " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new WaitForActionTemplate($2, *$4, current_timeout_action, current_timeout_ms,
-                                               timeout_message_name);
-    cleanupErrorClause();
+    ActionTemplate *wfa = new WaitForActionTemplate($2, *$4);
+    current_action = with_timeout_present ? make_timed_scope(wfa) : wfa;
     delete $4;
 }
 | INC SYMBOL /* increment a property */ {
@@ -1859,16 +1852,16 @@ SET SYMBOL TO expression error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate(new Value(new PropertyLookupValue($4, $2))), opAssign, $6));
 }
-| CALL SYMBOL ON SYMBOL error_clause /* execute a command on a machine and wait for it to complete */ {
+| CALL SYMBOL ON SYMBOL error_clause with_timeout_opt /* execute a command on a machine and wait for it to complete */ {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new CallMethodActionTemplate($2, $4, current_timeout_action, current_timeout_ms,
-                                                   timeout_message_name, error_message_name);
+	ActionTemplate *call = new CallMethodActionTemplate($2, $4, timeout_message_name, error_message_name);
+	current_action = with_timeout_present ? make_timed_scope(call) : call;
 	cleanupErrorClause();
 }
-| CALL SYMBOL error_clause /* execute a command within the current machine and wait for it to complete */ {
+| CALL SYMBOL error_clause with_timeout_opt /* execute a command within the current machine and wait for it to complete */ {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new CallMethodActionTemplate($2, "SELF", current_timeout_action, current_timeout_ms,
-                                                   timeout_message_name, error_message_name);
+	ActionTemplate *call = new CallMethodActionTemplate($2, "SELF", timeout_message_name, error_message_name);
+	current_action = with_timeout_present ? make_timed_scope(call) : call;
 	cleanupErrorClause();
 }
 | SEND SYMBOL TO SYMBOL /* send a generic message/command */ {
@@ -2305,6 +2298,22 @@ timeout_handler_opt:
 }
 ;
 
+// timeout-spec.md: optional [ WITH TIMEOUT <duration> [ ON TIMEOUT { … } ] ] on a
+// statement. Sets current_timeout_value / current_timeout_handler / with_timeout_present.
+with_timeout_opt:
+/* empty */ {
+    with_timeout_present = false;
+    current_timeout_value = Value();
+    current_timeout_handler = nullptr;
+}
+| WITH TIMEOUT basic_value timeout_handler_opt {
+    validate_timeout_value($3);
+    current_timeout_value = *$3;
+    delete $3;
+    with_timeout_present = true;
+}
+;
+
 /* TBD fix this to only allow one generic error and one timeout clause.
  	Also add the ON ERROR error-name handler form.
  */
@@ -2336,7 +2345,7 @@ IGNORE ERRORS {
 	}
 }
 | ON TIMEOUT SYMBOL error_clause {
-	// legacy: ON TIMEOUT <msg> behaves like ON TIMEOUT THROW <msg>
+	// legacy: ON TIMEOUT <msg> names a message handled by CATCH (not a duration).
 	if (timeout_message_name) {
 		std::stringstream ss;
 		ss << current_machineclass->name << ": multiple ON TIMEOUT clauses\n";
@@ -2346,44 +2355,6 @@ IGNORE ERRORS {
 	}
 	else {
 		timeout_message_name = strdup($3);
-		current_timeout_action = TimeoutAction::Throw;
-	}
-}
-| ON TIMEOUT ABORT error_clause {
-	if (current_timeout_action != TimeoutAction::None || timeout_message_name) {
-		std::stringstream ss;
-		ss << current_machineclass->name << ": multiple ON TIMEOUT clauses\n";
-		MessageLog::instance()->add(ss.str().c_str());
-		error_messages.push_back(ss.str());
-		++num_errors;
-	}
-	else {
-		current_timeout_action = TimeoutAction::Abort;
-	}
-}
-| ON TIMEOUT RETURN error_clause {
-	if (current_timeout_action != TimeoutAction::None || timeout_message_name) {
-		std::stringstream ss;
-		ss << current_machineclass->name << ": multiple ON TIMEOUT clauses\n";
-		MessageLog::instance()->add(ss.str().c_str());
-		error_messages.push_back(ss.str());
-		++num_errors;
-	}
-	else {
-		current_timeout_action = TimeoutAction::Return;
-	}
-}
-| ON TIMEOUT THROW SYMBOL error_clause {
-	if (current_timeout_action != TimeoutAction::None || timeout_message_name) {
-		std::stringstream ss;
-		ss << current_machineclass->name << ": multiple ON TIMEOUT clauses\n";
-		MessageLog::instance()->add(ss.str().c_str());
-		error_messages.push_back(ss.str());
-		++num_errors;
-	}
-	else {
-		timeout_message_name = strdup($4);
-		current_timeout_action = TimeoutAction::Throw;
 	}
 }
 | ;
@@ -2712,14 +2683,6 @@ property_block:
 {
     DBG_PARSER << "properties " << properties << "\n";
     property_stack.push_back(properties);
-    // Part B: capture TIMEOUT (ms) so WAITFOR/CALL blocking actions can enforce
-    // a deadline. The action productions that follow this reduction read
-    // current_timeout_ms.
-    if (properties.exists("TIMEOUT")) {
-        const Value &t = properties.lookup("TIMEOUT");
-        int64_t tv;
-        if (t.asInteger(tv)) current_timeout_ms = tv;
-    }
     properties.clear();
 }
 ;
@@ -2747,20 +2710,6 @@ SYMBOL PROPSEP value
 | SYMBOL {
     DBG_PARSER << "property: " << $1 << " = 0\n";
     properties.add($1, 0);
-}
-| TIMEOUT PROPSEP value {
-    // Part B: allow `(TIMEOUT : <ms>)` in a command property block. TIMEOUT is a
-    // keyword (not SYMBOL), so it needs its own production.
-    DBG_PARSER << "property: TIMEOUT = " << *$3 << "\n";
-    properties.add("TIMEOUT", *$3);
-    delete $3;
-}
-| TIMEOUT value {
-    // Part B: also allow the bare `(TIMEOUT <ms>)` form, matching OPTION's
-    // `name value` style.
-    DBG_PARSER << "property: TIMEOUT = " << *$2 << "\n";
-    properties.add("TIMEOUT", *$2);
-    delete $2;
 }
 ;
 

@@ -29,10 +29,8 @@
 //    the remote machine must send a reply or this action hangs forever
 
 CallMethodActionTemplate::CallMethodActionTemplate(CStringHolder msg, CStringHolder dest,
-                                                   TimeoutAction timeout_action, long timeout_ms,
-                                                   CStringHolder timeout_message, CStringHolder error)
-    : message(msg), target(dest), timeout_action(timeout_action), timeout_ms(timeout_ms),
-      timeout_message(timeout_message), error_symbol(error) {}
+                                                   CStringHolder timeout, CStringHolder error)
+    : message(msg), target(dest), timeout_symbol(timeout), error_symbol(error) {}
 
 Action *CallMethodActionTemplate::factory(MachineInstance *mi) {
     return new CallMethodAction(mi, *this);
@@ -43,9 +41,10 @@ std::ostream &CallMethodActionTemplate::operator<<(std::ostream &out) const {
 }
 
 CallMethodAction::CallMethodAction(MachineInstance *mi, CallMethodActionTemplate &eat)
-    : Action(mi), message(eat.message), target(eat.target), target_machine(0),
-      timeout_action(eat.timeout_action), timeout_ms(eat.timeout_ms),
-      timeout_message(eat.timeout_message) {
+    : Action(mi), message(eat.message), target(eat.target), target_machine(0) {
+    if (eat.timeout_symbol.get()) {
+        timeout_msg = new CStringHolder(eat.timeout_symbol.get());
+    }
     if (eat.error_symbol.get()) {
         error_msg = new CStringHolder(eat.error_symbol.get());
     }
@@ -112,10 +111,6 @@ Action::Status CallMethodAction::run() {
 Action::Status CallMethodAction::checkComplete() {
     if (status == Complete || status == Failed) {
         return status;
-    }
-    if (timeout_action != TimeoutAction::None && timeout_ms > 0 &&
-        age() >= (uint64_t)timeout_ms * 1000) {
-        return timedOut(timeout_action, timeout_message);
     }
     if (status == Action::New) {
         if (run() == Action::New) {
