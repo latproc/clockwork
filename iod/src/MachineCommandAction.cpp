@@ -316,6 +316,9 @@ Action::Status MachineCommand::runActions() {
             std::stringstream ss;
             ss << "ABORTING: " << *this << " at action " << *a << "\n";
             abort();
+            if (a->timedOut()) {
+                timed_out = true; // propagate an unhandled timeout as a timeout
+            }
             char *err_msg = strdup(ss.str().c_str());
             MessageLog::instance()->add(err_msg);
             error_str = err_msg;
@@ -339,15 +342,17 @@ Action::Status MachineCommand::runActions() {
         if (stat == Action::Failed) {
             std::stringstream ss;
             ss << " action: " << *a << " running on " << owner->fullName();
-            if (a->aborted()) {
-                ss << " aborted (" << a->error() << ")";
-            }
-            else {
-                ss << " failed to start (" << a->error() << ")";
-            }
+            ss << " failed to start (" << a->error() << ")";
             char *err_msg = strdup(ss.str().c_str());
             MessageLog::instance()->add(err_msg);
             error_str = err_msg;
+            if (a->timedOut()) {
+                timed_out = true; // propagate an unhandled timeout as a timeout
+            }
+            owner->stop(a);
+            a->release();
+            status = Failed;
+            return Failed;
         }
         if (stat == Action::NeedsRetry || stat == Action::New) {
             std::stringstream ss;
@@ -482,6 +487,9 @@ Action::Status MachineCommand::checkComplete() {
             ++current_step;
         }
         else if (a->getStatus() == Failed) {
+            if (a->timedOut()) {
+                timed_out = true; // propagate an unhandled timeout as a timeout
+            }
             NB_MSG << command_name.get() << " " << a->error() << "\n";
             owner->stop(this);
             status = Failed;
@@ -490,6 +498,9 @@ Action::Status MachineCommand::checkComplete() {
         else if (a->getStatus() == Running || a->getStatus() == Suspended) {
             if (a->complete()) { // check current status
                 if (a->getStatus() == Failed) {
+                    if (a->timedOut()) {
+                        timed_out = true; // propagate an unhandled timeout as a timeout
+                    }
                     NB_MSG << command_name.get() << " " << a->error() << "\n";
                     owner->stop(this);
                     status = Failed;

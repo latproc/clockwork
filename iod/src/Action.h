@@ -119,6 +119,11 @@ class Action : public TriggerOwner {
     void start();
     void stop();
     bool aborted() const;
+    // True when this action's Failed status represents an unhandled timeout
+    // (rather than an ordinary error). Propagated through a MachineCommand so an
+    // enclosing timed scope can route it to ON TIMEOUT rather than ON ERROR.
+    bool timedOut() const { return timed_out; }
+    void setTimedOut(bool t = true) { timed_out = t; }
 
     virtual void toString(char *buf, int buffer_size);
     virtual std::ostream &operator<<(std::ostream &out) const { return out << "(Action)"; }
@@ -137,6 +142,7 @@ class Action : public TriggerOwner {
     uint64_t start_time{};
     bool started_ = false;
     bool aborted_ = false;
+    bool timed_out = false;
     bool is_waiting = false;
     CStringHolder *timeout_msg = nullptr; // message to send on timeout
     CStringHolder *error_msg = nullptr;   // message to send on error

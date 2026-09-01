@@ -52,7 +52,9 @@ struct TryTimeoutAction : public Action {
 
 struct TryActionTemplate : public ActionTemplate {
     TryActionTemplate(Value timeout_value, MachineCommandTemplate *body,
-                      MachineCommandTemplate *timeout_handler);
+                      MachineCommandTemplate *timeout_handler,
+                      MachineCommandTemplate *error_handler = nullptr,
+                      bool has_deadline = true);
     ~TryActionTemplate() override;
     Action *factory(MachineInstance *mi) override;
     std::ostream &operator<<(std::ostream &out) const override;
@@ -60,6 +62,8 @@ struct TryActionTemplate : public ActionTemplate {
     Value timeout_value;               // duration in ms (literal or variable)
     MachineCommandTemplate *body;
     MachineCommandTemplate *timeout_handler; // null if no ON TIMEOUT block
+    MachineCommandTemplate *error_handler;   // null if no ON ERROR block
+    bool has_deadline; // false when a handler has ON TIMEOUT/ON ERROR but no WITH TIMEOUT
 };
 
 struct TryAction : public Action {
@@ -74,15 +78,18 @@ struct TryAction : public Action {
     void timeoutTriggered();
     void scheduleTimeout();
     void runTimeoutHandler();
+    void runErrorHandler();
     // Abort the active nested work (body, or the running recovery handler).
     void abortActive() override;
 
     Value timeout_value;
     long timeout_ms = 0;        // resolved from timeout_value in run()
+    bool has_deadline = true;   // false: no own deadline, only catch inner outcomes
     uint64_t deadline_us = 0;   // absolute deadline (µs) once the body suspends
     uint64_t completion_us = 0; // body completion time (µs), recorded once
     MachineCommand *body;
     MachineCommand *timeout_handler;
+    MachineCommand *error_handler;
     bool handler_started = false;
     bool timeout_triggered = false;
 };

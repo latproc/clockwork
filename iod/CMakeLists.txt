@@ -644,6 +644,24 @@ add_test(NAME runtime_try_immediate COMMAND sh ${_runtime}
 add_test(NAME runtime_try_empty_handler COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/try_empty_handler.cw
   --must-contain "completed via empty handler")
+# ON ERROR { }: body failure runs ON ERROR (not ON TIMEOUT).
+add_test(NAME runtime_try_on_error COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_on_error.cw
+  --must-contain "error handled"
+  --must-not-contain "should not timeout")
+# ON ERROR does not run on a timeout (distinct outcomes).
+add_test(NAME runtime_try_on_error_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_on_error_timeout.cw
+  --must-contain "timed out"
+  --must-not-contain "should not error")
+# ABORT in ON TIMEOUT cascades to ON ERROR.
+add_test(NAME runtime_try_on_error_cascade COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_on_error_cascade.cw
+  --must-contain "abort cascaded to error")
+# Handler-level ON ERROR (no WITH TIMEOUT) catches a body failure.
+add_test(NAME runtime_handler_on_error COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/handler_on_error.cw
+  --must-contain "handler error caught")
 
 add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)
 set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")

@@ -84,6 +84,9 @@ static char *timeout_message_name = 0;
 // timeout-spec.md: an ON TIMEOUT { … } block captured by timeout_handler_opt,
 // passed to the enclosing TRY / timed statement.
 static MachineCommandTemplate *current_timeout_handler = nullptr;
+// timeout-spec.md: an ON ERROR { … } block captured by error_handler_opt,
+// passed to the enclosing TRY / handler.
+static MachineCommandTemplate *current_error_handler = nullptr;
 // timeout-spec.md: WITH TIMEOUT <duration> captured by with_timeout_opt, plus a
 // flag so the enclosing production knows whether the clause was present.
 static Value current_timeout_value;
@@ -341,32 +344,32 @@ static void validate_timeout_value(const Value *v) {
 static ActionTemplate *make_timed_scope(ActionTemplate *inner) {
     MachineCommandTemplate *body = new MachineCommandTemplate("timed_body", "");
     body->setActionTemplate(inner);
-    return new TryActionTemplate(current_timeout_value, body, current_timeout_handler);
+    return new TryActionTemplate(current_timeout_value, body, current_timeout_handler,
+                                 current_error_handler);
 }
 
 // timeout-spec.md: wrap the handler body currently in current_actions in a timed
-// scope when a WITH TIMEOUT / AFTER clause was present (handler-level deadline).
+// scope when a WITH TIMEOUT / AFTER / ON TIMEOUT / ON ERROR clause was present.
 static void wrap_current_actions_in_timed_scope() {
     MachineCommandTemplate *body = new MachineCommandTemplate("handler_body", "");
     body->setActionTemplates(*current_actions);
     current_actions->clear();
     current_actions->push_back(new TryActionTemplate(current_timeout_value, body,
-                                                     current_timeout_handler));
+                                                     current_timeout_handler,
+                                                     current_error_handler,
+                                                     with_timeout_present));
     current_timeout_handler = nullptr;
+    current_error_handler = nullptr;
     with_timeout_present = false;
 }
 
-// timeout-spec.md: handler types whose runtime timeout is not wired yet still
-// parse the clause, but emit a warning and ignore the deadline.
-static void warn_handler_timeout_unimplemented(const char *kind) {
-    if (!with_timeout_present) {
-        return;
+// Move the trailing action (still in current_action) into current_actions so a
+// handler/block's last statement is not dropped before setActionTemplates().
+static void flush_pending_action() {
+    if (current_action) {
+        current_actions->push_back(current_action);
+        current_action = 0;
     }
-    std::cerr << yyfilename << ":" << yylineno << " Warning: WITH TIMEOUT/AFTER on " << kind
-              << " handler is parsed but not yet implemented (timeout ignored)\n";
-    current_timeout_value = Value();
-    current_timeout_handler = nullptr;
-    with_timeout_present = false;
 }
 
 static bool check_machine_type(const std::string &name) {
@@ -1551,8 +1554,10 @@ enter_command
 ;
 
 basic_command:
-COMMAND SYMBOL /* command name */ action with_timeout_opt {
-    if (with_timeout_present) wrap_current_actions_in_timed_scope();
+COMMAND SYMBOL /* command name */ action handler_clauses {
+    if (with_timeout_present || current_timeout_handler || current_error_handler) {
+        wrap_current_actions_in_timed_scope();
+    }
     registerCommandHandler($2, std::vector<std::string>(), 0);
 }
 | COMMAND SYMBOL command_guard action {
@@ -1579,9 +1584,11 @@ COMMAND SYMBOL /* command name */ action with_timeout_opt {
 ;
 
 enter_command:
-ENTER SYMBOL /* state name */ action with_timeout_opt
+ENTER SYMBOL /* state name */ action handler_clauses
 {
-    if (with_timeout_present) wrap_current_actions_in_timed_scope();
+    if (with_timeout_present || current_timeout_handler || current_error_handler) {
+        wrap_current_actions_in_timed_scope();
+    }
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
@@ -1600,9 +1607,11 @@ ENTER SYMBOL /* state name */ action with_timeout_opt
 ;
 
 leave_command:
-LEAVE SYMBOL action with_timeout_opt
+LEAVE SYMBOL action handler_clauses
 {
-    warn_handler_timeout_unimplemented("LEAVE");
+    if (with_timeout_present || current_timeout_handler || current_error_handler) {
+        wrap_current_actions_in_timed_scope();
+    }
 #ifndef DISABLE_LEAVE_FUNCTIONS
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
@@ -1649,8 +1658,10 @@ CATCH SYMBOL action {
 	current_actions->clear();
 }
 |
-RECEIVE SYMBOL /* message */ error_clause action with_timeout_opt {
-    warn_handler_timeout_unimplemented("RECEIVE");
+RECEIVE SYMBOL /* message */ error_clause action handler_clauses {
+    if (with_timeout_present || current_timeout_handler || current_error_handler) {
+        wrap_current_actions_in_timed_scope();
+    }
     DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
     BOOST_FOREACH(ActionTemplate *at, *current_actions) {
         DBG_PARSER << *at << ", ";
@@ -2293,16 +2304,18 @@ IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
 	DBG_PARSER << "** popped old action list\n";
     current_action = new IfElseCommandActionTemplate($3, mc2, mc) ;
 }
-| TRY '{' action_list '}' WITH TIMEOUT basic_value timeout_handler_opt {
+| TRY '{' action_list '}' WITH TIMEOUT basic_value timeout_handler_opt error_handler_opt {
     DBG_PARSER << " TRY action: timeout " << *$7 << "\n";
     if (current_action) {
         current_actions->push_back(current_action);
         current_action = 0;
     }
-    // The ON TIMEOUT handler (if any) was captured by timeout_handler_opt into
-    // current_timeout_handler; current_actions now holds the body.
+    // The ON TIMEOUT / ON ERROR handlers (if any) were captured by
+    // timeout_handler_opt / error_handler_opt; current_actions now holds the body.
     MachineCommandTemplate *handler_mc = current_timeout_handler;
     current_timeout_handler = nullptr;
+    MachineCommandTemplate *error_mc = current_error_handler;
+    current_error_handler = nullptr;
     MachineCommandTemplate *body_mc = new MachineCommandTemplate("try_body", "");
     body_mc->setActionTemplates(*current_actions);
     current_actions->clear();
@@ -2311,7 +2324,7 @@ IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
     current_actions_stack.pop_back();
     DBG_PARSER << "** popped action list for TRY body\n";
     validate_timeout_value($7);
-    current_action = new TryActionTemplate(*$7, body_mc, handler_mc);
+    current_action = new TryActionTemplate(*$7, body_mc, handler_mc, error_mc);
     delete $7;
 }
 | '{' action_list '}' {
@@ -2327,12 +2340,31 @@ timeout_handler_opt:
 }
 | ON TIMEOUT '{' action_list '}' {
     MachineCommandTemplate *mc = new MachineCommandTemplate("timeout_handler", "");
+    flush_pending_action();
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
     delete current_actions;
     current_actions = current_actions_stack.back();
     current_actions_stack.pop_back();
     current_timeout_handler = mc;
+}
+;
+
+// timeout-spec.md: optional [ ON ERROR { <statements> } ] after ON TIMEOUT (TRY)
+// or on a handler. Captures the block into current_error_handler.
+error_handler_opt:
+/* empty */ {
+    current_error_handler = nullptr;
+}
+| ON ERROR '{' action_list '}' {
+    MachineCommandTemplate *mc = new MachineCommandTemplate("error_handler", "");
+    flush_pending_action();
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_error_handler = mc;
 }
 ;
 
@@ -2343,11 +2375,13 @@ with_timeout_opt:
     with_timeout_present = false;
     current_timeout_value = Value();
     current_timeout_handler = nullptr;
+    current_error_handler = nullptr;
 }
 | WITH TIMEOUT basic_value timeout_handler_opt {
     validate_timeout_value($3);
     current_timeout_value = *$3;
     delete $3;
+    current_error_handler = nullptr; // statements do not carry ON ERROR
     with_timeout_present = true;
 }
 | AFTER basic_value '{' action_list '}' %prec AFTER {
@@ -2357,6 +2391,40 @@ with_timeout_opt:
     current_timeout_value = *$2;
     delete $2;
     MachineCommandTemplate *mc = new MachineCommandTemplate("timeout_handler", "");
+    flush_pending_action();
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_timeout_handler = mc;
+    current_error_handler = nullptr; // statements do not carry ON ERROR
+    with_timeout_present = true;
+}
+;
+
+// timeout-spec.md: handler suffix. WITH TIMEOUT / ON TIMEOUT { } / ON ERROR { }
+// are independently optional; a handler may catch inner timeouts/errors without
+// its own deadline.
+handler_clauses:
+/* empty */ {
+    with_timeout_present = false;
+    current_timeout_value = Value();
+    current_timeout_handler = nullptr;
+    current_error_handler = nullptr;
+}
+| WITH TIMEOUT basic_value timeout_handler_opt error_handler_opt {
+    validate_timeout_value($3);
+    current_timeout_value = *$3;
+    delete $3;
+    with_timeout_present = true;
+}
+| AFTER basic_value '{' action_list '}' error_handler_opt %prec AFTER {
+    validate_timeout_value($2);
+    current_timeout_value = *$2;
+    delete $2;
+    MachineCommandTemplate *mc = new MachineCommandTemplate("timeout_handler", "");
+    flush_pending_action();
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
     delete current_actions;
@@ -2364,6 +2432,28 @@ with_timeout_opt:
     current_actions_stack.pop_back();
     current_timeout_handler = mc;
     with_timeout_present = true;
+}
+| ON TIMEOUT '{' action_list '}' error_handler_opt {
+    MachineCommandTemplate *mc = new MachineCommandTemplate("timeout_handler", "");
+    flush_pending_action();
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_timeout_handler = mc;
+    with_timeout_present = false; // no own deadline
+}
+| ON ERROR '{' action_list '}' {
+    MachineCommandTemplate *mc = new MachineCommandTemplate("error_handler", "");
+    flush_pending_action();
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_error_handler = mc;
+    with_timeout_present = false;
 }
 ;
 

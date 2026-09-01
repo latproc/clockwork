@@ -24,8 +24,10 @@
 #include "Scheduler.h"
 
 TryActionTemplate::TryActionTemplate(Value timeout_value, MachineCommandTemplate *body,
-                                     MachineCommandTemplate *timeout_handler)
-    : timeout_value(timeout_value), body(body), timeout_handler(timeout_handler) {}
+                                     MachineCommandTemplate *timeout_handler,
+                                     MachineCommandTemplate *error_handler, bool has_deadline)
+    : timeout_value(timeout_value), body(body), timeout_handler(timeout_handler),
+      error_handler(error_handler), has_deadline(has_deadline) {}
 
 TryActionTemplate::~TryActionTemplate() {
     if (body) {
@@ -34,6 +36,9 @@ TryActionTemplate::~TryActionTemplate() {
     if (timeout_handler) {
         delete timeout_handler;
     }
+    if (error_handler) {
+        delete error_handler;
+    }
 }
 
 Action *TryActionTemplate::factory(MachineInstance *mi) { return new TryAction(mi, this); }
@@ -41,7 +46,10 @@ Action *TryActionTemplate::factory(MachineInstance *mi) { return new TryAction(m
 std::ostream &TryActionTemplate::operator<<(std::ostream &out) const {
     out << "TRY body=" << *body;
     if (timeout_handler) {
-        out << " handler=" << *timeout_handler;
+        out << " timeout_handler=" << *timeout_handler;
+    }
+    if (error_handler) {
+        out << " error_handler=" << *error_handler;
     }
     return out;
 }
@@ -80,11 +88,14 @@ std::ostream &TryTimeoutAction::operator<<(std::ostream &out) const {
 }
 
 TryAction::TryAction(MachineInstance *mi, TryActionTemplate *t)
-    : Action(mi), timeout_value(t->timeout_value),
+    : Action(mi), timeout_value(t->timeout_value), has_deadline(t->has_deadline),
       body(dynamic_cast<MachineCommand *>(t->body->factory(mi))),
       timeout_handler(t->timeout_handler
                           ? dynamic_cast<MachineCommand *>(t->timeout_handler->factory(mi))
-                          : nullptr) {}
+                          : nullptr),
+      error_handler(t->error_handler
+                        ? dynamic_cast<MachineCommand *>(t->error_handler->factory(mi))
+                        : nullptr) {}
 
 TryAction::~TryAction() {
     if (body) {
@@ -92,6 +103,9 @@ TryAction::~TryAction() {
     }
     if (timeout_handler) {
         timeout_handler->release();
+    }
+    if (error_handler) {
+        error_handler->release();
     }
 }
 
@@ -110,11 +124,22 @@ Action::Status TryAction::run() {
         }
     }
     status = (*body)();
-    if (status == Complete || status == Failed) {
+    if (status == Complete) {
         owner->stop(this);
         return status;
     }
+    if (status == Failed) {
+        // Body failed synchronously: route to ON ERROR (or propagate).
+        runErrorHandler();
+        return status;
+    }
     // Body is blocking.
+    if (!has_deadline) {
+        // No own deadline: just wait for the body. Inner timeouts/errors reach
+        // checkComplete() via the body's Failed status + timedOut() marker.
+        status = Running;
+        return status;
+    }
     if (timeout_ms <= 0) {
         // Zero/negative timeout: run the handler immediately.
         runTimeoutHandler();
@@ -135,8 +160,14 @@ Action::Status TryAction::checkComplete() {
     }
     if (body->complete()) {
         if (body->getStatus() == Failed) {
-            status = Failed;
-            owner->stop(this);
+            // Distinguish an unhandled timeout (propagated from an inner timed
+            // scope) from an ordinary error, and route to the right handler.
+            if (body->timedOut()) {
+                runTimeoutHandler();
+            }
+            else {
+                runErrorHandler();
+            }
             return status;
         }
         // Body completed. Record its completion time (once) and compare against
@@ -147,7 +178,7 @@ Action::Status TryAction::checkComplete() {
         if (completion_us == 0) {
             completion_us = microsecs();
         }
-        if (deadline_us == 0 || completion_us < deadline_us) {
+        if (!has_deadline || deadline_us == 0 || completion_us < deadline_us) {
             status = body->getStatus();
             owner->stop(this);
             return status;
@@ -200,7 +231,15 @@ void TryAction::runTimeoutHandler() {
         status = (*timeout_handler)();
         setTimeoutContext(saved_context);
         if (timeout_handler->aborted()) {
-            // Propagate the handler's ABORT/THROW/RETURN up (like IfCommandAction).
+            // timeout-spec.md "Interaction With Errors": an ABORT/RETURN/THROW in
+            // ON TIMEOUT cascades to ON ERROR with the timeout context available,
+            // then the abort propagates.
+            if (error_handler) {
+                long saved2 = getTimeoutContext();
+                setTimeoutContext(timeout_ms);
+                (*error_handler)();
+                setTimeoutContext(saved2);
+            }
             abort();
         }
         if (status == Complete || status == Failed) {
@@ -208,7 +247,10 @@ void TryAction::runTimeoutHandler() {
         }
     }
     else {
-        // No ON TIMEOUT block: an unhandled timeout fails the scope.
+        // No ON TIMEOUT block: an unhandled timeout fails the scope and is marked
+        // as a timeout (not an error) so an enclosing scope routes it to its own
+        // ON TIMEOUT.
+        setTimedOut(true);
         abort();
         status = Failed;
         setError("timed out");
@@ -216,10 +258,34 @@ void TryAction::runTimeoutHandler() {
     }
 }
 
+void TryAction::runErrorHandler() {
+    // Route an ERROR outcome: run ON ERROR (or propagate the failure).
+    if (error_handler) {
+        // Keep the timeout context available inside ON ERROR (timeout-spec.md).
+        long saved_context = getTimeoutContext();
+        setTimeoutContext(timeout_ms);
+        status = (*error_handler)();
+        setTimeoutContext(saved_context);
+        if (error_handler->aborted()) {
+            abort();
+        }
+        if (status == Complete || status == Failed) {
+            owner->stop(this);
+        }
+    }
+    else {
+        status = Failed;
+        owner->stop(this);
+    }
+}
+
 std::ostream &TryAction::operator<<(std::ostream &out) const {
     out << "TryAction body=" << *body;
     if (timeout_handler) {
-        out << " handler=" << *timeout_handler;
+        out << " timeout_handler=" << *timeout_handler;
+    }
+    if (error_handler) {
+        out << " error_handler=" << *error_handler;
     }
     return out;
 }
