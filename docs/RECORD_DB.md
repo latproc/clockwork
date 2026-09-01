@@ -1199,7 +1199,7 @@ Commit convention: fixes to common code (shared infrastructure, memory leaks, ZM
 | iod-7 | `RecordClass.cpp` `mark` | RECORD has no `empty`/`dirty`/`clean` states yet and the grammar already calls `disableAutomaticStateChanges()`, so a RECORD currently has an empty state set; `cust IS empty` in the examples cannot evaluate until PR 9 adds the states. | PR 9 gap | **Landed** (PR 9 states) |
 | iod-8 | `MachineClass.cpp` `addPrivateProperty` | Private schema props (`RECORD`/`TABLE`/`VIEW`/`KEY`/`UNIQUE`/`NOT_NULL`) and `LOCAL OPTION` share the `local_properties` set, so `propertyIsLocal(KEY)` is true. PR 9's projection (`getOptions()` vs `propertyIsLocal`) must keep private-hidden-schema and LOCAL-not-a-column apart. | Model gap | **Landed** (PR 10 `private_properties`) |
 | iod-9 | `cwlang.ypp` `record_section` | `PERSISTENT OPTION` is not accepted in a RECORD body, though the grammar sketch and OPTIONS = columns describe its semantics. | Doc drift | **Deferred** — later PR; v1 grammar accepts only `OPTION` and `LOCAL OPTION` |
-| iod-10 | `cwlang.ypp` `QUERY … INTO` | The `INTO` target is discarded (`(void)$4`); the SEND goes out but the named LIST is never filled. | Gap | **Open** (PR 7 reply fill) |
+| iod-10 | `cwlang.ypp` `QUERY … INTO` | The `INTO` target is discarded (`(void)$4`); the SEND goes out but the named LIST is never filled. | Gap | **Landed** (PR 7: `INTO list` names the LIST the reply becomes via `AS LIST`) |
 | iod-11 | `cwlang.ypp` `record_definition_header` | `RecordClass::setTable(lowercase_copy($1))` is redundant; `mark()` already sets TABLE to the lowercase class name. | Cleanup | **Landed** (`6ea6ed38`) |
 | iod-12 | `src/dbd.cpp` | Logs the full outgoing request (`sending: …`, includes `auth` + row data) and the full `dbsvr` reply to stdout unconditionally. | Security/logging | **Landed** (gated behind `DEBUG_BASIC`) |
 | iod-13 | `dbd.cpp` | Two parallel iod connections: `g_iodcmd` (MessagingInterface) and `g_iod_req` (DeadlineReq), both to `:5555`. | Cleanup | **Landed** — single `DeadlineReq` to iod; dead `MessagingInterface` client + `sendIOD`/`sendIODMessage`/`getIODSyncCommand` MODBUS helpers removed |
@@ -1217,8 +1217,8 @@ Commit convention: fixes to common code (shared infrastructure, memory leaks, ZM
 | ds-4 | `dbmock/sql_interface.cpp` `collectFieldNamesAndTypes` | `create` concatenates schema type strings unbound into `CREATE TABLE`; `catalogAllows` skips `create` entirely. Accepted surface, but unvalidated SQL. | Security (accepted) | **Accepted** — create is lexical-only |
 | ds-5 | `cw-migrate.cpp` `set_rev` | Inserts the revision id by string concatenation, not a bound value. | Cleanup | **Landed** (bound value) |
 | ds-6 | `dbmock/db_server.cpp` (was `fetchReturning`) | Update reply relied on the original keys; changing the key column, or updating with no keys, returned nothing / the whole table (`INTEGER PRIMARY KEY` *is* the rowid, so the old rowid-capture workaround could not work). | Bug | **Landed** — sqlite upgraded to 3.46; writes use `RETURNING *` |
-| ds-7 | `dbmock/store.cpp` `getInstance` | Singleton ignores a later `db_name`. | Cleanup | **Open** — one DB per process is intentional; decide warn-vs-error |
-| ds-8 | `dbmock/` | Dead legacy code: file-blob methods (`importFile`/`getFile`/`deleteFile`/`listFiles`, `base64`) and the `collectValuesString(quoted=true)` interpolation path are unused by the JSON API; `server.c` is a leftover echo server. | Cleanup | **Open** (tidy) |
+| ds-7 | `dbmock/store.cpp` `getInstance` | Singleton ignores a later `db_name`. | Cleanup | **Landed** (warn on db_name mismatch) |
+| ds-8 | `dbmock/` | Dead legacy code: file-blob methods (`importFile`/`getFile`/`deleteFile`/`listFiles`, `base64`) and the `collectValuesString(quoted=true)` interpolation path are unused by the JSON API; `server.c` is a leftover echo server. | Cleanup | **Landed** (dead file-blob/base64 code removed) |
 
 ---
 
@@ -1238,7 +1238,7 @@ Clockwork PRs and datastore PRs stay in their own repos. First Clockwork slice d
 6. **COPY ALL FROM RecordClass INTO LIST** — **landed (in-memory).** Table and VIEW RECORD classes. Scaffolder **list** is COPY; **load** still SEND-find so dbd can materialize rows first.
 7. **QUERY INTO** — **landed.** `QUERY q INTO list` SENDs JSON property `q` to `DATABASE_CHANNEL` (same as INTERFACE load); `QUERY JSON_VALUE { … } INTO list` SENDs that object. The scan cannot wait for dbsvr, so `INTO list` names the LIST the reply is turned into: `list := reply AS LIST` (PR 8) or `PUSH ITEMS FROM reply TO list`. No `Class#key` spawn.
 8. **`json AS LIST`** — **landed.** `list := json AS LIST` clears the LIST and fills it from a JSON array (any JSON array, not only RECORD rows). Equivalent to `CLEAR list` + `PUSH ITEMS FROM json TO list`. `record_parse_as_list` + `test_copy_from_record`. Optional (deferred): `COPY PROPERTIES FROM` a JSON object onto a named RECORD.
-9. **RECORD APPLY projection + system states `empty`/`dirty`/`clean` + skip-dirty persist** — **next (this PR).** See [Clockwork PR 9](#clockwork-pr-9-record-states-and-apply-projection). Unblocks MACHINE TABLE (lifecycle on that MACHINE is `LOCAL OPTION state`, not `setState`).
+9. **RECORD APPLY projection + system states `empty`/`dirty`/`clean` + skip-dirty persist** — **landed.** See [Clockwork PR 9](#clockwork-pr-9-record-states-and-apply-projection). Unblocks MACHINE TABLE (lifecycle on that MACHINE is `LOCAL OPTION state`, not `setState`).
 
 ### Clockwork PR 9: RECORD states and APPLY projection
 
@@ -1382,7 +1382,7 @@ Spec-first is this section. Then code + tests in one Clockwork commit (or two: p
 - Parse: `OPTION x 0 PRIVATE` parses on a RECORD; errors on a non-RECORD OPTION.
 - `test_record_apply`: a `PRIVATE` column is APPLYed (written) but not published.
 
-### Clockwork PR 11: WAITFOR / CALL timeout (Q11, iod-15) — proposed
+### Clockwork PR 11: WAITFOR / CALL timeout (Q11, iod-15) — landed
 
 **Repo:** this one (`iod`). No datastore change — the hang is in Clockwork's blocking actions, not in `dbsvr` (the dbd request-drop side is iod-15, noted below). **`[common]`:** the grammar, runtime, and tests are core Clockwork language (`WAITFOR`/`CALL`/`ABORT`/`RETURN`/`THROW`/`CATCH`), so they are committed `[common]` and cherry-picked onto the other branches (`iod-elc`, `prod-experimental-mqtt-fix`). Only the dbd-side (iod-15) and this design doc stay on this branch.
 
