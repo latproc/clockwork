@@ -95,6 +95,10 @@ class Action : public TriggerOwner {
     void resume();
     void recover(); // debug TBD
     void abort();
+    // Abort this action's active nested work (e.g. a timed scope's running body
+    // or recovery handler) when an enclosing scope is being aborted. Default
+    // no-op; overridden by actions that wrap other work (TryAction).
+    virtual void abortActive() {}
     virtual void reset(); // reinitialise an action for re-execution
 
     bool debug();

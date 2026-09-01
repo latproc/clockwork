@@ -74,6 +74,8 @@ struct TryAction : public Action {
     void timeoutTriggered();
     void scheduleTimeout();
     void runTimeoutHandler();
+    // Abort the active nested work (body, or the running recovery handler).
+    void abortActive() override;
 
     Value timeout_value;
     long timeout_ms = 0; // resolved from timeout_value in run()

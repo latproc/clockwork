@@ -174,9 +174,11 @@ void MachineCommand::addAction(Action *a, ActionParameterList *params) { actions
 void MachineCommand::abortCommand() {
     abort();
     // Stop nested actions first (they sit above this command on the owner's
-    // action stack), then this command itself.
+    // action stack), then this command itself. Give each nested action a chance
+    // to abort its own active work (e.g. a timed scope's running handler).
     for (Action *a : actions) {
         if (a->started()) {
+            a->abortActive();
             owner->stop(a);
         }
     }

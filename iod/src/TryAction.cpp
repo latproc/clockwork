@@ -156,6 +156,18 @@ void TryAction::scheduleTimeout() {
     Scheduler::instance()->add(new ScheduledItem(timeout_ms * 1000, tta));
 }
 
+void TryAction::abortActive() {
+    // An enclosing scope's deadline fired while this scope was active: abort
+    // whichever nested work is currently running (the recovery handler if it has
+    // started, otherwise the body).
+    if (handler_started && timeout_handler) {
+        timeout_handler->abortCommand();
+    }
+    else if (body) {
+        body->abortCommand();
+    }
+}
+
 void TryAction::runTimeoutHandler() {
     timeout_triggered = true;
     if (timeout_handler) {
