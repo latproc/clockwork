@@ -123,6 +123,8 @@ iod/iosh
 iod/device_connector
 iod/iocmd
 iod/dbd
+iod/cw-scaffold
+iod/cw-migrate
 lib/
 ethercat-lib/
 examples/wecon/wecon
