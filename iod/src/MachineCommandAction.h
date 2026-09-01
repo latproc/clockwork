@@ -50,9 +50,9 @@ class MachineCommandTemplate : public ActionTemplate {
     MachineCommandTemplate(const MachineCommandTemplate &) = delete;
     MachineCommandTemplate &operator=(const MachineCommandTemplate &) = delete;
     ~MachineCommandTemplate() override;
-    virtual Action *factory(MachineInstance *mi);
+    Action *factory(MachineInstance *mi) override;
 
-    std::ostream &operator<<(std::ostream &out) const {
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << command_name.get() << " " << state_name.get();
     }
     void setActionTemplates(std::list<ActionTemplate *> &new_actions);
