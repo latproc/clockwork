@@ -13,7 +13,7 @@ TryComplete MACHINE {
             WAITFOR x == 1;
             LOG "body done";
         }
-        WHEN TIMER >= timeout {
+        WITH TIMEOUT timeout ON TIMEOUT {
             LOG "timed out";
         }
         SHUTDOWN;

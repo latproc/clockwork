@@ -86,6 +86,9 @@ static char *timeout_message_name = 0;
 // clause; current_timeout_ms is set by the property_block reduction.
 static TimeoutAction current_timeout_action = TimeoutAction::None;
 static long current_timeout_ms = 0;
+// timeout-spec.md: an ON TIMEOUT { … } block captured by timeout_handler_opt,
+// passed to the enclosing TRY / timed statement.
+static MachineCommandTemplate *current_timeout_handler = nullptr;
 
 MachineInstance *current_machine = 0;
 MachineClass *current_machineclass = 0;
@@ -299,6 +302,41 @@ static void cleanupErrorClause(bool deallocate) {
 		error_message_name = 0;
 	}
 	current_timeout_action = TimeoutAction::None;
+}
+
+// timeout-spec.md: WITH TIMEOUT <duration> — the duration must be an integer (a
+// literal) or a defined integer OPTION. Anything else is a load-time error.
+static void validate_timeout_value(const Value *v) {
+    if (!v || !current_machineclass) {
+        return;
+    }
+    if (v->kind == Value::t_integer) {
+        return;
+    }
+    if (v->kind == Value::t_symbol) {
+        const std::string &name = v->sValue;
+        auto it = current_machineclass->getOptions().find(name);
+        if (it == current_machineclass->getOptions().end()) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " WITH TIMEOUT duration '" << name
+               << "' is not a defined OPTION";
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+        else if (it->second.kind != Value::t_integer) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " WITH TIMEOUT duration '" << name
+               << "' is not an integer";
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+        return;
+    }
+    std::stringstream ss;
+    ss << yyfilename << ":" << yylineno << " WITH TIMEOUT duration must be an integer "
+       << "(milliseconds), got " << *v;
+    error_messages.push_back(ss.str());
+    ++num_errors;
 }
 
 static bool check_machine_type(const std::string &name) {
@@ -2224,31 +2262,46 @@ IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
 	DBG_PARSER << "** popped old action list\n";
     current_action = new IfElseCommandActionTemplate($3, mc2, mc) ;
 }
-| TRY '{' action_list '}' WHEN predicate '{' action_list '}' {
-    DBG_PARSER << " TRY action: " << *$6 << "\n";
+| TRY '{' action_list '}' WITH TIMEOUT basic_value timeout_handler_opt {
+    DBG_PARSER << " TRY action: timeout " << *$7 << "\n";
     if (current_action) {
         current_actions->push_back(current_action);
         current_action = 0;
     }
-    // After the second { action_list }, current_actions holds the handler and
-    // the stack holds [outer, body]. Capture handler, then body.
-    MachineCommandTemplate *handler_mc = new MachineCommandTemplate("try_handler", "");
-    handler_mc->setActionTemplates(*current_actions);
-    current_actions->clear();
-    delete current_actions;
-    current_actions = current_actions_stack.back();
-    current_actions_stack.pop_back();
+    // The ON TIMEOUT handler (if any) was captured by timeout_handler_opt into
+    // current_timeout_handler; current_actions now holds the body.
+    MachineCommandTemplate *handler_mc = current_timeout_handler;
+    current_timeout_handler = nullptr;
     MachineCommandTemplate *body_mc = new MachineCommandTemplate("try_body", "");
     body_mc->setActionTemplates(*current_actions);
     current_actions->clear();
     delete current_actions;
     current_actions = current_actions_stack.back();
     current_actions_stack.pop_back();
-    DBG_PARSER << "** popped action lists for TRY\n";
-    current_action = new TryActionTemplate($6, body_mc, handler_mc);
+    DBG_PARSER << "** popped action list for TRY body\n";
+    validate_timeout_value($7);
+    current_action = new TryActionTemplate(*$7, body_mc, handler_mc);
+    delete $7;
 }
 | '{' action_list '}' {
     if (current_action) current_actions->push_back(current_action); current_action = 0;
+}
+;
+
+// timeout-spec.md: optional [ ON TIMEOUT { <statements> } ] after WITH TIMEOUT.
+// Captures the block into current_timeout_handler (or clears it when absent).
+timeout_handler_opt:
+/* empty */ {
+    current_timeout_handler = nullptr;
+}
+| ON TIMEOUT '{' action_list '}' {
+    MachineCommandTemplate *mc = new MachineCommandTemplate("timeout_handler", "");
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_timeout_handler = mc;
 }
 ;
 

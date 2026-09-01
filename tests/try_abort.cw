@@ -11,7 +11,7 @@ TryAbort MACHINE {
         TRY {
             WAITFOR never == 1;
         }
-        WHEN TIMER >= timeout {
+        WITH TIMEOUT timeout ON TIMEOUT {
             ABORT;
         }
         LOG "should not run";

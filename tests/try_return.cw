@@ -11,7 +11,7 @@ TryReturn MACHINE {
         TRY {
             WAITFOR never == 1;
         }
-        WHEN TIMER >= timeout {
+        WITH TIMEOUT timeout ON TIMEOUT {
             RETURN;
         }
         LOG "returned normally";

@@ -21,7 +21,6 @@
 #pragma once
 
 #include "Action.h"
-#include "Expression.h"
 
 class MachineCommandTemplate;
 class MachineCommand;
@@ -29,9 +28,9 @@ class MachineInstance;
 
 struct TryAction;
 
-// Scheduled by a TryAction when its body blocks, so the timeout predicate
-// (e.g. TIMER >= timeout) can interrupt the body even though the body's nested
-// blocking action sits above the TryAction on the machine's action stack.
+// Scheduled by a TryAction when its body blocks, so the deadline can interrupt
+// the body even though the body's nested blocking action sits above the TryAction
+// on the machine's action stack.
 struct TryTimeoutAction : public Action {
     TryTimeoutAction(MachineInstance *mi, TryAction *ta);
     ~TryTimeoutAction() override;
@@ -42,23 +41,25 @@ struct TryTimeoutAction : public Action {
     TryAction *try_action;
 };
 
-// TRY { <body> } WHEN <predicate> { <handler> }
+// A timed scope per docs/timeout-spec.md:
 //
-// Runs <body>. If <body> finishes before the predicate becomes true, the action
-// completes with the body's status. If the predicate fires first (via a
-// Scheduler timer interrupt, or because it is already true when the body
-// blocks), <body> is aborted and <handler> runs — the handler's
-// ABORT / THROW / RETURN determines the outcome (see AbortAction).
+//   <body> WITH TIMEOUT <duration> [ ON TIMEOUT { <statements> } ]
+//
+// Runs <body>. If it finishes before <duration> (milliseconds, from the scope's
+// start) elapses, the scope completes with the body's status. Otherwise the body
+// is aborted and the ON TIMEOUT block runs (or, with no ON TIMEOUT block, the
+// timeout propagates to the enclosing timed scope).
 
 struct TryActionTemplate : public ActionTemplate {
-    TryActionTemplate(Predicate *pred, MachineCommandTemplate *body, MachineCommandTemplate *handler);
+    TryActionTemplate(Value timeout_value, MachineCommandTemplate *body,
+                      MachineCommandTemplate *timeout_handler);
     ~TryActionTemplate() override;
     Action *factory(MachineInstance *mi) override;
     std::ostream &operator<<(std::ostream &out) const override;
 
-    Condition condition;
+    Value timeout_value;               // duration in ms (literal or variable)
     MachineCommandTemplate *body;
-    MachineCommandTemplate *handler;
+    MachineCommandTemplate *timeout_handler; // null if no ON TIMEOUT block
 };
 
 struct TryAction : public Action {
@@ -72,11 +73,12 @@ struct TryAction : public Action {
     // that the handler must run (checkComplete() does the actual handler run).
     void timeoutTriggered();
     void scheduleTimeout();
-    void runHandler();
+    void runTimeoutHandler();
 
-    Condition condition;
+    Value timeout_value;
+    long timeout_ms = 0; // resolved from timeout_value in run()
     MachineCommand *body;
-    MachineCommand *handler;
+    MachineCommand *timeout_handler;
     bool handler_started = false;
     bool timeout_triggered = false;
 };

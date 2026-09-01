@@ -23,28 +23,32 @@
 #include "MachineInstance.h"
 #include "Scheduler.h"
 
-TryActionTemplate::TryActionTemplate(Predicate *pred, MachineCommandTemplate *body,
-                                     MachineCommandTemplate *handler)
-    : condition(pred), body(body), handler(handler) {}
+TryActionTemplate::TryActionTemplate(Value timeout_value, MachineCommandTemplate *body,
+                                     MachineCommandTemplate *timeout_handler)
+    : timeout_value(timeout_value), body(body), timeout_handler(timeout_handler) {}
 
 TryActionTemplate::~TryActionTemplate() {
     if (body) {
         delete body;
     }
-    if (handler) {
-        delete handler;
+    if (timeout_handler) {
+        delete timeout_handler;
     }
 }
 
 Action *TryActionTemplate::factory(MachineInstance *mi) { return new TryAction(mi, this); }
 
 std::ostream &TryActionTemplate::operator<<(std::ostream &out) const {
-    return out << "TRY body=" << *body << " handler=" << *handler;
+    out << "TRY body=" << *body;
+    if (timeout_handler) {
+        out << " handler=" << *timeout_handler;
+    }
+    return out;
 }
 
 TryTimeoutAction::TryTimeoutAction(MachineInstance *mi, TryAction *ta) : Action(mi), try_action(ta) {
     // Keep the TryAction alive until this interrupt fires (or is dropped), so a
-    // body that completes before the timeout does not leave a dangling pointer.
+    // body that completes before the deadline does not leave a dangling pointer.
     if (try_action) {
         try_action->retain();
     }
@@ -76,30 +80,44 @@ std::ostream &TryTimeoutAction::operator<<(std::ostream &out) const {
 }
 
 TryAction::TryAction(MachineInstance *mi, TryActionTemplate *t)
-    : Action(mi), condition(t->condition),
+    : Action(mi), timeout_value(t->timeout_value),
       body(dynamic_cast<MachineCommand *>(t->body->factory(mi))),
-      handler(dynamic_cast<MachineCommand *>(t->handler->factory(mi))) {}
+      timeout_handler(t->timeout_handler
+                          ? dynamic_cast<MachineCommand *>(t->timeout_handler->factory(mi))
+                          : nullptr) {}
 
 TryAction::~TryAction() {
     if (body) {
         body->release();
     }
-    if (handler) {
-        handler->release();
+    if (timeout_handler) {
+        timeout_handler->release();
     }
 }
 
 Action::Status TryAction::run() {
     owner->start(this);
+    // Resolve the deadline duration: an integer literal is used directly; a
+    // symbol is looked up on the machine (an OPTION). Invalid values are caught
+    // at load.
+    if (timeout_value.kind == Value::t_integer) {
+        timeout_ms = timeout_value.iValue;
+    }
+    else if (timeout_value.kind == Value::t_symbol) {
+        Value v = owner->getValue(timeout_value.sValue);
+        if (v.kind == Value::t_integer) {
+            timeout_ms = v.iValue;
+        }
+    }
     status = (*body)();
     if (status == Complete || status == Failed) {
         owner->stop(this);
         return status;
     }
-    // Body is blocking (Running or Suspended).
-    if (condition(owner)) {
-        // The timeout predicate is already true: run the handler immediately.
-        runHandler();
+    // Body is blocking.
+    if (timeout_ms <= 0) {
+        // Zero/negative timeout: run the handler immediately.
+        runTimeoutHandler();
         return status;
     }
     scheduleTimeout();
@@ -112,13 +130,7 @@ Action::Status TryAction::checkComplete() {
         return status;
     }
     if (timeout_triggered) {
-        runHandler();
-        return status;
-    }
-    // Fallback for the case where the timer interrupt is not scheduled (the
-    // predicate was already true, or is not a TIMER clause we can schedule).
-    if (condition(owner)) {
-        runHandler();
+        runTimeoutHandler();
         return status;
     }
     if (body->complete()) {
@@ -140,30 +152,36 @@ void TryAction::timeoutTriggered() {
 }
 
 void TryAction::scheduleTimeout() {
-    if (!condition.predicate) {
-        return;
-    }
-    PredicateTimerDetails *ptd = condition.predicate->scheduleTimerEvents(0, owner);
-    if (ptd) {
-        TryTimeoutAction *tta = new TryTimeoutAction(owner, this);
-        Scheduler::instance()->add(new ScheduledItem(ptd->delay, tta));
-        delete ptd;
-    }
+    TryTimeoutAction *tta = new TryTimeoutAction(owner, this);
+    Scheduler::instance()->add(new ScheduledItem(timeout_ms * 1000, tta));
 }
 
-void TryAction::runHandler() {
+void TryAction::runTimeoutHandler() {
     timeout_triggered = true;
-    handler_started = true;
-    status = (*handler)();
-    if (handler->aborted()) {
-        // Propagate the handler's ABORT/THROW/RETURN up (like IfCommandAction).
-        abort();
+    if (timeout_handler) {
+        handler_started = true;
+        status = (*timeout_handler)();
+        if (timeout_handler->aborted()) {
+            // Propagate the handler's ABORT/THROW/RETURN up (like IfCommandAction).
+            abort();
+        }
+        if (status == Complete || status == Failed) {
+            owner->stop(this);
+        }
     }
-    if (status == Complete || status == Failed) {
+    else {
+        // No ON TIMEOUT block: an unhandled timeout fails the scope.
+        abort();
+        status = Failed;
+        setError("timed out");
         owner->stop(this);
     }
 }
 
 std::ostream &TryAction::operator<<(std::ostream &out) const {
-    return out << "TryAction body=" << *body << " handler=" << *handler;
+    out << "TryAction body=" << *body;
+    if (timeout_handler) {
+        out << " handler=" << *timeout_handler;
+    }
+    return out;
 }

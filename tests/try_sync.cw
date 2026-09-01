@@ -10,7 +10,7 @@ TrySync MACHINE {
         TRY {
             LOG "body ran";
         }
-        WHEN TIMER >= timeout {
+        WITH TIMEOUT timeout ON TIMEOUT {
             LOG "timed out";
         }
         SHUTDOWN;

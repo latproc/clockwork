@@ -11,7 +11,7 @@ TryEmptyHandler MACHINE {
         TRY {
             WAITFOR never == 1;
         }
-        WHEN TIMER >= timeout {
+        WITH TIMEOUT timeout ON TIMEOUT {
         }
         LOG "completed via empty handler";
         SHUTDOWN;

@@ -1,4 +1,4 @@
-# TRY { ... } WHEN TIMER >= timeout { ... } + CATCH
+# TRY { ... } WITH TIMEOUT timeout ON TIMEOUT { ... } + CATCH
 #
 # The TRY body blocks on a WAITFOR that never completes; after `timeout` ms the
 # WHEN predicate fires, the handler THROWs, and CATCH handles it.
@@ -18,7 +18,7 @@ TryTest MACHINE {
         TRY {
             WAITFOR never == 1;
         }
-        WHEN TIMER >= timeout {
+        WITH TIMEOUT timeout ON TIMEOUT {
             THROW tmo;
         }
     }
