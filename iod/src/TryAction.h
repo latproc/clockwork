@@ -64,6 +64,8 @@ struct TryActionTemplate : public ActionTemplate {
     MachineCommandTemplate *timeout_handler; // null if no ON TIMEOUT block
     MachineCommandTemplate *error_handler;   // null if no ON ERROR block
     bool has_deadline; // false when a handler has ON TIMEOUT/ON ERROR but no WITH TIMEOUT
+    std::string source_file; // source location of the timed construct
+    int source_line = 0;
 };
 
 struct TryAction : public Action {
@@ -94,4 +96,6 @@ struct TryAction : public Action {
     MachineCommand *error_handler;
     bool handler_started = false;
     bool timeout_triggered = false;
+    std::string source_file;
+    int source_line = 0;
 };

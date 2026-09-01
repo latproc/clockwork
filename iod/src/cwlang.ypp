@@ -344,8 +344,12 @@ static void validate_timeout_value(const Value *v) {
 static ActionTemplate *make_timed_scope(ActionTemplate *inner) {
     MachineCommandTemplate *body = new MachineCommandTemplate("timed_body", "");
     body->setActionTemplate(inner);
-    return new TryActionTemplate(current_timeout_value, body, current_timeout_handler,
-                                 current_error_handler);
+    TryActionTemplate *tat = new TryActionTemplate(current_timeout_value, body,
+                                                   current_timeout_handler,
+                                                   current_error_handler);
+    tat->source_file = yyfilename ? yyfilename : "";
+    tat->source_line = yylineno;
+    return tat;
 }
 
 // timeout-spec.md: wrap the handler body currently in current_actions in a timed
@@ -354,10 +358,13 @@ static void wrap_current_actions_in_timed_scope() {
     MachineCommandTemplate *body = new MachineCommandTemplate("handler_body", "");
     body->setActionTemplates(*current_actions);
     current_actions->clear();
-    current_actions->push_back(new TryActionTemplate(current_timeout_value, body,
-                                                     current_timeout_handler,
-                                                     current_error_handler,
-                                                     with_timeout_present));
+    TryActionTemplate *tat = new TryActionTemplate(current_timeout_value, body,
+                                                   current_timeout_handler,
+                                                   current_error_handler,
+                                                   with_timeout_present);
+    tat->source_file = yyfilename ? yyfilename : "";
+    tat->source_line = yylineno;
+    current_actions->push_back(tat);
     current_timeout_handler = nullptr;
     current_error_handler = nullptr;
     with_timeout_present = false;
@@ -2326,7 +2333,10 @@ IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
     current_actions_stack.pop_back();
     DBG_PARSER << "** popped action list for TRY body\n";
     validate_timeout_value($7);
-    current_action = new TryActionTemplate(*$7, body_mc, handler_mc, error_mc);
+    TryActionTemplate *tat = new TryActionTemplate(*$7, body_mc, handler_mc, error_mc);
+    tat->source_file = yyfilename ? yyfilename : "";
+    tat->source_line = yylineno;
+    current_action = tat;
     delete $7;
 }
 | '{' action_list '}' {

@@ -95,7 +95,8 @@ TryAction::TryAction(MachineInstance *mi, TryActionTemplate *t)
                           : nullptr),
       error_handler(t->error_handler
                         ? dynamic_cast<MachineCommand *>(t->error_handler->factory(mi))
-                        : nullptr) {}
+                        : nullptr),
+      source_file(t->source_file), source_line(t->source_line) {}
 
 TryAction::~TryAction() {
     if (body) {
@@ -255,7 +256,11 @@ void TryAction::runTimeoutHandler(long context_ms) {
         setTimedOutMs(effective_ms);
         abort();
         status = Failed;
-        setError("timed out");
+        std::string err = "timed out";
+        if (!source_file.empty()) {
+            err += " at " + source_file + ":" + std::to_string(source_line);
+        }
+        setError(err);
         owner->stop(this);
     }
 }
