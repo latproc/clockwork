@@ -317,7 +317,7 @@ Action::Status MachineCommand::runActions() {
             ss << "ABORTING: " << *this << " at action " << *a << "\n";
             abort();
             if (a->timedOut()) {
-                timed_out = true; // propagate an unhandled timeout as a timeout
+                timed_out = true; timed_out_ms = a->getTimedOutMs(); // propagate an unhandled timeout
             }
             char *err_msg = strdup(ss.str().c_str());
             MessageLog::instance()->add(err_msg);
@@ -347,7 +347,7 @@ Action::Status MachineCommand::runActions() {
             MessageLog::instance()->add(err_msg);
             error_str = err_msg;
             if (a->timedOut()) {
-                timed_out = true; // propagate an unhandled timeout as a timeout
+                timed_out = true; timed_out_ms = a->getTimedOutMs(); // propagate an unhandled timeout
             }
             owner->stop(a);
             a->release();
@@ -488,7 +488,7 @@ Action::Status MachineCommand::checkComplete() {
         }
         else if (a->getStatus() == Failed) {
             if (a->timedOut()) {
-                timed_out = true; // propagate an unhandled timeout as a timeout
+                timed_out = true; timed_out_ms = a->getTimedOutMs(); // propagate an unhandled timeout
             }
             NB_MSG << command_name.get() << " " << a->error() << "\n";
             owner->stop(this);
@@ -499,7 +499,7 @@ Action::Status MachineCommand::checkComplete() {
             if (a->complete()) { // check current status
                 if (a->getStatus() == Failed) {
                     if (a->timedOut()) {
-                        timed_out = true; // propagate an unhandled timeout as a timeout
+                        timed_out = true; timed_out_ms = a->getTimedOutMs(); // propagate an unhandled timeout
                     }
                     NB_MSG << command_name.get() << " " << a->error() << "\n";
                     owner->stop(this);

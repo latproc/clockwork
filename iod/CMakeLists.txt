@@ -597,6 +597,10 @@ add_test(NAME runtime_handler_timeout COMMAND sh ${_runtime}
 add_test(NAME runtime_timeout_value COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/timeout_value_runtime.cw
   --must-contain "timed out after 500ms")
+# TIMEOUT reflects an inner statement's deadline when a handler catches it.
+add_test(NAME runtime_handler_timeout_value COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/handler_timeout_value_runtime.cw
+  --must-contain "run timed out after 2000ms")
 # Nested deadlines: outer cancels a blocking inner recovery.
 add_test(NAME runtime_nested_timeout COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/nested_timeout_runtime.cw

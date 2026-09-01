@@ -77,7 +77,9 @@ struct TryAction : public Action {
     // that the handler must run (checkComplete() does the actual handler run).
     void timeoutTriggered();
     void scheduleTimeout();
-    void runTimeoutHandler();
+    // context_ms >= 0: the deadline duration that expired (used when catching an
+    // inner timeout); -1: use this scope's own timeout_ms.
+    void runTimeoutHandler(long context_ms = -1);
     void runErrorHandler();
     // Abort the active nested work (body, or the running recovery handler).
     void abortActive() override;

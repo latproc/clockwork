@@ -124,6 +124,10 @@ class Action : public TriggerOwner {
     // enclosing timed scope can route it to ON TIMEOUT rather than ON ERROR.
     bool timedOut() const { return timed_out; }
     void setTimedOut(bool t = true) { timed_out = t; }
+    // The deadline duration (ms) carried with an unhandled timeout, so an
+    // enclosing ON TIMEOUT block sees the inner deadline's TIMEOUT value.
+    long getTimedOutMs() const { return timed_out_ms; }
+    void setTimedOutMs(long ms) { timed_out_ms = ms; }
 
     virtual void toString(char *buf, int buffer_size);
     virtual std::ostream &operator<<(std::ostream &out) const { return out << "(Action)"; }
@@ -143,6 +147,7 @@ class Action : public TriggerOwner {
     bool started_ = false;
     bool aborted_ = false;
     bool timed_out = false;
+    long timed_out_ms = 0;
     bool is_waiting = false;
     CStringHolder *timeout_msg = nullptr; // message to send on timeout
     CStringHolder *error_msg = nullptr;   // message to send on error

@@ -163,7 +163,7 @@ Action::Status TryAction::checkComplete() {
             // Distinguish an unhandled timeout (propagated from an inner timed
             // scope) from an ordinary error, and route to the right handler.
             if (body->timedOut()) {
-                runTimeoutHandler();
+                runTimeoutHandler(body->getTimedOutMs());
             }
             else {
                 runErrorHandler();
@@ -221,13 +221,14 @@ void TryAction::abortActive() {
     }
 }
 
-void TryAction::runTimeoutHandler() {
+void TryAction::runTimeoutHandler(long context_ms) {
     timeout_triggered = true;
+    long effective_ms = (context_ms >= 0) ? context_ms : timeout_ms;
     if (timeout_handler) {
         handler_started = true;
         // timeout-spec.md: TIMEOUT is readable inside the ON TIMEOUT block.
         long saved_context = getTimeoutContext();
-        setTimeoutContext(timeout_ms);
+        setTimeoutContext(effective_ms);
         status = (*timeout_handler)();
         setTimeoutContext(saved_context);
         if (timeout_handler->aborted()) {
@@ -236,7 +237,7 @@ void TryAction::runTimeoutHandler() {
             // then the abort propagates.
             if (error_handler) {
                 long saved2 = getTimeoutContext();
-                setTimeoutContext(timeout_ms);
+                setTimeoutContext(effective_ms);
                 (*error_handler)();
                 setTimeoutContext(saved2);
             }
@@ -249,8 +250,9 @@ void TryAction::runTimeoutHandler() {
     else {
         // No ON TIMEOUT block: an unhandled timeout fails the scope and is marked
         // as a timeout (not an error) so an enclosing scope routes it to its own
-        // ON TIMEOUT.
+        // ON TIMEOUT, carrying the expired duration for its TIMEOUT value.
         setTimedOut(true);
+        setTimedOutMs(effective_ms);
         abort();
         status = Failed;
         setError("timed out");
