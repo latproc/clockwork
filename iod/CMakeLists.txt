@@ -579,6 +579,14 @@ add_test(NAME runtime_waitfor_timeout COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/waitfor_timeout_runtime.cw
   --must-contain "waitfor timed out")
 
+# Handler-level deadline: <handler> { } WITH TIMEOUT <ms> [ON TIMEOUT { }] / AFTER <ms> { }.
+add_test(NAME parse_handler_timeout COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/handler_timeout.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME runtime_handler_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/handler_timeout_runtime.cw
+  --must-contain "init timed out")
+
 # Part B/4: TRY { } WHEN TIMER >= timeout { } — parse + runtime.
 add_test(NAME parse_try_catch COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/try_catch.cw -DEXPECT_RC=0

@@ -344,6 +344,18 @@ static ActionTemplate *make_timed_scope(ActionTemplate *inner) {
     return new TryActionTemplate(current_timeout_value, body, current_timeout_handler);
 }
 
+// timeout-spec.md: wrap the handler body currently in current_actions in a timed
+// scope when a WITH TIMEOUT / AFTER clause was present (handler-level deadline).
+static void wrap_current_actions_in_timed_scope() {
+    MachineCommandTemplate *body = new MachineCommandTemplate("handler_body", "");
+    body->setActionTemplates(*current_actions);
+    current_actions->clear();
+    current_actions->push_back(new TryActionTemplate(current_timeout_value, body,
+                                                     current_timeout_handler));
+    current_timeout_handler = nullptr;
+    with_timeout_present = false;
+}
+
 static bool check_machine_type(const std::string &name) {
     if (all_machine_types.count(name) > 0) {
         std::stringstream ss;
@@ -1517,7 +1529,8 @@ enter_command
 ;
 
 basic_command:
-COMMAND SYMBOL /* command name */ action {
+COMMAND SYMBOL /* command name */ action with_timeout_opt {
+    if (with_timeout_present) wrap_current_actions_in_timed_scope();
     registerCommandHandler($2, std::vector<std::string>(), 0);
 }
 | COMMAND SYMBOL command_guard action {
@@ -1544,8 +1557,9 @@ COMMAND SYMBOL /* command name */ action {
 ;
 
 enter_command:
-ENTER SYMBOL /* state name */ action
+ENTER SYMBOL /* state name */ action with_timeout_opt
 {
+    if (with_timeout_present) wrap_current_actions_in_timed_scope();
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
@@ -2310,6 +2324,20 @@ with_timeout_opt:
     validate_timeout_value($3);
     current_timeout_value = *$3;
     delete $3;
+    with_timeout_present = true;
+}
+| AFTER basic_value '{' action_list '}' {
+    // AFTER <duration> { … } == WITH TIMEOUT <duration> ON TIMEOUT { … } (handler).
+    validate_timeout_value($2);
+    current_timeout_value = *$2;
+    delete $2;
+    MachineCommandTemplate *mc = new MachineCommandTemplate("timeout_handler", "");
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_timeout_handler = mc;
     with_timeout_present = true;
 }
 ;
