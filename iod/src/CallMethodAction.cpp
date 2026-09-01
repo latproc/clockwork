@@ -41,7 +41,7 @@ std::ostream &CallMethodActionTemplate::operator<<(std::ostream &out) const {
 }
 
 CallMethodAction::CallMethodAction(MachineInstance *mi, CallMethodActionTemplate &eat)
-    : Action(mi), message(eat.message), target(eat.target), target_machine(0) {
+    : Action(mi), message(eat.message), target(eat.target), target_machine(0), correlation_id(0) {
     if (eat.timeout_symbol.get()) {
         timeout_msg = new CStringHolder(eat.timeout_symbol.get());
     }
@@ -80,8 +80,16 @@ Action::Status CallMethodAction::run() {
     }
     else if (target_machine->enabled()) {
         if (!getTrigger() || getTrigger()->fired() || !trigger->enabled()) {
-            setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
-            owner->sendMessageToReceiver(message.get(), target_machine, true);
+            // Correlate this CALL with the target's _done reply: the reply echoes
+            // the command message's sequence number, so a late reply from an
+            // earlier CALL to the same command cannot complete this one.
+            Message cmd(message.get());
+            correlation_id = cmd.getSeq();
+            std::string done_name = message.get();
+            done_name += "_done.";
+            done_name += std::to_string(correlation_id);
+            setTrigger(owner->setupTrigger(target_machine->getName(), done_name, ""));
+            owner->sendMessageToReceiver(cmd, target_machine, true);
             status = Action::Running;
         }
         else {
@@ -121,8 +129,13 @@ Action::Status CallMethodAction::checkComplete() {
     // the following test treats the Call as complete if there is no trigger
     if (status == New) {
         if (!trigger || trigger->fired()) {
-            setTrigger(owner->setupTrigger(target_machine->getName(), message.get(), "_done"));
-            owner->sendMessageToReceiver(Message(message.get()), target_machine, true);
+            Message cmd(message.get());
+            correlation_id = cmd.getSeq();
+            std::string done_name = message.get();
+            done_name += "_done.";
+            done_name += std::to_string(correlation_id);
+            setTrigger(owner->setupTrigger(target_machine->getName(), done_name, ""));
+            owner->sendMessageToReceiver(cmd, target_machine, true);
             status = Action::Running;
         }
         return status;

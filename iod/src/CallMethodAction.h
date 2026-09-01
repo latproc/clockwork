@@ -47,6 +47,7 @@ struct CallMethodAction : public Action {
     CStringHolder message;
     CStringHolder target;
     MachineInstance *target_machine;
+    unsigned long correlation_id; // message seq echoed in the target's _done reply
 };
 
 #endif

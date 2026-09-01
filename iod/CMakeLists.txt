@@ -595,6 +595,12 @@ add_test(NAME runtime_nested_timeout COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/nested_timeout_runtime.cw
   --must-contain "outer timeout"
   --must-not-contain "inner recovery")
+# Late-reply correlation: a timed-out CALL's late _done reply must not complete
+# a later CALL to the same command (the second CALL waits for its own reply).
+add_test(NAME runtime_call_reply_correlation COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/late_reply_correlation.cw
+  --must-contain "second call done completions=2"
+  --must-not-contain "second call done completions=1")
 
 # Part B/4: TRY { } WHEN TIMER >= timeout { } — parse + runtime.
 add_test(NAME parse_try_catch COMMAND ${CMAKE_COMMAND}

@@ -226,7 +226,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     void start(Action *a);
     void stop(Action *a);
     void push(Action *new_action);
-    void prepareCompletionMessage(Transmitter *from, std::string message);
+    void prepareCompletionMessage(Transmitter *from, std::string message,
+                                  unsigned long correlation_id = 0);
     Action *findHandler(Message &msg, Transmitter *t, bool response_required = false);
     // Shared receive path used by HandleMessageAction (and later clock ticks).
     // Finds the handler and starts it. Does not start/stop a HandleMessageAction.

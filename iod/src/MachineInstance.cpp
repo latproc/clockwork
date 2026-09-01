@@ -3141,19 +3141,19 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
                 continue;
             }
             if (response_required) {
-                prepareCompletionMessage(from, short_name);
+                prepareCompletionMessage(from, short_name, m.getSeq());
             }
             return (*receive_handler_i).second->retain();
         }
         if (response_required) {
-            prepareCompletionMessage(from, short_name);
+            prepareCompletionMessage(from, short_name, m.getSeq());
         }
         return nullptr;
     }
     else if (from == this) {
         if (short_name == m.getText()) {
             if (response_required) {
-                prepareCompletionMessage(from, short_name);
+                prepareCompletionMessage(from, short_name, m.getSeq());
             }
             return NULL;
         } // no other alternatives
@@ -3168,7 +3168,7 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
                                     << "handler: " << *((*receive_handler_i).second) << "\n";
                 }
                 if (response_required) {
-                    prepareCompletionMessage(from, short_name);
+                    prepareCompletionMessage(from, short_name, m.getSeq());
                 }
 
                 return (*receive_handler_i).second->retain();
@@ -3177,7 +3177,7 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
         }
     }
     if (response_required) {
-        prepareCompletionMessage(from, short_name);
+        prepareCompletionMessage(from, short_name, m.getSeq());
     }
     return NULL;
 }
@@ -3304,7 +3304,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                     // the CALL method waits for a response once the executed command is complete
                     // the response will be sent after the transition to the next state is done
                     if (response_required) {
-                        prepareCompletionMessage(from, t.trigger.getText());
+                        prepareCompletionMessage(from, t.trigger.getText(), m.getSeq());
                     }
 
                     if (!found) {
@@ -3355,7 +3355,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                             << "No linked command for the transition, performing state change\n";
                 }
                 if (response_required) {
-                    prepareCompletionMessage(from, t.trigger.getText());
+                    prepareCompletionMessage(from, t.trigger.getText(), m.getSeq());
                 }
 
                 if (state_change_ok) {
@@ -3374,7 +3374,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
         if (commands.count(short_name)) {
             Action *matching_command = findMatchingCommand(short_name);
             if (response_required) {
-                prepareCompletionMessage(from, short_name);
+                prepareCompletionMessage(from, short_name, m.getSeq());
             }
             if (matching_command) {
                 return matching_command;
@@ -3392,7 +3392,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
             if ((t.trigger.getText() == m.getText() || t.trigger.getText() == short_name) &&
                 current_state == t.source) {
                 if (response_required) {
-                    prepareCompletionMessage(from, short_name);
+                    prepareCompletionMessage(from, short_name, m.getSeq());
                 }
                 DBG_M_MESSAGING << _name << " received message" << m.getText()
                                 << "; pushing state change\n";
@@ -3421,11 +3421,18 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
     return findReceiveHandler(from, m, short_name, response_required);
 }
 
-void MachineInstance::prepareCompletionMessage(Transmitter *from, std::string message) {
+void MachineInstance::prepareCompletionMessage(Transmitter *from, std::string message,
+                                               unsigned long correlation_id) {
     if (from) {
         MachineInstance *from_mi = dynamic_cast<MachineInstance *>(from);
         assert(from_mi);
         std::string response = _name + "." + message + "_done";
+        // Echo the caller's message sequence so a CALL can match only the reply
+        // to its own command (not a late reply from an earlier CALL).
+        if (correlation_id != 0) {
+            response += ".";
+            response += std::to_string(correlation_id);
+        }
         //DBG_MSG << _name << " command " << message << " completion requires response. Adding command to execute "
         //<< response << " on: " << from_mi->fullName()
         //<< ( (from_mi->enabled()) ? " (enabled)\n" : " (disabled)\n");

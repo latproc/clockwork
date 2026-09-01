@@ -75,6 +75,9 @@ class Message {
     bool operator>(const Message &other) const { return text > other.text; }
     const std::string getText() const { return text; }
     const std::list<Value> *getParams() const { return params; }
+    // Unique per-message sequence number, assigned at construction and preserved
+    // by copy/move. Used to correlate a CALL with its target's _done reply.
+    unsigned long getSeq() const { return seq; }
 
     MessageType getType() const { return kind; }
     bool isEnter() const { return kind == ENTERMSG; }
