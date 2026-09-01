@@ -236,20 +236,87 @@ CustomerWithAddress RECORD VIEW "customer_with_address" {
 
 ## 2. A `MACHINE` bound to a table
 
-A full `MACHINE` (with `WHEN`/`COMMAND`) can bind the same table, keeping its
-own lifecycle in a `LOCAL OPTION`:
+A full `MACHINE` (with `WHEN`/`COMMAND`/`EXPORT`) can bind a table (or view) with
+`TABLE "name"` (or `VIEW "name"`) plus a `KEY`. It is then a row window exactly
+like a `RECORD`, but with your own logic and states. `RECORD APPLY` projects onto
+it; the row lifecycle lives in a `LOCAL OPTION`, because Clockwork `STATE` is
+yours (`idle`/`active`), not the RECORD's `empty`/`dirty`/`clean`.
 
 ```clockwork
 CustomerPanel MACHINE TABLE "customer" {
     OPTION id 0 KEY;
     OPTION name "";
-    LOCAL OPTION state "empty";
-    active WHEN name != "";
+    OPTION age 0;                 # projection — email on the table is ignored
+    LOCAL OPTION state "empty";   # row lifecycle; STATE is idle/active
+    OPTION note "";               # extra OPTION: not a column unless the table has it
+
+    EXPORT RW name, age;
+    EXPORT STATES idle, active;
+
+    active WHEN age > 0;
     idle DEFAULT;
+
+    COMMAND clear { name := ""; age := 0; }
 }
 
 cust CustomerPanel (id: 1);
 ```
+
+Notes:
+
+- Any `MACHINE` with `TABLE`/`VIEW` + `OPTION … KEY` is a row. A `RECORD` class
+  is only the **canonical schema** (for `cw-scaffold` and `cw-migrate`); it is
+  not required for the bind. Two machines may bind the same `(type, key)` — two
+  windows on one row.
+- `RECORD APPLY` matches `(type, key)` and writes only the declared column
+  OPTIONS (extra JSON fields like `email` are ignored). It does **not**
+  `setState` on a MACHINE — your `WHEN` owns `STATE`; the row lifecycle is the
+  `LOCAL OPTION state`.
+
+### Fill — a bind does not read the database
+
+Declaring `cust CustomerPanel (id: 1)` does **not** fetch the row. OPTIONS start
+at class defaults and `state` is `empty`. A row arrives only by an explicit
+`find`/`load`/`QUERY`, then `RECORD APPLY` (or `COPY PROPERTIES` from a LIST
+member). Two patterns:
+
+1. **KEY known in the program** — `cust CustomerPanel (id: 1)`; INTERFACE `find`
+   with that KEY; `RECORD APPLY` writes `cust` and sets `state` to `clean`.
+
+2. **Slot, KEY from a query** — `slot CustomerPanel;`. A loader MACHINE owns a
+   static selector, hydrates, and binds onto the slot:
+
+```clockwork
+slot CustomerPanel;
+occupancy LIST;
+
+loader MACHINE {
+    OPTION city "Perth";
+    COMMAND bind {
+        CLEAR occupancy;
+        COPY ALL FROM Customer TO occupancy WHERE ITEM.city == city;
+        IF (SIZE OF occupancy == 0) {
+            SEND clear TO slot;                 # slot -> empty
+        } ELSE {
+            row := TAKE FIRST FROM occupancy;
+            COPY PROPERTIES FROM row TO slot;   # slot -> clean
+        }
+    }
+}
+```
+
+`QUERY` and INTERFACE `load` are SENDs; they do not wait for `dbsvr`. The loader
+uses its own `WHEN`/`WAITFOR` for "hydrate done", then binds.
+
+### Rules
+
+- Do **not** `COPY PROPERTIES` row OPTIONS from one slot to another (prev →
+  enter → exit): that is a second in-memory copy of the row. Two slots that show
+  the same row both **bind** to it (same KEY / same APPLY). A real move updates
+  a query column (`update`) and each loader `load`s and rebinds. Cycle-only
+  OPTIONS (`LOCAL`, timers, maps) stay on the MACHINE.
+- Composition (`Editor MACHINE cust`) still works: two instances; APPLY hits
+  `cust`; `WHEN`/HMI sit on the editor.
 
 ## 3. Creating a database
 
