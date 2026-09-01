@@ -39,6 +39,7 @@ class MachineClass {
 
   public:
     std::set<std::string> local_properties;
+    std::set<std::string> persistent_properties;
     std::set<std::string> private_properties;
     std::vector<Parameter> parameters;
     std::vector<Parameter> locals;
@@ -86,6 +87,10 @@ class MachineClass {
     virtual void
     addPrivateProperty(const std::string &name); // used in interfaces to list synced properties
     virtual void addCommand(const char *name);   // used in interfaces to list permitted commands
+    // PERSISTENT OPTION: a non-column field persisted to persist.dat (only that
+    // field). Marked local (not a column) and persistent.
+    virtual void addPersistentProperty(const char *name);
+    virtual void addPersistentProperty(const std::string &name);
     MachineCommandTemplate *findMatchingCommand(std::string cmd_name, const char *state);
     MachineCommandTemplate *findOverlappingCommand(const std::string &cmd_name,
                                                    const std::vector<std::string> &within,
@@ -100,6 +105,9 @@ class MachineClass {
     bool propertyIsPrivate(const std::string &name) const { return private_properties.count(name) > 0; }
     bool propertyIsPrivate(const Value &name) const { return private_properties.count(name.asString()) > 0; }
     void addPrivateColumn(const std::string &name) { private_properties.insert(name); }
+    bool propertyIsPersistent(const char *name) const;
+    bool propertyIsPersistent(const std::string &name) const;
+    bool hasPersistentProperties() const { return !persistent_properties.empty(); }
 
     State default_state;
     State initial_state;

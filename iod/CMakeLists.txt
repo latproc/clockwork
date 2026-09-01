@@ -678,6 +678,14 @@ add_test(NAME runtime_receive_timeout COMMAND sh ${_runtime}
 add_test(NAME parse_set_timeout COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/set_timeout.cw -DEXPECT_RC=0
   -P ${_record_parse})
+# PERSISTENT OPTION (iod-9): per-field persist.dat marker, not a column.
+add_test(NAME parse_persistent_option COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/persistent_option.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+# LOCAL and PERSISTENT are mutually exclusive.
+add_test(NAME parse_persistent_option_conflict COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/persistent_option_conflict.cw -DEXPECT_RC=2
+  -P ${_record_parse})
 
 add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)
 set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
@@ -694,6 +702,11 @@ set_target_properties(test_abort_action PROPERTIES COMPILE_DEFINITIONS "EC_SIMUL
 target_include_directories(test_abort_action PRIVATE src tests)
 target_link_libraries(test_abort_action cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
 add_test(NAME test_abort_action COMMAND test_abort_action)
+add_executable(test_persistent_option tests/test_persistent_option.cpp)
+set_target_properties(test_persistent_option PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_persistent_option PRIVATE src tests)
+target_link_libraries(test_persistent_option cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_persistent_option COMMAND test_persistent_option)
 add_executable(test_deadline_race tests/test_deadline_race.cpp)
 set_target_properties(test_deadline_race PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_deadline_race PRIVATE src tests)

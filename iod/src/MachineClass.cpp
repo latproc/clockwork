@@ -129,6 +129,24 @@ void MachineClass::addPrivateProperty(const std::string &p) {
     local_properties.insert(p); //
 }
 
+void MachineClass::addPersistentProperty(const char *p) {
+    property_names.insert(p);
+    local_properties.insert(p);       // not a database column (like LOCAL)
+    persistent_properties.insert(p);  // but persisted to persist.dat
+}
+
+void MachineClass::addPersistentProperty(const std::string &p) {
+    addPersistentProperty(p.c_str());
+}
+
+bool MachineClass::propertyIsPersistent(const char *name) const {
+    return persistent_properties.count(name) > 0;
+}
+
+bool MachineClass::propertyIsPersistent(const std::string &name) const {
+    return persistent_properties.count(name) > 0;
+}
+
 void MachineClass::addCommand(const char *p) {
     //NB_MSG << "Warning: ignoring COMMAND/RECEIVES " << p << " in " << name << "\n";
     command_names.insert(p);

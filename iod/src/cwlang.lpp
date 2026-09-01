@@ -155,6 +155,7 @@ NOT                 return NOT;
 OF                  return OF;
 ON					return ON;
 OPTION              return OPTION;
+PERSISTENT          return PERSISTENT;
 OR                  return OR;
 PLUGIN              return PLUGIN;
 LOCAL				return LOCAL;

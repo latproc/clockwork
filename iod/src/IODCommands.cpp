@@ -1558,9 +1558,16 @@ bool IODCommandPersistentState::run(std::vector<Value> &params) {
         MachineInstance *m = *m_iter++;
         if (m && m->isPersistent()) {
             std::string fnam = m->fullName();
+            // Per-field PERSISTENT OPTION dumps only those fields; the machine
+            // flag (PERSISTENT == "true") dumps everything non-reserved.
+            const MachineClass *mc = m->getStateMachine();
+            const bool per_field = mc && mc->hasPersistentProperties();
             SymbolTableConstIterator props_i = m->properties.begin();
             while (props_i != m->properties.end()) {
                 std::pair<std::string, Value> item = *props_i++;
+                if (per_field && !mc->propertyIsPersistent(item.first)) {
+                    continue;
+                }
                 cJSON *json_item = cJSON_CreateArray();
                 cJSON_AddItemToArray(json_item, cJSON_CreateString(fnam.c_str()));
                 cJSON_AddItemToArray(json_item, cJSON_CreateString(item.first.c_str()));

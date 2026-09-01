@@ -5154,10 +5154,12 @@ void MachineInstance::discard() {
 
 bool MachineInstance::isPersistent() {
     const Value &persistent = getValue("PERSISTENT");
-    if (persistent == SymbolTable::Null) {
-        return false;
+    if (persistent != SymbolTable::Null && persistent == "true") {
+        return true;
     }
-    return persistent == "true";
+    // PERSISTENT OPTION: a class with any per-field persistent OPTION is also
+    // persisted (only those fields), even without the machine-level flag.
+    return state_machine && state_machine->hasPersistentProperties();
 }
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {

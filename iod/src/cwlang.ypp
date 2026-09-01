@@ -421,7 +421,7 @@ struct Subcondition {
 %token COMMA BEGINPROP ENDPROP PROPSEP STATEMACHINE WHEN TO INTO RECEIVE
 %token DURING WAIT WAITFOR TRANSITION TAG INC DEC BY CONCAT
 %token SEND CONDITION INITSTATE IF_ ELSE ENABLE DISABLE BECOMES
-%token GLOBAL GROUP OPTION LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
+%token GLOBAL GROUP OPTION PERSISTENT LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
 %token WHERE ROUTE ANY ARE COUNT SELECT TAKE LENGTH
@@ -537,6 +537,11 @@ local_option_setting
 | local_option_settings COMMA local_option_setting
 ;
 
+persistent_option_settings:
+persistent_option_setting
+| persistent_option_settings COMMA persistent_option_setting
+;
+
 option_settings:
 option_setting
 | option_settings COMMA option_setting
@@ -585,12 +590,36 @@ local_option_setting:
 SYMBOL value {
 	std::string name($1);
 	Value v(*$2);
+	if (current_machineclass->propertyIsPersistent(name)) {
+		std::stringstream ss;
+		ss << yyfilename << ":" << yylineno << " " << name
+		   << " cannot be both LOCAL and PERSISTENT";
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
 //  if (v.kind == Value::t_symbol)
 //    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
 	current_machineclass->setOption(name, v);
 	current_machineclass->addPrivateProperty(name);
 //	NB_MSG << current_machineclass->name << " local option: "
 //		<< name << ": " << *$2 << " (type: " << v.kind << ")" << "\n";
+	delete $2;
+}
+
+persistent_option_setting:
+SYMBOL value {
+	std::string name($1);
+	Value v(*$2);
+	if (current_machineclass->propertyIsLocal(name) &&
+	    !current_machineclass->propertyIsPersistent(name)) {
+		std::stringstream ss;
+		ss << yyfilename << ":" << yylineno << " " << name
+		   << " cannot be both LOCAL and PERSISTENT";
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
+	current_machineclass->setOption(name, v);
+	current_machineclass->addPersistentProperty(name);
 	delete $2;
 }
 
@@ -666,6 +695,7 @@ record_section
 record_section:
 OPTION option_settings ';'
 | LOCAL OPTION local_option_settings ';'
+| PERSISTENT OPTION persistent_option_settings ';'
 ;
 
 interface_definition:
@@ -987,6 +1017,7 @@ definition_section:
 GLOBAL global_references ';'
 | OPTION option_settings ';'
 | LOCAL OPTION local_option_settings ';'
+| PERSISTENT OPTION persistent_option_settings ';'
 | pin_definitions
 | export_clause
 | local_machine_instantiation
