@@ -522,28 +522,47 @@ ed MACHINE {
         "action": "select", "type": "customer", "auth": "xxx",
         "where": { "age": { "gt": 18 } }, "order": ["name"]
     };
+    OPTION response JSON_VALUE {};          # the reply lands here
+
     COMMAND refresh {
-        QUERY q INTO all;        # SEND q to DATABASE_CHANNEL
+        QUERY q INTO all;                   # SEND q to DATABASE_CHANNEL
+    }
+
+    RECEIVE response_changed {
+        all := response AS LIST;            # JSON array -> LIST
     }
 }
 ```
 
-1. `QUERY q INTO all` SENDs the JSON property `q` to `DATABASE_CHANNEL`.
-   (`QUERY { ... } INTO all` sends a literal object.)
+1. `QUERY q INTO all` SENDs the JSON property `q` to `DATABASE_CHANNEL`, adding a
+   `respond_to` field so the reply comes back to **this** machine's `response`
+   OPTION. (`QUERY { … } INTO all` sends a literal object.) The `INTO all` names
+   the list you will fill — a hint. The scan cannot wait for `dbsvr`, so `QUERY`
+   itself does **not** fill the list; the fill happens when the reply arrives.
 2. `dbd` (subscribed as `DATABASE_CHANNEL`) forwards the payload to `dbsvr`.
 3. `dbsvr` compiles it to SQL (`SQLInterface` → `Store`), runs it in one
    transaction, and returns a JSON reply.
-4. `dbd` applies the reply: a row reply becomes `RECORD APPLY` (per-column
-   OPTION writes on held RECORDs) or the legacy blob `respond_to` PROPERTY.
-5. The program turns the reply JSON into a LIST and drains it:
+4. `dbd` routes the reply's `response` payload (the row array — not the
+   `{status,request,response}` envelope) back to `ed.response`, then sends the
+   message `response_changed` to `ed`. A `select` is **query-only**: the rows go
+   to the list via `respond_to` and are *not* also `RECORD APPLY`-ed (so no
+   `Class#key` cache instances accumulate). `find`/`insert`/`update`/`delete`
+   replies *are* `RECORD APPLY`-ed onto held RECORDs by `(type, key)` — that is
+   how `load` materialises rows for `COPY ALL FROM`.
+5. `ed`'s `RECEIVE response_changed` fires and turns the array into a LIST:
 
 ```clockwork
-all := reply AS LIST;             # a JSON array becomes a LIST
+all := response AS LIST;                   # a JSON array becomes a LIST
 ```
 
 `AS LIST` is `CLEAR list` + `PUSH ITEMS FROM json TO list`, for any JSON array.
+After it, `TAKE FIRST FROM all`, `SIZE OF all`, and `COPY PROPERTIES FROM x TO
+cust` all work. Each list member is a JSON object keyed by the query's column
+names (`ITEM ${name} OF x` reads a field).
 
 ### 4.4 Responses
+
+`dbsvr` itself replies with the full envelope:
 
 ```json
 { "status": 0, "request": "{…}", "response": [ { "age": 21, "name": "Fred" } ] }
@@ -553,6 +572,14 @@ all := reply AS LIST;             # a JSON array becomes a LIST
 result data (or an error message). `insert`/`update`/`delete` replies include the
 affected rows (sqlite `RETURNING *`); `delete` includes the deleted rows. Column
 values are typed JSON (numbers, strings, or null — not all strings).
+
+`dbd` does not pass that envelope to Clockwork. The `respond_to` target (the
+machine's `response` OPTION, set automatically by `QUERY`) receives the `response`
+**payload** — the array of rows on success, or the error message string when
+`status != 0`. On error `response` is a string, not an array, so `response AS LIST`
+produces no rows; the author's `RECEIVE response_changed` handler sees that shape
+and can react accordingly.
+
 
 ## 5. Copying rows into a LIST or RECORD
 

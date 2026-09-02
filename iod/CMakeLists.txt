@@ -351,6 +351,7 @@ set (Clockwork_Headers
     src/Scheduler.h
     src/SDOEntry.h
     src/SendMessageAction.h
+    src/QueryAction.h
     src/SetListEntriesAction.h
     src/SetOperationAction.h
     src/SetStateAction.h
@@ -454,6 +455,7 @@ set (Clockwork_SRCS
     src/ResumeAction.cpp
     src/Scheduler.cpp
     src/SendMessageAction.cpp
+    src/QueryAction.cpp
     src/SetListEntriesAction.cpp
     src/SetOperationAction.cpp
     src/SetStateAction.cpp

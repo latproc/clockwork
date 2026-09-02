@@ -120,10 +120,20 @@ static void send_response_to_clockwork(cJSON *json_request, const char *buf) {
         std::cout << "could not parse database response: " << buf << "\n";
         return;
     }
-    char *str = cJSON_PrintUnformatted(msg);
+    // Route the payload (the `response` field: the row array/object, or the error
+    // message), not the whole {status,request,response} envelope, so `reply AS LIST`
+    // (or PUSH ITEMS FROM) can consume it directly.
+    cJSON *payload = cJSON_GetObjectItem(msg, "response");
+    cJSON *to_send = payload ? payload : msg;
+    Value resp_value;
+    if (to_send->type == cJSON_Object || to_send->type == cJSON_Array) {
+        resp_value = Value(clone_json(to_send));
+    }
+    else {
+        resp_value = get_value(to_send);
+    }
     auto cmd = MessageEncoding::encodeCommand("PROPERTY", target.machine, target.property,
-                                              Value(str ? str : "", Value::t_string));
-    free(str);
+                                              resp_value);
     cJSON_Delete(msg);
     if (cmd.empty()) {
         return;
@@ -189,6 +199,13 @@ static void apply_rows_to_records(cJSON *request, cJSON *reply) {
         if (!removed_any && (!keys || !keys->child)) {
             send_remove(0);
         }
+        return;
+    }
+    if (action && strcmp(action, "select") == 0) {
+        // select is a filtered query: its rows belong in the author's LIST via
+        // respond_to (send_response_to_clockwork), not in the held-RECORD cache.
+        // RECORD APPLY here would create one Class#key instance per row and keep
+        // it until a delete, so repeated selects on a large table leak machines.
         return;
     }
     auto send_apply = [&](cJSON *row) {

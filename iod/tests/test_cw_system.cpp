@@ -162,6 +162,7 @@ int main() {
                "    OPTION id 0 KEY;\n"
                "    OPTION name \"\";\n"
                "}\n"
+               "all LIST;\n"
                "Ping MACHINE {\n"
                "    idle INITIAL;\n"
                "}\n"
@@ -187,6 +188,21 @@ int main() {
                "    };\n"
                "    COMMAND delete {\n"
                "        SEND qdel TO DATABASE_CHANNEL;\n"
+               "    }\n"
+               "    OPTION response JSON_VALUE {};\n"
+               "    OPTION qsel JSON_VALUE {\n"
+               "        \"action\": \"select\", \"auth\": \"xxx\", \"type\": \"customer\",\n"
+               "        \"where\": {\"name\": {\"like\": \"A%\"}}, \"order\": [\"name\"]\n"
+               "    };\n"
+               "    COMMAND refresh {\n"
+               "        QUERY qsel INTO all;\n"
+               "    }\n"
+               "    OPTION qsel_b JSON_VALUE {\n"
+               "        \"action\": \"select\", \"auth\": \"xxx\", \"type\": \"customer\",\n"
+               "        \"where\": {\"name\": {\"like\": \"B%\"}}, \"order\": [\"name\"]\n"
+               "    };\n"
+               "    COMMAND refresh_b {\n"
+               "        QUERY qsel_b INTO all;\n"
                "    }\n"
                "}\n");
 
@@ -252,6 +268,18 @@ int main() {
         "\"schema\":{\"id\":\"integer primary key\",\"name\":\"text\"}}";
     if (!req(dbs, create, reply, 40)) {
         std::cerr << "dbsvr create failed: " << reply << "\n";
+        kill_all(pids);
+        return 2;
+    }
+
+    // Insert a second row directly (before any dbd is connected) so no RECORD
+    // APPLY/notify ever materialises it. A later `select` must route it to the
+    // list via respond_to WITHOUT spawning a `Customer#2` cache instance.
+    const char *seed =
+        "{\"action\":\"insert\",\"auth\":\"xxx\",\"type\":\"customer\","
+        "\"data\":{\"id\":2,\"name\":\"Bob\"}}";
+    if (!req(dbs, seed, reply, 40)) {
+        std::cerr << "dbsvr seed insert failed: " << reply << "\n";
         kill_all(pids);
         return 2;
     }
@@ -339,6 +367,83 @@ int main() {
         std::cerr << "cw2cw Link shadow ping_b not idle on A (RECORD still matched)\n";
         kill_all(pids);
         return 7;
+    }
+
+    // QUERY routing: QUERY <select> INTO list must inject respond_to and dbd must
+    // route the `response` array (not the {status,request,response} envelope) back
+    // to the issuing machine's `response` OPTION.
+    std::string refresh =
+        MessageEncoding::encodeCommand("SEND", Value("refresh"), Value("TO"), Value("ed"));
+    if (!cw_cmd(iod_a, refresh, reply, 10)) {
+        std::cerr << "SEND refresh TO ed failed: " << reply << "\n";
+        kill_all(pids);
+        return 10;
+    }
+    {
+        std::string getresp = MessageEncoding::encodeCommand("GET", Value("ed"), Value("response"));
+        bool routed = false;
+        for (int i = 0; i < 50; ++i) {
+            std::string r;
+            if (cw_cmd(iod_a, getresp, r, 2) && r.find("Ann") != std::string::npos &&
+                r.find("status") == std::string::npos && r.find("Error") == std::string::npos &&
+                r.find("Unknown") == std::string::npos) {
+                routed = true;
+                break;
+            }
+            usleep(100000);
+        }
+        if (!routed) {
+            std::cerr << "QUERY select reply did not route to ed.response as an array\n";
+            kill_all(pids);
+            return 11;
+        }
+    }
+
+    // select must NOT spawn Class#key cache instances. Bob (id=2) was seeded
+    // before any dbd connected, so nothing holds it; a select that returns it
+    // must route via respond_to and leave the RECORD registry untouched.
+    std::string refresh_b =
+        MessageEncoding::encodeCommand("SEND", Value("refresh_b"), Value("TO"), Value("ed"));
+    if (!cw_cmd(iod_a, refresh_b, reply, 10)) {
+        std::cerr << "SEND refresh_b TO ed failed: " << reply << "\n";
+        kill_all(pids);
+        return 12;
+    }
+    {
+        std::string getresp = MessageEncoding::encodeCommand("GET", Value("ed"), Value("response"));
+        bool routed = false;
+        for (int i = 0; i < 50; ++i) {
+            std::string r;
+            if (cw_cmd(iod_a, getresp, r, 2) && r.find("Bob") != std::string::npos &&
+                r.find("Error") == std::string::npos && r.find("Unknown") == std::string::npos) {
+                routed = true;
+                break;
+            }
+            usleep(100000);
+        }
+        if (!routed) {
+            std::cerr << "select reply for Bob did not route to ed.response\n";
+            kill_all(pids);
+            return 13;
+        }
+    }
+    {
+        std::string getc = MessageEncoding::encodeCommand("GET", Value("Customer#2"), Value("name"));
+        bool leaked = false;
+        for (int i = 0; i < 20; ++i) {
+            std::string r;
+            if (cw_cmd(iod_a, getc, r, 2) && r.find("Unknown") == std::string::npos &&
+                r.find("Error") == std::string::npos) {
+                leaked = true;
+                break;
+            }
+            usleep(100000);
+        }
+        if (leaked) {
+            std::cerr << "select spawned Customer#2 cache instance (memory leak)\n";
+            kill_all(pids);
+            return 14;
+        }
     }
 
     // delete path: request + notify propagate RECORD REMOVE to both iods.

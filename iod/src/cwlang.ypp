@@ -27,6 +27,7 @@
 #include "ShutdownAction.h"
 #include "WaitAction.h"
 #include "SendMessageAction.h"
+#include "QueryAction.h"
 #include "CallMethodAction.h"
 #include "MachineCommandAction.h"
 #include "PatternAction.h"
@@ -1962,16 +1963,15 @@ SET SYMBOL TO expression error_clause with_timeout_opt {
     current_action = new SendMessageActionTemplate($2, $4);
 }
 | QUERY SYMBOL INTO SYMBOL {
-    /* JSON on DATABASE_CHANNEL; the reply becomes a LIST via "list := reply AS LIST"
-       (or PUSH ITEMS FROM). $4 names that LIST. */
-    (void)$4;
+    /* JSON on DATABASE_CHANNEL; the reply comes back via respond_to (routed to
+       this machine's `response` OPTION) and becomes a LIST via "list := response
+       AS LIST" (or PUSH ITEMS FROM). $4 names that LIST (a hint). */
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SendMessageActionTemplate($2, Value("DATABASE_CHANNEL"));
+    current_action = new QueryActionTemplate(Value($2), Value($4));
 }
 | QUERY JSONVAL INTO SYMBOL {
-    (void)$4;
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SendMessageActionTemplate(Value($2), Value("DATABASE_CHANNEL"));
+    current_action = new QueryActionTemplate(Value($2), Value($4));
 }
 | THROW SYMBOL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
