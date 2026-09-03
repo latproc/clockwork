@@ -163,6 +163,7 @@ int main() {
                "    OPTION name \"\";\n"
                "}\n"
                "all LIST;\n"
+               "slot Customer;\n"
                "Ping MACHINE {\n"
                "    idle INITIAL;\n"
                "}\n"
@@ -203,6 +204,11 @@ int main() {
                "    };\n"
                "    COMMAND refresh_b {\n"
                "        QUERY qsel_b INTO all;\n"
+               "    }\n"
+               "    RECEIVE response_changed {\n"
+               "        all := response AS LIST;\n"
+               "        x := TAKE FIRST FROM all;\n"
+               "        COPY PROPERTIES FROM x TO slot;\n"
                "    }\n"
                "}\n");
 
@@ -397,6 +403,16 @@ int main() {
             kill_all(pids);
             return 11;
         }
+    }
+
+    // Full drain chain: the reply routes to ed.response, ed's
+    // RECEIVE response_changed turns it into `all` via AS LIST, TAKE FIRST pops
+    // a row, and COPY PROPERTIES FROM <json object> TO slot fills the RECORD.
+    if (!wait_get(iod_a, "slot", "name", "Ann", 50)) {
+        std::cerr << "drain chain did not fill slot.name with Ann (QUERY -> AS LIST -> "
+                     "TAKE FIRST -> COPY PROPERTIES)\n";
+        kill_all(pids);
+        return 15;
     }
 
     // select must NOT spawn Class#key cache instances. Bob (id=2) was seeded

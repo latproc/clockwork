@@ -316,6 +316,75 @@ int main() {
         delete cp_act;
     }
 
+    // COPY PROPERTIES from a JSON object (a row taken from a query-result LIST
+    // via `x := TAKE FIRST FROM rows`) onto a RECORD: no machine source needed.
+    {
+        MachineInstance *dst2 = MachineInstanceFactory::create("dst2", "Customer");
+        dst2->setStateMachine(mc);
+        dst2->setRecordApplyMode(true);
+        dst2->setValue("id", Value(static_cast<int64_t>(9)));
+        dst2->setRecordApplyMode(false);
+        machines[dst2->getName()] = dst2;
+
+        // A LIST member is a JSON object (machine == nullptr, val == t_json).
+        Value row(cJSON_Parse("{\"id\":9,\"name\":\"FromJSON\",\"tmp\":true}"));
+        ed->setValue("row", row);
+
+        CopyPropertiesActionTemplate cpt2(Value("row"), Value("dst2"));
+        Action *cp2 = cpt2.factory(ed);
+        if ((*cp2)() != Action::Complete) {
+            std::cerr << "COPY PROPERTIES from JSON object failed\n";
+            return 44;
+        }
+        if (dst2->getValue("name").asString() != "FromJSON") {
+            std::cerr << "COPY PROPERTIES from JSON did not copy name: "
+                      << dst2->getValue("name").asString() << "\n";
+            return 45;
+        }
+        // `tmp` is a LOCAL property: it must not be projected onto the RECORD.
+        if (dst2->getValue("tmp") != SymbolTable::Null) {
+            std::cerr << "COPY PROPERTIES from JSON copied LOCAL property tmp\n";
+            return 46;
+        }
+        if (std::string(dst2->getCurrentStateString()) != "clean") {
+            std::cerr << "COPY PROPERTIES from JSON did not set clean: "
+                      << dst2->getCurrentStateString() << "\n";
+            return 47;
+        }
+        delete cp2;
+    }
+
+    // Generic (non-RECORD) MACHINE: COPY PROPERTIES from a JSON object sets plain
+    // properties on any machine, not just RECORDs.
+    {
+        MachineClass *plainc = new MachineClass("PlainThing");
+        MachineInstance *plain = MachineInstanceFactory::create("plain", "PlainThing");
+        plain->setStateMachine(plainc);
+        machines[plain->getName()] = plain;
+
+        Value row2(cJSON_Parse("{\"alpha\":\"A\",\"beta\":42}"));
+        ed->setValue("row2", row2);
+
+        CopyPropertiesActionTemplate cpt3(Value("row2"), Value("plain"));
+        Action *cp3 = cpt3.factory(ed);
+        if ((*cp3)() != Action::Complete) {
+            std::cerr << "COPY PROPERTIES from JSON onto generic MACHINE failed\n";
+            return 48;
+        }
+        if (plain->getValue("alpha").asString() != "A") {
+            std::cerr << "COPY PROPERTIES from JSON did not copy alpha: "
+                      << plain->getValue("alpha").asString() << "\n";
+            return 49;
+        }
+        int64_t beta = 0;
+        if (!plain->getValue("beta").asInteger(beta) || beta != 42) {
+            std::cerr << "COPY PROPERTIES from JSON did not copy beta: "
+                      << plain->getValue("beta").asString() << "\n";
+            return 50;
+        }
+        delete cp3;
+    }
+
     // MachineCommand leak fix: an instance with COMMAND/RECEIVE/ENTER handlers
     // must be destroyed cleanly (no double-free / crash).
     {

@@ -253,8 +253,8 @@ Action::Status IncludeAction::run() {
                                 list_machine->addParameter(v, nullptr, pos, before);
                             }
                         }
-                        else if (to_insert.kind == Value::t_json) {
-                            auto res = add_json_array(list_machine, to_insert, pos, before);
+                        else if (v.kind == Value::t_json) {
+                            auto res = add_json_array(list_machine, v, pos, before);
                             if (!res) {
                                 error_str = res.error().c_str();
                                 status = Failed;
