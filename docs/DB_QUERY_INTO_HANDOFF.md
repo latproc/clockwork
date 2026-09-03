@@ -96,7 +96,7 @@ e.g. BaleNo, LotSize; snake_case where the RECORD uses snake_case, e.g. bale_id,
 
 The query JSON is the datastore's select shape (see docs/RECORD_JEMALONG.md):
 
-    {"action":"select","from":"<view/table>","where":{"<col>":"<val>"},"order":["<col>"],"limit":N}
+    {"action":"select","type":"<view/table>","where":{"<col>":"<val>"},"order":["<col>"],"limit":N}
 
 | # | Feature | Query | Must produce |
 |---|---|---|---|

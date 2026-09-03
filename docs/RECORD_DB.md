@@ -426,7 +426,7 @@ u PanelUser panel, db;
 Drain MACHINE customers, cust {
     COMMAND queue {
         QUERY JSON_VALUE {
-            "action": "select", "from": "customer",
+            "action": "select", "type": "customer",
             "where": { "age": { "gt": 0 } }, "order": ["name"]
         } INTO customers;
     }
@@ -562,7 +562,7 @@ cities LIST;
 ViewDemo MACHINE row, cust, db {
     COMMAND show_perth {
         QUERY JSON_VALUE {
-            "action": "select", "from": "customer_with_city",
+            "action": "select", "type": "customer_with_city",
             "where": { "city": "Perth" }
         } INTO cities;
     }
@@ -694,7 +694,7 @@ Joined shapes belong in datastore (named views), not in WHEN.
 ```
 OPTION queue_query JSON_VALUE {
   "action": "select",
-  "from": "customer_with_city",
+  "type": "customer_with_city",
   "where": { "city": "Perth" },
   "order": ["name"],
   "limit": 20
@@ -947,7 +947,7 @@ CustomerEditor MACHINE cust {
     COMMAND queue {
         QUERY JSON_VALUE {
             "action": "select",
-            "from": "customer_with_city",
+            "type": "customer_with_city",
             "where": { "city": "Perth" },
             "order": ["name"]
         } INTO recent;
