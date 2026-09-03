@@ -567,6 +567,33 @@ add_test(NAME record_parse_export_local_option COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/export_local_option.cw -DEXPECT_RC=0
   -P ${_record_parse})
 
+# OPTION PERSISTENT true (machine-level flag): valid only on a plain MACHINE;
+# rejected on RECORD, table-bound MACHINE, CPU/BOARD, and when per-field
+# PERSISTENT OPTION is also present.
+add_test(NAME record_parse_machine_persistent_flag COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_persistent_flag.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_record_persistent_flag COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/record_persistent_flag.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=RECORD
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_table_persistent_flag COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_table_persistent_flag.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=table-bound
+  -P ${_record_parse})
+add_test(NAME record_parse_cpu_persistent_flag COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/cpu_persistent_flag.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=CPU/BOARD
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_persistent_flag_redundant COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_persistent_flag_redundant.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=redundant
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_persistent_flag_redundant2 COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_persistent_flag_redundant2.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=redundant
+  -P ${_record_parse})
+
 # Runtime tests for the exception machinery (ABORT/RETURN/THROW/CATCH). These
 # programs do not SHUTDOWN, so pass/fail is checked via log markers under a
 # bounded run (see tests/run_cw_runtime.sh, which SIGTERMs cw so its log flushes).
@@ -687,6 +714,11 @@ add_test(NAME parse_persistent_option COMMAND ${CMAKE_COMMAND}
 # LOCAL and PERSISTENT are mutually exclusive.
 add_test(NAME parse_persistent_option_conflict COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/persistent_option_conflict.cw -DEXPECT_RC=2
+  -P ${_record_parse})
+# PERSISTENT is a soft keyword (token only before OPTION): a CHANNEL can still
+# monitor the machine-level reserved "PERSISTENT" property by name.
+add_test(NAME parse_monitors_persistent_channel COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/monitors_persistent_channel.cw -DEXPECT_RC=0
   -P ${_record_parse})
 
 add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)

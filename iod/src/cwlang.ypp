@@ -104,6 +104,7 @@ std::set<std::string> all_machine_types;
 static unsigned pending_column_flags = 0;
 static std::string pending_record_view;
 static std::string pending_record_table;
+static bool current_is_statemachine = false;
 
 static std::string lowercase_copy(const char *s) {
     std::string out(s ? s : "");
@@ -185,6 +186,47 @@ static void validate_exports(MachineClass *mc) {
             error_messages.push_back(ss.str());
             ++num_errors;
         }
+    }
+}
+
+// Machine-level persistence flag validation (end of definition, order
+// independent). `OPTION PERSISTENT <value>` sets the reserved "PERSISTENT"
+// option, which MachineInstance::isPersistent() reads (== "true"). It is valid
+// only on a plain MACHINE (STATEMACHINE): RECORD, table-bound MACHINE, and
+// CPU/BOARD persist via per-field `PERSISTENT OPTION` / the table, so the flag
+// is rejected there; and it is redundant/illegal when the class also declares
+// per-field PERSISTENT OPTION (persistd then dumps only those fields).
+static void validate_persistence(MachineClass *mc) {
+    if (!mc) {
+        return;
+    }
+    auto it = mc->getOptions().find("PERSISTENT");
+    if (it == mc->getOptions().end()) {
+        return; // no machine-level flag set
+    }
+    const char *why = nullptr;
+    if (RecordClass::isRow(mc)) {
+        why = RecordClass::isRecord(mc) ? "RECORD" : "table-bound MACHINE";
+    }
+    else if (!current_is_statemachine) {
+        why = "CPU/BOARD (only a MACHINE may set it)";
+    }
+    if (why) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno
+           << " OPTION PERSISTENT (machine-level flag) is not valid on " << why
+           << " " << mc->name;
+        error_messages.push_back(ss.str());
+        ++num_errors;
+        return;
+    }
+    if (it->second == "true" && mc->hasPersistentProperties()) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno
+           << " OPTION PERSISTENT true is redundant/illegal when " << mc->name
+           << " also declares PERSISTENT OPTION fields";
+        error_messages.push_back(ss.str());
+        ++num_errors;
     }
 }
 
@@ -403,6 +445,7 @@ void reset_parser() {
     pending_column_flags = 0;
     pending_record_view.clear();
     pending_record_table.clear();
+    current_is_statemachine = false;
 }
 
 struct Subcondition {
@@ -648,6 +691,7 @@ definition_header '{' definition_body '}' {
         DBG_PARSER << "num transitions: " << current_machineclass->transitions.size() << "\n";
 
         validate_exports(current_machineclass);
+        validate_persistence(current_machineclass);
         current_machineclass = NULL;
     }
 }
@@ -659,6 +703,7 @@ definition_header '{' definition_body '}' {
                       back_inserter(current_machineclass->locals));
             current_locals.clear();
         }
+        validate_persistence(current_machineclass);
         current_machineclass = NULL;
     }
 }
@@ -671,6 +716,7 @@ SYMBOL RECORD record_rel parameters {
     current_machineclass = new MachineClass($1);
     current_machineclass->disableAutomaticStateChanges();
     RecordClass::mark(current_machineclass);
+    current_is_statemachine = false;
     if (!pending_record_view.empty()) {
         RecordClass::setView(current_machineclass, pending_record_view);
     }
@@ -966,6 +1012,7 @@ SYMBOL STATEMACHINE record_rel parameters {
     DBG_PARSER << " machine class "  << $1 << "\n";
     check_machine_type($1);
     current_machineclass = new MachineClass($1);
+    current_is_statemachine = true;
     if (!pending_record_view.empty()) { RecordClass::setView(current_machineclass, pending_record_view); }
     if (!pending_record_table.empty()) { RecordClass::setTable(current_machineclass, pending_record_table); }
     pending_record_view.clear();
@@ -977,6 +1024,7 @@ SYMBOL STATEMACHINE record_rel parameters {
     DBG_PARSER << " machine class (with properties)  "  << $1 << "\n";
     check_machine_type($1);
     current_machineclass = new MachineClass($1);
+    current_is_statemachine = true;
     properties = property_stack.back();
     property_stack.pop_back();
     current_machineclass->setProperties(properties);
@@ -992,6 +1040,7 @@ SYMBOL STATEMACHINE record_rel parameters {
   DBG_PARSER << " machine class  "  << $1 << "\n";
   check_machine_type($1);
   current_machineclass = new MachineClass($1);
+  current_is_statemachine = false;
   MachineClass *cpu_class = MachineClass::find("CPU");
   if (!cpu_class) cpu_class = new MachineClass("CPU");
   current_machineclass->parent = cpu_class;
@@ -1001,6 +1050,7 @@ SYMBOL STATEMACHINE record_rel parameters {
   DBG_PARSER << " machine class   "  << $1 << "\n";
   check_machine_type($1);
   current_machineclass = new MachineClass($1);
+  current_is_statemachine = false;
   MachineClass *board_class = MachineClass::find("BOARD");
   if (!board_class) board_class = new MachineClass("BOARD");
   current_machineclass->parent = board_class;

@@ -78,6 +78,36 @@ int main() {
         return 5;
     }
 
+    // Machine-level flag: OPTION PERSISTENT true sets the reserved "PERSISTENT"
+    // option that isPersistent() reads.
+    MachineClass *mc2 = new MachineClass("Panel");
+    mc2->setOption("PERSISTENT", Value("true"));
+    MachineInstance *m2 = MachineInstanceFactory::create("p", "Panel");
+    m2->setStateMachine(mc2);
+    machines[m2->getName()] = m2;
+    if (!m2->isPersistent()) {
+        std::cerr << "machine with OPTION PERSISTENT true is not isPersistent()\n";
+        return 6;
+    }
+    // The PERSISTENCE_CHANNEL monitors `PERSISTENT == "true"` and matches with
+    // machine->getValue("PERSISTENT") == Value("true", t_string) (Channel.cpp).
+    // Verify the flag resolves to "true" under that exact comparison, so a
+    // persistent machine is still selected and published to the channel.
+    if (!(m2->getValue("PERSISTENT") == Value("true", Value::t_string))) {
+        std::cerr << "OPTION PERSISTENT true machine not matched by channel monitor (PERSISTENT == \"true\")\n";
+        return 8;
+    }
+
+    MachineClass *mc3 = new MachineClass("Transient");
+    mc3->setOption("PERSISTENT", Value("false"));
+    MachineInstance *m3 = MachineInstanceFactory::create("t", "Transient");
+    m3->setStateMachine(mc3);
+    machines[m3->getName()] = m3;
+    if (m3->isPersistent()) {
+        std::cerr << "machine with OPTION PERSISTENT false is wrongly isPersistent()\n";
+        return 7;
+    }
+
     std::cout << "ok\n";
     return 0;
 }
