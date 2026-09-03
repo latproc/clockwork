@@ -792,7 +792,7 @@ Drain MACHINE rows, input, monitor {
 rows := result AS LIST;     # JSON array → LIST (values or objects)
 ```
 
-or keep `PUSH ITEMS FROM result TO rows`. Do **not** invent a second “query creates RECORD machines” feature. If a LIST member is a JSON object, copy fields onto the named RECORD (`ITEM ${name} OF x` today; `COPY PROPERTIES FROM x TO input` when `x` is a machine or when COPY PROPERTIES is extended to a JSON object).
+or keep `PUSH ITEMS FROM result TO rows`. Do **not** invent a second “query creates RECORD machines” feature. If a LIST member is a JSON object, copy fields onto the named RECORD (`ITEM ${name} OF x`, or `COPY PROPERTIES FROM x TO input`). **Landed 2026-09-03:** `COPY PROPERTIES FROM x TO <record>` now also accepts a JSON-object source — when `x` names no machine it is resolved as an OPTION holding a JSON object (a row from a query-result LIST via `TAKE FIRST`) and its fields are projected onto the destination (skip `STATE`/`NAME`/LOCAL; RECORD destinations keep only declared OPTIONS). Covered by `test_record_apply` and the full `QUERY → AS LIST → TAKE FIRST → COPY PROPERTIES` drain chain in `test_cw_system`.
 
 `RECORD_APPLY` still updates **named** instances that match `(type, key)` (Q6). Creating `Class#key` when nothing is held stays a cache so PUB and `COPY ALL FROM Class` have somewhere to land. It is not a WHEN target. Do not grow a graph of unlinked machines as the query API.
 
