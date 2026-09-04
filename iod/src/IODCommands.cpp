@@ -487,18 +487,17 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
                 int64_t x;
                 char *p;
                 x = strtol(params[3].asString().c_str(), &p, 10);
-                if (use_authority)
-                    if (*p == 0) {
-                        changed = m->setValue(params[2].asString(), x, authority);
-                    }
-                    else {
-                        changed = m->setValue(params[2].asString(), params[3], authority);
-                    }
-                else if (*p == 0) {
-                    changed = m->setValue(params[2].asString(), x);
+                // A value strtol did not fully consume is a string, not a number.
+                // Guard the empty string so `PROPERTY x key ""` clears to "" rather
+                // than being parsed as the integer 0.
+                const bool is_integer = !params[3].asString().empty() && *p == 0;
+                if (use_authority) {
+                    changed = is_integer ? m->setValue(params[2].asString(), x, authority)
+                                         : m->setValue(params[2].asString(), params[3], authority);
                 }
                 else {
-                    changed = m->setValue(params[2].asString(), params[3]);
+                    changed = is_integer ? m->setValue(params[2].asString(), x)
+                                         : m->setValue(params[2].asString(), params[3]);
                 }
             }
             else {
