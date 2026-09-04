@@ -155,6 +155,14 @@ class ECInterface {
      * setup-hold holds the master (avoids multi-minute deadlock with ecat thread).
      */
     static void setSetupMailboxExclusive(bool on);
+    static bool setupMailboxExclusive();
+    /**
+     * Apply queued ECDomain and ETHERCAT_BUS mirrors on the processing thread.
+     * Ecat only stores a POD snapshot (no MachineInstance::setValue).
+     */
+    static void flushDomainClockworkMirrors();
+    /** True when a non-primary domain is WC-incomplete (latest snapshot). */
+    static bool anyNonPrimaryDomainIncomplete();
     void updateDomain(uint32_t size, uint8_t *data, uint8_t *mask);
     /** Write a digital output bit into the kernel output shadow (turnOn/turnOff). */
     void applyKernelOutputBit(unsigned int io_offset, unsigned int bitpos, bool on);

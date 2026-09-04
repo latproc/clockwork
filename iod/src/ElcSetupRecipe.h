@@ -89,6 +89,9 @@ void refreshRecipeSnapshot();
  */
 void pollFromProcessingThread();
 
+/** Queue reapplyOutputDefaults for the processing thread (not ecat). */
+void requestOutputDefaults();
+
 /**
  * Legacy name: ecat must not mutate Clockwork. No-op; kept so older call
  * sites compile. Use pollFromProcessingThread().

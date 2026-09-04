@@ -27,6 +27,7 @@
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <pthread.h>
 #include <set>
 #include <sstream>
 #include <string>
@@ -1097,8 +1098,11 @@ void processPending(KernelEthercatBus *bus) {
             }
             if (gate == ReapplyGate::WaitPreop) {
                 // Hold from OP only after power-down (needs_commission).
-                // Continuously OP slaves never reach WaitPreop.
-                if (al != kAlOp || need_coe) {
+                // Do not hold while INIT / identity 0:0 (mailbox not ready).
+                ECModule *hm = ECInterface::findModule(p.position);
+                const uint32_t vid = hm ? hm->vendor_id : 0;
+                const uint32_t pid = hm ? hm->product_code : 0;
+                if (canBeginSetupHold(al, vid, pid) && (al != kAlOp || need_coe)) {
                     ensureSetupHold(bus, p);
                 }
                 p.ready_since_us = 0;
@@ -1337,8 +1341,13 @@ void processPending(KernelEthercatBus *bus) {
     }
 }
 
+void requestOutputDefaults() {
+    g_need_output_defaults.store(true);
+}
+
 void pollFromProcessingThread() {
     static uint64_t last_snap_us = 0;
+    static uint64_t last_flush_us = 0;
     const uint64_t now = microsecs();
     bool snap_empty = false;
     {
@@ -1349,7 +1358,16 @@ void pollFromProcessingThread() {
         refreshRecipeSnapshot();
         last_snap_us = now;
     }
-    flushMachineStatusUpdates();
+    const bool exclusive = ECInterface::setupMailboxExclusive();
+    const bool d2_incomplete = ECInterface::anyNonPrimaryDomainIncomplete();
+    const uint64_t flush_min_us = (exclusive || d2_incomplete) ? 100000ULL : 0;
+    if (flush_min_us == 0 || last_flush_us == 0 || now - last_flush_us >= flush_min_us) {
+        flushMachineStatusUpdates();
+        last_flush_us = now;
+    }
+    if (exclusive || d2_incomplete) {
+        return;
+    }
     if (g_need_output_defaults.exchange(false)) {
         std::cerr << "ElcSetupRecipe: applying deferred reapplyOutputDefaults\n";
         reapplyOutputDefaults();
@@ -1364,14 +1382,16 @@ void pollFromEcatThread() {
 // ---- Background worker: never block sendUpdates / ecat with mailbox SDO ----
 std::mutex g_worker_mu;
 std::condition_variable g_worker_cv;
+std::mutex g_worker_start_mu;
 std::atomic<KernelEthercatBus *> g_worker_bus{nullptr};
 std::atomic<bool> g_worker_kick{false};
 std::atomic<bool> g_worker_stop{false};
-std::once_flag g_worker_once;
+std::atomic<bool> g_worker_running{false};
 std::thread g_worker_thread;
 
 void reapplyWorkerMain() {
     pthread_setname_np(pthread_self(), "iod setup reapply");
+    g_worker_running.store(true);
     std::cerr << "ElcSetupRecipe: reapply worker started (off hot path)\n";
     while (!g_worker_stop.load()) {
         {
@@ -1404,15 +1424,21 @@ void reapplyWorkerMain() {
             ECInterface::setSetupMailboxExclusive(false);
         }
     }
+    g_worker_running.store(false);
     std::cerr << "ElcSetupRecipe: reapply worker stopped\n";
 }
 
 void ensureReapplyWorker() {
-    std::call_once(g_worker_once, [] {
-        g_worker_stop.store(false);
-        g_worker_thread = std::thread(reapplyWorkerMain);
-        g_worker_thread.detach();
-    });
+    std::lock_guard<std::mutex> lk(g_worker_start_mu);
+    if (g_worker_running.load() && g_worker_thread.joinable()) {
+        return;
+    }
+    if (g_worker_thread.joinable()) {
+        g_worker_thread.join();
+    }
+    g_worker_stop.store(false);
+    g_worker_running.store(true);
+    g_worker_thread = std::thread(reapplyWorkerMain);
 }
 
 void scheduleProcessPending(KernelEthercatBus *bus) {
@@ -1433,6 +1459,9 @@ void scheduleProcessPending(KernelEthercatBus *bus) {
         }
     }
     ensureReapplyWorker();
+    if (!g_worker_running.load()) {
+        std::cerr << "ElcSetupRecipe: pending reapply but worker not running\n";
+    }
     g_worker_kick.store(true);
     g_worker_cv.notify_one();
 }

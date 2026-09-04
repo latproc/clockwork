@@ -59,3 +59,12 @@ TEST(ElcSetupReapplyPolicy, PowerDownPreopApplies) {
     EXPECT_EQ(ReapplyGate::Apply,
               decideReapply(true, kAlPreop, true, 1000, kHoldStuckLimitUs, true));
 }
+
+TEST(ElcSetupReapplyPolicy, HoldNotFromInitOrZeroIdentity) {
+    using ElcSetupRecipe::canBeginSetupHold;
+    EXPECT_FALSE(canBeginSetupHold(kAlInit, 0x60a, 0xed310001));
+    EXPECT_FALSE(canBeginSetupHold(0, 0x60a, 0xed310001));
+    EXPECT_FALSE(canBeginSetupHold(kAlOp, 0, 0));
+    EXPECT_TRUE(canBeginSetupHold(kAlOp, 0x60a, 0xed310001));
+    EXPECT_TRUE(canBeginSetupHold(kAlPreop, 0x60a, 0xed310001));
+}

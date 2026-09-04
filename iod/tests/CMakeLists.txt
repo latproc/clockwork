@@ -44,6 +44,11 @@ target_include_directories(test_elc_setup_reapply_policy PRIVATE ${PROJECT_SOURC
 target_link_libraries(test_elc_setup_reapply_policy gtest_main pthread)
 add_test(NAME test_elc_setup_reapply_policy COMMAND test_elc_setup_reapply_policy)
 
+add_executable(test_elc_domain_cw_mirror test_elc_domain_cw_mirror.cpp)
+target_include_directories(test_elc_domain_cw_mirror PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test_elc_domain_cw_mirror gtest_main pthread)
+add_test(NAME test_elc_domain_cw_mirror COMMAND test_elc_domain_cw_mirror)
+
 # Now simply link against gtest or gtest_main as needed. Eg
 add_executable(test_value test_value.cpp )
 target_link_libraries(test_value gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${DL_LIBRARY} pthread)

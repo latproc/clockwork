@@ -64,11 +64,13 @@
 #include "Scheduler.h"
 #include "Statistic.h"
 #include "Statistics.h"
+#include "StallTrace.h"
 #include "clockwork.h"
 #include "ecat_thread.h"
 #include "ethercat_xml_parser.h"
 #include "options.h"
 #include "symboltable.h"
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include "ThreadSafeQueue.h"
@@ -79,8 +81,33 @@ bool machine_is_ready = false;
 
 // svc -d / daemontools send SIGTERM. Set program_done so threads leave cleanly
 // and ecat can deactivate (reduces SM-watchdog spam vs SIGKILL / svc -k).
+// If processing is wedged it never sees program_done — _exit after 2s of a
+// frozen heartbeat so supervise can restart (1G2C-122 2026-08/09 wedges).
 static void iod_request_shutdown(int /*sig*/) {
     program_done = true;
+}
+
+static void iod_shutdown_watch() {
+#ifdef __linux__
+    pthread_setname_np(pthread_self(), "iod shutdown wd");
+#endif
+    while (!program_done) {
+        usleep(100000);
+    }
+    const uint64_t seq0 = StallTrace::heartbeatSeq();
+    for (int i = 0; i < 20; ++i) {
+        usleep(100000);
+        if (!program_done) {
+            return;
+        }
+        if (StallTrace::heartbeatSeq() != seq0) {
+            return;
+        }
+    }
+    if (program_done) {
+        std::cerr << "iod: SIGTERM: processing heartbeat frozen 2s; _exit\n";
+        _exit(1);
+    }
 }
 
 void usage(int argc, char *argv[]);
@@ -373,6 +400,7 @@ int main(int argc, char const *argv[]) {
         sigaction(SIGTERM, &sa, nullptr);
         sigaction(SIGINT, &sa, nullptr);
     }
+    std::thread(iod_shutdown_watch).detach();
 
     boost::condition_variable_any processing_condition;
     boost::shared_mutex processing_queue_mutex;
