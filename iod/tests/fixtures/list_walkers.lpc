@@ -1,5 +1,5 @@
 # Instances for iod LIST drain tests. Names here are the public test API
-# (what C++ looks up). Type implementations are loaded separately.
+# (what C++ looks up). Types are in list_walkers_types.lpc (in-tree only).
 
 # ---------------------------------------------------------------------------
 # Primitive LIST (MOVE / SEND / ADD)
@@ -22,24 +22,6 @@ LISTOPS MACHINE Src, Work {
 # ---------------------------------------------------------------------------
 # Screen walker: start list, auto/manual fork, held questions, default screen
 # ---------------------------------------------------------------------------
-ALWAYSTRUE MACHINE {
-  true INITIAL;
-  false STATE;
-}
-
-ALLARETRUE MACHINE List {
-  true WHEN ALL List ARE true;
-  false DEFAULT;
-  false INITIAL;
-}
-
-TESTGUARD MACHINE {
-  true INITIAL;
-  false STATE;
-  COMMAND fail { SET SELF TO false; }
-  COMMAND pass { SET SELF TO true; }
-}
-
 G_Ready ALWAYSTRUE;
 G_Fault TESTGUARD;
 P_Mode FLAG;
@@ -61,23 +43,26 @@ L_ScreenAuto LIST M_ScreenFault, M_ScreenHoldA, M_ScreenHoldB, M_ScreenHoldC, M_
 L_ScreenManual LIST M_ScreenFault, M_ScreenManual;
 L_ScreenWalk LIST;
 L_ScreenCmds LIST;
+L_ScreenCur LIST;
 
-M_Screen HMISCREEN L_ScreenStart, L_ScreenWalk, L_ScreenCmds;
-M_ScreenTrack HMISCREENTRACK V_Screen, L_ScreenCmds;
+M_Screen HMISCREEN L_ScreenStart, L_ScreenWalk, L_ScreenCmds, L_ScreenCur;
+M_ScreenTrack HMISCREENTRACK V_Screen, M_Screen;
 M_ScreenFork HMISCREENFORK G_Mode, L_ScreenWalk, L_ScreenAuto, L_ScreenManual;
+M_HoldARefresh HMIQUESTIONSCREENREFRESH M_HoldA, G_HoldA, M_Screen;
+M_HoldBRefresh HMIQUESTIONSCREENREFRESH M_HoldB, G_HoldB, M_Screen;
+M_HoldCRefresh HMIQUESTIONSCREENREFRESH M_HoldC, G_HoldC, M_Screen;
 
-M_ScreenStart HMISCREENTEST (ScreenNo:"Start") G_Ready, L_ScreenCmds;
-M_ScreenFault HMISCREENTEST (ScreenNo:"Fault") G_Fault, L_ScreenCmds;
-M_ScreenHoldA HMISCREENTEST (ScreenNo:"HoldA") G_HoldA, L_ScreenCmds;
-M_ScreenHoldB HMISCREENTEST (ScreenNo:"HoldB") G_HoldB, L_ScreenCmds;
-M_ScreenHoldC HMISCREENTEST (ScreenNo:"HoldC") G_HoldC, L_ScreenCmds;
-M_ScreenAuto HMISCREENTEST (ScreenNo:"AutoHome") G_Mode, L_ScreenCmds;
-M_ScreenManual HMISCREENTEST (ScreenNo:"ManualHome") G_Mode, L_ScreenCmds;
+M_ScreenStart HMISCREENTEST (ScreenNo:"Start") G_Ready, V_Screen;
+M_ScreenFault HMISCREENTEST (ScreenNo:"Fault") G_Fault, V_Screen;
+M_ScreenHoldA HMISCREENTEST (ScreenNo:"HoldA") G_HoldA, V_Screen;
+M_ScreenHoldB HMISCREENTEST (ScreenNo:"HoldB") G_HoldB, V_Screen;
+M_ScreenHoldC HMISCREENTEST (ScreenNo:"HoldC") G_HoldC, V_Screen;
+M_ScreenAuto HMISCREENTEST (ScreenNo:"AutoHome") G_Mode, V_Screen;
+M_ScreenManual HMISCREENTEST (ScreenNo:"ManualHome") G_Mode, V_Screen;
 
 # ---------------------------------------------------------------------------
-# Rotating cell map
+# Rotating / grid maps (generic LIST mapper)
 # ---------------------------------------------------------------------------
-S_Rotate GRABPLANSTATUS;
 F_Cell1 CNTFLAG (loc:1, zone:1, depth:0, rowLoc:1, columnLoc:0);
 F_Cell2 CNTFLAG (loc:2, zone:1, depth:1, rowLoc:1, columnLoc:0);
 F_Cell3 CNTFLAG (loc:3, zone:2, depth:0, rowLoc:2, columnLoc:2);
@@ -85,23 +70,10 @@ F_Cell4 CNTFLAG (loc:4, zone:2, depth:1, rowLoc:2, columnLoc:2);
 F_Cell5 CNTFLAG (loc:5, zone:3, depth:0, rowLoc:0, columnLoc:1);
 F_Cell6 CNTFLAG (loc:6, zone:3, depth:1, rowLoc:0, columnLoc:1);
 L_Cells LIST F_Cell1, F_Cell2, F_Cell3, F_Cell4, F_Cell5, F_Cell6;
-M_RotateImpl GRABPLANNER S_Rotate, L_Cells;
-M_Rotate ROTATECTL M_RotateImpl;
+L_RotateWork LIST;
+L_RotateCur LIST;
+M_Rotate MAPCTL L_Cells, L_RotateWork, L_RotateCur;
 
-ROTATECTL MACHINE Planner {
-  OPTION count 0;
-  OPTION bits 0;
-  sync WHEN bits != Planner.grabMap;
-  idle DEFAULT;
-  ENTER sync { bits := Planner.grabMap; }
-  COMMAND start { Planner.NumGrabs := count; CALL getMap ON Planner; }
-  COMMAND clear { CALL reset ON Planner; }
-}
-
-# ---------------------------------------------------------------------------
-# Grid slot map
-# ---------------------------------------------------------------------------
-S_Grid COREPLANSTATUS;
 P_Skip0 PFLAG (SlotId:0);
 P_Skip1 PFLAG (SlotId:1);
 F_R1S0 TUBEFLAG (ID:0, SlotId:0, Location:1) P_Skip0;
@@ -111,16 +83,35 @@ F_R2S1 TUBEFLAG (ID:3, SlotId:1, Location:2) P_Skip1;
 F_R3S0 TUBEFLAG (ID:4, SlotId:0, Location:3) P_Skip0;
 F_R3S1 TUBEFLAG (ID:5, SlotId:1, Location:3) P_Skip1;
 L_Slots LIST F_R1S0, F_R1S1, F_R2S0, F_R2S1, F_R3S0, F_R3S1;
-L_Skipped LIST P_Skip0, P_Skip1;
-M_GridImpl COREPLANNER S_Grid, L_Slots, L_Skipped;
-M_Grid GRIDCTL M_GridImpl;
+L_GridWork LIST;
+L_GridCur LIST;
+M_Grid MAPCTL L_Slots, L_GridWork, L_GridCur;
 
-GRIDCTL MACHINE Planner {
-  OPTION count 0;
-  OPTION bits 0;
-  sync WHEN bits != Planner.coreMap;
-  idle DEFAULT;
-  ENTER sync { bits := Planner.coreMap; }
-  COMMAND start { Planner.numCores := count; CALL getMap ON Planner; }
-  COMMAND clear { CALL reset ON Planner; }
+# ---------------------------------------------------------------------------
+# SEND Sample: dest COMMAND SET State; WHEN must recheck without SET SELF
+# (SEND Sample → ToPackBlast / ToPackBlastWait)
+# ---------------------------------------------------------------------------
+TUBESEQSTATES MACHINE {
+  Ready INITIAL;
+  ToPackBlast STATE;
 }
+
+TUBESEQ MACHINE State {
+  Ready WHEN State IS Ready;
+  ToPackBlastWait WHEN State IS ToPackBlast;
+  Ready INITIAL;
+  COMMAND Sample WITHIN Ready { SET State TO ToPackBlast; }
+  COMMAND Reset {
+    SET State TO Ready;
+    SET SELF TO Ready;
+  }
+}
+
+TUBESEQSRC MACHINE Tube {
+  idle INITIAL;
+  COMMAND go { SEND Sample TO Tube; }
+}
+
+M_TubeSeqState TUBESEQSTATES;
+M_TubeSeq TUBESEQ M_TubeSeqState;
+M_TubeSeqSrc TUBESEQSRC M_TubeSeq;

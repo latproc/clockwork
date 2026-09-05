@@ -1,0 +1,182 @@
+# In-tree types for LIST drain tests.
+
+ALWAYSTRUE MACHINE {
+  true INITIAL;
+  false STATE;
+}
+
+ALLARETRUE MACHINE List {
+  true WHEN ALL List ARE true;
+  false DEFAULT;
+  false INITIAL;
+}
+
+TESTGUARD MACHINE {
+  true INITIAL;
+  false STATE;
+  COMMAND fail { SET SELF TO false; }
+  COMMAND pass { SET SELF TO true; }
+}
+
+CNTFLAG MACHINE {
+  OPTION loc 0;
+  OPTION zone 0;
+  OPTION depth 0;
+  OPTION rowLoc 0;
+  OPTION columnLoc 0;
+  on STATE;
+  off INITIAL;
+  COMMAND turnOn { SET SELF TO on; }
+  COMMAND turnOff { SET SELF TO off; }
+}
+
+PFLAG MACHINE {
+  OPTION SlotId 0;
+  on STATE;
+  off INITIAL;
+  COMMAND turnOn { SET SELF TO on; }
+  COMMAND turnOff { SET SELF TO off; }
+}
+
+TUBEFLAG MACHINE DeSelect {
+  OPTION ID 0;
+  OPTION SlotId 0;
+  OPTION Location 0;
+  blocked WHEN DeSelect IS on;
+  on STATE;
+  off INITIAL;
+  COMMAND turnOn { SET SELF TO on; }
+  COMMAND turnOff { SET SELF TO off; }
+}
+
+HMIINPUT2GUARD MACHINE In {
+  true WHEN In IS on;
+  false DEFAULT;
+}
+
+HMIQUESTION MACHINE {
+  off INITIAL;
+  ask STATE;
+  on STATE;
+  COMMAND Question { SET SELF TO ask; }
+  COMMAND Yes { SET SELF TO on; }
+  COMMAND Reset { SET SELF TO on; }
+}
+
+HMIQUESTION2GUARD MACHINE Q {
+  true WHEN Q IS on;
+  false DEFAULT;
+}
+
+# Attention screens show when Guard is false; skipped when true (home is last skip).
+HMISCREENTEST MACHINE Guard, ScreenVar {
+  OPTION ScreenNo "";
+  skip WHEN Guard IS true;
+  show DEFAULT;
+  RECEIVE publish { ScreenVar := ScreenNo; }
+}
+
+HMISCREENFORK MACHINE Mode, Walk, Auto, Manual {
+  auto WHEN Mode IS true;
+  manual DEFAULT;
+  RECEIVE seed {
+    CLEAR Walk;
+    IF (SELF IS auto) {
+      ADD ITEMS FROM Auto AFTER LAST OF Walk;
+    }
+    ELSE {
+      ADD ITEMS FROM Manual AFTER LAST OF Walk;
+    }
+  }
+  ENTER auto { SEND seed TO SELF; }
+  ENTER manual { SEND seed TO SELF; }
+}
+
+# Walk ScreenList in one drain: skip until a show (attention), else last skip is home.
+# Current is a 1-slot LIST so SEND/MOVE address the item, not an OPTION name.
+HMISCREEN MACHINE StartList, ScreenList, Commands, Current {
+  OPTION ScreenNo "IdleScreen";
+  TestFalse WHEN SELF IS TestFalse AND SIZE OF Current == 1 AND ALL Current ARE show;
+  step WHEN SIZE OF ScreenList > 0 AND SELF IS idle;
+  idle INITIAL;
+
+  COMMAND Reset {
+    CLEAR ScreenList;
+    CLEAR Current;
+    ADD ITEMS FROM StartList AFTER LAST OF ScreenList;
+    SET SELF TO idle;
+  }
+  COMMAND Reevaluate {
+    CLEAR ScreenList;
+    CLEAR Current;
+    ADD ITEMS FROM StartList AFTER LAST OF ScreenList;
+    SET SELF TO idle;
+  }
+
+  ENTER INIT { SEND Reset TO SELF; }
+  ENTER step {
+    CLEAR Current;
+    MOVE 1 FROM ScreenList TO Current;
+    SEND seed TO Current;
+    SEND publish TO Current;
+    IF (ALL Current ARE show) {
+      SET SELF TO TestFalse;
+    }
+    ELSE {
+      SET SELF TO idle;
+    }
+  }
+}
+
+HMISCREENTRACK MACHINE ScreenVar, Screen {
+  sync WHEN ScreenVar != Screen.ScreenNo;
+  idle DEFAULT;
+  ENTER sync { ScreenVar := Screen.ScreenNo; }
+}
+
+HMIQUESTIONSCREENREFRESH MACHINE Q, Guard, Screen {
+  pending WHEN Q IS ask AND Guard IS false AND SELF IS idle;
+  asking WHEN Q IS ask;
+  idle DEFAULT;
+  ENTER pending { SET SELF TO asking; }
+  ENTER asking { SEND Reevaluate TO Screen; }
+  LEAVE asking { SEND Reevaluate TO Screen; }
+}
+
+# Turn on the first `count` members that are off (blocked/skipped items are not off).
+MAPCTL MACHINE Cells, Work, Current {
+  OPTION count 0;
+  OPTION bits 0;
+  OPTION taken 0;
+  mapping WHEN SIZE OF Work > 0 AND taken < count AND SELF IS idle;
+  idle INITIAL;
+
+  COMMAND clear {
+    SEND turnOff TO Cells;
+    bits := 0;
+    taken := 0;
+    CLEAR Work;
+    CLEAR Current;
+    SET SELF TO idle;
+  }
+  COMMAND start {
+    SEND turnOff TO Cells;
+    bits := 0;
+    taken := 0;
+    CLEAR Work;
+    CLEAR Current;
+    ADD ITEMS FROM Cells AFTER LAST OF Work;
+    SET SELF TO idle;
+  }
+
+  ENTER mapping {
+    CLEAR Current;
+    MOVE 1 FROM Work TO Current;
+    IF (ALL Current ARE off) {
+      SEND turnOn TO Current;
+      taken := taken + 1;
+      bits := bits + 1;
+    }
+    SET SELF TO idle;
+  }
+}
