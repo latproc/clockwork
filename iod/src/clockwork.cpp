@@ -43,6 +43,7 @@
 #include "Logger.h"
 #include "MachineCommandAction.h"
 #include "MachineInstance.h"
+#include "RecordClass.h"
 #include "Message.h"
 #include "MessageLog.h"
 #include "ModbusInterface.h"
@@ -139,7 +140,8 @@ void usage(int argc, char const *argv[]) {
         << "General:\n"
         << "  -h, --help                 Show this help and exit\n"
         << "  -v                         Verbose logging\n"
-        << "  -t                         Parse/check only (no runtime)\n"
+        << "  -t                         Parse and semantic-check, write modbus map, then exit\n"
+        << "  --parse-only               Parse and semantic-check, then exit (no runtime)\n"
         << "  -l FILE                    Log file (use - for stdout)\n"
         << "  -i FILE                    Persistent store\n"
         << "  -c FILE                    Debug flag file (iod.conf)\n"
@@ -858,6 +860,27 @@ void semantic_analysis() {
             mc->collectTimerPredicates();
         }
         MachineClass::machine_classes[mc->name] = mc;
+        if (RecordClass::isRecord(mc)) {
+            unsigned keys = RecordClass::keyColumnCount(mc);
+            if (keys == 0) {
+                if (RecordClass::isView(mc)) {
+                    std::cerr << "## - Warning: RECORD " << mc->name << " has no KEY OPTION\n";
+                }
+                else {
+                    std::stringstream ss;
+                    ss << "## - Error: RECORD " << mc->name << " has no KEY OPTION";
+                    error_messages.push_back(ss.str());
+                    ++num_errors;
+                }
+            }
+            else if (keys > 1) {
+                std::stringstream ss;
+                ss << "## - Error: RECORD " << mc->name
+                   << " has multiple KEY OPTIONS; v1 allows one";
+                error_messages.push_back(ss.str());
+                ++num_errors;
+            }
+        }
     }
     // setup references for each global
     BOOST_FOREACH (MachineClass *mc, MachineClass::all_machine_classes) {
@@ -1227,6 +1250,9 @@ int loadOptions(int argc, const char *argv[], std::list<std::string> &files) {
         }
         else if (strcmp(argv[i], "-t") == 0) {
             set_test_only(1);
+        }
+        else if (strcmp(argv[i], "--parse-only") == 0) {
+            set_parse_only(1);
         }
         else if (strcmp(argv[i], "-l") == 0 && i < argc - 1) {
             logfilename = argv[++i];

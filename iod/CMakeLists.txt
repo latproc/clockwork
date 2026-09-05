@@ -53,6 +53,10 @@ endif() # USE_ETHERCAT
 cmake_policy(SET CMP0008 NEW)
 cmake_policy(SET CMP0015 NEW)
 
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 NEW)
+endif()
+
 function(target_link_directories_compat target dir)
        if(CMAKE_VERSION VERSION_LESS "3.13")
                target_link_libraries(${target} "-L${dir}")
@@ -90,6 +94,9 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-function")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-value")
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-literal-operator")
+endif()
 IF("${CMAKE_SYSTEM}" MATCHES "Linux")
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -rdynamic")
 endif()
@@ -344,6 +351,7 @@ set (Clockwork_Headers
     src/Scheduler.h
     src/SDOEntry.h
     src/SendMessageAction.h
+    src/QueryAction.h
     src/SetListEntriesAction.h
     src/SetOperationAction.h
     src/SetStateAction.h
@@ -440,11 +448,14 @@ set (Clockwork_SRCS
     src/ProcessingThread.cpp
     src/StallTrace.cpp
     src/RateEstimatorInstance.cpp
+    src/RecordApply.cpp
+    src/RecordClass.cpp
     src/read_file.c
     src/ResetAction.cpp
     src/ResumeAction.cpp
     src/Scheduler.cpp
     src/SendMessageAction.cpp
+    src/QueryAction.cpp
     src/SetListEntriesAction.cpp
     src/SetOperationAction.cpp
     src/SetStateAction.cpp
@@ -457,6 +468,7 @@ set (Clockwork_SRCS
     src/SyncRemoteStatesAction.cpp
     src/Transition.cpp
     src/Trigger.cpp
+    src/TryAction.cpp
     src/UnlockAction.cpp
     src/UpdateListItemsAction.cpp
     src/WaitAction.cpp
@@ -485,6 +497,322 @@ add_executable(cw src/cw.cpp) # ${Clockwork_SRCS})
 set_target_properties (cw PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 #target_link_libraries(cw cw_client "dl" ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES})
 target_link_libraries(cw cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+
+add_executable(cw-scaffold src/cw_scaffold.cpp)
+set_target_properties(cw-scaffold PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_link_libraries(cw-scaffold cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+
+enable_testing()
+set(_record_parse ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_parse.cmake)
+set(_record_fix ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/record)
+add_test(NAME record_parse_customer COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/customer.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_view COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/customer_with_address_view.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_table COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/customer_table.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_reject_when COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/reject_when.cw -DEXPECT_RC=2
+  -P ${_record_parse})
+add_test(NAME record_parse_reject_command COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/reject_command.cw -DEXPECT_RC=2
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_key COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_key.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=RECORD
+  -P ${_record_parse})
+add_test(NAME record_parse_no_key COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/no_key.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=KEY
+  -P ${_record_parse})
+add_test(NAME record_parse_copy_from_class COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/record_list.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_copy_from_view COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/customer_view_list.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_copy_where COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/record_list_where.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_query_into COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/query_into.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_query_into_json COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/query_into_json.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_private COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/record_private.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_private COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_private.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=RECORD
+  -P ${_record_parse})
+add_test(NAME record_parse_as_list COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/as_list.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_table COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_table.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_export_valid COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/export_valid.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_export_unknown_option COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/export_unknown_option.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=EXPORT
+  -P ${_record_parse})
+add_test(NAME record_parse_export_local_option COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/export_local_option.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+
+# OPTION PERSISTENT true (machine-level flag): valid only on a plain MACHINE;
+# rejected on RECORD, table-bound MACHINE, CPU/BOARD, and when per-field
+# PERSISTENT OPTION is also present.
+add_test(NAME record_parse_machine_persistent_flag COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_persistent_flag.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME record_parse_record_persistent_flag COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/record_persistent_flag.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=RECORD
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_table_persistent_flag COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_table_persistent_flag.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=table-bound
+  -P ${_record_parse})
+add_test(NAME record_parse_cpu_persistent_flag COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/cpu_persistent_flag.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=CPU/BOARD
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_persistent_flag_redundant COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_persistent_flag_redundant.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=redundant
+  -P ${_record_parse})
+add_test(NAME record_parse_machine_persistent_flag_redundant2 COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/machine_persistent_flag_redundant2.cw -DEXPECT_RC=2
+  -DMUST_CONTAIN=redundant
+  -P ${_record_parse})
+
+# Runtime tests for the exception machinery (ABORT/RETURN/THROW/CATCH). These
+# programs do not SHUTDOWN, so pass/fail is checked via log markers under a
+# bounded run (see tests/run_cw_runtime.sh, which SIGTERMs cw so its log flushes).
+set(_runtime ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_runtime.sh)
+set(_runtime_tests ${CMAKE_CURRENT_SOURCE_DIR}/../tests)
+add_test(NAME runtime_abort COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/abort.cw
+  --must-not-contain "check should have aborted but continued")
+add_test(NAME runtime_exceptions COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/exceptions.cw
+  --must-contain "Overrun detected"
+  --must-not-contain "should not be displayed")
+
+# Part B: WAITFOR / CALL ON TIMEOUT ABORT|RETURN|THROW <msg> with TIMEOUT <ms>.
+add_test(NAME parse_waitfor_timeout COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/waitfor_timeout.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME runtime_waitfor_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/waitfor_timeout_runtime.cw
+  --must-contain "waitfor timed out")
+
+# Handler-level deadline: <handler> { } WITH TIMEOUT <ms> [ON TIMEOUT { }] / AFTER <ms> { }.
+add_test(NAME parse_handler_timeout COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/handler_timeout.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+add_test(NAME runtime_handler_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/handler_timeout_runtime.cw
+  --must-contain "init timed out")
+# TIMEOUT is a read-only contextual value (ms) inside ON TIMEOUT.
+add_test(NAME runtime_timeout_value COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/timeout_value_runtime.cw
+  --must-contain "timed out after 500ms")
+# TIMEOUT reflects an inner statement's deadline when a handler catches it.
+add_test(NAME runtime_handler_timeout_value COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/handler_timeout_value_runtime.cw
+  --must-contain "run timed out after 2000ms")
+# Nested deadlines: outer cancels a blocking inner recovery.
+add_test(NAME runtime_nested_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/nested_timeout_runtime.cw
+  --must-contain "outer timeout"
+  --must-not-contain "inner recovery")
+# Late-reply correlation: a timed-out CALL's late _done reply must not complete
+# a later CALL to the same command (the second CALL waits for its own reply).
+add_test(NAME runtime_call_reply_correlation COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/late_reply_correlation.cw
+  --must-contain "second call done completions=2"
+  --must-not-contain "second call done completions=1")
+
+# Part B/4: TRY { } WHEN TIMER >= timeout { } — parse + runtime.
+add_test(NAME parse_try_catch COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/try_catch.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+
+# Blocking body + timeout -> THROW (caught by CATCH).
+add_test(NAME runtime_try_throw COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_catch.cw
+  --must-contain "try timed out")
+# Blocking body + timeout -> RETURN (statement after TRY runs).
+add_test(NAME runtime_try_return COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_return.cw
+  --must-contain "returned normally")
+# Blocking body + timeout -> ABORT (statement after TRY must NOT run).
+add_test(NAME runtime_try_abort COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_abort.cw
+  --must-not-contain "should not run")
+# Body completes before timeout (handler must NOT run).
+add_test(NAME runtime_try_body_completes COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_body_completes.cw
+  --must-contain "body done"
+  --must-not-contain "timed out")
+# Synchronous body (handler must NOT run).
+add_test(NAME runtime_try_sync COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_sync.cw
+  --must-contain "body ran"
+  --must-not-contain "timed out")
+# Timeout predicate already true (fires immediately).
+add_test(NAME runtime_try_immediate COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_immediate.cw
+  --must-contain "immediate timeout")
+# Empty handler: TRY completes on timeout, statement after TRY runs.
+add_test(NAME runtime_try_empty_handler COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_empty_handler.cw
+  --must-contain "completed via empty handler")
+# ON ERROR { }: body failure runs ON ERROR (not ON TIMEOUT).
+add_test(NAME runtime_try_on_error COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_on_error.cw
+  --must-contain "error handled"
+  --must-not-contain "should not timeout")
+# ON ERROR does not run on a timeout (distinct outcomes).
+add_test(NAME runtime_try_on_error_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_on_error_timeout.cw
+  --must-contain "timed out"
+  --must-not-contain "should not error")
+# ABORT in ON TIMEOUT cascades to ON ERROR.
+add_test(NAME runtime_try_on_error_cascade COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/try_on_error_cascade.cw
+  --must-contain "abort cascaded to error")
+# Handler-level ON ERROR (no WITH TIMEOUT) catches a body failure.
+add_test(NAME runtime_handler_on_error COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/handler_on_error.cw
+  --must-contain "handler error caught")
+# WAIT ... WITH TIMEOUT (statement form).
+add_test(NAME runtime_wait_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/wait_timeout_runtime.cw
+  --must-contain "wait timed out")
+# RECEIVE handler runtime deadline.
+add_test(NAME runtime_receive_timeout COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/receive_timeout_runtime.cw
+  --must-contain "receive timed out")
+# SET ... WITH TIMEOUT (parse-only; a synchronous SET has no observable deadline).
+add_test(NAME parse_set_timeout COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/set_timeout.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+# PERSISTENT OPTION (iod-9): per-field persist.dat marker, not a column.
+add_test(NAME parse_persistent_option COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/persistent_option.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+# LOCAL and PERSISTENT are mutually exclusive.
+add_test(NAME parse_persistent_option_conflict COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/persistent_option_conflict.cw -DEXPECT_RC=2
+  -P ${_record_parse})
+# PERSISTENT is a soft keyword (token only before OPTION): a CHANNEL can still
+# monitor the machine-level reserved "PERSISTENT" property by name.
+add_test(NAME parse_monitors_persistent_channel COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/monitors_persistent_channel.cw -DEXPECT_RC=0
+  -P ${_record_parse})
+
+add_executable(test_record_apply tests/test_record_apply.cpp src/DbNotify.cpp)
+set_target_properties(test_record_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_record_apply PRIVATE src tests)
+target_link_libraries(test_record_apply cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_record_apply COMMAND test_record_apply)
+add_executable(test_copy_from_record tests/test_copy_from_record.cpp)
+set_target_properties(test_copy_from_record PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_copy_from_record PRIVATE src tests)
+target_link_libraries(test_copy_from_record cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_copy_from_record COMMAND test_copy_from_record)
+add_executable(test_abort_action tests/test_abort_action.cpp)
+set_target_properties(test_abort_action PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_abort_action PRIVATE src tests)
+target_link_libraries(test_abort_action cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_abort_action COMMAND test_abort_action)
+add_executable(test_persistent_option tests/test_persistent_option.cpp)
+set_target_properties(test_persistent_option PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_persistent_option PRIVATE src tests)
+target_link_libraries(test_persistent_option cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_persistent_option COMMAND test_persistent_option)
+add_executable(test_deadline_race tests/test_deadline_race.cpp)
+set_target_properties(test_deadline_race PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_deadline_race PRIVATE src tests)
+target_link_libraries(test_deadline_race cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_deadline_race COMMAND test_deadline_race)
+add_executable(test_deadline_req tests/test_deadline_req.cpp src/DeadlineReq.cpp)
+set_target_properties(test_deadline_req PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_deadline_req PRIVATE src)
+target_link_libraries(test_deadline_req cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_deadline_req COMMAND test_deadline_req)
+add_executable(test_db_notify tests/test_db_notify.cpp src/DbNotify.cpp)
+set_target_properties(test_db_notify PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_db_notify PRIVATE src)
+target_link_libraries(test_db_notify cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_db_notify COMMAND test_db_notify)
+add_executable(test_two_process_apply tests/test_two_process_apply.cpp src/DbNotify.cpp)
+set_target_properties(test_two_process_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_two_process_apply PRIVATE src tests)
+target_link_libraries(test_two_process_apply cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} dl pthread)
+add_test(NAME test_two_process_apply COMMAND test_two_process_apply)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
+  set_tests_properties(test_two_process_apply PROPERTIES
+    ENVIRONMENT "DBSVR=${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
+endif()
+add_executable(test_two_dbd tests/test_two_dbd.cpp)
+set_target_properties(test_two_dbd PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_two_dbd PRIVATE src)
+target_link_libraries(test_two_dbd ${ZeroMQ_LIBRARY} pthread)
+add_test(NAME test_two_dbd COMMAND test_two_dbd)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
+  set_tests_properties(test_two_dbd PROPERTIES
+    ENVIRONMENT "DBD=$<TARGET_FILE:dbd>;DBSVR=${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr"
+    TIMEOUT 30)
+else()
+  set_tests_properties(test_two_dbd PROPERTIES
+    ENVIRONMENT "DBD=$<TARGET_FILE:dbd>"
+    TIMEOUT 20)
+endif()
+add_executable(test_cw_system tests/test_cw_system.cpp)
+set_target_properties(test_cw_system PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_cw_system PRIVATE src)
+target_link_libraries(test_cw_system cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_cw_system COMMAND test_cw_system)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
+  set_tests_properties(test_cw_system PROPERTIES
+    ENVIRONMENT "CW=$<TARGET_FILE:cw>;DBD=$<TARGET_FILE:dbd>;DBSVR=${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr"
+    TIMEOUT 45)
+else()
+  set_tests_properties(test_cw_system PROPERTIES
+    ENVIRONMENT "CW=$<TARGET_FILE:cw>;DBD=$<TARGET_FILE:dbd>"
+    TIMEOUT 20)
+endif()
+add_test(NAME record_scaffold_customer COMMAND ${CMAKE_COMMAND}
+  -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
+  -DCW=$<TARGET_FILE:cw>
+  -DFROM=${_record_fix}/customer.cw
+  -DGOLDEN=${_record_fix}/expected_CustomerINTERFACE.lpc
+  -DGOLDEN_SQL=${_record_fix}/expected_Customer.sql
+  -DOUT_NAME=CustomerINTERFACE.lpc
+  -DSQL_NAME=Customer.sql
+  -DCHANNEL=${CMAKE_CURRENT_SOURCE_DIR}/../tests/db-channel.cw
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_scaffold.cmake)
+add_test(NAME record_scaffold_view COMMAND ${CMAKE_COMMAND}
+  -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
+  -DCW=$<TARGET_FILE:cw>
+  -DFROM=${_record_fix}/customer_with_address_view.cw
+  -DGOLDEN=${_record_fix}/expected_CustomerWithAddressINTERFACE.lpc
+  -DGOLDEN_SQL=${_record_fix}/expected_CustomerWithAddress.sql
+  -DOUT_NAME=CustomerWithAddressINTERFACE.lpc
+  -DSQL_NAME=CustomerWithAddress.sql
+  -DCHANNEL=${CMAKE_CURRENT_SOURCE_DIR}/../tests/db-channel.cw
+  -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_scaffold.cmake)
 
 if (USE_ETHERCAT)
 # Experimental cw with SOEM EtherCAT library support
@@ -615,18 +943,19 @@ target_link_libraries(device_connector cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRA
 add_executable(persistd src/persistd.cpp src/PersistentStore.cpp )
 target_link_libraries(persistd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 
-# modbusd/dbd need libmodbus. HMI panels often only build cw_client and do not
-# install libmodbus-dev; do not fail configure for that case.
-set(CLOCKWORK_RUNTIME_TARGETS cw iosh iocmd device_connector persistd)
+# modbusd needs libmodbus. dbd talks ZMQ only.
+set(CLOCKWORK_RUNTIME_TARGETS cw cw-scaffold iosh iocmd device_connector persistd)
+add_executable(dbd src/dbd.cpp src/DeadlineReq.cpp src/DbNotify.cpp)
+target_link_libraries(dbd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
+list(APPEND CLOCKWORK_RUNTIME_TARGETS dbd)
+add_dependencies(test_two_dbd dbd)
+add_dependencies(test_cw_system cw dbd)
 if (MODBUS_FOUND)
   add_executable(modbusd src/modbusd.cpp )
   target_link_libraries(modbusd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
-
-  add_executable(dbd src/dbd.cpp )
-  target_link_libraries(dbd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
-  list(APPEND CLOCKWORK_RUNTIME_TARGETS modbusd dbd)
+  list(APPEND CLOCKWORK_RUNTIME_TARGETS modbusd)
 else()
-  message(STATUS "libmodbus not found: skipping modbusd and dbd (cw_client still builds)")
+  message(STATUS "libmodbus not found: skipping modbusd (cw_client and dbd still build)")
 endif()
 
 if (RUN_TESTS)

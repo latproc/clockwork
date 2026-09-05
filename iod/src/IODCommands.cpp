@@ -28,6 +28,7 @@
 #include "MessageLog.h"
 #include "MessagingInterface.h"
 #include "ProcessingThread.h"
+#include "RecordApply.h"
 #include "Scheduler.h"
 #include "SharedWorkSet.h"
 #include "Statistic.h"
@@ -486,18 +487,17 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
                 int64_t x;
                 char *p;
                 x = strtol(params[3].asString().c_str(), &p, 10);
-                if (use_authority)
-                    if (*p == 0) {
-                        changed = m->setValue(params[2].asString(), x, authority);
-                    }
-                    else {
-                        changed = m->setValue(params[2].asString(), params[3], authority);
-                    }
-                else if (*p == 0) {
-                    changed = m->setValue(params[2].asString(), x);
+                // A value strtol did not fully consume is a string, not a number.
+                // Guard the empty string so `PROPERTY x key ""` clears to "" rather
+                // than being parsed as the integer 0.
+                const bool is_integer = !params[3].asString().empty() && *p == 0;
+                if (use_authority) {
+                    changed = is_integer ? m->setValue(params[2].asString(), x, authority)
+                                         : m->setValue(params[2].asString(), params[3], authority);
                 }
                 else {
-                    changed = m->setValue(params[2].asString(), params[3]);
+                    changed = is_integer ? m->setValue(params[2].asString(), x)
+                                         : m->setValue(params[2].asString(), params[3]);
                 }
             }
             else {
@@ -523,6 +523,99 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
         error_str = buf;
         return false;
     }
+}
+
+static size_t recordCommandOffset(const std::vector<Value> &params) {
+    if (!params.empty() && params[0].asString() == "RECORD" && params.size() >= 2) {
+        return 2;
+    }
+    return 1;
+}
+
+bool IODCommandRecordApply::run(std::vector<Value> &params) {
+    const size_t off = recordCommandOffset(params);
+    if (params.size() < off + 2) {
+        error_str = "Usage: RECORD APPLY type [keys_json] row_json";
+        return false;
+    }
+    std::string type = params[off].asString();
+    cJSON *keys = 0;
+    cJSON *row = 0;
+    bool own_keys = false;
+    bool own_row = false;
+    if (params.size() >= off + 3) {
+        if (params[off + 1].kind == Value::t_json) {
+            keys = params[off + 1].asJSON();
+        }
+        else {
+            keys = cJSON_Parse(params[off + 1].asString().c_str());
+            own_keys = true;
+        }
+        if (params[off + 2].kind == Value::t_json) {
+            row = params[off + 2].asJSON();
+        }
+        else {
+            row = cJSON_Parse(params[off + 2].asString().c_str());
+            own_row = true;
+        }
+    }
+    else {
+        if (params[off + 1].kind == Value::t_json) {
+            row = params[off + 1].asJSON();
+        }
+        else {
+            row = cJSON_Parse(params[off + 1].asString().c_str());
+            own_row = true;
+        }
+    }
+    if (!row) {
+        if (own_keys) {
+            cJSON_Delete(keys);
+        }
+        error_str = "RECORD APPLY: invalid row JSON";
+        return false;
+    }
+    int n = RecordApply::applyRow(type, keys, row);
+    if (own_keys) {
+        cJSON_Delete(keys);
+    }
+    if (own_row) {
+        cJSON_Delete(row);
+    }
+    std::ostringstream ss;
+    ss << "OK " << n;
+    result_str = ss.str();
+    return n >= 0;
+}
+
+bool IODCommandRecordRemove::run(std::vector<Value> &params) {
+    const size_t off = recordCommandOffset(params);
+    if (params.size() < off + 2) {
+        error_str = "Usage: RECORD REMOVE type keys_json";
+        return false;
+    }
+    std::string type = params[off].asString();
+    cJSON *keys = 0;
+    bool own_keys = false;
+    if (params[off + 1].kind == Value::t_json) {
+        keys = params[off + 1].asJSON();
+    }
+    else {
+        keys = cJSON_Parse(params[off + 1].asString().c_str());
+        own_keys = true;
+    }
+    if (!keys) {
+        error_str = "RECORD REMOVE: invalid keys JSON";
+        return false;
+    }
+    int n = RecordApply::removeRow(type, keys);
+    if (own_keys) {
+        cJSON_Delete(keys);
+    }
+    std::ostringstream ss;
+    ss << "OK " << n;
+    result_str = ss.str();
+    return n >= 0;
 }
 
 bool IODCommandList::run(std::vector<Value> &params) {
@@ -1464,9 +1557,16 @@ bool IODCommandPersistentState::run(std::vector<Value> &params) {
         MachineInstance *m = *m_iter++;
         if (m && m->isPersistent()) {
             std::string fnam = m->fullName();
+            // Per-field PERSISTENT OPTION dumps only those fields; the machine
+            // flag (PERSISTENT == "true") dumps everything non-reserved.
+            const MachineClass *mc = m->getStateMachine();
+            const bool per_field = mc && mc->hasPersistentProperties();
             SymbolTableConstIterator props_i = m->properties.begin();
             while (props_i != m->properties.end()) {
                 std::pair<std::string, Value> item = *props_i++;
+                if (per_field && !mc->propertyIsPersistent(item.first)) {
+                    continue;
+                }
                 cJSON *json_item = cJSON_CreateArray();
                 cJSON_AddItemToArray(json_item, cJSON_CreateString(fnam.c_str()));
                 cJSON_AddItemToArray(json_item, cJSON_CreateString(item.first.c_str()));

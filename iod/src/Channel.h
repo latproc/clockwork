@@ -248,6 +248,7 @@ class Channel : public MachineInstance, public ChannelImplementation {
     static Channel *find(const std::string &name);
     static void remove(const std::string &name);
     static int uniquePort(unsigned int range_start = 7600, unsigned int range_end = 7799);
+    static bool isLocalOrPrivate(const MachineInstance *machine, const Value &key);
     static void sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val,
                                    uint64_t authority = 0);
     static void sendStateChange(MachineInstance *machine, std::string new_state,

@@ -28,6 +28,17 @@
 typedef std::vector<std::string> ActionParameterList;
 class MachineInstance;
 
+// How a blocking action (WAITFOR / CALL) should complete when its timeout
+// fires. None means "no timeout / no ON TIMEOUT clause".
+enum class TimeoutAction { None, Abort, Return, Throw };
+
+// timeout-spec.md: the read-only TIMEOUT contextual value (milliseconds), scoped
+// to the currently-executing ON TIMEOUT block. It is stored on the execution
+// stack, not as a machine property.
+void setTimeoutContext(long timeout_ms);
+long getTimeoutContext();
+const Value *getTimeoutContextValue();
+
 class Action;
 class ActionTemplate {
   public:
@@ -71,6 +82,11 @@ class Action : public TriggerOwner {
 
     enum Status { New, Running, Complete, Failed, Suspended, NeedsRetry };
 
+    // Complete a blocking action whose timeout fired (WAITFOR / CALL ON TIMEOUT).
+    // Abort/Throw -> Failed, Return -> Complete; Throw also sends `message` to
+    // the owner (SELF), where a CATCH/RECEIVE handler can pick it up.
+    Status timedOut(TimeoutAction action, const CStringHolder &message);
+
     Status operator()();
     bool complete();
     bool running();
@@ -79,6 +95,10 @@ class Action : public TriggerOwner {
     void resume();
     void recover(); // debug TBD
     void abort();
+    // Abort this action's active nested work (e.g. a timed scope's running body
+    // or recovery handler) when an enclosing scope is being aborted. Default
+    // no-op; overridden by actions that wrap other work (TryAction).
+    virtual void abortActive() {}
     virtual void reset(); // reinitialise an action for re-execution
 
     bool debug();
@@ -99,6 +119,15 @@ class Action : public TriggerOwner {
     void start();
     void stop();
     bool aborted() const;
+    // True when this action's Failed status represents an unhandled timeout
+    // (rather than an ordinary error). Propagated through a MachineCommand so an
+    // enclosing timed scope can route it to ON TIMEOUT rather than ON ERROR.
+    bool timedOut() const { return timed_out; }
+    void setTimedOut(bool t = true) { timed_out = t; }
+    // The deadline duration (ms) carried with an unhandled timeout, so an
+    // enclosing ON TIMEOUT block sees the inner deadline's TIMEOUT value.
+    long getTimedOutMs() const { return timed_out_ms; }
+    void setTimedOutMs(long ms) { timed_out_ms = ms; }
 
     virtual void toString(char *buf, int buffer_size);
     virtual std::ostream &operator<<(std::ostream &out) const { return out << "(Action)"; }
@@ -117,6 +146,8 @@ class Action : public TriggerOwner {
     uint64_t start_time{};
     bool started_ = false;
     bool aborted_ = false;
+    bool timed_out = false;
+    long timed_out_ms = 0;
     bool is_waiting = false;
     CStringHolder *timeout_msg = nullptr; // message to send on timeout
     CStringHolder *error_msg = nullptr;   // message to send on error

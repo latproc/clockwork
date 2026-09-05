@@ -50,9 +50,9 @@ class MachineCommandTemplate : public ActionTemplate {
     MachineCommandTemplate(const MachineCommandTemplate &) = delete;
     MachineCommandTemplate &operator=(const MachineCommandTemplate &) = delete;
     ~MachineCommandTemplate() override;
-    virtual Action *factory(MachineInstance *mi);
+    Action *factory(MachineInstance *mi) override;
 
-    std::ostream &operator<<(std::ostream &out) const {
+    std::ostream &operator<<(std::ostream &out) const override {
         return out << command_name.get() << " " << state_name.get();
     }
     void setActionTemplates(std::list<ActionTemplate *> &new_actions);
@@ -90,6 +90,9 @@ class MachineCommand : public Action {
     void addAction(Action *a, ActionParameterList *params);
     Status checkAction(Action *a, Status stat);
     Status runActions();
+    // Abort this command and stop any nested actions it has running on the
+    // owner's action stack (used by TRY's timeout interrupt).
+    void abortCommand();
     bool canRunFast() const;
     bool runFastBody();
     Status run();

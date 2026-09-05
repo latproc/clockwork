@@ -171,6 +171,20 @@ MachineCommand::~MachineCommand() {
 
 void MachineCommand::addAction(Action *a, ActionParameterList *params) { actions.push_back(a); }
 
+void MachineCommand::abortCommand() {
+    abort();
+    // Stop nested actions first (they sit above this command on the owner's
+    // action stack), then this command itself. Give each nested action a chance
+    // to abort its own active work (e.g. a timed scope's running handler).
+    for (Action *a : actions) {
+        if (a->started()) {
+            a->abortActive();
+            owner->stop(a);
+        }
+    }
+    owner->stop(this);
+}
+
 void MachineCommand::setActions(std::list<Action *> &new_actions) {
     std::copy(new_actions.begin(), new_actions.end(), back_inserter(actions));
 }
@@ -294,13 +308,17 @@ Action::Status MachineCommand::runActions() {
         DBG_M_ACTIONS << owner->getName() << " about to execute " << *a << "\n";
         Action::Status stat = (*a)();
 
-        // An abort action needs special processing to cause the action pointer
-        // to immediately move to the end of the action list
-        auto aa = dynamic_cast<AbortAction *>(a);
-        if (aa) {
+        // An abort (a direct AbortAction, or an abort propagated up from a
+        // nested block) needs special processing to immediately move to the end
+        // of the action list. RETURN completes successfully; ABORT/THROW fail,
+        // which the caller uses to trigger a WHEN re-evaluation.
+        if (a->aborted()) {
             std::stringstream ss;
             ss << "ABORTING: " << *this << " at action " << *a << "\n";
             abort();
+            if (a->timedOut()) {
+                timed_out = true; timed_out_ms = a->getTimedOutMs(); // propagate an unhandled timeout
+            }
             char *err_msg = strdup(ss.str().c_str());
             MessageLog::instance()->add(err_msg);
             error_str = err_msg;
@@ -319,20 +337,22 @@ Action::Status MachineCommand::runActions() {
                 owner->stop(a);
             }
             a->release();
-            return Complete;
+            return stat;
         }
         if (stat == Action::Failed) {
             std::stringstream ss;
             ss << " action: " << *a << " running on " << owner->fullName();
-            if (a->aborted()) {
-                ss << " aborted (" << a->error() << ")";
-            }
-            else {
-                ss << " failed to start (" << a->error() << ")";
-            }
+            ss << " failed to start (" << a->error() << ")";
             char *err_msg = strdup(ss.str().c_str());
             MessageLog::instance()->add(err_msg);
             error_str = err_msg;
+            if (a->timedOut()) {
+                timed_out = true; timed_out_ms = a->getTimedOutMs(); // propagate an unhandled timeout
+            }
+            owner->stop(a);
+            a->release();
+            status = Failed;
+            return Failed;
         }
         if (stat == Action::NeedsRetry || stat == Action::New) {
             std::stringstream ss;
@@ -467,15 +487,23 @@ Action::Status MachineCommand::checkComplete() {
             ++current_step;
         }
         else if (a->getStatus() == Failed) {
+            if (a->timedOut()) {
+                timed_out = true; timed_out_ms = a->getTimedOutMs(); // propagate an unhandled timeout
+            }
             NB_MSG << command_name.get() << " " << a->error() << "\n";
             owner->stop(this);
+            status = Failed;
             return status; // an action failed
         }
         else if (a->getStatus() == Running || a->getStatus() == Suspended) {
             if (a->complete()) { // check current status
                 if (a->getStatus() == Failed) {
+                    if (a->timedOut()) {
+                        timed_out = true; timed_out_ms = a->getTimedOutMs(); // propagate an unhandled timeout
+                    }
                     NB_MSG << command_name.get() << " " << a->error() << "\n";
                     owner->stop(this);
+                    status = Failed;
                     return status; // an action failed
                 }
                 else {

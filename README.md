@@ -68,15 +68,15 @@ Note, the Makefile used here assumes libzmq is installed in /usr/local/
 <br/>
 
   
-### Part B - setting up the user database for the web interface (optional)
+### Part B - the web status/control service (optional)
 
-Latproc comes with a basic web server and some php scripts that display the state of the system in web panels or display a 3D representation of the model (advanced usage). These pages require a login using a local database for the accounts. The user database can be created using scripts/create_webiodb.
+The legacy PHP web UI (and its `www/` tree) has been removed. Its replacement is
+the standalone **`cw-stream`** service, which streams Clockwork + datastore data
+to a browser over WebSocket and proxies the Clockwork command interface over
+HTTP. It lives in its own repository (sibling of this one) and is documented
+there; it depends only on ZMQ + Boost and serves its own static UI, so no PHP
+or `mini_httpd` is required.
 
-   By default it will be created in www/app with the name 'webio.db' these
-     settings can be changed in settings.php
-
-  TODO: fix the above documentation and revisit the web implementation (old and clunky)
-  
   TODO: Add a comment about our GUI toolkit, humid (https://github.com/latproc/humid as an alternative to the web interface)
   
   TODO: Mention that iosh can be used to get started)

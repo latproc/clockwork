@@ -79,6 +79,15 @@ struct IODCommandProperty : public IODCommand {
     std::string raw_message_;
 };
 
+struct IODCommandRecordApply : public IODCommand {
+    bool run(std::vector<Value> &params);
+};
+
+// dbd helper (not an iosh verb): drop Class#key cache after a delete notify.
+struct IODCommandRecordRemove : public IODCommand {
+    bool run(std::vector<Value> &params);
+};
+
 struct IODCommandDescribe : public IODCommand {
     bool run(std::vector<Value> &params);
 };

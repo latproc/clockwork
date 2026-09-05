@@ -35,7 +35,7 @@ struct CallMethodActionTemplate : public ActionTemplate {
     std::ostream &operator<<(std::ostream &out) const override;
     CStringHolder message;
     CStringHolder target;
-    CStringHolder timeout_symbol;
+    CStringHolder timeout_symbol; // legacy ON TIMEOUT <msg> message name
     CStringHolder error_symbol;
 };
 
@@ -47,6 +47,7 @@ struct CallMethodAction : public Action {
     CStringHolder message;
     CStringHolder target;
     MachineInstance *target_machine;
+    unsigned long correlation_id; // message seq echoed in the target's _done reply
 };
 
 #endif

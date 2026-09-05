@@ -1302,6 +1302,31 @@ static int matched(const char *match, int index, void *user_data) {
 
 const Value &PatternMatchValue::operator()() {
     MachineInstance *mi = scope;
+
+    // MATCHES OF <x> IN <LIST>: the third operand may name a LIST machine
+    // (whose members are string items). Resolve it and test true membership
+    // against the LIST's string members, rather than regex-searching the LIST's
+    // VALUE (which yields "" for a LIST). Preserves the legacy behaviour for a
+    // scalar string property (regex substring search) below.
+    MachineInstance *list = mi->lookup(property_name);
+    if (list && list->_type == "LIST") {
+        Value to_find = pattern->evaluate(mi);
+        const std::string target = to_find.asString();
+        for (unsigned int i = 0; i < list->parameters.size(); ++i) {
+            const Parameter &p = list->parameters[i];
+            std::string member = p.val.asString();
+            if (member.empty() && !p.real_name.empty()) {
+                member = p.real_name;
+            }
+            if (member == target) {
+                last_result = Value(member, Value::t_string);
+                return last_result;
+            }
+        }
+        last_result = "";
+        return last_result;
+    }
+
     Value text = mi->getValue(property_name);
     if (text != SymbolTable::Null) {
         Value to_find = pattern->evaluate(mi);

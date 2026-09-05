@@ -1,6 +1,10 @@
 cmake_minimum_required (VERSION 3.5)
 project (MBM)
 
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 NEW)
+endif()
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS on)
 
 set (MBM_VERSION_MAJOR 0)
@@ -17,6 +21,11 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake_modules/")
 
 set (CMAKE_CXX_FLAGS "-g -Wall --std=c++11 -Wno-deprecated-declarations")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-variable")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused-function")
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-literal-operator")
+endif()
 set (CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR})
 
 if (RUN_TESTS)

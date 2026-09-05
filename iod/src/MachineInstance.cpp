@@ -20,6 +20,7 @@
 
 #include "MachineInstance.h"
 #include "CallMethodAction.h"
+#include "RecordClass.h"
 #include "Channel.h"
 #include "ControlSystemMachine.h"
 #include "DebugExtra.h"
@@ -302,6 +303,7 @@ std::map<std::string, MachineInstance *> machines;
 // All machine instances automatically join and leave this list.
 // During the poll process, all machines in this list have their idle() called.
 std::list<MachineInstance *> MachineInstance::all_machines;
+std::list<MachineInstance *> MachineInstance::record_instances;
 std::list<MachineInstance *> MachineInstance::command_clocks;
 std::list<MachineInstance *> MachineInstance::io_modules;
 std::list<MachineInstance *> MachineInstance::automatic_machines;
@@ -316,6 +318,7 @@ std::mutex global_lists_mutex;
 // The above lists need to be reorganised.. in the meantime
 // this is a temporary list of machines that need to be removed
 ThreadSafeList<MachineInstance *> MachineInstance::to_remove;
+ThreadSafeList<MachineInstance *> MachineInstance::to_delete;
 
 /* Factory methods */
 
@@ -883,7 +886,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
       owner_channel(0), cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
       cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
       command_fanout_skip(0), command_fanout_pending(false), property_notify_defer(0),
-      deferred_property_notify(false), expected_authority(0) {
+      deferred_property_notify(false), record_apply_mode(false), expected_authority(0) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -922,7 +925,7 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
       cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
       cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
       command_fanout_skip(0), command_fanout_pending(false), property_notify_defer(0),
-      deferred_property_notify(false), expected_authority(0) {
+      deferred_property_notify(false), record_apply_mode(false), expected_authority(0) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -949,10 +952,17 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
     }
 }
 
+void MachineInstance::unregisterRecord() {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
+    record_instances.remove(this);
+    all_machines.remove(this);
+}
+
 MachineInstance::~MachineInstance() {
     {
         std::unique_lock<std::mutex> lock(global_lists_mutex);
         all_machines.remove(this);
+        record_instances.remove(this);
         command_clocks.remove(this);
         automatic_machines.remove(this);
         active_machines.remove(this);
@@ -1000,6 +1010,7 @@ void MachineInstance::remove_pending() {
         {
             std::unique_lock<std::mutex> lock(global_lists_mutex);
             all_machines.remove(m);
+            record_instances.remove(m);
             command_clocks.remove(m);
             automatic_machines.remove(m);
             active_machines.remove(m);
@@ -1017,6 +1028,21 @@ void MachineInstance::remove_pending() {
             std::lock_guard<std::mutex> lock(pending_state_change_mutex);
             pending_state_change.erase(m);
         }
+    }
+}
+
+void MachineInstance::delete_pending() {
+    if (to_delete.is_empty()) { return; }
+    std::vector<MachineInstance *> copy_of_to_delete;
+    MachineInstance *m = nullptr;
+    while (to_delete.try_pop_front(m)) {
+        copy_of_to_delete.push_back(m);
+    }
+    // Safe point: ProcessingThread runs this between scans, so no receiver
+    // iteration is in flight. The destructor removes the instance from the
+    // lists and the Dispatcher.
+    for (size_t i = 0; i < copy_of_to_delete.size(); ++i) {
+        delete copy_of_to_delete[i];
     }
 }
 
@@ -1197,7 +1223,18 @@ void MachineInstance::describe(std::ostream &out) {
     }
     if (properties.size()) {
         out << "properties:\n  ";
-        if (!private_constant) {
+        bool redact_any = private_constant;
+        if (!redact_any && state_machine) {
+            SymbolTableConstIterator probe = properties.begin();
+            while (probe != properties.end()) {
+                if (state_machine->propertyIsPrivate((*probe).first)) {
+                    redact_any = true;
+                    break;
+                }
+                ++probe;
+            }
+        }
+        if (!redact_any) {
             out << properties;
         }
         else {
@@ -1206,7 +1243,8 @@ void MachineInstance::describe(std::ostream &out) {
             while (property != properties.end()) {
                 const std::pair<std::string, Value> item = *property++;
                 out << separator << item.first << ": ";
-                if (item.first == "VALUE") {
+                if ((private_constant && item.first == "VALUE") ||
+                    (state_machine && state_machine->propertyIsPrivate(item.first))) {
                     out << "<private>";
                 }
                 else {
@@ -3113,19 +3151,19 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
                 continue;
             }
             if (response_required) {
-                prepareCompletionMessage(from, short_name);
+                prepareCompletionMessage(from, short_name, m.getSeq());
             }
             return (*receive_handler_i).second->retain();
         }
         if (response_required) {
-            prepareCompletionMessage(from, short_name);
+            prepareCompletionMessage(from, short_name, m.getSeq());
         }
         return nullptr;
     }
     else if (from == this) {
         if (short_name == m.getText()) {
             if (response_required) {
-                prepareCompletionMessage(from, short_name);
+                prepareCompletionMessage(from, short_name, m.getSeq());
             }
             return NULL;
         } // no other alternatives
@@ -3140,7 +3178,7 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
                                     << "handler: " << *((*receive_handler_i).second) << "\n";
                 }
                 if (response_required) {
-                    prepareCompletionMessage(from, short_name);
+                    prepareCompletionMessage(from, short_name, m.getSeq());
                 }
 
                 return (*receive_handler_i).second->retain();
@@ -3149,7 +3187,7 @@ Action *MachineInstance::findReceiveHandler(Transmitter *from, const Message &m,
         }
     }
     if (response_required) {
-        prepareCompletionMessage(from, short_name);
+        prepareCompletionMessage(from, short_name, m.getSeq());
     }
     return NULL;
 }
@@ -3276,7 +3314,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                     // the CALL method waits for a response once the executed command is complete
                     // the response will be sent after the transition to the next state is done
                     if (response_required) {
-                        prepareCompletionMessage(from, t.trigger.getText());
+                        prepareCompletionMessage(from, t.trigger.getText(), m.getSeq());
                     }
 
                     if (!found) {
@@ -3327,7 +3365,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
                             << "No linked command for the transition, performing state change\n";
                 }
                 if (response_required) {
-                    prepareCompletionMessage(from, t.trigger.getText());
+                    prepareCompletionMessage(from, t.trigger.getText(), m.getSeq());
                 }
 
                 if (state_change_ok) {
@@ -3346,7 +3384,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
         if (commands.count(short_name)) {
             Action *matching_command = findMatchingCommand(short_name);
             if (response_required) {
-                prepareCompletionMessage(from, short_name);
+                prepareCompletionMessage(from, short_name, m.getSeq());
             }
             if (matching_command) {
                 return matching_command;
@@ -3364,7 +3402,7 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
             if ((t.trigger.getText() == m.getText() || t.trigger.getText() == short_name) &&
                 current_state == t.source) {
                 if (response_required) {
-                    prepareCompletionMessage(from, short_name);
+                    prepareCompletionMessage(from, short_name, m.getSeq());
                 }
                 DBG_M_MESSAGING << _name << " received message" << m.getText()
                                 << "; pushing state change\n";
@@ -3393,11 +3431,18 @@ Action *MachineInstance::findHandler(Message &m, Transmitter *from, bool respons
     return findReceiveHandler(from, m, short_name, response_required);
 }
 
-void MachineInstance::prepareCompletionMessage(Transmitter *from, std::string message) {
+void MachineInstance::prepareCompletionMessage(Transmitter *from, std::string message,
+                                               unsigned long correlation_id) {
     if (from) {
         MachineInstance *from_mi = dynamic_cast<MachineInstance *>(from);
         assert(from_mi);
         std::string response = _name + "." + message + "_done";
+        // Echo the caller's message sequence so a CALL can match only the reply
+        // to its own command (not a late reply from an earlier CALL).
+        if (correlation_id != 0) {
+            response += ".";
+            response += std::to_string(correlation_id);
+        }
         //DBG_MSG << _name << " command " << message << " completion requires response. Adding command to execute "
         //<< response << " on: " << from_mi->fullName()
         //<< ( (from_mi->enabled()) ? " (enabled)\n" : " (disabled)\n");
@@ -4114,7 +4159,7 @@ void MachineInstance::updateLastEvaluationTime() {
         if (state_machine && state_machine->polling_delay) {
             next_poll = last_state_evaluation_time + state_machine->polling_delay;
         }
-        else {
+        else if (MachineInstance::polling_delay) {
             next_poll = last_state_evaluation_time + MachineInstance::polling_delay->iValue;
         }
     }
@@ -4351,6 +4396,25 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
         std::unique_lock<std::mutex> lock(global_lists_mutex);
         registerCommandClockLocked();
         command_clock_cache_valid = false;
+    }
+    if (machine_class && RecordClass::isRow(machine_class)) {
+        std::unique_lock<std::mutex> lock(global_lists_mutex);
+        bool already = false;
+        std::list<MachineInstance *>::iterator it = record_instances.begin();
+        while (it != record_instances.end()) {
+            if (*it++ == this) {
+                already = true;
+                break;
+            }
+        }
+        if (!already) {
+            record_instances.push_back(this);
+        }
+        // RECORD owns empty/dirty/clean (runtime setState); a table-bound MACHINE
+        // owns its own state via WHEN, so do not setState on it.
+        if (RecordClass::isRecord(machine_class)) {
+            setState(machine_class->initial_state);
+        }
     }
     if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states &&
         (machine_class->stable_states.size() || machine_class->name == "LIST" ||
@@ -4632,6 +4696,11 @@ const Value *MachineInstance::resolve(std::string property) {
         // try the current machine's parameters, the current instance of the machine, then the machine class and finally the global symbols
         const Value *res = 0;
         Value property_val(property); // tokenise the property
+        if (property == "TIMEOUT") {
+            // timeout-spec.md: TIMEOUT is a read-only contextual value, valid
+            // only while executing an ON TIMEOUT block.
+            return getTimeoutContextValue();
+        }
         if (property_val.token_id == ClockworkToken::TIMER) {
             // we do not use the precalculated timer here since this may be being accessed
             // within an action handler of a nother machine and will not have been updated
@@ -5102,10 +5171,12 @@ void MachineInstance::discard() {
 
 bool MachineInstance::isPersistent() {
     const Value &persistent = getValue("PERSISTENT");
-    if (persistent == SymbolTable::Null) {
-        return false;
+    if (persistent != SymbolTable::Null && persistent == "true") {
+        return true;
     }
-    return persistent == "true";
+    // PERSISTENT OPTION: a class with any per-field persistent OPTION is also
+    // persisted (only those fields), even without the machine-level flag.
+    return state_machine && state_machine->hasPersistentProperties();
 }
 
 void MachineInstance::sendModbusUpdate(const std::string &property_name, const Value &new_value) {
@@ -5326,6 +5397,10 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         }
         if (!was_changed) {
             return true; // value was ok but was already the same
+        }
+        if (RecordClass::isRecord(state_machine) && !record_apply_mode &&
+            !state_machine->propertyIsLocal(property) && current_state.getName() != "dirty") {
+            setState("dirty");
         }
         // calcAdjust temps: one notify at endDeferredPropertyNotify.
         // Never defer VALUE / IO (outputs, plugins, analog owners).

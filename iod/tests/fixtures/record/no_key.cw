@@ -1,0 +1,3 @@
+NoKey RECORD {
+    OPTION name "";
+}

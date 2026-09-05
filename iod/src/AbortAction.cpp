@@ -56,14 +56,13 @@ Action::Status AbortAction::run() {
         delete sma;
     }
     abort();
-    status = Complete;
-    //    if (abort_fail) {
-    //        status = Failed;
-    //        error_str = strdup(message.c_str());
-    //    }
-    //    else {
-    //        status = Complete;
-    //    }
+    if (abort_fail) {
+        status = Failed;
+        setError(message);
+    }
+    else {
+        status = Complete;
+    }
     owner->stop(this);
     return status;
 }

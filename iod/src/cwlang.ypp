@@ -27,6 +27,7 @@
 #include "ShutdownAction.h"
 #include "WaitAction.h"
 #include "SendMessageAction.h"
+#include "QueryAction.h"
 #include "CallMethodAction.h"
 #include "MachineCommandAction.h"
 #include "PatternAction.h"
@@ -42,11 +43,13 @@
 #include "MessageLog.h"
 #include "Channel.h"
 #include "AbortAction.h"
+#include "TryAction.h"
 #include "SDOEntry.h"
 #include "MachineInterface.h"
 #include "ResetAction.h"
 #include "LoadPropertiesAction.h"
 #include "UpdateListItemsAction.h"
+#include "RecordClass.h"
 
 #define COMPILER_MAIN
 #include "cwlang.h"
@@ -79,6 +82,16 @@ PredicateOperator current_op;
 
 static char *error_message_name = 0;
 static char *timeout_message_name = 0;
+// timeout-spec.md: an ON TIMEOUT { … } block captured by timeout_handler_opt,
+// passed to the enclosing TRY / timed statement.
+static MachineCommandTemplate *current_timeout_handler = nullptr;
+// timeout-spec.md: an ON ERROR { … } block captured by error_handler_opt,
+// passed to the enclosing TRY / handler.
+static MachineCommandTemplate *current_error_handler = nullptr;
+// timeout-spec.md: WITH TIMEOUT <duration> captured by with_timeout_opt, plus a
+// flag so the enclosing production knows whether the clause was present.
+static Value current_timeout_value;
+static bool with_timeout_present = false;
 
 MachineInstance *current_machine = 0;
 MachineClass *current_machineclass = 0;
@@ -88,6 +101,134 @@ std::list<ChannelDefinition> all_channeldefs;
 ChannelDefinition::Feature current_feature;
 std::set<ChannelDefinition::Feature> *current_features = 0;
 std::set<std::string> all_machine_types;
+static unsigned pending_column_flags = 0;
+static std::string pending_record_view;
+static std::string pending_record_table;
+static bool current_is_statemachine = false;
+
+static std::string lowercase_copy(const char *s) {
+    std::string out(s ? s : "");
+    for (size_t i = 0; i < out.size(); ++i) {
+        if (out[i] >= 'A' && out[i] <= 'Z') {
+            out[i] = static_cast<char>(out[i] - 'A' + 'a');
+        }
+    }
+    return out;
+}
+
+static void apply_column_annots(const char *option_name) {
+    if (!pending_column_flags) {
+        return;
+    }
+    if (!current_machineclass) {
+        pending_column_flags = 0;
+        return;
+    }
+    if (!RecordClass::isRow(current_machineclass)) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno
+           << " KEY, UNIQUE, NOT NULL, and PRIVATE are only valid on RECORD or table-bound MACHINE OPTIONS";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+    else if (current_machineclass->propertyIsLocal(option_name)) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno << " LOCAL OPTION " << option_name
+           << " cannot be KEY, UNIQUE, or NOT NULL";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+    else {
+        RecordClass::addFlags(current_machineclass, option_name, pending_column_flags);
+    }
+    pending_column_flags = 0;
+}
+
+// EXPORT must be checked at load: unknown OPTION/STATE/COMMAND is an error;
+// EXPORT of a LOCAL OPTION is a warning (not a row column).
+static void validate_exports(MachineClass *mc) {
+    if (!mc) {
+        return;
+    }
+    for (auto &exp : mc->exports) {
+        const std::string &name = exp.property_name;
+        if (mc->getOptions().find(name) == mc->getOptions().end()) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " EXPORT of unknown OPTION " << name;
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+        else if (mc->propertyIsLocal(name)) {
+            std::cerr << yyfilename << ":" << yylineno << " Warning: EXPORT of LOCAL OPTION " << name
+                      << " is not a row column\n";
+        }
+    }
+    for (const std::string &name : mc->state_exports) {
+        if (mc->state_names.find(name) == mc->state_names.end()) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " EXPORT of unknown STATE " << name;
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+    }
+    for (const std::string &name : mc->state_exports_rw) {
+        if (mc->state_names.find(name) == mc->state_names.end()) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " EXPORT of unknown STATE " << name;
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+    }
+    for (const std::string &name : mc->command_exports) {
+        if (mc->commands.find(name) == mc->commands.end()) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " EXPORT of unknown COMMAND " << name;
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+    }
+}
+
+// Machine-level persistence flag validation (end of definition, order
+// independent). `OPTION PERSISTENT <value>` sets the reserved "PERSISTENT"
+// option, which MachineInstance::isPersistent() reads (== "true"). It is valid
+// only on a plain MACHINE (STATEMACHINE): RECORD, table-bound MACHINE, and
+// CPU/BOARD persist via per-field `PERSISTENT OPTION` / the table, so the flag
+// is rejected there; and it is redundant/illegal when the class also declares
+// per-field PERSISTENT OPTION (persistd then dumps only those fields).
+static void validate_persistence(MachineClass *mc) {
+    if (!mc) {
+        return;
+    }
+    auto it = mc->getOptions().find("PERSISTENT");
+    if (it == mc->getOptions().end()) {
+        return; // no machine-level flag set
+    }
+    const char *why = nullptr;
+    if (RecordClass::isRow(mc)) {
+        why = RecordClass::isRecord(mc) ? "RECORD" : "table-bound MACHINE";
+    }
+    else if (!current_is_statemachine) {
+        why = "CPU/BOARD (only a MACHINE may set it)";
+    }
+    if (why) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno
+           << " OPTION PERSISTENT (machine-level flag) is not valid on " << why
+           << " " << mc->name;
+        error_messages.push_back(ss.str());
+        ++num_errors;
+        return;
+    }
+    if (it->second == "true" && mc->hasPersistentProperties()) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno
+           << " OPTION PERSISTENT true is redundant/illegal when " << mc->name
+           << " also declares PERSISTENT OPTION fields";
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+}
 
 static MachineInstance *addMachine(const char *name, const char *type,
             MachineInstance::InstanceType instance_type = MachineInstance::MACHINE_INSTANCE) {
@@ -206,6 +347,81 @@ static void cleanupErrorClause(bool deallocate) {
 	}
 }
 
+// timeout-spec.md: WITH TIMEOUT <duration> — the duration must be an integer (a
+// literal) or a defined integer OPTION. Anything else is a load-time error.
+static void validate_timeout_value(const Value *v) {
+    if (!v || !current_machineclass) {
+        return;
+    }
+    if (v->kind == Value::t_integer) {
+        return;
+    }
+    if (v->kind == Value::t_symbol) {
+        const std::string &name = v->sValue;
+        auto it = current_machineclass->getOptions().find(name);
+        if (it == current_machineclass->getOptions().end()) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " WITH TIMEOUT duration '" << name
+               << "' is not a defined OPTION";
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+        else if (it->second.kind != Value::t_integer) {
+            std::stringstream ss;
+            ss << yyfilename << ":" << yylineno << " WITH TIMEOUT duration '" << name
+               << "' is not an integer";
+            error_messages.push_back(ss.str());
+            ++num_errors;
+        }
+        return;
+    }
+    std::stringstream ss;
+    ss << yyfilename << ":" << yylineno << " WITH TIMEOUT duration must be an integer "
+       << "(milliseconds), got " << *v;
+    error_messages.push_back(ss.str());
+    ++num_errors;
+}
+
+// timeout-spec.md: wrap a single action (e.g. a CALL/WAITFOR) in a timed scope
+// so its WITH TIMEOUT deadline and ON TIMEOUT handler apply to that statement.
+static ActionTemplate *make_timed_scope(ActionTemplate *inner) {
+    MachineCommandTemplate *body = new MachineCommandTemplate("timed_body", "");
+    body->setActionTemplate(inner);
+    TryActionTemplate *tat = new TryActionTemplate(current_timeout_value, body,
+                                                   current_timeout_handler,
+                                                   current_error_handler);
+    tat->source_file = yyfilename ? yyfilename : "";
+    tat->source_line = yylineno;
+    return tat;
+}
+
+// timeout-spec.md: wrap the handler body currently in current_actions in a timed
+// scope when a WITH TIMEOUT / AFTER / ON TIMEOUT / ON ERROR clause was present.
+static void wrap_current_actions_in_timed_scope() {
+    MachineCommandTemplate *body = new MachineCommandTemplate("handler_body", "");
+    body->setActionTemplates(*current_actions);
+    current_actions->clear();
+    TryActionTemplate *tat = new TryActionTemplate(current_timeout_value, body,
+                                                   current_timeout_handler,
+                                                   current_error_handler,
+                                                   with_timeout_present);
+    tat->source_file = yyfilename ? yyfilename : "";
+    tat->source_line = yylineno;
+    current_actions->push_back(tat);
+    current_timeout_handler = nullptr;
+    current_error_handler = nullptr;
+    with_timeout_present = false;
+}
+
+// Move the trailing action (still in current_action) into current_actions so a
+// handler/block's last statement is not dropped before setActionTemplates().
+static void flush_pending_action() {
+    if (current_action) {
+        current_actions->push_back(current_action);
+        current_action = 0;
+    }
+}
+
 static bool check_machine_type(const std::string &name) {
     if (all_machine_types.count(name) > 0) {
         std::stringstream ss;
@@ -226,6 +442,10 @@ void reset_parser() {
     current_channel = 0;
     current_features = 0;
     current_parameters.clear();
+    pending_column_flags = 0;
+    pending_record_view.clear();
+    pending_record_table.clear();
+    current_is_statemachine = false;
 }
 
 struct Subcondition {
@@ -242,10 +462,10 @@ struct Subcondition {
 %token NOT SET AND OR SQUOTE LOG FLAG
 %token PROPERTY DEFINE COLLECT FROM TEST EXECUTE SPAWN RUN
 %token CALL TRIM LINE OF USING MATCH IN REPLACE WITH INTERPRET
-%token COMMA BEGINPROP ENDPROP PROPSEP STATEMACHINE WHEN TO RECEIVE
+%token COMMA BEGINPROP ENDPROP PROPSEP STATEMACHINE WHEN TO INTO RECEIVE
 %token DURING WAIT WAITFOR TRANSITION TAG INC DEC BY CONCAT
 %token SEND CONDITION INITSTATE IF_ ELSE ENABLE DISABLE BECOMES
-%token GLOBAL GROUP OPTION LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
+%token GLOBAL GROUP OPTION PERSISTENT LOCK UNLOCK ON RESUME AT SHUTDOWN COMMAND
 %token EXPORT READONLY READWRITE WORD DOUBLEWORD STRINGTYPE
 %token STATES MATCHES COMMANDS COPY EXTRACT ALL REQUIRES
 %token WHERE ROUTE ANY ARE COUNT SELECT TAKE LENGTH
@@ -255,8 +475,9 @@ struct Subcondition {
 %token LEAVE ASSIGN WITHIN PUSH MOVE ITEMS PLUGIN
 %token CHANNEL IDENTIFIER VERSION SHARES MONITORS UPDATES SENDS RECEIVES
 %token INTERFACE EXTENDS KEY MACHINES MATCHING NAME EXPORTS
+%token RECORD UNIQUE VIEW TABLE QUERY PRIVATE ASLIST
 %token CONSTRAINT IGNORE IGNORES THROTTLE tokPUBLISHER EXISTS
-%token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT
+%token THROW CATCH ABORT RETURN ERROR ERRORS TIMEOUT TRY
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
 %token FLOAT32 SUM ABS SQRT MIN MAX MEAN
@@ -309,6 +530,7 @@ struct Subcondition {
 %nonassoc AS
 %left IFX
 %left IFELSE
+%nonassoc AFTER
 
 %type <expr> expression
 %type <expr> predicate
@@ -359,6 +581,11 @@ local_option_setting
 | local_option_settings COMMA local_option_setting
 ;
 
+persistent_option_settings:
+persistent_option_setting
+| persistent_option_settings COMMA persistent_option_setting
+;
+
 option_settings:
 option_setting
 | option_settings COMMA option_setting
@@ -366,14 +593,37 @@ option_setting
 
 
 option_setting:
-SYMBOL value {
+SYMBOL value option_annots_opt {
 	std::string name($1);
 	Value v(*$2);
-//  if (v.kind == Value::t_symbol)
-//    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
 	current_machineclass->setOption(name, v);
+	apply_column_annots($1);
 	delete $2;
 }
+
+option_annots_opt:
+/* empty */ { pending_column_flags = 0; }
+| { pending_column_flags = 0; } option_annots
+
+option_annots:
+option_annot
+| option_annots option_annot
+
+option_annot:
+KEY { pending_column_flags |= RecordClass::COL_KEY; }
+| UNIQUE { pending_column_flags |= RecordClass::COL_UNIQUE; }
+| NOT SYMBOL {
+    if (!$2 || strcmp($2, "NULL") != 0) {
+        std::stringstream ss;
+        ss << yyfilename << ":" << yylineno << " expected NOT NULL, not NOT " << ($2 ? $2 : "");
+        error_messages.push_back(ss.str());
+        ++num_errors;
+    }
+    else {
+        pending_column_flags |= RecordClass::COL_NOT_NULL;
+    }
+}
+| PRIVATE { pending_column_flags |= RecordClass::COL_PRIVATE; }
 //| SYMBOL REFERS TO SYMBOL {
 //  std::string name($1);
 //  Value v($4);
@@ -384,12 +634,36 @@ local_option_setting:
 SYMBOL value {
 	std::string name($1);
 	Value v(*$2);
+	if (current_machineclass->propertyIsPersistent(name)) {
+		std::stringstream ss;
+		ss << yyfilename << ":" << yylineno << " " << name
+		   << " cannot be both LOCAL and PERSISTENT";
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
 //  if (v.kind == Value::t_symbol)
 //    v.toString(); // the only way to define symbol properties is via 'REFERS TO'
 	current_machineclass->setOption(name, v);
 	current_machineclass->addPrivateProperty(name);
 //	NB_MSG << current_machineclass->name << " local option: "
 //		<< name << ": " << *$2 << " (type: " << v.kind << ")" << "\n";
+	delete $2;
+}
+
+persistent_option_setting:
+SYMBOL value {
+	std::string name($1);
+	Value v(*$2);
+	if (current_machineclass->propertyIsLocal(name) &&
+	    !current_machineclass->propertyIsPersistent(name)) {
+		std::stringstream ss;
+		ss << yyfilename << ":" << yylineno << " " << name
+		   << " cannot be both LOCAL and PERSISTENT";
+		error_messages.push_back(ss.str());
+		++num_errors;
+	}
+	current_machineclass->setOption(name, v);
+	current_machineclass->addPersistentProperty(name);
 	delete $2;
 }
 
@@ -416,9 +690,59 @@ definition_header '{' definition_body '}' {
         DBG_PARSER << "states: " << current_machineclass->states.size() << "\n";
         DBG_PARSER << "num transitions: " << current_machineclass->transitions.size() << "\n";
 
+        validate_exports(current_machineclass);
+        validate_persistence(current_machineclass);
         current_machineclass = NULL;
     }
 }
+| record_definition_header '{' record_definition_body '}' {
+    DBG_PARSER << "record definition\n";
+    if (current_machineclass) {
+        if (current_locals.size()) {
+            std::copy(current_locals.begin(), current_locals.end(),
+                      back_inserter(current_machineclass->locals));
+            current_locals.clear();
+        }
+        validate_persistence(current_machineclass);
+        current_machineclass = NULL;
+    }
+}
+;
+
+record_definition_header:
+SYMBOL RECORD record_rel parameters {
+    DBG_PARSER << " record class " << $1 << "\n";
+    check_machine_type($1);
+    current_machineclass = new MachineClass($1);
+    current_machineclass->disableAutomaticStateChanges();
+    RecordClass::mark(current_machineclass);
+    current_is_statemachine = false;
+    if (!pending_record_view.empty()) {
+        RecordClass::setView(current_machineclass, pending_record_view);
+    }
+    if (!pending_record_table.empty()) {
+        RecordClass::setTable(current_machineclass, pending_record_table);
+    }
+    pending_record_view.clear();
+    pending_record_table.clear();
+    std::copy(current_parameters.begin(), current_parameters.end(),
+              back_inserter(current_machineclass->parameters));
+    current_parameters.clear();
+}
+
+record_rel:
+/* empty */
+| VIEW STRINGVAL { pending_record_view = $2; }
+| TABLE STRINGVAL { pending_record_table = $2; }
+
+record_definition_body:
+record_section
+| record_definition_body record_section
+
+record_section:
+OPTION option_settings ';'
+| LOCAL OPTION local_option_settings ';'
+| PERSISTENT OPTION persistent_option_settings ';'
 ;
 
 interface_definition:
@@ -663,6 +987,10 @@ INTEGERVAL   {
 | SYMBOL {
     $$ = new Value($1);
 }
+| TIMEOUT {
+    // timeout-spec.md: TIMEOUT is a read-only contextual value inside ON TIMEOUT.
+    $$ = new Value("TIMEOUT", Value::t_symbol);
+}
 ;
 
 chn_option_settings:
@@ -680,21 +1008,31 @@ SYMBOL value {
 
 
 definition_header:
-SYMBOL STATEMACHINE parameters {
+SYMBOL STATEMACHINE record_rel parameters {
     DBG_PARSER << " machine class "  << $1 << "\n";
     check_machine_type($1);
     current_machineclass = new MachineClass($1);
+    current_is_statemachine = true;
+    if (!pending_record_view.empty()) { RecordClass::setView(current_machineclass, pending_record_view); }
+    if (!pending_record_table.empty()) { RecordClass::setTable(current_machineclass, pending_record_table); }
+    pending_record_view.clear();
+    pending_record_table.clear();
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
     current_parameters.clear();
 }
-| SYMBOL STATEMACHINE property_block parameters  {
+| SYMBOL STATEMACHINE property_block record_rel parameters  {
     DBG_PARSER << " machine class (with properties)  "  << $1 << "\n";
     check_machine_type($1);
     current_machineclass = new MachineClass($1);
+    current_is_statemachine = true;
     properties = property_stack.back();
     property_stack.pop_back();
     current_machineclass->setProperties(properties);
     properties.clear();
+    if (!pending_record_view.empty()) { RecordClass::setView(current_machineclass, pending_record_view); }
+    if (!pending_record_table.empty()) { RecordClass::setTable(current_machineclass, pending_record_table); }
+    pending_record_view.clear();
+    pending_record_table.clear();
     std::copy(current_parameters.begin(), current_parameters.end(),back_inserter(current_machineclass->parameters));
     current_parameters.clear();
 }
@@ -702,6 +1040,7 @@ SYMBOL STATEMACHINE parameters {
   DBG_PARSER << " machine class  "  << $1 << "\n";
   check_machine_type($1);
   current_machineclass = new MachineClass($1);
+  current_is_statemachine = false;
   MachineClass *cpu_class = MachineClass::find("CPU");
   if (!cpu_class) cpu_class = new MachineClass("CPU");
   current_machineclass->parent = cpu_class;
@@ -711,6 +1050,7 @@ SYMBOL STATEMACHINE parameters {
   DBG_PARSER << " machine class   "  << $1 << "\n";
   check_machine_type($1);
   current_machineclass = new MachineClass($1);
+  current_is_statemachine = false;
   MachineClass *board_class = MachineClass::find("BOARD");
   if (!board_class) board_class = new MachineClass("BOARD");
   current_machineclass->parent = board_class;
@@ -728,6 +1068,7 @@ definition_section:
 GLOBAL global_references ';'
 | OPTION option_settings ';'
 | LOCAL OPTION local_option_settings ';'
+| PERSISTENT OPTION persistent_option_settings ';'
 | pin_definitions
 | export_clause
 | local_machine_instantiation
@@ -885,14 +1226,6 @@ SYMBOL /*state name */ DURING SYMBOL /* command */ error_clause action  {
     MachineCommandTemplate *mc = new MachineCommandTemplate($3, $1, true);
     properties = property_stack.back();
     property_stack.pop_back();
-    if (properties.exists("TIMEOUT")) {
-		error_messages.push_back("Deprecated feature setting a timeout on a command using a TIMEOUT property");
-        const Value &t = properties.lookup("TIMEOUT");
-        int64_t timeout;
-        if (t.asInteger(timeout)) {
-            mc->timeout = timeout;
-        }
-    }
     properties.clear();
     MoveStateActionTemplate *state_change = new MoveStateActionTemplate("SELF", $1);
     mc->action_templates.push_back(state_change);
@@ -1132,6 +1465,10 @@ INTEGERVAL   {
 | SYMBOL {
     $$ = new Value($1);
 }
+| TIMEOUT {
+    // timeout-spec.md: TIMEOUT is a read-only contextual value inside ON TIMEOUT.
+    $$ = new Value("TIMEOUT", Value::t_symbol);
+}
 | ABS SYMBOL {
 	$$ = new Value(new AbsoluteValue($2));
 }
@@ -1306,7 +1643,10 @@ enter_command
 ;
 
 basic_command:
-COMMAND SYMBOL /* command name */ action {
+COMMAND SYMBOL /* command name */ action handler_clauses {
+    if (with_timeout_present || current_timeout_handler || current_error_handler) {
+        wrap_current_actions_in_timed_scope();
+    }
     registerCommandHandler($2, std::vector<std::string>(), 0);
 }
 | COMMAND SYMBOL command_guard action {
@@ -1323,13 +1663,21 @@ COMMAND SYMBOL /* command name */ action {
     registerCommandHandler($2, std::move(within), $4);
 }
 | COMMAND SYMBOL /* command name */ property_block action {
+    if (!property_stack.empty()) {
+        properties = property_stack.back();
+        property_stack.pop_back();
+        properties.clear();
+    }
     registerCommandHandler($2, std::vector<std::string>(), 0);
 }
 ;
 
 enter_command:
-ENTER SYMBOL /* state name */ action
+ENTER SYMBOL /* state name */ action handler_clauses
 {
+    if (with_timeout_present || current_timeout_handler || current_error_handler) {
+        wrap_current_actions_in_timed_scope();
+    }
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
     current_actions->clear();
@@ -1348,8 +1696,11 @@ ENTER SYMBOL /* state name */ action
 ;
 
 leave_command:
-LEAVE SYMBOL action
+LEAVE SYMBOL action handler_clauses
 {
+    if (with_timeout_present || current_timeout_handler || current_error_handler) {
+        wrap_current_actions_in_timed_scope();
+    }
 #ifndef DISABLE_LEAVE_FUNCTIONS
     MachineCommandTemplate *mc = new MachineCommandTemplate($2, "");
     mc->setActionTemplates(*current_actions);
@@ -1396,7 +1747,10 @@ CATCH SYMBOL action {
 	current_actions->clear();
 }
 |
-RECEIVE SYMBOL /* message */ error_clause action  {
+RECEIVE SYMBOL /* message */ error_clause action handler_clauses {
+    if (with_timeout_present || current_timeout_handler || current_error_handler) {
+        wrap_current_actions_in_timed_scope();
+    }
     DBG_PARSER << "receiving " << $2 << " for " << current_actions->size() << " actions: ";
     BOOST_FOREACH(ActionTemplate *at, *current_actions) {
         DBG_PARSER << *at << ", ";
@@ -1494,10 +1848,11 @@ block_action {
 ;
 
 simple_action:
-SET SYMBOL TO expression error_clause  {
+SET SYMBOL TO expression error_clause with_timeout_opt {
     DBG_PARSER << "set action: set " << $2 << " to " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new SetStateActionTemplate($2, $4);
+    ActionTemplate *set = new SetStateActionTemplate($2, $4);
+    current_action = with_timeout_present ? make_timed_scope(set) : set;
 	cleanupErrorClause(true);
 }
 | ABORT {
@@ -1510,10 +1865,11 @@ SET SYMBOL TO expression error_clause  {
 	if (current_action) current_actions->push_back(current_action);
 	current_action = new AbortActionTemplate(false); // do not regard this as an action failure
 }
-| WAIT value /* wait for timer */ {
+| WAIT value with_timeout_opt /* wait for timer */ {
     DBG_PARSER << " wait action: wait " << *$2 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new WaitActionTemplate(*$2);
+    ActionTemplate *wa = new WaitActionTemplate(*$2);
+    current_action = with_timeout_present ? make_timed_scope(wa) : wa;
     delete $2;
 }
 | LOCK SYMBOL /* obtain a lock on a machine */ {
@@ -1580,10 +1936,11 @@ SET SYMBOL TO expression error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new ShutdownActionTemplate();
 }
-| WAITFOR SYMBOL EQ basic_value /* wait for object to be in a state */ {
+| WAITFOR SYMBOL EQ basic_value with_timeout_opt /* wait for object to be in a state */ {
     DBG_PARSER << " wait for action: wait for " << $2 << " to be " << *$4 << "\n";
     if (current_action) current_actions->push_back(current_action);
-    current_action = new WaitForActionTemplate($2, *$4);
+    ActionTemplate *wfa = new WaitForActionTemplate($2, *$4);
+    current_action = with_timeout_present ? make_timed_scope(wfa) : wfa;
     delete $4;
 }
 | INC SYMBOL /* increment a property */ {
@@ -1603,6 +1960,12 @@ SET SYMBOL TO expression error_clause  {
 | SYMBOL BECOMES expression /* set the value of a property */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate($1), opAssign, $3));
+}
+| SYMBOL BECOMES value ASLIST /* JSON array -> LIST (replace contents) */ {
+    if (current_action) current_actions->push_back(current_action);
+    current_actions->push_back(new ClearListActionTemplate($1));
+    current_action = new IncludeActionTemplate($1, *$3, -1, false, true);
+    delete $3;
 }
 // TBD: Fix setting state from property name
 //| SET SYMBOL TO PROPERTY SYMBOL OF SYMBOL error_clause /* set the state based on the value of a property */ {
@@ -1629,14 +1992,16 @@ SET SYMBOL TO expression error_clause  {
     if (current_action) current_actions->push_back(current_action);
     current_action = new PredicateActionTemplate(new Predicate(new Predicate(new Value(new PropertyLookupValue($4, $2))), opAssign, $6));
 }
-| CALL SYMBOL ON SYMBOL error_clause /* execute a command on a machine and wait for it to complete */ {
+| CALL SYMBOL ON SYMBOL error_clause with_timeout_opt /* execute a command on a machine and wait for it to complete */ {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new CallMethodActionTemplate($2, $4, timeout_message_name, error_message_name);
+	ActionTemplate *call = new CallMethodActionTemplate($2, $4, timeout_message_name, error_message_name);
+	current_action = with_timeout_present ? make_timed_scope(call) : call;
 	cleanupErrorClause();
 }
-| CALL SYMBOL error_clause /* execute a command within the current machine and wait for it to complete */ {
+| CALL SYMBOL error_clause with_timeout_opt /* execute a command within the current machine and wait for it to complete */ {
 	if (current_action) current_actions->push_back(current_action);
-	current_action = new CallMethodActionTemplate($2, "SELF", timeout_message_name, error_message_name);
+	ActionTemplate *call = new CallMethodActionTemplate($2, "SELF", timeout_message_name, error_message_name);
+	current_action = with_timeout_present ? make_timed_scope(call) : call;
 	cleanupErrorClause();
 }
 | SEND SYMBOL TO SYMBOL /* send a generic message/command */ {
@@ -1646,6 +2011,17 @@ SET SYMBOL TO expression error_clause  {
 | SEND STRINGVAL TO SYMBOL /* send a generic message/command */ {
     if (current_action) current_actions->push_back(current_action);
     current_action = new SendMessageActionTemplate($2, $4);
+}
+| QUERY SYMBOL INTO SYMBOL {
+    /* JSON on DATABASE_CHANNEL; the reply comes back via respond_to (routed to
+       this machine's `response` OPTION) and becomes a LIST via "list := response
+       AS LIST" (or PUSH ITEMS FROM). $4 names that LIST (a hint). */
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new QueryActionTemplate(Value($2), Value($4));
+}
+| QUERY JSONVAL INTO SYMBOL {
+    if (current_action) current_actions->push_back(current_action);
+    current_action = new QueryActionTemplate(Value($2), Value($4));
 }
 | THROW SYMBOL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";
@@ -2018,8 +2394,159 @@ IF_ '(' predicate ')' '{' action_list '}'  %prec IFX {
 	DBG_PARSER << "** popped old action list\n";
     current_action = new IfElseCommandActionTemplate($3, mc2, mc) ;
 }
+| TRY '{' action_list '}' WITH TIMEOUT basic_value timeout_handler_opt error_handler_opt {
+    DBG_PARSER << " TRY action: timeout " << *$7 << "\n";
+    if (current_action) {
+        current_actions->push_back(current_action);
+        current_action = 0;
+    }
+    // The ON TIMEOUT / ON ERROR handlers (if any) were captured by
+    // timeout_handler_opt / error_handler_opt; current_actions now holds the body.
+    MachineCommandTemplate *handler_mc = current_timeout_handler;
+    current_timeout_handler = nullptr;
+    MachineCommandTemplate *error_mc = current_error_handler;
+    current_error_handler = nullptr;
+    MachineCommandTemplate *body_mc = new MachineCommandTemplate("try_body", "");
+    body_mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    DBG_PARSER << "** popped action list for TRY body\n";
+    validate_timeout_value($7);
+    TryActionTemplate *tat = new TryActionTemplate(*$7, body_mc, handler_mc, error_mc);
+    tat->source_file = yyfilename ? yyfilename : "";
+    tat->source_line = yylineno;
+    current_action = tat;
+    delete $7;
+}
 | '{' action_list '}' {
     if (current_action) current_actions->push_back(current_action); current_action = 0;
+}
+;
+
+// timeout-spec.md: optional [ ON TIMEOUT { <statements> } ] after WITH TIMEOUT.
+// Captures the block into current_timeout_handler (or clears it when absent).
+timeout_handler_opt:
+/* empty */ {
+    current_timeout_handler = nullptr;
+}
+| ON TIMEOUT '{' action_list '}' {
+    MachineCommandTemplate *mc = new MachineCommandTemplate("timeout_handler", "");
+    flush_pending_action();
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_timeout_handler = mc;
+}
+;
+
+// timeout-spec.md: optional [ ON ERROR { <statements> } ] after ON TIMEOUT (TRY)
+// or on a handler. Captures the block into current_error_handler.
+error_handler_opt:
+/* empty */ {
+    current_error_handler = nullptr;
+}
+| ON ERROR '{' action_list '}' {
+    MachineCommandTemplate *mc = new MachineCommandTemplate("error_handler", "");
+    flush_pending_action();
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_error_handler = mc;
+}
+;
+
+// timeout-spec.md: optional [ WITH TIMEOUT <duration> [ ON TIMEOUT { … } ] ] on a
+// statement. Sets current_timeout_value / current_timeout_handler / with_timeout_present.
+with_timeout_opt:
+/* empty */ {
+    with_timeout_present = false;
+    current_timeout_value = Value();
+    current_timeout_handler = nullptr;
+    current_error_handler = nullptr;
+}
+| WITH TIMEOUT basic_value timeout_handler_opt {
+    validate_timeout_value($3);
+    current_timeout_value = *$3;
+    delete $3;
+    current_error_handler = nullptr; // statements do not carry ON ERROR
+    with_timeout_present = true;
+}
+| AFTER basic_value '{' action_list '}' %prec AFTER {
+    // AFTER <duration> { … } == WITH TIMEOUT <duration> ON TIMEOUT { … } (handler).
+    // %prec AFTER keeps this distinct from the ADD … AFTER LAST/ITEM … forms.
+    validate_timeout_value($2);
+    current_timeout_value = *$2;
+    delete $2;
+    MachineCommandTemplate *mc = new MachineCommandTemplate("timeout_handler", "");
+    flush_pending_action();
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_timeout_handler = mc;
+    current_error_handler = nullptr; // statements do not carry ON ERROR
+    with_timeout_present = true;
+}
+;
+
+// timeout-spec.md: handler suffix. WITH TIMEOUT / ON TIMEOUT { } / ON ERROR { }
+// are independently optional; a handler may catch inner timeouts/errors without
+// its own deadline.
+handler_clauses:
+/* empty */ {
+    with_timeout_present = false;
+    current_timeout_value = Value();
+    current_timeout_handler = nullptr;
+    current_error_handler = nullptr;
+}
+| WITH TIMEOUT basic_value timeout_handler_opt error_handler_opt {
+    validate_timeout_value($3);
+    current_timeout_value = *$3;
+    delete $3;
+    with_timeout_present = true;
+}
+| AFTER basic_value '{' action_list '}' error_handler_opt %prec AFTER {
+    validate_timeout_value($2);
+    current_timeout_value = *$2;
+    delete $2;
+    MachineCommandTemplate *mc = new MachineCommandTemplate("timeout_handler", "");
+    flush_pending_action();
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_timeout_handler = mc;
+    with_timeout_present = true;
+}
+| ON TIMEOUT '{' action_list '}' error_handler_opt {
+    MachineCommandTemplate *mc = new MachineCommandTemplate("timeout_handler", "");
+    flush_pending_action();
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_timeout_handler = mc;
+    with_timeout_present = false; // no own deadline
+}
+| ON ERROR '{' action_list '}' {
+    MachineCommandTemplate *mc = new MachineCommandTemplate("error_handler", "");
+    flush_pending_action();
+    mc->setActionTemplates(*current_actions);
+    current_actions->clear();
+    delete current_actions;
+    current_actions = current_actions_stack.back();
+    current_actions_stack.pop_back();
+    current_error_handler = mc;
+    with_timeout_present = false;
 }
 ;
 
@@ -2054,6 +2581,7 @@ IGNORE ERRORS {
 	}
 }
 | ON TIMEOUT SYMBOL error_clause {
+	// legacy: ON TIMEOUT <msg> names a message handled by CATCH (not a duration).
 	if (timeout_message_name) {
 		std::stringstream ss;
 		ss << current_machineclass->name << ": multiple ON TIMEOUT clauses\n";

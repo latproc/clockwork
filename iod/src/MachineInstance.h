@@ -116,6 +116,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     class SharedCache;
     class Cache;
     static ThreadSafeList<MachineInstance *> to_remove;
+    static ThreadSafeList<MachineInstance *> to_delete;
 
   public:
     virtual ~MachineInstance();
@@ -123,6 +124,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     static void prepare_to_remove(MachineInstance *m) { to_remove.push_back(m); }
     static void remove_pending();
+    static void delete_later(MachineInstance *m) { to_delete.push_back(m); }
+    static void delete_pending();
 
     void triggerFired(Trigger *trig);
 
@@ -184,6 +187,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     // command body (calcAdjust). Nested. IO / dotted VALUE still notify now.
     void beginDeferredPropertyNotify();
     void endDeferredPropertyNotify();
+    void setRecordApplyMode(bool on) { record_apply_mode = on; }
+    bool recordApplyMode() const { return record_apply_mode; }
+    void setRecordSystemState(const char *name) { setState(name); }
     const Value *resolve(
         std::string
             property); // provides a pointer to the value of an object that can be evaluated in the future
@@ -220,7 +226,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     void start(Action *a);
     void stop(Action *a);
     void push(Action *new_action);
-    void prepareCompletionMessage(Transmitter *from, std::string message);
+    void prepareCompletionMessage(Transmitter *from, std::string message,
+                                  unsigned long correlation_id = 0);
     Action *findHandler(Message &msg, Transmitter *t, bool response_required = false);
     // Shared receive path used by HandleMessageAction (and later clock ticks).
     // Finds the handler and starts it. Does not start/stop a HandleMessageAction.
@@ -295,6 +302,11 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     static MachineInstance *find(const char *name);
     static std::list<MachineInstance *>::iterator begin() { return all_machines.begin(); }
     static std::list<MachineInstance *>::iterator end() { return all_machines.end(); }
+    static std::list<MachineInstance *>::iterator begin_records() {
+        return record_instances.begin();
+    }
+    static std::list<MachineInstance *>::iterator end_records() { return record_instances.end(); }
+    void unregisterRecord();
 
     static std::list<MachineInstance *>::iterator io_modules_begin() { return io_modules.begin(); }
     static std::list<MachineInstance *>::iterator io_modules_end() { return io_modules.end(); }
@@ -498,6 +510,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     MachineInstance &operator=(const MachineInstance &orig);
     MachineInstance(const MachineInstance &other);
     static std::list<MachineInstance *> all_machines;
+    static std::list<MachineInstance *> record_instances;
     static std::list<MachineInstance *> command_clocks;
     void registerCommandClockLocked();
     void refreshCommandClockCache();
@@ -515,6 +528,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     bool command_fanout_pending;
     int property_notify_defer;
     bool deferred_property_notify;
+    bool record_apply_mode;
 
   protected:
     static std::list<MachineInstance *>

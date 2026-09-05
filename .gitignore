@@ -37,7 +37,11 @@ nohup.out
 *.log
 *.sql
 *.sqlite
+!iod/tests/fixtures/**/*.sql
 *.dat
+
+# Unpublished application / plant notes (not for the Clockwork repo)
+docs/local/
 
 # local configuration (root / iod tree; product sample is etc/iod.conf)
 /iod.conf
@@ -66,6 +70,8 @@ Thumbs.db
 
 #project build files
 iod/build/
+iod/build-record/
+iod/tests/_scaffold_out/
 iod/xcode/
 iod/.test/
 modbus/build/
@@ -117,6 +123,8 @@ iod/iosh
 iod/device_connector
 iod/iocmd
 iod/dbd
+iod/cw-scaffold
+iod/cw-migrate
 lib/
 ethercat-lib/
 examples/wecon/wecon

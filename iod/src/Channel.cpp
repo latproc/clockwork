@@ -1849,13 +1849,19 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
     }
 }
 
+bool Channel::isLocalOrPrivate(const MachineInstance *machine, const Value &key) {
+    return machine && machine->getStateMachine() &&
+           (machine->getStateMachine()->propertyIsLocal(key) ||
+            machine->getStateMachine()->propertyIsPrivate(key));
+}
+
 void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val,
                                  uint64_t authority) {
     if (!all) {
         return;
     }
     std::string channel_name = machine->fullName();
-    if (machine->getStateMachine() && machine->getStateMachine()->propertyIsLocal(key)) {
+    if (Channel::isLocalOrPrivate(machine, key)) {
         return;
     }
     std::map<std::string, Channel *>::iterator iter = all->begin();
@@ -1884,7 +1890,8 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
             else {
                 if (chn->definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges) ||
                     (machine->getStateMachine() &&
-                     !machine->getStateMachine()->propertyIsLocal(key))) {
+                     !machine->getStateMachine()->propertyIsLocal(key) &&
+                     !machine->getStateMachine()->propertyIsPrivate(key))) {
                     chn->sendPropertyChangeMessage(machine, machine->getName(), key, val,
                                                    authority);
                 }
