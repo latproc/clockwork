@@ -101,6 +101,7 @@ Action::Status CopyPropertiesAction::run() {
     dest_machine = owner->lookup(dest);
     MachineClass *dest_class = dest_machine ? dest_machine->getStateMachine() : nullptr;
     const bool dest_is_record = dest_class && RecordClass::isRecord(dest_class);
+    const bool dest_is_row = dest_class && RecordClass::isRow(dest_class);
 
     // A symbol may also name an OPTION that holds a JSON object — e.g. a row
     // taken from a query-result LIST via `x := TAKE FIRST FROM rows`. Copy its
@@ -116,7 +117,7 @@ Action::Status CopyPropertiesAction::run() {
 
     if (dest_machine && (source_machine || source_json)) {
         size_t count = 0; // how many direct symbol updates did we do?
-        if (dest_is_record) {
+        if (dest_is_row) {
             dest_machine->setRecordApplyMode(true);
         }
         if (source_machine) {
@@ -187,9 +188,9 @@ Action::Status CopyPropertiesAction::run() {
                 }
             }
         }
-        if (dest_is_record) {
+        if (dest_is_row) {
             dest_machine->setRecordApplyMode(false);
-            dest_machine->setRecordSystemState("clean");
+            dest_machine->setRowLifecycle("clean");
         }
         if (count) {
             dest_machine->setNeedsCheck();

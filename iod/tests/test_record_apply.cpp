@@ -433,8 +433,23 @@ int main() {
             return 51;
         }
         if (std::string(panel->getCurrentStateString()) == "clean") {
-            std::cerr << "MACHINE TABLE state was set to clean by APPLY\n";
+            std::cerr << "MACHINE TABLE Clockwork STATE was set to clean by APPLY\n";
             return 52;
+        }
+        if (panel->getValue("state").asString() != "clean") {
+            std::cerr << "MACHINE TABLE LOCAL state not clean after APPLY: "
+                      << panel->getValue("state") << "\n";
+            return 53;
+        }
+        panel->setValue("name", Value("Bob", Value::t_string));
+        if (panel->getValue("state").asString() != "dirty") {
+            std::cerr << "MACHINE TABLE LOCAL state not dirty after column assign: "
+                      << panel->getValue("state") << "\n";
+            return 54;
+        }
+        if (std::string(panel->getCurrentStateString()) == "dirty") {
+            std::cerr << "MACHINE TABLE Clockwork STATE was set to dirty\n";
+            return 55;
         }
     }
 

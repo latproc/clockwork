@@ -5250,6 +5250,32 @@ void MachineInstance::sendModbusUpdate(const std::string &property_name, const V
     }
 }
 
+void MachineInstance::setRowLifecycle(const char *name) {
+    if (!name || !state_machine) {
+        return;
+    }
+    if (RecordClass::isRecord(state_machine)) {
+        setRecordSystemState(name);
+        return;
+    }
+    if (!RecordClass::hasTableBinding(state_machine) ||
+        !state_machine->propertyIsLocal("state")) {
+        return;
+    }
+    Value next(name, Value::t_string);
+    const Value &prev = properties.lookup("state");
+    if (prev != SymbolTable::Null && prev.asString() == name) {
+        return;
+    }
+    properties.add("state", next, SymbolTable::ST_REPLACE);
+    setNeedsCheck();
+    if (property_notify_defer > 0) {
+        deferred_property_notify = true;
+        return;
+    }
+    notifyDependents();
+}
+
 bool MachineInstance::setValue(const std::string &property, const Value &new_value,
                                uint64_t authority) {
 
@@ -5410,9 +5436,15 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         if (!was_changed) {
             return true; // value was ok but was already the same
         }
-        if (RecordClass::isRecord(state_machine) && !record_apply_mode &&
-            !state_machine->propertyIsLocal(property) && current_state.getName() != "dirty") {
-            setState("dirty");
+        if (!record_apply_mode && state_machine && property != "state" &&
+            !state_machine->propertyIsLocal(property)) {
+            if (RecordClass::isRecord(state_machine) &&
+                current_state.getName() != "dirty") {
+                setState("dirty");
+            }
+            else if (RecordClass::hasTableBinding(state_machine)) {
+                setRowLifecycle("dirty");
+            }
         }
         // calcAdjust temps: one notify at endDeferredPropertyNotify.
         // Never defer VALUE / IO (outputs, plugins, analog owners).

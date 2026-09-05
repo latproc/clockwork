@@ -190,6 +190,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     void setRecordApplyMode(bool on) { record_apply_mode = on; }
     bool recordApplyMode() const { return record_apply_mode; }
     void setRecordSystemState(const char *name) { setState(name); }
+    // RECORD: Clockwork state empty/dirty/clean. MACHINE TABLE: LOCAL OPTION
+    // "state" (WHEN owns InCycle/Idle). No-op if the class has no such LOCAL.
+    void setRowLifecycle(const char *name);
     const Value *resolve(
         std::string
             property); // provides a pointer to the value of an object that can be evaluated in the future

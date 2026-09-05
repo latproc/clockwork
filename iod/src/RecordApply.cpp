@@ -90,9 +90,7 @@ static void applyFields(MachineInstance *m, const MachineClass *mc, cJSON *row) 
     }
     m->endDeferredPropertyNotify();
     m->setRecordApplyMode(false);
-    if (RecordClass::isRecord(mc)) {
-        m->setRecordSystemState("clean");
-    }
+    m->setRowLifecycle("clean");
 }
 
 // Cache name only (`Customer#1`). Not a MachineClass field; named instances keep
@@ -240,9 +238,7 @@ int removeRow(const std::string &type, cJSON *keys) {
                     ++oi;
                 }
                 m->setRecordApplyMode(false);
-                if (RecordClass::isRecord(mc)) {
-                    m->setRecordSystemState("empty");
-                }
+                m->setRowLifecycle("empty");
             }
             ++n;
         }
