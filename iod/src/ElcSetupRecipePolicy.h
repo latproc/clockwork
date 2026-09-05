@@ -60,6 +60,17 @@ inline ReapplyGate decideReapply(bool visible, uint8_t al, bool hold_active,
     return ReapplyGate::WaitPreop;
 }
 
+/** Hold ioctl is for PREOP/SAFEOP/OP (hold-from-OP). Not INIT or SII 0:0. */
+inline bool canBeginSetupHold(uint8_t al, uint32_t vendor_id, uint32_t product_code) {
+    if (al == 0 || al == kAlInit) {
+        return false;
+    }
+    if (vendor_id == 0 && product_code == 0) {
+        return false;
+    }
+    return true;
+}
+
 } // namespace ElcSetupRecipe
 
 #endif

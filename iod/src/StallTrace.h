@@ -67,6 +67,17 @@ void publishQueueCounts(uint32_t runnable, uint32_t stable, uint32_t exec, uint3
 /** Heartbeat-only (same as markStage without changing stage). */
 void heartbeat();
 
+/**
+ * Always update heartbeat (even when DEBUG_STALLSNAP is off).
+ * Command-port timeout, SIGTERM _exit, and output-lease stale checks use this.
+ */
+void tickHeartbeat();
+
+uint64_t heartbeatUs();
+uint64_t heartbeatSeq();
+uint8_t stage();
+uint64_t heartbeatAgeUs();
+
 } // namespace StallTrace
 
 #endif

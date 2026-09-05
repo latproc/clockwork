@@ -90,6 +90,8 @@ class KernelEthercatBus {
                       struct elc_output_publish *pub);
     int armOutput(struct elc_output_arm *arm);
     int disarmOutput(struct elc_output_disarm *disarm = nullptr);
+    /** flags: 0 = all domains; non-zero = that domain_config_id only. */
+    int disarmOutputDomain(uint32_t domain_config_id);
     int getIoStatus(struct elc_io_status *st);
 
     /**

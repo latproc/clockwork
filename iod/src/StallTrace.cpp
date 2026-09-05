@@ -313,4 +313,29 @@ void heartbeat() {
     writeHeartbeat(microsecs());
 }
 
+void tickHeartbeat() {
+    writeHeartbeat(microsecs());
+}
+
+uint64_t heartbeatUs() {
+    return g.heartbeat_us.load(std::memory_order_relaxed);
+}
+
+uint64_t heartbeatSeq() {
+    return g.heartbeat_seq.load(std::memory_order_relaxed);
+}
+
+uint8_t stage() {
+    return g.stage.load(std::memory_order_relaxed);
+}
+
+uint64_t heartbeatAgeUs() {
+    const uint64_t hb = heartbeatUs();
+    if (hb == 0) {
+        return 0;
+    }
+    const uint64_t now = microsecs();
+    return now > hb ? now - hb : 0;
+}
+
 } // namespace StallTrace

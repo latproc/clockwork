@@ -23,6 +23,7 @@
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "SetStateAction.h"
+#include "ElcDomainCwMirror.h"
 #include "Statistic.h"
 #include "Statistics.h"
 #include "cJSON.h"
@@ -55,6 +56,7 @@
 #include "KernelEthercatBus.h"
 #include "ElcConfigFile.h"
 #include "ElcSetupRecipe.h"
+#include "StallTrace.h"
 #include "EtherCATSetup.h"
 #include "options.h"
 #include "IOComponent.h"
@@ -75,6 +77,10 @@ static std::atomic<bool> g_setup_mailbox_busy{false};
 
 void ECInterface::setSetupMailboxExclusive(bool on) {
     g_setup_mailbox_busy.store(on);
+}
+
+bool ECInterface::setupMailboxExclusive() {
+    return g_setup_mailbox_busy.load();
 }
 
 namespace {
@@ -138,6 +144,11 @@ static uint32_t g_primary_domain_id = 0;
 static bool g_all_domains_complete = false;
 // Cycle is active but at least one domain has no successful status yet.
 static bool g_domain_status_pending = false;
+static ElcDomainCwMirror::Coalesce g_cw_mirror;
+static std::mutex g_cw_mirror_mu;
+static uint32_t g_ethercat_al_primary = 0;
+static uint32_t g_ethercat_al_all = 0;
+static bool g_ethercat_al_valid = false;
 
 // Map elc WC/data_valid to CW ETHERCAT_DOMAIN states.
 // Domain bus firewall: WC completeness is the isolation boundary — do not
@@ -248,16 +259,43 @@ static void setMachineStateIfChanged(MachineInstance *m, const char *state) {
     }
 }
 
-// Push status into each ECDomain_<id>, ETHERCAT (bus), ETHERCAT_WC (primary).
-static void publishKernelEthercatClockworkMachines() {
-    MachineInstance *ec = MachineInstance::find("ETHERCAT");
-    MachineInstance *wc = MachineInstance::find("ETHERCAT_WC");
+static void queueDomainClockworkSnapshot() {
+    ElcDomainCwMirror::Snapshot snap{};
+    const size_t n = g_domains.size();
+    snap.nslots = static_cast<uint8_t>(
+        n > ElcDomainCwMirror::kMaxDomains ? ElcDomainCwMirror::kMaxDomains : n);
+    snap.primary_domain_id = g_primary_domain_id;
+    snap.domain_status_ok = g_domain_status_ok;
+    snap.domain_status_pending = g_domain_status_pending;
+    snap.ethercat_slave_states = g_ethercat_al_primary;
+    snap.ethercat_all_slave_states = g_ethercat_al_all;
+    snap.ethercat_al_valid = g_ethercat_al_valid;
+    for (uint8_t i = 0; i < snap.nslots; ++i) {
+        const ElcDomainSlot &slot = g_domains[i];
+        ElcDomainCwMirror::Slot &out = snap.slots[i];
+        out.id = slot.id;
+        out.status_known = slot.status_known;
+        out.active = slot.active;
+        out.valid = slot.valid;
+        out.armed = slot.armed;
+        out.rearm_required = slot.rearm_required;
+        out.wc = slot.wc;
+        out.wc_state = slot.wc_state;
+        out.faults = slot.faults;
+        out.slave_states = slot.slave_states;
+        out.base_offset = slot.base_offset;
+        out.domain_size = slot.domain_size;
+    }
+    std::lock_guard<std::mutex> lock(g_cw_mirror_mu);
+    g_cw_mirror.store(snap);
+}
 
+// Ecat thread: edge-log + POD snapshot only. No MachineInstance::setValue.
+static void publishKernelEthercatClockworkMachines() {
     bool all_complete = !g_domains.empty();
     bool any_known = false;
     bool any_pending = false;
     for (ElcDomainSlot &slot : g_domains) {
-        MachineInstance *dm = slot.machine;
         const char *dstate = domainSlotCwState(slot);
         if (!slot.status_known) {
             any_pending = true;
@@ -269,14 +307,47 @@ static void publishKernelEthercatClockworkMachines() {
                 all_complete = false;
             }
         }
+        if (!dstate) {
+            continue;
+        }
+        if (slot.published_state != dstate) {
+            std::cerr << "ECDomain_" << slot.id << " " << slot.published_state << " -> "
+                      << dstate << " valid=" << (int)slot.valid
+                      << " wc=" << slot.wc << " wc_state=" << (unsigned)slot.wc_state
+                      << " faults=0x" << std::hex << slot.faults << std::dec
+                      << " armed=" << (int)slot.armed
+                      << " rearm=" << (int)slot.rearm_required
+                      << " slave_al=0x" << std::hex << slot.slave_states << std::dec
+                      << " known=1\n";
+            slot.published_state = dstate;
+        }
+    }
+    g_domain_status_pending = any_pending;
+    g_all_domains_complete = all_complete && any_known && !any_pending;
+    queueDomainClockworkSnapshot();
+}
+
+void ECInterface::flushDomainClockworkMirrors() {
+#ifndef EC_SIMULATOR
+    ElcDomainCwMirror::Snapshot snap{};
+    {
+        std::lock_guard<std::mutex> lock(g_cw_mirror_mu);
+        if (!g_cw_mirror.takeIfDue(microsecs(), &snap)) {
+            return;
+        }
+    }
+
+    MachineInstance *ec = MachineInstance::find("ETHERCAT");
+    MachineInstance *wc = MachineInstance::find("ETHERCAT_WC");
+
+    for (uint8_t i = 0; i < snap.nslots; ++i) {
+        const ElcDomainCwMirror::Slot &slot = snap.slots[i];
+        const std::string name = "ECDomain_" + std::to_string(slot.id);
+        MachineInstance *dm = MachineInstance::find(name.c_str());
         if (!dm) {
-            if (dstate) {
-                slot.published_state = dstate;
-            }
             continue;
         }
         dm->setValue("domain_id", Value{static_cast<int64_t>(slot.id)});
-        // status_known=0 → lifecycle hold (not "bus failed"). Keep last size/offset.
         dm->setValue("status_known", Value{slot.status_known ? 1 : 0});
         if (slot.status_known) {
             dm->setValue("valid", Value{slot.valid ? 1 : 0});
@@ -291,45 +362,32 @@ static void publishKernelEthercatClockworkMachines() {
                 dm->setValue("domain_size", Value{static_cast<int64_t>(slot.domain_size)});
             }
         }
-        if (!dstate) {
-            // Lifecycle: hold last CW state; do not COMPLETE→INVALID→INCOMPLETE.
-            continue;
+        const char *dstate = ElcDomainCwMirror::cwState(slot);
+        if (dstate) {
+            setMachineStateIfChanged(dm, dstate);
         }
-        if (slot.published_state != dstate) {
-            std::cerr << "ECDomain_" << slot.id << " " << slot.published_state << " -> "
-                      << dstate << " valid=" << (int)slot.valid
-                      << " wc=" << slot.wc << " wc_state=" << (unsigned)slot.wc_state
-                      << " faults=0x" << std::hex << slot.faults << std::dec
-                      << " armed=" << (int)slot.armed
-                      << " rearm=" << (int)slot.rearm_required
-                      << " slave_al=0x" << std::hex << slot.slave_states << std::dec
-                      << " known=1\n";
-            slot.published_state = dstate;
-        }
-        setMachineStateIfChanged(dm, dstate);
     }
-    g_domain_status_pending = any_pending;
-    g_all_domains_complete = all_complete && any_known && !any_pending;
 
     if (ec) {
-        ec->setValue("primary_domain_id", Value{static_cast<int64_t>(g_primary_domain_id)});
-        ec->setValue("domain_count", Value{static_cast<int64_t>(g_domains.size())});
-        ec->setValue("domain_status_pending", Value{any_pending ? 1 : 0});
-        if (g_domain_status_ok) {
+        ec->setValue("primary_domain_id", Value{static_cast<int64_t>(snap.primary_domain_id)});
+        ec->setValue("domain_count", Value{static_cast<int64_t>(snap.nslots)});
+        ec->setValue("domain_status_pending", Value{snap.domain_status_pending ? 1 : 0});
+        if (snap.domain_status_ok) {
             ec->setValue("all_ok_source", Value("primary_domain", Value::t_string));
         }
         else {
             ec->setValue("all_ok_source", Value("aggregate", Value::t_string));
         }
+        if (snap.ethercat_al_valid) {
+            ec->setValue("slave_states",
+                         Value{static_cast<uint64_t>(snap.ethercat_slave_states)});
+            ec->setValue("all_slave_states",
+                         Value{static_cast<uint64_t>(snap.ethercat_all_slave_states)});
+        }
     }
 
-    if (!wc) {
-        return;
-    }
-    // ETHERCAT_WC follows the primary domain (first declared) WC only.
-    // Hold last VALUE/state while primary status is not yet known (lifecycle).
-    if (g_domain_status_ok && !g_domains.empty() && g_domains.front().status_known) {
-        const ElcDomainSlot &p = g_domains.front();
+    if (wc && snap.domain_status_ok && snap.nslots > 0 && snap.slots[0].status_known) {
+        const ElcDomainCwMirror::Slot &p = snap.slots[0];
         const char *state = "INCOMPLETE";
         int64_t value = static_cast<int64_t>(p.wc);
         if (p.wc_state == 2 && p.valid) {
@@ -341,6 +399,16 @@ static void publishKernelEthercatClockworkMachines() {
         wc->setValue("VALUE", Value{value});
         setMachineStateIfChanged(wc, state);
     }
+#endif
+}
+
+bool ECInterface::anyNonPrimaryDomainIncomplete() {
+#ifndef EC_SIMULATOR
+    std::lock_guard<std::mutex> lock(g_cw_mirror_mu);
+    return ElcDomainCwMirror::anyNonPrimaryIncomplete(g_cw_mirror.pending);
+#else
+    return false;
+#endif
 }
 ec_master_t *ECInterface::master = NULL;
 ec_master_state_t ECInterface::master_state = {};
@@ -1845,8 +1913,13 @@ static bool refreshKernelDomainHealth(KernelEthercatBus *bus, bool log_periodic)
             slot.domain_size = st.domain_size;
         }
         // Lost arm on a still-valid domain → republish+rearm (fault epoch).
-        if (was_armed && !slot.armed && slot.valid) {
-            g_kernel_output_dirty = true;
+        if (was_armed && !slot.armed) {
+            std::cerr << "ECDomain_" << slot.id << " armed 1 -> 0 valid="
+                      << (int)slot.valid << " wc=" << slot.wc
+                      << " faults=0x" << std::hex << slot.faults << std::dec << "\n";
+            if (slot.valid) {
+                g_kernel_output_dirty = true;
+            }
         }
         if (do_log) {
             const char *cw = domainSlotCwState(slot);
@@ -2378,9 +2451,23 @@ void ECInterface::sendUpdates() {
             if (kernelBus->hasDomainOutputAuthority() && g_domain_status_ok) {
                 // Stage 2: arm each healthy domain independently. Offline groups
                 // stay disarmed; primary remains armable when valid.
+                const uint64_t hb = StallTrace::heartbeatUs();
+                const bool processing_stale =
+                    hb != 0 && now > hb && (now - hb) > 2000000ULL;
                 int last_err = 0;
-                for (ElcDomainSlot &slot : g_domains) {
+                for (size_t si = 0; si < g_domains.size(); ++si) {
+                    ElcDomainSlot &slot = g_domains[si];
+                    const bool primary = (si == 0);
+                    if (processing_stale && !primary && slot.armed) {
+                        (void)kernelBus->disarmOutputDomain(slot.id);
+                        slot.armed = false;
+                        std::cerr << "ECDomain_" << slot.id
+                                  << " armed 1 -> 0 (processing heartbeat stale)\n";
+                    }
                     if (link_up && slot.valid && !slot.armed) {
+                        if (processing_stale && !primary) {
+                            continue;
+                        }
                         int aret =
                             armKernelDomain(kernelBus.get(), slot.id, pub.config_generation,
                                             pub.output_sequence);
@@ -2406,7 +2493,7 @@ void ECInterface::sendUpdates() {
                 if (all_valid_armed && g_kernel_outputs_armed &&
                     !g_output_defaults_after_arm_done) {
                     g_output_defaults_after_arm_done = true;
-                    reapplyOutputDefaults();
+                    ElcSetupRecipe::requestOutputDefaults();
                     g_kernel_output_dirty = true;
                 }
                 if (last_err != 0 && now - last_warning > 2000000) {
@@ -2730,13 +2817,10 @@ void ECInterface::check_slave_config_states(void) {
             }
             g_domains[di].slave_states = al_per_domain[di];
         }
-        if (ethercat_status) {
-            ethercat_status->setValue("slave_states",
-                                      Value{static_cast<uint64_t>(al_for_startup)});
-            ethercat_status->setValue("all_slave_states",
-                                      Value{static_cast<uint64_t>(al_or_all)});
-        }
-        // Push per-domain AL onto ECDomain_* promptly (do not wait for next WC poll).
+        g_ethercat_al_primary = al_for_startup;
+        g_ethercat_al_all = al_or_all;
+        g_ethercat_al_valid = true;
+        // Push per-domain AL onto the CW snapshot (processing applies).
         if (al_changed) {
             publishKernelEthercatClockworkMachines();
         }

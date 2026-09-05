@@ -873,6 +873,7 @@ void ProcessingThread::operator()() {
     const int MAX_UNCONTROLLED_POLLS = 5;
     int io_unsafe_polls_remaining = MAX_UNCONTROLLED_POLLS;
     while (!program_done) {
+        StallTrace::tickHeartbeat();
         StallTrace::syncEnabledFromDebug();
         StallTrace::markStage(StallTrace::StageOuterHousekeeping);
         if (IOComponent::getHardwareState() == IOComponent::s_hardware_preinit) {
@@ -990,6 +991,7 @@ void ProcessingThread::operator()() {
             internals->process_manager.SetTime(curr_t);
 #ifndef EC_SIMULATOR
             ElcSetupRecipe::pollFromProcessingThread();
+            ECInterface::flushDomainClockworkMirrors();
 #endif
             // MEMSNAPSHOT: opt-in via DEBUG DEBUG_MEMSNAPSHOT on|off (default off).
             static uint64_t last_memory_snapshot = 0;

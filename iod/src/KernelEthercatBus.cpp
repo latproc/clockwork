@@ -614,6 +614,16 @@ int KernelEthercatBus::disarmOutput(struct elc_output_disarm *disarm) {
     return ret;
 }
 
+int KernelEthercatBus::disarmOutputDomain(uint32_t domain_config_id) {
+    if (!handle) {
+        return -EINVAL;
+    }
+    struct elc_output_disarm local = {};
+    elc_init_api_header(&local, sizeof(local));
+    local.flags = domain_config_id;
+    return elc_disarm_output(handle, &local);
+}
+
 int KernelEthercatBus::configureOutputLease(uint32_t timeout_ms, uint32_t domain_config_id) {
     if (!handle) {
         return -EINVAL;

@@ -24,6 +24,7 @@
 #include <list>
 #include <map>
 #include <sstream>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string>
 #include <zmq.hpp>
@@ -40,7 +41,10 @@
 #include "options.h"
 #include "value.h"
 #include "watchdog.h"
+#include "StallTrace.h"
 #include <pthread.h>
+#include <unistd.h>
+#include <strings.h>
 
 uint64_t client_watchdog_timer = 0;
 //extern bool machine_is_ready;
@@ -563,6 +567,10 @@ void IODCommandThread::operator()() {
         e_responding
     } status = e_running; //are we holding shared resources?
     int poll_time = 2;
+    bool cmd_outstanding = false;
+    bool cmd_discard_next_sync = false;
+    uint64_t cmd_sent_us = 0;
+    const uint64_t kCmdSyncTimeoutUs = 2000000ULL;
     while (!done) {
         try {
             wd->stop(); // disable the watchdog while we wait for something to do
@@ -571,6 +579,21 @@ void IODCommandThread::operator()() {
                                        {(void *)command_sync, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0}};
             int rc;
             try {
+                if (cmd_outstanding && !cmd_discard_next_sync) {
+                    const uint64_t now = microsecs();
+                    if (now > cmd_sent_us && now - cmd_sent_us >= kCmdSyncTimeoutUs) {
+                        char msg[256];
+                        snprintf(msg, sizeof(msg),
+                                 "processing stalled stage=%s heartbeat_age_us=%llu pid=%d\n",
+                                 StallTrace::stageName(
+                                     static_cast<StallTrace::Stage>(StallTrace::stage())),
+                                 (unsigned long long)StallTrace::heartbeatAgeUs(),
+                                 (int)getpid());
+                        safeSend(cti->socket, msg, strlen(msg));
+                        cmd_outstanding = false;
+                        cmd_discard_next_sync = true;
+                    }
+                }
                 rc = zmq::poll(&items[0], 3, poll_time);
                 if (done) { break; }
                 if (poll_time < 20) {
@@ -617,15 +640,13 @@ void IODCommandThread::operator()() {
                 char *buf = nullptr;
                 size_t response_len;
                 if (safeRecv(command_sync, &buf, &response_len, true, 0)) {
-#if 0
-                    {
-                        char line[80];
-                        snprintf(line, 80, "%s", buf);
-                        FileLogger fl(program_name);
-                        fl.f() << "client interface received " << line << "\n";
+                    if (cmd_discard_next_sync) {
+                        cmd_discard_next_sync = false;
                     }
-#endif
-                    safeSend(cti->socket, buf, response_len);
+                    else {
+                        safeSend(cti->socket, buf, response_len);
+                        cmd_outstanding = false;
+                    }
                     delete[] buf;
                 }
             }
@@ -652,10 +673,31 @@ void IODCommandThread::operator()() {
                 char *data = (char *)malloc(size + 1); // note: leaks if an exception is thrown
                 memcpy(data, request.data(), size);
                 data[size] = 0;
+                const char *p = data;
+                while (*p == ' ' || *p == '\t') {
+                    ++p;
+                }
+                const bool is_ping = strncasecmp(p, "PING", 4) == 0;
+                const bool is_health = strncasecmp(p, "SHOW HEALTH", 11) == 0;
+                if (is_ping || is_health) {
+                    char msg[256];
+                    snprintf(msg, sizeof(msg),
+                             "%s pid=%d stage=%s heartbeat_age_us=%llu\n",
+                             is_ping ? "pong" : "health", (int)getpid(),
+                             StallTrace::stageName(
+                                 static_cast<StallTrace::Stage>(StallTrace::stage())),
+                             (unsigned long long)StallTrace::heartbeatAgeUs());
+                    safeSend(cti->socket, msg, strlen(msg));
+                    free(data);
+                    continue;
+                }
                 MessageHeader mh;
                 mh.start_time = microsecs();
                 mh.needReply(true);
                 safeSend(command_sync, data, size, mh);
+                cmd_outstanding = true;
+                cmd_sent_us = microsecs();
+                cmd_discard_next_sync = false;
                 free(data);
             }
         }
