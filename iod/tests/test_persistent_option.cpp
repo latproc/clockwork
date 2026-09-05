@@ -23,6 +23,7 @@
 // that a machine carrying such a field is persistent even without the
 // machine-level `PERSISTENT` flag.
 
+#include "Channel.h"
 #include "Dispatcher.h"
 #include "Logger.h"
 #include "MachineClass.h"
@@ -106,6 +107,70 @@ int main() {
     if (m3->isPersistent()) {
         std::cerr << "machine with OPTION PERSISTENT false is wrongly isPersistent()\n";
         return 7;
+    }
+
+    // PERSISTENT OPTION fields are non-column (marked local) but must still be
+    // published to the persistence channel, so the channel must NOT treat them
+    // as local/private (which would skip them).
+    if (Channel::isLocalOrPrivate(m, Value("sp"))) {
+        std::cerr << "persistent field sp wrongly treated as local/private (not publishable)\n";
+        return 9;
+    }
+    if (!Channel::isLocalOrPrivate(m, Value("tmp"))) {
+        std::cerr << "LOCAL field tmp wrongly treated as publishable\n";
+        return 10;
+    }
+
+    // The PERSISTENCE_CHANNEL (MONITORS PERSISTENT == "true") must select machines
+    // that are persistent via per-field PERSISTENT OPTION, not only the flag.
+    ChannelDefinition *cd = new ChannelDefinition("PERSISTENCE_CHANNEL");
+    cd->addMonitorProperty("PERSISTENT", Value("true", Value::t_string));
+    Channel *chn = Channel::create(7901, cd);
+    if (!chn->channelMachines().count(m)) {
+        std::cerr << "per-field PERSISTENT OPTION machine not selected by channel monitor\n";
+        return 11;
+    }
+    if (!chn->channelMachines().count(m2)) {
+        std::cerr << "OPTION PERSISTENT true machine not selected by channel monitor\n";
+        return 12;
+    }
+    if (chn->channelMachines().count(m3)) {
+        std::cerr << "OPTION PERSISTENT false machine wrongly selected by channel monitor\n";
+        return 13;
+    }
+
+    // Modbus deferred flush: a modbus-exported property updated while property
+    // notify is deferred must still be pushed to the modbus channel when the
+    // defer ends (the deferred path skips sendPropertyChange but must not drop
+    // the modbus update).
+    {
+        MachineClass *mc_mb = new MachineClass("Baler");
+        MachineInstance *mb = MachineInstanceFactory::create("baler", "Baler");
+        mb->setStateMachine(mc_mb);
+        machines[mb->getName()] = mb;
+        mb->addModbusExport("baler.BaleNo", ModbusAddress::holding_register, 1, mb,
+                            ModbusExport::rw_reg, ModbusAddress::machine, "baler.BaleNo");
+        mb->publish();
+        mb->setNeedsThrottle(true);
+
+        ChannelDefinition *mcd = new ChannelDefinition("MODBUS_CHANNEL");
+        mcd->addFeature(ChannelDefinition::ReportModbusUpdates);
+        mcd->setThrottleTime(50);
+        Channel *mchn = Channel::create(7902, mcd);
+        // Force the channel to ACTIVE so Channel::sendModbusUpdate dispatches to
+        // it. Channel::setState sets current_state = ACTIVE first, then returns
+        // Failed only because this minimal harness has no subscription manager;
+        // the state is still ACTIVE, so the "failed" log is expected/harmless.
+        mchn->setState(ChannelImplementation::ACTIVE);
+
+        mb->beginDeferredPropertyNotify();
+        mb->setValue("BaleNo", 5);
+        mb->endDeferredPropertyNotify();
+
+        if (mchn->pendingThrottledCount() == 0) {
+            std::cerr << "deferred modbus update was not flushed to the modbus channel\n";
+            return 14;
+        }
     }
 
     std::cout << "ok\n";

@@ -355,6 +355,18 @@ void MachineInstance::endDeferredPropertyNotify() {
     }
     if (property_notify_defer == 0 && deferred_property_notify) {
         deferred_property_notify = false;
+        // APPLY skips sendPropertyChange (no persist echo) but Humid/modbus
+        // is sendModbusUpdate, not PROPERTY_CHANGES. Flush those now.
+        if (published && !deferred_modbus_updates.empty()) {
+            std::map<std::string, Value>::iterator it = deferred_modbus_updates.begin();
+            while (it != deferred_modbus_updates.end()) {
+                if (modbus_exports.count(it->first)) {
+                    Channel::sendModbusUpdate(this, it->first, it->second);
+                }
+                ++it;
+            }
+        }
+        deferred_modbus_updates.clear();
         setNeedsCheck();
         notifyDependents();
     }
@@ -5407,6 +5419,9 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         if (property_notify_defer > 0 && !io_interface &&
             property_val.token_id != ClockworkToken::tokVALUE) {
             deferred_property_notify = true;
+            if (published) {
+                deferred_modbus_updates[modbusName(property, property_val)] = new_value;
+            }
             return true;
         }
 #ifndef EC_SIMULATOR

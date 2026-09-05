@@ -1780,8 +1780,11 @@ void Channel::setDefinition(const ChannelDefinition *def) {
 
 void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &channel_name,
                                         const Value &key, const Value &val, uint64_t auth) {
+    const MachineClass *mc = m->getStateMachine();
+    // Skip local/private fields, but not PERSISTENT OPTION fields (they are
+    // non-column/local yet must still reach the persistence channel).
     if (definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges) ||
-        (m->getStateMachine() && m->getStateMachine()->local_properties.count(key.asString()))) {
+        (mc && mc->local_properties.count(key.asString()) && !mc->propertyIsPersistent(key))) {
         return;
     }
     if (communications_manager) {
@@ -1850,9 +1853,16 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
 }
 
 bool Channel::isLocalOrPrivate(const MachineInstance *machine, const Value &key) {
-    return machine && machine->getStateMachine() &&
-           (machine->getStateMachine()->propertyIsLocal(key) ||
-            machine->getStateMachine()->propertyIsPrivate(key));
+    if (!machine || !machine->getStateMachine()) {
+        return false;
+    }
+    const MachineClass *mc = machine->getStateMachine();
+    // PERSISTENT OPTION fields are non-column (marked local) but must still be
+    // published to the persistence channel, so they are not "local" here.
+    if (mc->propertyIsPersistent(key)) {
+        return false;
+    }
+    return mc->propertyIsLocal(key) || mc->propertyIsPrivate(key);
 }
 
 void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, const Value &val,
@@ -1888,10 +1898,10 @@ void Channel::sendPropertyChange(MachineInstance *machine, const Value &key, con
                 chn->throttled_items[machine]->properties[key.asString()] = val;
             }
             else {
+                const MachineClass *mc = machine->getStateMachine();
                 if (chn->definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges) ||
-                    (machine->getStateMachine() &&
-                     !machine->getStateMachine()->propertyIsLocal(key) &&
-                     !machine->getStateMachine()->propertyIsPrivate(key))) {
+                    (mc && (mc->propertyIsPersistent(key) ||
+                            (!mc->propertyIsLocal(key) && !mc->propertyIsPrivate(key))))) {
                     chn->sendPropertyChangeMessage(machine, machine->getName(), key, val,
                                                    authority);
                 }
@@ -1926,8 +1936,9 @@ void Channel::sendThrottledUpdates() {
                     std::pair<std::string, Value> prop = *props_iter;
                     Value key(prop.first);
                     MachineInstance *mi(item.second->machine);
+                    const MachineClass *mc = mi->getStateMachine();
                     if (definition()->hasFeature(ChannelDefinition::ReportLocalPropertyChanges) ||
-                        (mi->getStateMachine() && !mi->getStateMachine()->propertyIsLocal(key)))
+                        (mc && (mc->propertyIsPersistent(key) || !mc->propertyIsLocal(key))))
                         sendPropertyChangeMessage(item.second->machine,
                                                   item.second->machine->getName(), key,
                                                   prop.second);
@@ -2001,9 +2012,10 @@ void Channel::sendPropertyChanges(MachineInstance *machine) {
             while (iter != mr->properties.end()) {
                 std::pair<std::string, Value> item = *iter;
                 Value key(item.first);
+                const MachineClass *mc = machine->getStateMachine();
                 if (do_properties &&
-                    (do_local_properties || (machine->getStateMachine() &&
-                                             !machine->getStateMachine()->propertyIsLocal(key)))) {
+                    (do_local_properties ||
+                     (mc && (mc->propertyIsPersistent(key) || !mc->propertyIsLocal(key))))) {
                     chn->sendPropertyChangeMessage(machine, machine->getName(), key, item.second);
                 }
                 if (do_modbus) {
@@ -2990,11 +3002,22 @@ void Channel::setupFilters() {
         while (m_iter != MachineInstance::end()) {
             MachineInstance *machine = *m_iter++;
             if (machine && !this->channel_machines.count(machine)) {
-                const Value &val = machine->getValue(item.first);
-                // match if the machine has the property and Null was given as the match value
-                //  or if the machine has the property and it matches the provided value
-                if (val != SymbolTable::Null &&
-                    (item.second == SymbolTable::Null || val == item.second)) {
+                bool matched = false;
+                // PERSISTENT == "true" selects machines that are persistent via the
+                // machine-level flag OR per-field PERSISTENT OPTION markers. The
+                // reserved "PERSISTENT" property is unset for per-field machines, so
+                // fall back to isPersistent() which covers both.
+                if (item.first == "PERSISTENT" && item.second == "true") {
+                    matched = machine->isPersistent();
+                }
+                else {
+                    const Value &val = machine->getValue(item.first);
+                    // match if the machine has the property and Null was given as the match value
+                    //  or if the machine has the property and it matches the provided value
+                    matched = val != SymbolTable::Null &&
+                              (item.second == SymbolTable::Null || val == item.second);
+                }
+                if (matched) {
                     //DBG_CHANNELS << "found match " << machine->getName() <<"\n";
                     this->channel_machines.insert(machine);
                     machine->publish();

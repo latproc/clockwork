@@ -529,6 +529,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     int property_notify_defer;
     bool deferred_property_notify;
     bool record_apply_mode;
+    // APPLY/calcAdjust defer setValue before sendModbusUpdate. Flush on end.
+    std::map<std::string, Value> deferred_modbus_updates;
 
   protected:
     static std::list<MachineInstance *>

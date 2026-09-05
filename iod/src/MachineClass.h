@@ -107,6 +107,9 @@ class MachineClass {
     void addPrivateColumn(const std::string &name) { private_properties.insert(name); }
     bool propertyIsPersistent(const char *name) const;
     bool propertyIsPersistent(const std::string &name) const;
+    bool propertyIsPersistent(const Value &name) const {
+        return persistent_properties.count(name.asString()) > 0;
+    }
     bool hasPersistentProperties() const { return !persistent_properties.empty(); }
 
     State default_state;
