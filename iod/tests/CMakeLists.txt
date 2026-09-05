@@ -188,7 +188,10 @@ target_link_libraries(test_json_ownership gmock_main cw_interpreter cw_client ${
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_json_ownership COMMAND test_json_ownership)
 
-add_executable(test_scheduler test_scheduler.cpp )
+# process.cpp lives in cw_interpreter (kept out of cw_client for Bionic panels
+# without boost/context/fiber.hpp). Compile it into this test directly.
+add_executable(test_scheduler test_scheduler.cpp
+  ${PROJECT_SOURCE_DIR}/src/process.cpp)
 target_link_libraries(test_scheduler gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} dl pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 if (USE_ASAN)
