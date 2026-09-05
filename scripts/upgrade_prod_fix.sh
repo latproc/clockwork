@@ -341,7 +341,7 @@ fi
 
 git checkout -B "$BRANCH" "origin/${BRANCH}"
 git reset --hard "origin/${BRANCH}"
-git clean -fd --exclude=sampling --exclude=www/html/baleimages \
+git clean -fd --exclude=sampling \
   --exclude='iod/*.prev-*' --exclude='iod/*.new-*' \
   --exclude='code/plugins/*.prev-*' \
   --exclude='log/' || true
