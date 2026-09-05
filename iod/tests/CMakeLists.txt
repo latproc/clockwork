@@ -57,6 +57,9 @@ target_link_libraries(test_disable_action gmock_main cw_interpreter cw_client
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_disable_action COMMAND test_disable_action)
 
+add_test(NAME no_site_tree_in_product_tests
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_SOURCE_DIR}/check_no_site_paths.cmake)
+
 # LIST drain fixtures: in-tree types only.
 add_executable(test_list_walkers test_list_walkers.cpp)
 set_target_properties (test_list_walkers PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )

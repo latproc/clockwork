@@ -2,6 +2,8 @@
 
 **Updated:** 2026-07-31 (B is elc-only product)
 
+This repo is the Clockwork product, not the site LPC tree. See `AGENTS.md`.
+
 Three lines stay in **partial** sync. Do not full-merge tips. Port small commits
 with scope tags.
 
