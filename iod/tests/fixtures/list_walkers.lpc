@@ -115,3 +115,6 @@ TUBESEQSRC MACHINE Tube {
 M_TubeSeqState TUBESEQSTATES;
 M_TubeSeq TUBESEQ M_TubeSeqState;
 M_TubeSeqSrc TUBESEQSRC M_TubeSeq;
+
+L_ClearSrc LIST F_ItemA, F_ItemB;
+M_Clear CHECKCLEAR L_ClearSrc;

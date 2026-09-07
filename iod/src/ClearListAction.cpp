@@ -63,6 +63,7 @@ Action::Status ClearListAction::run() {
         }
 #endif
         dest_machine->parameters.clear();
+        fixListState(*dest_machine);
         dest_machine->updateLastEvaluationTime();
         dest_machine->setNeedsCheck();
         dest_machine->notifyDependents();

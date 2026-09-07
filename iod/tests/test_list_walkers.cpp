@@ -350,4 +350,15 @@ TEST_F(ListWalkersTest, GridMapSkipsDeselectedSlot) {
     EXPECT_NE(intValue("M_Grid", "bits"), 0);
 }
 
+TEST_F(ListWalkersTest, ClearListReconcilesEmptyState) {
+    // CLEAR must move the LIST to its "empty" state so a dependent's
+    // `Src IS empty` WHEN becomes true in the same drain. Regression: the
+    // CLEAR action emptied parameters but left the state "nonempty", so the
+    // walker kept re-entering the empty-list work step.
+    sendCmd("M_Clear", "go");
+    drainOnce();
+    EXPECT_EQ(stateOf("M_Clear"), "emptied")
+        << "CLEAR must reconcile the LIST empty state (Src IS empty must be true)";
+}
+
 } // namespace

@@ -570,6 +570,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     friend int changeState(void *s, const char *new_state);
 };
 
+// Reconcile a LIST's empty/nonempty state from its current parameters.
+void fixListState(MachineInstance &list);
+
 std::ostream &operator<<(std::ostream &out, const MachineInstance &m);
 
 class MachineValue : public DynamicValue {

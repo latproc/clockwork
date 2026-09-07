@@ -180,3 +180,11 @@ MAPCTL MACHINE Cells, Work, Current {
     SET SELF TO idle;
   }
 }
+
+# CLEAR must reconcile the LIST empty/nonempty state so `Src IS empty` is
+# true immediately after CLEAR (regression guard for the list-walker drain).
+CHECKCLEAR MACHINE Src {
+  emptied WHEN Src IS empty;
+  idle INITIAL;
+  COMMAND go { CLEAR Src; }
+}
