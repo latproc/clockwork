@@ -397,8 +397,9 @@ Action::Status PredicateAction::run() {
             DBG_M_PREDICATES << "Telling " << owner->getName() << " to set property " << name
                              << " to " << val << " (type: " << val.kind_to_string() << ")\n";
             setValue(owner, name, val, predicate);
-            // FIXME: This prevents a double free.
-            if (val.kind == Value::t_json) { val.kind = Value::t_empty; }
+            // `val` owns its own tree (setValue clones into the target), so its
+            // destructor releases it. Blanking `kind` here orphaned the tree and
+            // leaked one JSON document per assignment.
             status = Complete;
             owner->stop(this);
             return status;
