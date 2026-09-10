@@ -1,4 +1,5 @@
 #include "cw_test.h"
+#include <cJSON.h>
 #include <ControlSystemMachine.h>
 #include <MachineInstance.h>
 #include <ProcessingThread.h>
@@ -38,6 +39,19 @@ static void start_test_server() {
         ])", "application/json");
     });
 
+    // Catalog-sized JSON array: production responses are small but numerous.
+    svr.Get("/api/catalog", [](const httplib::Request&, httplib::Response& res) {
+        std::string body = "[";
+        for (int i = 0; i < 12; ++i) {
+            if (i) body += ",";
+            body += "{\"bale_ref\":\"B2609051612" + std::to_string(10 + i) +
+                    "\",\"station\":\"FeederChamber\",\"lot_size\":13,"
+                    "\"weight\":12.5,\"tags\":[\"a\",\"b\"]}";
+        }
+        body += "]";
+        res.set_content(body, "application/json");
+    });
+
     // Minimal POST endpoint: echo the posted JSON body back verbatim
     svr.Post("/api/echo", [](const httplib::Request& req, httplib::Response& res) {
         if (req.body.empty()) {
@@ -73,6 +87,7 @@ class WebRequestTests {
         tests_.push_back(TestCase([this]() { return test_basic_request(); }));
         tests_.push_back(TestCase([this]() { return test_post_request(); }));
         tests_.push_back(TestCase([this]() { return test_repeated_requests(); }));
+        tests_.push_back(TestCase([this]() { return test_repeated_requests_json_node_stable(); }));
     }
     ~WebRequestTests() { delete scope_; }
     std::list<TestCase> tests() { return tests_; }
@@ -204,6 +219,53 @@ class WebRequestTests {
             EXPECT_TRUE(req->getValue("Status") == 200);
             delete req;
         }
+        EXPECT_TRUE(debug_mallocs_remaining() == 0);
+        PASS;
+    }
+
+    // Live cJSON node count is the instrumentation the plant reports via
+    // MEMSNAPSHOT (cjson_nodes=). debug_malloc cannot see cJSON allocations
+    // (cJSON uses malloc directly), so assert node stability separately across
+    // repeated real HTTP request/response cycles.
+    TestResult test_repeated_requests_json_node_stable() {
+        const int N = 60;
+        auto run_one = [this]() -> bool {
+            MachineInstance *req = MachineInstanceFactory::create("req_cat", machine_class_->name);
+            req->setStateMachine(machine_class_);
+            req->properties.add("Request", Value{"http://127.0.0.1:8081/api/catalog"});
+            req->properties.add("Status", Value{0});
+            req->properties.add("Result", Value{""});
+            req->properties.add("Errors", Value{""});
+            req->idle();
+            changeState(req, "Start");
+            exec_web_request((void *)req);
+            int spins = 0;
+            while (req->getCurrentStateVal() != nullptr && spins < 500) {
+                req->idle();
+                exec_web_request((void *)req);
+                usleep(5000);
+                Value s = *req->getCurrentStateVal();
+                if (s == "Done" || s == "Error") break;
+                ++spins;
+            }
+            bool ok = (*req->getCurrentStateVal() == "Done") && (req->getValue("Status") == 200);
+            delete req;
+            return ok;
+        };
+
+        for (int i = 0; i < 5; ++i) {
+            EXPECT_TRUE(run_one());
+        }
+        const long before = cJSON_LiveNodeCount();
+        for (int i = 0; i < N; ++i) {
+            EXPECT_TRUE(run_one());
+        }
+        const long after = cJSON_LiveNodeCount();
+        if (after != before) {
+            std::cout << "live cJSON nodes grew by " << (after - before) << " over " << N
+                      << " real HTTP request/response cycles\n";
+        }
+        EXPECT_TRUE(after == before);
         EXPECT_TRUE(debug_mallocs_remaining() == 0);
         PASS;
     }
