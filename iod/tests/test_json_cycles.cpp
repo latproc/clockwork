@@ -330,6 +330,59 @@ TEST_F(JsonCycleTest, EvaluatedJsonFieldReadIsNodeStable) {
                              << " over 500 evaluated ITEM reads";
 }
 
+// 10. Machine lifecycle: production creates and destroys machine instances
+//     (shadow/API machines). A per-instance resource that holds JSON and is not
+//     released in ~MachineInstance leaks once per machine, which is exactly the
+//     shape of the previously fixed MachineCommand-handler leak.
+TEST_F(JsonCycleTest, MachineLifecycleWithJsonPropertiesIsNodeStable) {
+    MachineClass *cls = new MachineClass("JsonLifecycle");
+    cls->addState("Idle", true);
+    cls->initial_state = State("Idle");
+    cls->default_state = State("Idle");
+    cls->disableAutomaticStateChanges();
+    cls->setProperty("Status", Value{(int64_t)0});
+    cls->setProperty("result", Value{cJSON_CreateObject()});
+
+    auto make_and_destroy = [&]() {
+        MachineInstance *m = MachineInstanceFactory::create("life", cls->name);
+        m->setStateMachine(cls);
+        m->setProperties(cls->getProperties());
+        m->setValue("result", Value{cJSON_Parse(catalogBody(4).c_str())});
+        m->setValue("Status", Value{(int64_t)200});
+        delete m;
+    };
+
+    for (int i = 0; i < 10; ++i) {
+        make_and_destroy();
+    }
+    const long before = cJSON_LiveNodeCount();
+    for (int i = 0; i < 200; ++i) {
+        make_and_destroy();
+    }
+    const long after = cJSON_LiveNodeCount();
+    EXPECT_EQ(before, after) << "live cJSON nodes grew by " << (after - before)
+                             << " over 200 machine create/destroy cycles";
+}
+
+// 11. Class-property projection: every instance copies class OPTION defaults
+//     (including JSON defaults such as `OPTION result JSON_VALUE {}`).
+TEST_F(JsonCycleTest, ClassPropertyProjectionIsNodeStable) {
+    MachineClass *cls = new MachineClass("JsonProjection");
+    cls->setProperty("result", Value{cJSON_Parse(catalogBody(4).c_str())});
+
+    api_->setStateMachine(cls);
+    for (int i = 0; i < 10; ++i) {
+        api_->setProperties(cls->getProperties());
+    }
+    const long before = cJSON_LiveNodeCount();
+    for (int i = 0; i < 300; ++i) {
+        api_->setProperties(cls->getProperties());
+    }
+    const long after = cJSON_LiveNodeCount();
+    EXPECT_EQ(before, after) << "live cJSON nodes grew by " << (after - before)
+                             << " over 300 class-property projections";
+}
+
 } // namespace
 
 #include <Dispatcher.h>
