@@ -2,12 +2,25 @@
 
 #include <cJSON.h>
 #include <json_expression.h>
+#include <cstring>
+#include <string>
 #include <utility>
 #include <value.h>
+#include "MessageEncoding.h"
 
 #include "library_globals.cpp"
 
 namespace {
+
+int countObjectKeys(cJSON *obj, const char *name) {
+    int n = 0;
+    for (cJSON *c = obj ? obj->child : nullptr; c; c = c->next) {
+        if (c->string && strcmp(c->string, name) == 0) {
+            ++n;
+        }
+    }
+    return n;
+}
 
 std::string jsonToString(cJSON *json) {
     if (!json) {
@@ -226,6 +239,54 @@ TEST(JsonOwnership, ValueGetFromJSONScalarDoesNotLeak) {
 
     cJSON_Delete(doc);
     EXPECT_EQ(cJSON_LiveNodeCount(), live_before);
+}
+
+// Regression: addValueToJSONObject / addValueToJSONArray must not fall through
+// from the t_json case into t_bool (a missing `break`). Falling through appended
+// a spurious `false` under the same key, corrupting every JSON value serialized
+// into a command (e.g. dbd routing the QUERY reply payload to `response`).
+TEST(JsonOwnership, AddJsonValueToObjectEmitsSingleValue) {
+    Value arr(cJSON_Parse(R"JSON([{"id":1},{"id":2}])JSON"));
+    ASSERT_EQ(Value::t_json, arr.kind);
+
+    cJSON *obj = cJSON_CreateObject();
+    MessageEncoding::addValueToJSONObject(obj, "value", arr);
+    EXPECT_EQ(1, countObjectKeys(obj, "value"));
+    cJSON *v = cJSON_GetObjectItem(obj, "value");
+    ASSERT_NE(nullptr, v);
+    EXPECT_EQ(cJSON_Array, v->type);
+    cJSON_Delete(obj);
+}
+
+TEST(JsonOwnership, AddJsonValueToArrayEmitsSingleItem) {
+    Value objv(cJSON_Parse(R"JSON({"id":1})JSON"));
+    ASSERT_EQ(Value::t_json, objv.kind);
+
+    cJSON *arr = cJSON_CreateArray();
+    MessageEncoding::addValueToJSONArray(arr, objv);
+    EXPECT_EQ(1, cJSON_GetArraySize(arr));
+    cJSON_Delete(arr);
+}
+
+// Full round trip: a JSON array routed through encodeCommand (as dbd does for
+// the `select` reply) must carry exactly one "value" — the row array, no bool.
+TEST(JsonOwnership, EncodeCommandJsonParamHasSingleValue) {
+    Value rows(cJSON_Parse(R"JSON([{"id":1},{"id":2}])JSON"));
+    std::string cmd =
+        MessageEncoding::encodeCommand("PROPERTY", Value("ed"), Value("response"), rows);
+
+    cJSON *msg = cJSON_Parse(cmd.c_str());
+    ASSERT_NE(nullptr, msg);
+    cJSON *params = cJSON_GetObjectItem(msg, "params");
+    ASSERT_NE(nullptr, params);
+    ASSERT_EQ(3, cJSON_GetArraySize(params));
+    cJSON *third = cJSON_GetArrayItem(params, 2);
+    ASSERT_NE(nullptr, third);
+    cJSON *type = cJSON_GetObjectItem(third, "type");
+    ASSERT_NE(nullptr, type);
+    EXPECT_EQ(std::string("JSON"), std::string(type->valuestring));
+    EXPECT_EQ(1, countObjectKeys(third, "value"));
+    cJSON_Delete(msg);
 }
 
 } // namespace

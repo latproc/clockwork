@@ -93,6 +93,7 @@ void MessageEncoding::addValueToJSONObject(cJSON *obj, const char *name, const V
         else if (val.json->type == cJSON_Array) {
             cJSON_AddItemToObject(obj, name, cJSON_Duplicate(val.json));
         }
+        break;
     }
     case Value::t_bool:
         if (val.bValue) {
@@ -151,6 +152,7 @@ void MessageEncoding::addValueToJSONArray(cJSON *obj, const Value &val) {
         else if (val.json->type == cJSON_Array) {
             cJSON_AddItemToArray(obj, cJSON_Duplicate(val.json));
         }
+        break;
     }
 #ifdef DYNAMIC_VALUES
     case Value::t_dynamic: {

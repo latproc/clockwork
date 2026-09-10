@@ -135,7 +135,7 @@ PathResult follow_json_expr_path(const std::string &str,
             if (result.value && result.value->type == cJSON_Array) {
                 result.parent = result.value;
                 result.key.reset();
-                int64_t index = 8;
+                int64_t index = 0;
                 if (symbol.asInteger(index)) {
                     result.index = static_cast<int>(index);
                 }
