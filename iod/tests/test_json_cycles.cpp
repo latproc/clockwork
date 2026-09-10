@@ -17,6 +17,7 @@
 #include <Expression.h>
 #include <MachineInstance.h>
 #include <MessageEncoding.h>
+#include <dynamic_value.h>
 #include <cJSON.h>
 #include <json_expression.h>
 #include <json_expr_parser.h>
@@ -381,6 +382,64 @@ TEST_F(JsonCycleTest, ClassPropertyProjectionIsNodeStable) {
     const long after = cJSON_LiveNodeCount();
     EXPECT_EQ(before, after) << "live cJSON nodes grew by " << (after - before)
                              << " over 300 class-property projections";
+}
+
+// 12. ExpressionValue is the per-processing-loop consumer of JSON paths:
+//     conditions of the form `WHEN ITEM ${k} OF prop ...` compile to a dynamic
+//     value re-evaluated on every loop pass. A leak here grows with loop count,
+//     not with requests.
+TEST_F(JsonCycleTest, EvaluatedJsonDynamicValueIsNodeStable) {
+    api_->setValue("Source", Value{cJSON_Parse(catalogBody(8).c_str())});
+
+    Predicate *target = new Predicate("Source");
+    target->json_expression = "$[0].bale_ref";
+    ExpressionValue ev(target); // copies the predicate
+    ev.setScope(api_);
+
+    for (int i = 0; i < 20; ++i) {
+        ev();
+    }
+    const long before = cJSON_LiveNodeCount();
+    for (int i = 0; i < 500; ++i) {
+        ev();
+    }
+    const long after = cJSON_LiveNodeCount();
+    EXPECT_EQ(before, after) << "live cJSON nodes grew by " << (after - before)
+                             << " over 500 dynamic JSON-path evaluations";
+    delete target;
+}
+
+// 13. Same, but with a symbol-substituted index (`ITEM ${idx} OF ...`), which is
+//     how the generic JSON walkers address array elements, and with a path that
+//     fails to resolve (the error/default branch).
+TEST_F(JsonCycleTest, EvaluatedJsonSymbolIndexIsNodeStable) {
+    api_->setValue("Source", Value{cJSON_Parse(catalogBody(8).c_str())});
+    api_->setValue("idx", Value{(int64_t)1});
+
+    Predicate *target = new Predicate("Source");
+    target->json_expression = "$[${idx}].bale_ref";
+    ExpressionValue ev(target);
+    ev.setScope(api_);
+
+    Predicate *missing = new Predicate("Source");
+    missing->json_expression = "$.no_such_field";
+    ExpressionValue ev_missing(missing);
+    ev_missing.setScope(api_);
+
+    for (int i = 0; i < 20; ++i) {
+        ev();
+        ev_missing();
+    }
+    const long before = cJSON_LiveNodeCount();
+    for (int i = 0; i < 500; ++i) {
+        ev();
+        ev_missing();
+    }
+    const long after = cJSON_LiveNodeCount();
+    EXPECT_EQ(before, after) << "live cJSON nodes grew by " << (after - before)
+                             << " over 500 symbol-indexed / failing path evaluations";
+    delete target;
+    delete missing;
 }
 
 } // namespace
