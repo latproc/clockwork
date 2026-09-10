@@ -16,6 +16,7 @@
 
 #include <Expression.h>
 #include <MachineInstance.h>
+#include <PredicateAction.h>
 #include <MessageEncoding.h>
 #include <dynamic_value.h>
 #include <cJSON.h>
@@ -440,6 +441,119 @@ TEST_F(JsonCycleTest, EvaluatedJsonSymbolIndexIsNodeStable) {
                              << " over 500 symbol-indexed / failing path evaluations";
     delete target;
     delete missing;
+}
+
+// 14. Condition::operator() is what the machine state-check loop calls for
+//     every WHEN clause. A WHEN clause that reads a JSON path (ITEM ... OF)
+//     stores the evaluated result in Condition::last_result, so this is the
+//     per-loop JSON ownership path that the plain evaluator probes do not cover.
+TEST_F(JsonCycleTest, ConditionEvaluationWithJsonIsNodeStable) {
+    api_->setValue("Source", Value{cJSON_Parse(catalogBody(8).c_str())});
+
+    Predicate *lhs = new Predicate(Value(std::string("FeederChamber"), Value::t_string));
+    Predicate *rhs = new Predicate("Source");
+    rhs->json_expression = "$[0].station";
+    rhs->default_value = Value(std::string(""), Value::t_string);
+    Predicate *cmp = new Predicate(lhs, opEQ, rhs); // owns lhs and rhs
+
+    Condition cond(cmp); // copies cmp
+    delete cmp;
+
+    for (int i = 0; i < 20; ++i) {
+        cond(api_);
+    }
+    const long before = cJSON_LiveNodeCount();
+    for (int i = 0; i < 500; ++i) {
+        cond(api_);
+    }
+    const long after = cJSON_LiveNodeCount();
+    EXPECT_EQ(before, after) << "live cJSON nodes grew by " << (after - before)
+                             << " over 500 JSON condition evaluations";
+}
+
+// 15. PredicateAction::run() executes ITEM ... OF ... := ... statements. This is
+//     the action path the scheduler runs, as opposed to a direct assign() call.
+TEST_F(JsonCycleTest, PredicateActionRunWithJsonIsNodeStable) {
+    api_->setValue("PostData", Value{cJSON_CreateObject()});
+    api_->setValue("Source", Value{cJSON_Parse(catalogBody(4).c_str())});
+
+    Predicate *target = new Predicate("PostData");
+    target->json_expression = "$.station";
+    Predicate *rhs = new Predicate(Value(std::string("FeederChamber"), Value::t_string));
+    Predicate *put = new Predicate(target, opPutSubExpr, rhs); // owns target and rhs
+
+    PredicateActionTemplate tmpl(put);
+    PredicateAction action(api_, tmpl); // copies the predicate
+
+    Predicate *src_target = new Predicate("scratch");
+    Predicate *src_rhs = new Predicate("Source");
+    src_rhs->json_expression = "$[0].bale_ref";
+    Predicate *geta = new Predicate(src_target, opGetSubExpr, src_rhs); // owns both
+    PredicateActionTemplate get_tmpl(geta);
+    PredicateAction get_action(api_, get_tmpl);
+
+    for (int i = 0; i < 20; ++i) {
+        action.run();
+        get_action.run();
+    }
+    const long before = cJSON_LiveNodeCount();
+    for (int i = 0; i < 500; ++i) {
+        action.run();
+        get_action.run();
+    }
+    const long after = cJSON_LiveNodeCount();
+    EXPECT_EQ(before, after) << "live cJSON nodes grew by " << (after - before)
+                             << " over 500 predicate-action pairs";
+    // PredicateActionTemplate owns the predicates passed to it; deleting them
+    // here as well is a double free.
+}
+
+// 16. Production reset clears JSON properties with an empty *symbol*
+//     (`Result := "";`), not with a fresh object. Isolate that clear.
+TEST_F(JsonCycleTest, JsonPropertyClearedWithEmptySymbolIsNodeStable) {
+    const std::string body = catalogBody(12);
+    for (int i = 0; i < 5; ++i) {
+        api_->setValue("big", Value{cJSON_Parse(body.c_str())});
+        api_->setValue("big", Value(""));
+    }
+    const long before = cJSON_LiveNodeCount();
+    for (int i = 0; i < 200; ++i) {
+        api_->setValue("big", Value{cJSON_Parse(body.c_str())});
+        api_->setValue("big", Value(""));
+    }
+    EXPECT_EQ(before, cJSON_LiveNodeCount()) << "empty-symbol clear leaked nodes";
+}
+
+// 17. Full observed production shape: response -> property copy -> second
+//     machine copy -> reset clears the plugin Result with "".
+TEST_F(JsonCycleTest, CrossMachineJsonCopyThenResetIsNodeStable) {
+    const std::string body = catalogBody(12);
+    MachineClass *cls = new MachineClass("JsonConsumer");
+    cls->addState("Idle", true);
+    cls->initial_state = State("Idle");
+    cls->default_state = State("Idle");
+    cls->disableAutomaticStateChanges();
+    MachineInstance *consumer = MachineInstanceFactory::create("consumer", cls->name);
+    consumer->setStateMachine(cls);
+
+    auto cycle = [&]() {
+        curl_->setValue("Result", Value{cJSON_Parse(body.c_str())}); // plugin setJsonValue
+        api_->setValue("result", curl_->getValue("Result"));          // result := curl.Result
+        consumer->setValue("rows_json", api_->getValue("result"));    // cross-machine copy
+        curl_->setValue("Result", Value(""));                        // reset: Result := ""
+    };
+
+    for (int i = 0; i < 20; ++i) {
+        cycle();
+    }
+    const long before = cJSON_LiveNodeCount();
+    for (int i = 0; i < 200; ++i) {
+        cycle();
+    }
+    const long after = cJSON_LiveNodeCount();
+    delete consumer;
+    EXPECT_EQ(before, after) << "live cJSON nodes grew by " << (after - before)
+                             << " over 200 cross-machine copy/reset cycles";
 }
 
 } // namespace
