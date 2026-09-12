@@ -177,7 +177,24 @@ extern FILE *yyin;
 
 bool cmdline_done = false;
 
-void usage(const char *name) { std::cout << name << " [-q] [-h host] [-p port]\n"; }
+void usage(const char *name, std::ostream &out = std::cout) {
+    out << "Usage: " << name << " [options]\n"
+        << "\n"
+        << "Interactive command shell for a running iod / cw instance. Commands are\n"
+        << "sent over ZeroMQ and every command must end with ';'.\n"
+        << "\n"
+        << "Options:\n"
+        << "  -h HOST        Host to connect to (default: 127.0.0.1)\n"
+        << "                 A bare -h, with no HOST, prints this help and exits.\n"
+        << "  -p PORT        Command / iosh port (default: 5555)\n"
+        << "  -q             Quiet: skip the connection banner, recent messages\n"
+        << "                 and the startup HEALTH line\n"
+        << "  --help, -?     Show this help and exit\n"
+        << "\n"
+        << "Inside the shell:\n"
+        << "  HELP;          Ask the connected target to list the commands it accepts\n"
+        << "  exit;          Leave the shell (ctrl-D also works)\n";
+}
 
 std::list<char *> machine_names;
 std::list<const char *> commands;
@@ -462,18 +479,37 @@ int main(int argc, const char *argv[]) {
         bool quiet = false;
         std::string host = "127.0.0.1";
         for (int i = 1; i < argc; ++i) {
-            if (i < argc - 1 && strcmp(argv[i], "-p") == 0) {
-                port = (int)strtol(argv[++i], 0, 10);
-            }
-            else if (i < argc - 1 && strcmp(argv[i], "-h") == 0) {
-                host = argv[++i];
-            }
-            else if (strcmp(argv[i], "-?") == 0) {
-                usage(argv[0]);
+            const char *arg = argv[i];
+            if (strcmp(arg, "--help") == 0 || strcmp(arg, "-?") == 0) {
+                usage(program_name);
                 exit(0);
             }
-            else if (strcmp(argv[i], "-q") == 0) {
+            else if (strcmp(arg, "-h") == 0) {
+                /* -h HOST selects the host (backward compatible). A bare -h, or an
+                   -h followed by another option, is a request for help. */
+                if (i + 1 < argc && argv[i + 1][0] != '-') {
+                    host = argv[++i];
+                }
+                else {
+                    usage(program_name);
+                    exit(0);
+                }
+            }
+            else if (strcmp(arg, "-p") == 0) {
+                if (i + 1 >= argc) {
+                    std::cerr << program_name << ": option -p requires a PORT argument\n";
+                    usage(program_name, std::cerr);
+                    exit(1);
+                }
+                port = (int)strtol(argv[++i], 0, 10);
+            }
+            else if (strcmp(arg, "-q") == 0) {
                 quiet = true;
+            }
+            else {
+                std::cerr << program_name << ": unrecognised option '" << arg << "'\n";
+                usage(program_name, std::cerr);
+                exit(1);
             }
         }
         std::stringstream ss;
