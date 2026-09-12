@@ -779,6 +779,21 @@ else()
     ENVIRONMENT "DBD=$<TARGET_FILE:dbd>"
     TIMEOUT 20)
 endif()
+# dbd must re-request CHANNEL promptly after a "no such channel" reply, so it
+# subscribes as soon as iod defines DATABASE_CHANNEL instead of stalling ~10s.
+add_executable(test_dbd_channel_retry tests/test_dbd_channel_retry.cpp)
+set_target_properties(test_dbd_channel_retry PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_dbd_channel_retry PRIVATE src)
+target_link_libraries(test_dbd_channel_retry ${ZeroMQ_LIBRARY} pthread)
+add_test(NAME test_dbd_channel_retry COMMAND test_dbd_channel_retry)
+set_tests_properties(test_dbd_channel_retry PROPERTIES
+  ENVIRONMENT "DBD=$<TARGET_FILE:dbd>" TIMEOUT 30)
+add_dependencies(test_dbd_channel_retry dbd)
+# dbd must exit on SIGTERM; it used to hang in ~zmq::context_t() because
+# SubscriptionManager leaked sockets (zmq_ctx_term waits for all of them).
+add_test(NAME test_dbd_sigterm COMMAND sh
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_dbd_sigterm.sh $<TARGET_FILE:dbd>)
+set_tests_properties(test_dbd_sigterm PROPERTIES TIMEOUT 20)
 add_executable(test_cw_system tests/test_cw_system.cpp)
 set_target_properties(test_cw_system PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_cw_system PRIVATE src)

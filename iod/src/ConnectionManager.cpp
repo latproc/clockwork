@@ -106,15 +106,23 @@ class SubscriptionManagerInternals : public ConnectionManagerInternals {
 
   public:
     SubscriptionManagerInternals()
-        : sent_request(false), send_time(0), last_setup_recreate_time(0) {}
+        : sent_request(false), send_time(0), last_setup_recreate_time(0),
+          channel_missing(false), channel_missing_since(0) {}
 
     ~SubscriptionManagerInternals() {}
     // helpers for connection resume
     bool sent_request;
     uint64_t send_time;
     uint64_t last_setup_recreate_time;
+    // A well-formed "no such channel" reply is not a broken connection: the
+    // server is up and the channel may be defined moments later (iod starting).
+    // Retry CHANNEL on a short interval instead of the generic e_error timeout,
+    // which stalled dbd ~10s before it would subscribe to DATABASE_CHANNEL.
+    bool channel_missing;
+    uint64_t channel_missing_since;
     static const uint64_t channel_request_timeout = 3000000;
     static const uint64_t setup_recreate_min_interval = 2000000; // 2s
+    static const uint64_t channel_retry_min_interval = 500000;   // 0.5s
     static std::list<SubscriptionManager*> all;
 };
 
@@ -181,7 +189,25 @@ SubscriptionManager::~SubscriptionManager() {
     if (monit_setup &&!monit_setup->disconnected()) {
         monit_setup->abort();
     }
+
+    // Close every ZMQ socket this manager owns. zmq_ctx_term() blocks until all
+    // sockets open in the context are closed, so a socket that is merely
+    // aborted (or never freed) leaves the process alive forever after its main
+    // loop returns. dbd appeared to ignore SIGTERM for exactly this reason: the
+    // signal handler ran and main() returned, then hung in ~context_t() on the
+    // leaked setup REQ / monitor sockets. Delete the monitor before the socket
+    // it references, since zmq::monitor_t keeps a non-owning reference.
+    delete monit_setup;
+    monit_setup = 0;
+    delete monit_pubs;
+    monit_pubs = 0;
+    delete sender_;
+    sender_ = 0;
+    delete setup_;
+    setup_ = 0;
+
     delete internals;
+    internals = 0;
 }
 
 SubscriptionManager::SubStatus SubscriptionManager::subscriberStatus() { return sub_status_; }
@@ -259,6 +285,9 @@ bool SubscriptionManager::forceFullReconnect(const char *reason) {
                 SubscriptionManagerInternals::setup_recreate_min_interval) {
             return false;
         }
+        // A forced reconnect starts a fresh CHANNEL request; drop the
+        // channel-missing cooldown so it is not suppressed.
+        smi->channel_missing = false;
     }
     {
         FileLogger fl(program_name);
@@ -430,6 +459,12 @@ bool SubscriptionManager::applyChannelSetupReply(const char *buf, size_t len) {
     if (!buf || len == 0) {
         return false;
     }
+    SubscriptionManagerInternals *smi = dynamic_cast<SubscriptionManagerInternals *>(internals);
+    if (smi) {
+        // Cleared up front so a parse failure below is not mistaken for the
+        // "channel not defined" reply that requestChannel() retries cheaply.
+        smi->channel_missing = false;
+    }
     // cJSON_Parse expects a C string; copy if not already terminated.
     std::string payload(buf, buf + len);
     {
@@ -454,7 +489,15 @@ bool SubscriptionManager::applyChannelSetupReply(const char *buf, size_t len) {
             fl.f() << payload << "\n";
         }
         cJSON_Delete(chan);
-        setSetupStatus(e_error);
+        if (smi) {
+            smi->channel_missing = true;
+            smi->channel_missing_since = microsecs();
+        }
+        // The server answered, so the connection is healthy — the channel is
+        // simply not defined yet. Stay connectable and let requestChannel()
+        // retry on channel_retry_min_interval. e_error would sit for 10s before
+        // a full reconnect, which is why dbd took ~10s to find DATABASE_CHANNEL.
+        setSetupStatus(e_waiting_connect);
         return false;
     }
 
@@ -516,7 +559,6 @@ bool SubscriptionManager::applyChannelSetupReply(const char *buf, size_t len) {
 
     setSetupStatus(SubscriptionManager::e_settingup_subscriber);
 
-    SubscriptionManagerInternals *smi = dynamic_cast<SubscriptionManagerInternals *>(internals);
     if (smi) {
         smi->sent_request = false;
         smi->send_time = 0;
@@ -539,6 +581,14 @@ bool SubscriptionManager::requestChannel() {
             smi->sent_request &&
             (now - smi->send_time > SubscriptionManagerInternals::channel_request_timeout);
         if (!smi->sent_request || request_timed_out) {
+            if (smi->channel_missing &&
+                now - smi->channel_missing_since <
+                    SubscriptionManagerInternals::channel_retry_min_interval) {
+                // The server just told us the channel is not defined. Wait out
+                // the short retry interval; the next pass re-sends CHANNEL on
+                // the same (healthy) REQ socket.
+                return false;
+            }
             if (request_timed_out) {
                 FileLogger fl(program_name);
                 fl.f() << channel_name
@@ -616,6 +666,14 @@ bool SubscriptionManager::requestChannel() {
         }
         buf[len] = 0;
         if (!applyChannelSetupReply(buf, len)) {
+            if (smi->channel_missing) {
+                // "No such channel": the REQ socket is healthy and already back
+                // in the send state (a full reply was consumed), so recreating
+                // it here only churns the monitor thread and delays the retry by
+                // the 2s recreate rate limit. requestChannel() re-sends on its
+                // own short interval.
+                return false;
+            }
             // Reply was not a usable grant; recover REQ so the next CHANNEL can send.
             resetChannelRequestState(true);
             return false;
