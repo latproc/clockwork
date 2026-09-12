@@ -4177,6 +4177,33 @@ void MachineInstance::updateLastEvaluationTime() {
     }
 }
 
+const Value &MachineInstance::listMembershipToken() {
+    // Exact token of the current membership. Derived from the parameters on
+    // every read, so it cannot miss an edit: TAKE/CLEAR/ADD/COPY/MOVE and
+    // record unlinking all mutate parameters one way or another. Machine names
+    // (not pointers) keep the token meaningful if an entry is removed and the
+    // same slot is reused.
+    std::string token;
+    token.reserve(parameters.size() * 8);
+    for (size_t i = 0; i < parameters.size(); ++i) {
+        if (i) {
+            token += ',';
+        }
+        MachineInstance *m = parameters[i].machine;
+        if (!m && parameters[i].val.kind == Value::t_symbol) {
+            m = lookup(parameters[i]);
+        }
+        if (m) {
+            token += m->getName();
+        }
+        else {
+            token += parameters[i].val.asString();
+        }
+    }
+    list_membership_token = Value(token.c_str(), Value::t_string);
+    return list_membership_token;
+}
+
 bool MachineInstance::isStableState(const std::string state_name) {
     for (unsigned int ss_idx = 0; ss_idx < stable_states.size(); ++ss_idx) {
         StableState &s = stable_states[ss_idx];

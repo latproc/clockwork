@@ -204,6 +204,14 @@ std::ostream &SizeValue::operator<<(std::ostream &out) const {
 }
 std::ostream &operator<<(std::ostream &out, const SizeValue &val) { return val.operator<<(out); }
 
+DynamicValue *ListChangesValue::clone() const { return new ListChangesValue(*this); }
+std::ostream &ListChangesValue::operator<<(std::ostream &out) const {
+    return out << "CHANGES OF " << machine_list_name << "(" << last_result << ")";
+}
+std::ostream &operator<<(std::ostream &out, const ListChangesValue &val) {
+    return val.operator<<(out);
+}
+
 DynamicValue *BitsetValue::clone() const { return new BitsetValue(*this); }
 std::ostream &BitsetValue::operator<<(std::ostream &out) const {
     out << "BITSET FROM " << machine_list_name;
@@ -1008,6 +1016,37 @@ const Value &SizeValue::operator()() {
 
     last_process_time = currentTime();
     last_result = (int64_t)machine_list->parameters.size();
+    return last_result;
+}
+
+ListChangesValue::ListChangesValue(const ListChangesValue &other) {
+    machine_list_name = other.machine_list_name;
+    machine_list = 0;
+}
+
+const Value &ListChangesValue::operator()() {
+    if (!scope) {
+        return SymbolTable::Null;
+    }
+    machine_list = scope->lookup(machine_list_name);
+    if (!machine_list) {
+        char buf[400];
+        snprintf(buf, 400, "%s: no machine %s for CHANGES test", scope->getName().c_str(),
+                 machine_list_name.c_str());
+        MessageLog::instance()->add(buf);
+        last_result = 0;
+        return last_result;
+    }
+    if (machine_list->_type != "LIST") {
+        char buf[400];
+        snprintf(buf, 400, "%s: CHANGES OF needs a LIST, %s is %s", scope->getName().c_str(),
+                 machine_list_name.c_str(), machine_list->_type.c_str());
+        MessageLog::instance()->add(buf);
+        last_result = 0;
+        return last_result;
+    }
+    last_process_time = currentTime();
+    last_result = machine_list->listMembershipToken();
     return last_result;
 }
 

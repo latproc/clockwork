@@ -481,7 +481,7 @@ struct Subcondition {
 %token REPORTS STATE_CHANGES PROPERTY_CHANGES MODBUS
 %token LINKED SDO LOCAL CLASS AS INTEGER FLOAT ASINT ASFLOAT
 %token FLOAT32 SUM ABS SQRT MIN MAX MEAN
-%token CHANGING FAILURE ADD AFTER BEFORE
+%token CHANGING CHANGES FAILURE ADD AFTER BEFORE
 %token ASCENDING ASC DESCENDING DESC INDEX
 %token REFERS FIND SEEK CPU BOARD
 %token DIGITALIN ADC TOUCH PIN ETHERNET DIGITALIO DAC SPI SDIO JTAG UART
@@ -1500,6 +1500,11 @@ INTEGERVAL   {
 }
 | SIZE OF SYMBOL {
     $$ = new Value(new SizeValue($3));
+}
+| CHANGES OF SYMBOL {
+    // Membership token for a LIST; sees a same-pass swap that SIZE OF cannot
+    // (see ListChangesValue).
+    $$ = new Value(new ListChangesValue($3));
 }
 | COUNT SYMBOL FROM SYMBOL {
     $$ = new Value(new CountValue($2,$4));

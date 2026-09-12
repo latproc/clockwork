@@ -68,6 +68,7 @@ BOARD               return BOARD;
 BY                  return BY;
 CALL				return CALL;
 CATCH				return CATCH;
+CHANGES             return CHANGES;
 CHANGING            return CHANGING;
 CHANNEL             return CHANNEL;
 CLASS				return CLASS;

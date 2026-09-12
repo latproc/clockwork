@@ -607,6 +607,20 @@ add_test(NAME runtime_exceptions COMMAND sh ${_runtime}
   --must-contain "Overrun detected"
   --must-not-contain "should not be displayed")
 
+# LIST membership events for a supervisor that watches a list.
+#   same_size_swap: CHANGES OF changes on a remove+add that leaves SIZE
+#   unchanged; the size-based watcher must miss it.
+add_test(NAME runtime_list_changes_same_size_swap COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/list_changes_event.cw
+  --must-contain "BYCHANGES token=B"
+  --must-not-contain "BYSIZE token=B")
+#   local_state: an `X LOCAL STATE;` transient does not send X_enter to
+#   dependents, while the non-local control does.
+add_test(NAME runtime_list_changes_local_state COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/list_changes_event.cw
+  --must-contain "OBSERVED plain loud_enter"
+  --must-not-contain "LEAK local quiet_enter")
+
 # Part B: WAITFOR / CALL ON TIMEOUT ABORT|RETURN|THROW <msg> with TIMEOUT <ms>.
 add_test(NAME parse_waitfor_timeout COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/waitfor_timeout.cw -DEXPECT_RC=0

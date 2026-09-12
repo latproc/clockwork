@@ -436,6 +436,11 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
         return (start_time && microsecs() > start_time) ? microsecs() - start_time : 0;
     }
     void updateLastEvaluationTime();
+    // Computed membership token backing the `CHANGES OF <list>` value. It is
+    // derived from the current parameters on every read, so it changes for ANY
+    // membership edit (including a same-size swap) without every mutation site
+    // remembering to bump a counter. Returns a reference to the cached Value.
+    const Value &listMembershipToken();
 
     bool queuedForStableStateTest();
 
@@ -488,6 +493,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     bool is_active; // is this machine active or passive?
     CommandClock command_clock;
     Value current_value_holder;
+    Value list_membership_token; // cached result of listMembershipToken()
     std::stringstream ss;                // saves recreating string stream for temporary use
     uint64_t last_state_evaluation_time; // dynamic value check against this before recalculating
   public:

@@ -364,6 +364,25 @@ class SizeValue : public DynamicValue {
     MachineInstance *machine_list;
 };
 
+// CHANGES OF <list>: a token that changes for EVERY membership edit, including
+// a remove+add in one pass that leaves SIZE OF unchanged. It is a dynamic
+// value, so it is re-evaluated on each predicate evaluation instead of being
+// cached like a plain symbol or property read.
+class ListChangesValue : public DynamicValue {
+  public:
+    ListChangesValue(const char *list) : machine_list_name(list), machine_list(0) {}
+    virtual ~ListChangesValue() {}
+    virtual const Value &operator()();
+    virtual DynamicValue *clone() const;
+    virtual std::ostream &operator<<(std::ostream &) const;
+    ListChangesValue(const ListChangesValue &);
+
+  private:
+    ListChangesValue(const DynamicValue &);
+    std::string machine_list_name;
+    MachineInstance *machine_list;
+};
+
 class PopListBackValue : public DynamicValue {
   public:
     PopListBackValue(const char *list, bool remove = true)
