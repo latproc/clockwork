@@ -2332,26 +2332,21 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
             }
         }
         if (earliestTimerState) {
-            StableState s(*earliestTimerState);
             int64_t timer_val = earliestTimer;
 
             DBG_M_SCHEDULER << _name << " Scheduling timer for " << timer_val << "ms\n";
-            // prepare a new trigger. note: very short timers will still be scheduled
-            // TBD move this outside of the loop and only apply it for the earliest timer
+            // Hang the trigger on the live StableState, not a stack copy:
+            // ~StableState disables its trigger, so a copy would kill the
+            // scheduler item before it could fire (lost TIMER wake, no extra
+            // poll). Existing s.trigger was already released in the loop above.
             std::string trigger_name("SSTimer ");
             trigger_name += _name;
             trigger_name += " ";
-            trigger_name += s.state_name;
-            if (s.trigger) {
-                s.trigger->release();
-                s.trigger = 0;
-            }
+            trigger_name += earliestTimerState->state_name;
             if (timer_val > 0) {
-                s.trigger = new Trigger(this, trigger_name);
-                //FireTriggerAction *fta = new FireTriggerAction(this, s.trigger);
-                //Scheduler::instance()->add(new ScheduledItem(stable_state_timer_base, timer_val*1000, fta));
-                Scheduler::instance()->add(
-                    new ScheduledItem(stable_state_timer_base, timer_val * 1000, s.trigger));
+                earliestTimerState->trigger = new Trigger(this, trigger_name);
+                Scheduler::instance()->add(new ScheduledItem(
+                    stable_state_timer_base, timer_val * 1000, earliestTimerState->trigger));
             }
             else if (timer_val >= -2) {
                 ProcessingThread::activate(this);
