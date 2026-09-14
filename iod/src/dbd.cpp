@@ -366,6 +366,15 @@ int main(int argc, const char *argv[]) {
     std::string dbsvr_endpoint = "tcp://127.0.0.1:5554";
     std::string notify_endpoint = "tcp://127.0.0.1:5556";
 
+    // CurveZMQ settings for the DATASTORE connection only.
+    //
+    // These deliberately do NOT apply to the local iod channel. dbd builds both
+    // sockets from the same factory, and only the datastore link can be remote;
+    // applying CURVE to the iod channel would break a connection that is not and
+    // never will be a CURVE peer. Leaving every value empty keeps the previous
+    // plain-ZMQ behaviour exactly, so existing deployments are unaffected.
+    CurveOptions dbsvr_curve;
+
     po::options_description desc("Allowed options");
     desc.add_options()("help", "produce help message")(
         "debug", po::value<int>(&debug)->default_value(0), "set debug level")(
@@ -375,7 +384,15 @@ int main(int argc, const char *argv[]) {
         "dbsvr", po::value<std::string>(&dbsvr_endpoint)->default_value("tcp://127.0.0.1:5554"),
         "datastore REQ endpoint")(
         "notify", po::value<std::string>(&notify_endpoint)->default_value("tcp://127.0.0.1:5556"),
-        "datastore PUB notify endpoint")("cwin", "clockwork incoming port (deprecated)");
+        "datastore PUB notify endpoint")(
+        "dbsvr-curve-server-key", po::value<std::string>(&dbsvr_curve.serverKey),
+        "datastore CurveZMQ server public key (Z85); enables CURVE for the "
+        "datastore connection only")(
+        "dbsvr-curve-public-key", po::value<std::string>(&dbsvr_curve.clientPublicKey),
+        "this client's CurveZMQ public key (Z85)")(
+        "dbsvr-curve-secret-key", po::value<std::string>(&dbsvr_curve.clientSecretKey),
+        "this client's CurveZMQ secret key (Z85)")("cwin",
+                                                   "clockwork incoming port (deprecated)");
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
@@ -396,8 +413,15 @@ int main(int argc, const char *argv[]) {
     std::cout << "dbsvr " << dbsvr_endpoint << " notify " << notify_endpoint << "\n";
     std::ostringstream iod_ep;
     iod_ep << "tcp://" << host << ":" << cw_port;
+    // The iod channel is always plain: it is a local hop and has no CURVE peer.
     DeadlineReq iod_req(context, iod_ep.str());
-    DeadlineReq dbsvr_req(context, dbsvr_endpoint);
+    // The datastore connection carries its own options, so CURVE can be turned on
+    // for it alone.
+    if (dbsvr_curve.enabled()) {
+        std::cout << "dbsvr CurveZMQ enabled (server key "
+                  << dbsvr_curve.serverKey.substr(0, 8) << "...)\n";
+    }
+    DeadlineReq dbsvr_req(context, dbsvr_endpoint, dbsvr_curve);
     g_iod_req = &iod_req;
     g_dbsvr_req = &dbsvr_req;
 
