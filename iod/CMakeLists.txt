@@ -782,6 +782,14 @@ set_target_properties(test_deadline_req_curve_wire PROPERTIES COMPILE_DEFINITION
 target_include_directories(test_deadline_req_curve_wire PRIVATE src)
 target_link_libraries(test_deadline_req_curve_wire cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
 add_test(NAME test_deadline_req_curve_wire COMMAND test_deadline_req_curve_wire)
+# Interop check against a peer this build does not control. Not a CTest: it needs a
+# running endpoint, its public key and an authorised client identity, all supplied
+# on the command line, so it is run by hand against a target. Kept in the build so
+# it cannot rot into a stale copy of DeadlineReq's interface.
+add_executable(curve_endpoint_check tests/curve_endpoint_check.cpp src/DeadlineReq.cpp)
+set_target_properties(curve_endpoint_check PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(curve_endpoint_check PRIVATE src)
+target_link_libraries(curve_endpoint_check cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
 add_executable(test_db_notify tests/test_db_notify.cpp src/DbNotify.cpp)
 set_target_properties(test_db_notify PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_db_notify PRIVATE src)
