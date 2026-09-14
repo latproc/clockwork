@@ -765,6 +765,23 @@ set_target_properties(test_deadline_req PROPERTIES COMPILE_DEFINITIONS "EC_SIMUL
 target_include_directories(test_deadline_req PRIVATE src)
 target_link_libraries(test_deadline_req cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
 add_test(NAME test_deadline_req COMMAND test_deadline_req)
+# CurveZMQ is configured PER CONNECTION, not per process: dbd holds two
+# DeadlineReq objects (the local iod channel and the datastore) and only the
+# datastore one may ever speak CURVE. This guards the datastore side - enabling
+# CURVE for the dbsvr endpoint must never turn the iod channel, or a plain dbsvr
+# connection, into a CURVE one.
+add_executable(test_deadline_req_curve tests/test_deadline_req_curve.cpp src/DeadlineReq.cpp)
+set_target_properties(test_deadline_req_curve PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_deadline_req_curve PRIVATE src)
+target_link_libraries(test_deadline_req_curve cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_deadline_req_curve COMMAND test_deadline_req_curve)
+# Wire-level CurveZMQ: a correct key completes a handshake, a wrong key is refused
+# and a plain client is refused - with no plaintext fallback in either case.
+add_executable(test_deadline_req_curve_wire tests/test_deadline_req_curve_wire.cpp src/DeadlineReq.cpp)
+set_target_properties(test_deadline_req_curve_wire PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_deadline_req_curve_wire PRIVATE src)
+target_link_libraries(test_deadline_req_curve_wire cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_deadline_req_curve_wire COMMAND test_deadline_req_curve_wire)
 add_executable(test_db_notify tests/test_db_notify.cpp src/DbNotify.cpp)
 set_target_properties(test_db_notify PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_db_notify PRIVATE src)
