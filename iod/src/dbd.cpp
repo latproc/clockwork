@@ -92,8 +92,11 @@ static bool sendIodCommand(const std::string &cmd, std::string &reply) {
     return false;
 }
 
-static void send_response_to_clockwork(cJSON *json_request, const char *buf) {
-    if (!json_request || !buf) {
+// Deliver one request's reply payload to the machine named by that request's
+// `respond_to` (default manager.response), then notify `<property>_changed`.
+// `msg` is the parsed reply envelope; the caller owns it.
+static void send_one_response_to_clockwork(cJSON *json_request, cJSON *msg) {
+    if (!json_request || !msg) {
         return;
     }
     struct ResponseTarget {
@@ -115,11 +118,6 @@ static void send_response_to_clockwork(cJSON *json_request, const char *buf) {
             target.machine = Value{respond_to_str};
         }
     }
-    cJSON *msg = cJSON_Parse(buf);
-    if (!msg) {
-        std::cout << "could not parse database response: " << buf << "\n";
-        return;
-    }
     // Route the payload (the `response` field: the row array/object, or the error
     // message), not the whole {status,request,response} envelope, so `reply AS LIST`
     // (or PUSH ITEMS FROM) can consume it directly.
@@ -134,7 +132,6 @@ static void send_response_to_clockwork(cJSON *json_request, const char *buf) {
     }
     auto cmd = MessageEncoding::encodeCommand("PROPERTY", target.machine, target.property,
                                               resp_value);
-    cJSON_Delete(msg);
     if (cmd.empty()) {
         return;
     }
@@ -155,7 +152,33 @@ static void send_response_to_clockwork(cJSON *json_request, const char *buf) {
     }
 }
 
-static void apply_rows_to_records(cJSON *request, cJSON *reply) {
+static void send_response_to_clockwork(cJSON *json_request, const char *buf) {
+    if (!json_request || !buf) {
+        return;
+    }
+    cJSON *msg = cJSON_Parse(buf);
+    if (!msg) {
+        std::cout << "could not parse database response: " << buf << "\n";
+        return;
+    }
+    // A batch request (a JSON array of queries) gets a JSON array of per-query
+    // envelopes in the same order; route each payload to its own respond_to.
+    if (json_request->type == cJSON_Array && msg->type == cJSON_Array) {
+        int n = cJSON_GetArraySize(json_request);
+        int m = cJSON_GetArraySize(msg);
+        int count = n < m ? n : m;
+        for (int i = 0; i < count; ++i) {
+            send_one_response_to_clockwork(cJSON_GetArrayItem(json_request, i),
+                                           cJSON_GetArrayItem(msg, i));
+        }
+    }
+    else {
+        send_one_response_to_clockwork(json_request, msg);
+    }
+    cJSON_Delete(msg);
+}
+
+static void apply_one_to_records(cJSON *request, cJSON *reply) {
     if (!request || !reply) {
         return;
     }
@@ -236,6 +259,24 @@ static void apply_rows_to_records(cJSON *request, cJSON *reply) {
     else if (response->type == cJSON_Object) {
         send_apply(response);
     }
+}
+
+static void apply_rows_to_records(cJSON *request, cJSON *reply) {
+    if (!request || !reply) {
+        return;
+    }
+    // A batch reply is an array of per-query envelopes, one per request entry in
+    // the same order; project each entry against its own request.
+    if (request->type == cJSON_Array && reply->type == cJSON_Array) {
+        int n = cJSON_GetArraySize(request);
+        int m = cJSON_GetArraySize(reply);
+        int count = n < m ? n : m;
+        for (int i = 0; i < count; ++i) {
+            apply_one_to_records(cJSON_GetArrayItem(request, i), cJSON_GetArrayItem(reply, i));
+        }
+        return;
+    }
+    apply_one_to_records(request, reply);
 }
 
 static void apply_notify_payload(const std::string &payload) {
@@ -365,6 +406,11 @@ int main(int argc, const char *argv[]) {
     std::string hostname = "localhost";
     std::string dbsvr_endpoint = "tcp://127.0.0.1:5554";
     std::string notify_endpoint = "tcp://127.0.0.1:5556";
+    // The channel this dbd subscribes to. A pull needs two: the source it reads
+    // and the local store it writes, and both are the same protocol on different
+    // endpoints. Defaults to the existing name so nothing changes for a plain
+    // read/write deployment.
+    std::string channel_name = "DATABASE_CHANNEL";
 
     // CurveZMQ settings for the DATASTORE connection only.
     //
@@ -383,6 +429,8 @@ int main(int argc, const char *argv[]) {
                                    "clockwork outgoing port (5555)")(
         "dbsvr", po::value<std::string>(&dbsvr_endpoint)->default_value("tcp://127.0.0.1:5554"),
         "datastore REQ endpoint")(
+        "channel", po::value<std::string>(&channel_name)->default_value("DATABASE_CHANNEL"),
+        "Clockwork channel to subscribe to (DATABASE_CHANNEL)")(
         "notify", po::value<std::string>(&notify_endpoint)->default_value("tcp://127.0.0.1:5556"),
         "datastore PUB notify endpoint")(
         "dbsvr-curve-server-key", po::value<std::string>(&dbsvr_curve.serverKey),
@@ -437,7 +485,7 @@ int main(int argc, const char *argv[]) {
     zmq::socket_t iosh_cmd(*MessagingInterface::getContext(), ZMQ_REP);
     iosh_cmd.bind(local_commands);
 
-    SubscriptionManager subscription_manager("DATABASE_CHANNEL", eCLOCKWORK, "localhost", 5555);
+    SubscriptionManager subscription_manager(channel_name.c_str(), eCLOCKWORK, "localhost", 5555);
     subscription_manager.configureSetupConnection(host.c_str(), cw_port);
     SetupDisconnectMonitor disconnect_responder;
     SetupConnectMonitor connect_responder;

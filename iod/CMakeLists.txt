@@ -847,6 +847,20 @@ else()
     ENVIRONMENT "CW=$<TARGET_FILE:cw>;DBD=$<TARGET_FILE:dbd>"
     TIMEOUT 20)
 endif()
+add_executable(test_dbd_batch tests/test_dbd_batch.cpp)
+set_target_properties(test_dbd_batch PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_dbd_batch PRIVATE src)
+target_link_libraries(test_dbd_batch cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_dbd_batch COMMAND test_dbd_batch)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
+  set_tests_properties(test_dbd_batch PROPERTIES
+    ENVIRONMENT "CW=$<TARGET_FILE:cw>;DBD=$<TARGET_FILE:dbd>;DBSVR=${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr"
+    TIMEOUT 45)
+else()
+  set_tests_properties(test_dbd_batch PROPERTIES
+    ENVIRONMENT "CW=$<TARGET_FILE:cw>;DBD=$<TARGET_FILE:dbd>"
+    TIMEOUT 20)
+endif()
 add_test(NAME record_scaffold_customer COMMAND ${CMAKE_COMMAND}
   -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
   -DCW=$<TARGET_FILE:cw>
@@ -1004,6 +1018,7 @@ target_link_libraries(dbd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthrea
 list(APPEND CLOCKWORK_RUNTIME_TARGETS dbd)
 add_dependencies(test_two_dbd dbd)
 add_dependencies(test_cw_system cw dbd)
+add_dependencies(test_dbd_batch cw dbd)
 if (MODBUS_FOUND)
   add_executable(modbusd src/modbusd.cpp )
   target_link_libraries(modbusd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
