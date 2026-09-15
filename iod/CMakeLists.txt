@@ -861,6 +861,14 @@ else()
     ENVIRONMENT "CW=$<TARGET_FILE:cw>;DBD=$<TARGET_FILE:dbd>"
     TIMEOUT 20)
 endif()
+add_executable(test_property_padding tests/test_property_padding.cpp)
+set_target_properties(test_property_padding PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_property_padding PRIVATE src)
+target_link_libraries(test_property_padding cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_property_padding COMMAND test_property_padding)
+set_tests_properties(test_property_padding PROPERTIES
+  ENVIRONMENT "CW=$<TARGET_FILE:cw>"
+  TIMEOUT 20)
 add_test(NAME record_scaffold_customer COMMAND ${CMAKE_COMMAND}
   -DCW_SCAFFOLD=$<TARGET_FILE:cw-scaffold>
   -DCW=$<TARGET_FILE:cw>
@@ -1019,6 +1027,7 @@ list(APPEND CLOCKWORK_RUNTIME_TARGETS dbd)
 add_dependencies(test_two_dbd dbd)
 add_dependencies(test_cw_system cw dbd)
 add_dependencies(test_dbd_batch cw dbd)
+add_dependencies(test_property_padding cw)
 if (MODBUS_FOUND)
   add_executable(modbusd src/modbusd.cpp )
   target_link_libraries(modbusd cw_client ${MODBUS_LIBRARIES} ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")

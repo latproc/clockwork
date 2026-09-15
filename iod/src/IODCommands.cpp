@@ -484,13 +484,22 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
                 return false;
             }
             if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
-                int64_t x;
-                char *p;
-                x = strtol(params[3].asString().c_str(), &p, 10);
+                const std::string raw = params[3].asString();
+                int64_t x = 0;
+                char *p = 0;
+                if (!raw.empty()) {
+                    x = strtol(raw.c_str(), &p, 10);
+                }
                 // A value strtol did not fully consume is a string, not a number.
                 // Guard the empty string so `PROPERTY x key ""` clears to "" rather
-                // than being parsed as the integer 0.
-                const bool is_integer = !params[3].asString().empty() && *p == 0;
+                // than being parsed as the integer 0. Also require the first
+                // character to be a sign or digit: strtol skips leading whitespace,
+                // so a padded fixed-width key such as "  267968" would otherwise be
+                // judged an integer and coerced to 267968, losing its padding.
+                const char c0 = raw.empty() ? '\0' : raw[0];
+                const bool is_integer =
+                    !raw.empty() && *p == 0 &&
+                    (c0 == '-' || c0 == '+' || (c0 >= '0' && c0 <= '9'));
                 if (use_authority) {
                     changed = is_integer ? m->setValue(params[2].asString(), x, authority)
                                          : m->setValue(params[2].asString(), params[3], authority);
