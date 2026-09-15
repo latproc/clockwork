@@ -101,13 +101,19 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
         rc = zmq::poll(&items[0], num_items, 0);
     }
 
-    char buf[1000];
+    // The receive buffer is allocated to the message size rather than a fixed
+    // 1000 bytes. A fixed buffer silently truncates a larger message, so a
+    // datastore reply carrying many rows arrived as invalid JSON, and the
+    // terminator written at buf[msglen] was a stack overflow once a message
+    // reached the buffer size. Datastore replies are the reason this matters:
+    // one select can return a whole table's worth of rows.
+    char *buf = 0;
     size_t msglen = 0;
     // After a REP recv we must always send a reply before the next recv, or
     // every inproc REQ peer (device_connector status/property path) freezes.
     if (rc > 0 && run_status == e_waiting_cmd && items[1].revents & ZMQ_POLLIN) {
         //      {FileLogger fl(program_name); fl.f() << "command socket activity when waiting cmd.  receiving...\n" << std::flush; }
-        safeRecv(cmd, buf, 1000, false, msglen, 1);
+        safeRecv(cmd, &buf, &msglen, false, 1);
         if (msglen) {
             buf[msglen] = 0;
             //{FileLogger fl(program_name); fl.f() << "got cmd: " << buf << " for clockwork\n"<<std::flush; }
@@ -150,6 +156,10 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
             fl.f() << "No Message\n" << std::flush;
         }
     }
+    // The command buffer is not needed past this point, and the response path
+    // below allocates its own.
+    delete[] buf;
+    buf = 0;
     if (run_status == e_waiting_response && monit_setup->disconnected()) {
         {
             FileLogger fl(program_name);
@@ -186,9 +196,12 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
     }
     else if (rc > 0 && run_status == e_waiting_response && items[0].revents & ZMQ_POLLIN) {
         //{FileLogger fl(program_name); fl.f() << "command socket activity.  receiving...\n" << std::flush; }
-        if (safeRecv(*setup, buf, 1000, false, msglen, 0)) {
+        if (safeRecv(*setup, &buf, &msglen, false, 0)) {
             try {
-                if (msglen && msglen < 1000) {
+                // No size test beyond "not empty": the buffer holds the whole
+                // message now, so a reply larger than the old 1000-byte ceiling
+                // is forwarded instead of being replaced with "error".
+                if (msglen) {
                     cmd.send(buf, msglen);
                 }
                 else {
@@ -201,6 +214,7 @@ bool CommandManager::checkConnections(zmq::pollitem_t *items, int num_items, zmq
             cmd_request_start = 0;
         }
     }
+    delete[] buf;
     return true;
 }
 

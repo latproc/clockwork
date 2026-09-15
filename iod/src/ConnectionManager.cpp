@@ -654,18 +654,23 @@ bool SubscriptionManager::requestChannel() {
         return false;
     }
     if (setupStatus() == SubscriptionManager::e_waiting_setup && !monit_setup->disconnected()) {
-        char buf[1000];
-        if (!safeRecv(setup(), buf, 1000, false, len, 2)) {
+        // Allocated to the message size rather than fixed at 1000 bytes. This
+        // socket receives datastore replies as well as channel-setup grants, and
+        // a fixed buffer truncates a larger reply into invalid JSON. The guard
+        // that used to follow (len >= 1000 -> len = 999) kept the terminator in
+        // bounds but still cut the message.
+        char *buf = 0;
+        if (!safeRecv(setup(), &buf, &len, false, 2)) {
+            delete[] buf;
             return false; // attempt a connection but do not wait very long before giving up
         }
         if (len == 0) {
+            delete[] buf;
             return false; // no data yet
         }
-        if (len >= 1000) {
-            len = 999;
-        }
-        buf[len] = 0;
-        if (!applyChannelSetupReply(buf, len)) {
+        bool applied = applyChannelSetupReply(buf, len);
+        delete[] buf;
+        if (!applied) {
             if (smi->channel_missing) {
                 // "No such channel": the REQ socket is healthy and already back
                 // in the send state (a full reply was consumed), so recreating
