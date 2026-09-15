@@ -71,6 +71,12 @@ Thumbs.db
 #project build files
 iod/build/
 iod/build-record/
+# Out-of-tree build directories used to build the CURVE test targets. iod/build/
+# carries a CMake cache from an older machine state and refuses to reconfigure, so
+# a separate directory is the practical way to build; without this it shows up as
+# ~31 MB of untracked build output.
+iod/fbuild/
+iod/fdoc/
 iod/tests/_scaffold_out/
 iod/xcode/
 iod/.test/
