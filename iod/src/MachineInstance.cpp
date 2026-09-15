@@ -1340,6 +1340,8 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
         //while (busy_it != SharedWorkSet::instance()->end() ) {
 
         std::set<MachineInstance *>::iterator busy_it = to_process.begin();
+        unsigned due_n = 0;
+        uint64_t last_due = start_processing;
         while (busy_it != to_process.end()) {
             MachineInstance *mi = *busy_it;
             // is it possible for a non active machine to be executing a command?
@@ -1382,6 +1384,14 @@ bool MachineInstance::processAll(std::set<MachineInstance *> &to_process, uint32
             }
             else {
                 busy_it++;
+            }
+            ++due_n;
+            {
+                uint64_t now = nowMicrosecs();
+                if (due_n % 32 == 0 || now - last_due >= 2000) {
+                    Scheduler::instance()->fireDueItems(now);
+                    last_due = now;
+                }
             }
         }
     }
@@ -1446,6 +1456,8 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
                                         uint32_t max_time) {
     total_machines_needing_check = 0;
     std::set<MachineInstance *>::iterator iter = to_process.begin();
+    unsigned due_n = 0;
+    uint64_t last_due = nowMicrosecs();
     while (iter != to_process.end()) {
         MachineInstance *mi = *iter++;
         // STALLSNAP breadcrumb only (no-op when DEBUG_STALLSNAP off).
@@ -1466,6 +1478,14 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
                 mi); // this machine has other work, it should no longer be on the pending state change queue
             }
             ProcessingThread::activate(mi);
+        }
+        ++due_n;
+        {
+            uint64_t now = nowMicrosecs();
+            if (due_n % 32 == 0 || now - last_due >= 2000) {
+                Scheduler::instance()->fireDueItems(now);
+                last_due = now;
+            }
         }
     }
     return true;

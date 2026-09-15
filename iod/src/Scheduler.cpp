@@ -30,6 +30,7 @@
 #include <assert.h>
 #include <boost/chrono.hpp>
 #include <boost/thread/mutex.hpp>
+#include <cstddef>
 #include <inttypes.h>
 #include <iomanip>
 #include <iostream>
@@ -365,6 +366,58 @@ bool Scheduler::ready(uint64_t start) {
     return getNextDelay(start) <= 0;
 }
 
+static void dispatchScheduledItem(ScheduledItem *item) {
+    if (!item) {
+        return;
+    }
+    if (item->trigger) {
+        if (item->trigger->enabled()) {
+            DBG_SCHEDULER << "Scheduler firing trigger " << item->trigger->getName() << "\n";
+            item->trigger->fire();
+        }
+        delete item;
+    }
+    else if (item->package) {
+        DBG_SCHEDULER << "Scheduler activating package on "
+                      << item->package->receiver->getName() << "\n";
+        item->package->receiver->handle(*item->package->message, item->package->transmitter);
+        delete item;
+    }
+    else if (item->action) {
+        DBG_SCHEDULER << "Scheduler activating pushing action to  "
+                      << item->action->getOwner()->getName() << "\n";
+        item->action->getOwner()->push(item->action);
+        item->action = nullptr;
+        delete item;
+    }
+    else {
+        assert(0 == "Scheduler could not process item");
+        delete item;
+    }
+}
+
+size_t Scheduler::fireDueItems(uint64_t now) {
+    size_t n = 0;
+    while (ready(now)) {
+        ScheduledItem *item = 0;
+        {
+            boost::recursive_mutex::scoped_lock scoped_lock(internals->q_mutex);
+            item = next();
+            if (!item) {
+                break;
+            }
+            DBG_SCHEDULER << "Scheduler activating scheduled item " << (*item) << " ready. "
+                          << items.size() << " items remain\n";
+            pop();
+        }
+        next_time = 0;
+        dispatchScheduledItem(item);
+        ++n;
+        now = microsecs();
+    }
+    return n;
+}
+
 void Scheduler::operator()() {
 #ifdef __APPLE__
     pthread_setname_np("iod scheduler");
@@ -484,46 +537,10 @@ void Scheduler::idle() {
             state = e_running;
         }
 
-        while (state == e_running && is_ready) {
+        if (state == e_running && is_ready) {
             watch_dog->poll();
-            ScheduledItem *item = 0;
-            {
-                boost::recursive_mutex::scoped_lock scoped_lock(
-                    Scheduler::instance()->internals->q_mutex);
-                item = next();
-                DBG_SCHEDULER << "Scheduler activating scheduled item " << (*item) << " ready. "
-                              << items.size() << " items remain\n";
-                pop();
-            }
-            next_time = 0;
-            if (item->trigger) {
-                if (item->trigger->enabled()) {
-                    DBG_SCHEDULER << "Scheduler firing trigger " << item->trigger->getName()
-                                  << "\n";
-                    item->trigger->fire();
-                }
-                delete item;
-            }
-            else if (item->package) {
-                DBG_SCHEDULER << "Scheduler activating package on "
-                              << item->package->receiver->getName() << "\n";
-                item->package->receiver->handle(*item->package->message,
-                                                item->package->transmitter);
-                delete item;
-            }
-            else if (item->action) {
-                DBG_SCHEDULER << "Scheduler activating pushing action to  "
-                              << item->action->getOwner()->getName() << "\n";
-                item->action->getOwner()->push(item->action); // handover action its owner
-                item->action = nullptr;
-                delete item;
-            }
-            else {
-                assert(0 == "Scheduler could not process item");
-                delete item;
-            }
+            fireDueItems(microsecs());
             last_poll = microsecs();
-            is_ready = ready(last_poll);
         }
         if (state == e_running) {
             DBG_SCHEDULER << "scheduler done\n";

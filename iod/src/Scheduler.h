@@ -22,6 +22,7 @@
 
 #include <boost/thread/thread.hpp>
 
+#include <cstddef>
 #include <list>
 #include <ostream>
 #include <queue>
@@ -93,6 +94,12 @@ class Scheduler {
     ScheduledItem *next() const;
     void pop();
     bool ready(uint64_t start);
+    /** Pop and fire every item with delivery_time <= now.
+     *  Processing thread: only from handle_machines (status == e_waiting),
+     *  never during the scheduler handshake and never on the quiet poll.
+     *  Scheduler thread: idle() while e_running after continue.
+     *  Those regions do not overlap. Pop under q_mutex; fire outside it. */
+    size_t fireDueItems(uint64_t now);
     void idle();
     bool empty() { return items.empty(); }
     size_t pendingCount() const { return items.size(); }

@@ -1769,6 +1769,10 @@ void ProcessingThread::operator()() {
         if (status == e_waiting && machines_have_work &&
             curr_t - last_checked_machines >= machine_check_delay) {
 
+            // Due TIMERs while busy: processing already owns the machines.
+            // Do not open the scheduler handshake here (that is eIdle only).
+            Scheduler::instance()->fireDueItems(curr_t);
+
             if (processing_state == eIdle) {
                 processing_state = ePollingMachines;
             }
@@ -1777,6 +1781,7 @@ void ProcessingThread::operator()() {
                 if (processing_state == ePollingMachines) {
                     StallTrace::markStage(StallTrace::StagePollMachines);
                     processing_state = poll_machines();
+                    Scheduler::instance()->fireDueItems(microsecs());
                 }
                 if (processing_state == eStableStates) {
                     StallTrace::markStage(StallTrace::StageStableStates);
@@ -1804,6 +1809,7 @@ void ProcessingThread::operator()() {
                         DBG_SCHEDULER << "processing stable states\n";
                         MachineInstance::checkStableStates(to_process, 150000);
                     }
+                    Scheduler::instance()->fireDueItems(microsecs());
                     StallTrace::markStage(StallTrace::StageOuterHousekeeping);
                     if (i < num_loops - 1) {
                         processing_state = ePollingMachines;
