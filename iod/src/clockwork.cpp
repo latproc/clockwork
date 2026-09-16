@@ -1052,6 +1052,11 @@ void semantic_analysis() {
                         if (ch.condition.predicate &&
                             ch.condition.predicate->usesTimer(ch.timer_val)) {
                             ch.uses_timer = true;
+                            // Accumulate: without this the machine-level flag
+                            // below is never set for a machine whose only timers
+                            // live in subconditions, so `SHOW MACHINE` reports
+                            // "no timer" for a machine that has them.
+                            subcond_uses_timer = true;
                         }
                         else {
                             ch.uses_timer = false;
