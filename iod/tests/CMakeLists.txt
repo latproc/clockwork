@@ -201,4 +201,12 @@ target_link_libraries(test_regular_expressions gmock_main cw_client cw_interpret
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_regular_expressions COMMAND test_regular_expressions)
 
+# TIMER soft-clock progress guard: a due/hold clock must reach its due state.
+add_executable(test_timer_clock_probe test_timer_clock_probe.cpp library_globals.cpp iod_mock.h)
+set_target_properties (test_timer_clock_probe PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_timer_clock_probe gmock_main cw_client cw_interpreter
+    ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_timer_clock_probe COMMAND test_timer_clock_probe)
+
 endif()
