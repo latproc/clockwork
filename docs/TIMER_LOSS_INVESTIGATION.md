@@ -1142,3 +1142,100 @@ sequentially, confirming it as a load-sensitive flake.
 
 The B tree was left clean after the check: both temporary probe files and the
 `CMakeLists.txt` registrations were removed; `git status` shows no modifications.
+
+
+---
+
+## Addendum 13 — could line A be restructured to look like line B? Not for this issue
+
+Asked 2026-09-16. Checked by comparing the three functions that actually decide
+this bug on both lines. **Answer: no — for this issue, B's structure is strictly
+behind A's, and restructuring A toward B would reintroduce the defect.** The
+direction of travel should stay B ← A.
+
+### A correction first: `setNeedsCheck` is identical on both lines
+
+An earlier reading (Addendum 10.5, quoting Martin's review point 2) described B's
+`setNeedsCheck` guard as broader than A's. That is wrong — the two functions diff
+clean and are byte-identical, including the coalescing condition:
+
+```cpp
+if (needs_check > 0 &&
+    (ProcessingThread::is_pending(this) || queuedForStableStateTest() ||
+     !active_actions.empty() || !mail_queue.empty())) {
+    ++needs_check;
+    return;
+}
+```
+
+So neither line is more defensive here, and Martin's "an unrelated wake may not
+repair the orphan" point applies equally to both.
+
+### The three deciding functions, per line
+
+| Function | A (`c6ebcb6b`) | B (`bafe98b7`) |
+|---|---|---|
+| `checkStableStates` | `erase_pending = !changed_state && !needsCheck()` — preserves a wake requested during evaluation | `steps`/`keep_pending` 32-step loop; `keep_pending` is true only when `steps >= 32`; otherwise the entry is **erased** |
+| `setNeedsCheck` | identical to B | identical to A |
+| `processAll` / evaluation | same `mi->idle()`-in-loop shape as B | same shape |
+
+B's 32-step loop is not a wake-retention mechanism and never was. Its stated
+purpose is "bound stops flip-flop livelock" for list-walker machines that queue a
+`SetState` per check. On the TIMER-hold path, `setStableState()` returns and
+`steps < 32`, so `keep_pending` stays false and the entry is erased — which is
+exactly the two `test_timer_wake` failures measured on B in Addendum 12.
+
+### Why B's structure *looks* like it retains the wake after all
+
+B has a second branch that hides the erase for a while:
+
+```cpp
+else if (mi->enabled()) {
+    SharedWorkSet::instance()->add(mi);
+    { ... pending_state_change.erase(mi); }   // erase
+    ProcessingThread::activate(mi);           // ...then make it runnable again
+}
+```
+
+It erases the stable-state membership but immediately marks the machine runnable.
+Coupled with the identical broad coalescing guard above, that produces the
+**runnable orphan** Martin's review describes directly: runnable, `needs_check > 0`,
+`queuedForStableStateTest()` false. The probe confirms it — B reports
+`live_trigger=<null>`, `needs_check=0` after firing, and
+`queuedForStableStateTest() == false`. So this branch is not an alternative fix;
+it is the mechanism by which the lost wake becomes invisible to the activation
+bookkeeping.
+
+Runnable-only membership is also weaker than `pending_state_change` membership:
+the work-set selection requires the machine to be queued for a stable-state test,
+so runnable membership alone does not get it evaluated.
+
+### The one part of B worth considering — and why it is not a restructure
+
+B's `checkStableStates` calls `mi->idle()` **inside** its evaluation loop, so a
+command queued during evaluation is drained in the same pass. A's
+`setStableState()`-only path leaves that to the next pass. That is a real
+difference, but it is orthogonal to wake loss: it does not change the erase
+decision, and A now keeps the entry anyway, so the next pass exists. If A ever
+wants that behaviour it is an optimisation to evaluate on its own merits — not a
+restructure, and definitely not a fix for this issue.
+
+### Practical conclusion
+
+- **Do not restructure A after B for this issue.** It would drop `erase_pending`
+  (the actual fix) and re-adopt `keep_pending`, which does not retain wake
+  requests. Then it would need `c6ebcb6b` again.
+- **Do port A → B**, as Addendum 12 sets out: the bounded `RecoverOverdue` plus an
+  `erase_pending`-equivalent adapted to B's `steps`/`keep_pending` shape, keeping
+  B's 32-step bound intact (it still serves the list-walker livelock).
+- **Gates already exist**: `test_timer_wake` (2 cases must go FAIL → PASS on B)
+  and the `SSTimerArm` probe for the separate `0e163446` backport.
+
+The wider "converge the two lines" question is out of scope here, but this bug is
+now a useful data point for it: the two lines diverged on this code for
+**behavioural** reasons (independent patches landing on one side), not because the
+legacy-ecrt vs kernel-elc transport forces it. None of `checkStableStates`,
+`setNeedsCheck`, `setState` or `setStableState` contains a single
+transport-conditional line on either branch, so a shared transport-neutral
+stable-state/TIMER core is *technically* feasible. It is not worth doing while the
+fix sets are still diverging — converge the fixes first, then decide.
