@@ -80,6 +80,10 @@ iod/fdoc/
 iod/tests/_scaffold_out/
 iod/xcode/
 iod/.test/
+# Root-level out-of-tree build/cache dirs used when building the iod test
+# targets without disturbing iod/build (which carries an older CMake state).
+_build-elc/
+_ccache/
 modbus/build/
 modbus/.test/
 modbus/xcode/
