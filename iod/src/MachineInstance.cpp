@@ -1463,9 +1463,15 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
         // STALLSNAP breadcrumb only (no-op when DEBUG_STALLSNAP off).
         StallTrace::markMachine(mi->getName().c_str());
         if (!mi->executingCommand() && mi->mail_queue.empty()) {
-            // unless the machine is disabled leave the state check on the queue until it is stable
-            if (!mi->enabled() || !mi->getStateMachine()->allow_auto_states ||
-                !mi->setStableState()) {
+            // Leave a changed machine queued until its state action completes.
+            // For an unchanged machine, preserve any wake requested during
+            // setStableState(); it belongs to the next evaluation pass.
+            bool erase_pending = !mi->enabled() || !mi->getStateMachine()->allow_auto_states;
+            if (!erase_pending) {
+                const bool changed_state = mi->setStableState();
+                erase_pending = !changed_state && !mi->needsCheck();
+            }
+            if (erase_pending) {
                 std::lock_guard<std::mutex> lock(pending_state_change_mutex);
                 pending_state_change.erase(mi);
             }

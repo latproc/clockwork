@@ -52,6 +52,13 @@ target_link_libraries(test_disable_action gmock_main cw_interpreter cw_client
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_disable_action COMMAND test_disable_action)
 
+add_executable(test_timer_wake test_timer_wake.cpp)
+set_target_properties (test_timer_wake PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_timer_wake gmock_main cw_interpreter cw_client
+  ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_timer_wake COMMAND test_timer_wake)
+
 add_executable(test_sync_remote_states_action iod_mock.h test_sync_remote_states_action.cpp)
 target_link_libraries(test_sync_remote_states_action gmock_main cw_interpreter cw_client
         ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)

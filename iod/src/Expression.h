@@ -132,8 +132,9 @@ struct PredicateTimerDetails {
     `TIMER < N` with TIMER already past would otherwise re-queue the machine
     every evaluation and storm processing load.
 
-    RecoverOverdue — if already past due, call setNeedsCheck so a late check
-    still re-arms / transitions. Use only on the *matched holding* rule (and
+    RecoverOverdue — when a deadline is past due, call setNeedsCheck for one
+    follow-up pass per absolute deadline. Further evaluations of that same
+    overdue deadline do not requeue. Use only on the matched holding rule (and
     its subconditions), not on false rules walked before the match.
 */
 enum class TimerOverduePolicy {
@@ -198,6 +199,10 @@ class Predicate {
     bool lookup_error;
     std::string error_str;
     bool needs_reevaluation;
+    // RecoverOverdue may request at most one follow-up for an absolute TIMER
+    // deadline. A new state entry produces a new deadline and can recover again.
+    bool has_recovered_overdue_deadline = false;
+    int64_t recovered_overdue_deadline = 0;
     Stack stack;
     uint64_t last_evaluation_time;
 };

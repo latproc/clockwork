@@ -518,10 +518,18 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             }
         }
         else if (overdue_policy == TimerOverduePolicy::RecoverOverdue && target) {
-            // Matched hold path: processing may resume after the due time. Dropping
-            // a late wake left TIMER soft-clocks stuck until an unrelated input.
-            // setNeedsCheck() coalesces if the target is already queued.
-            target->setNeedsCheck();
+            // Recover this absolute deadline once. Keeping the follow-up queued
+            // is necessary when the wake arrives during another evaluation, but
+            // requeueing the same overdue deadline on every pass creates a load
+            // storm for a matched `TIMER >= N` hold.
+            MachineInstance *clock = timed_machine ? timed_machine : target;
+            const int64_t deadline = static_cast<int64_t>(clock->start_time) +
+                                     scheduled_time * 1000;
+            if (!has_recovered_overdue_deadline || recovered_overdue_deadline != deadline) {
+                has_recovered_overdue_deadline = true;
+                recovered_overdue_deadline = deadline;
+                target->setNeedsCheck();
+            }
         }
     }
     return earliest;
@@ -651,6 +659,8 @@ Predicate &Predicate::operator=(const Predicate &other) {
     lookup_error = false;
     last_calculation = 0;
     needs_reevaluation = true;
+    has_recovered_overdue_deadline = false;
+    recovered_overdue_deadline = 0;
     return *this;
 }
 
