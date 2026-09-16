@@ -52,6 +52,7 @@ void debugParameterChange(MachineInstance *dest_machine) {
         delim = ",";
     }
     snprintf(buf + n, bufsize - n, "]");
+    dest_machine->setValue("DEBUG", Value(buf, Value::t_string));
 }
 
 }
