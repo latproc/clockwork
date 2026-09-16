@@ -1049,3 +1049,96 @@ thing to remove. The defect was the unconditional erase in `checkStableStates` a
 the unbounded `RecoverOverdue`; both are now fixed on line A. The remaining real
 gaps are line B's missing backports (10.9 items 1 and 2) and the unbounded
 busy-pass batch (10.1), none of which reverting these commits would help.
+
+
+---
+
+## Addendum 12 — line B state check (2026-09-16, after `b333e8f8`)
+
+Direct check of `feature/iod-elc-kernel-transport` @`bafe98b7` (build `_build-elc`,
+Release, `RUN_TESTS=ON`). Confirms the two open items and closes the "is B
+structurally different?" question.
+
+### Feature inventory: B has only one of the five TIMER commits
+
+`git merge-base --is-ancestor` against B's HEAD:
+
+| Commit | In B? | What it does |
+|---|---|---|
+| `bafe98b7` accum. `subcond_uses_timer` | **yes** (same change as A's `4692653e`) | diagnostic flag only |
+| `0e163446` live `StableState` trigger | no | fixes the disabled SSTimer arm |
+| `3ce87578` busy-pass `fireDueItems` | no | fires due TIMERs while processing is busy |
+| `41f68f93` due/hold progress guard test | no | A-side test only |
+| `c6ebcb6b` bounded overdue wakes | no | the queue fix from Addendum 10.7 |
+
+B's `Scheduler.cpp` contains **no `fireDueItems` and no `dispatchScheduledItem`**;
+its scheduler still drains inline in `Scheduler::idle`'s
+`while (state == e_running && is_ready)` loop, and the handshake is still refused
+unless `processing_state == eIdle` (`ProcessingThread.cpp:1374`, `:1550`, `:1791`).
+So B has the same structural gap `3ce87578` closed on A, and it is the only line
+that has never had busy-pass TIMER firing.
+
+### Both gates fail on B, as predicted
+
+Built with the A-side probes registered temporarily, then removed:
+
+**Gate 1 — SSTimer arm (`0e163446`):**
+
+```
+DIAG live-state uses_timer=1 timer_val=5
+SSTIMER-PROBE live_trigger=<null> live_enabled=no scheduled=yes sched_enabled=no
+SSTIMER-PROBE after-fire needs_check=0 queued=no
+[  FAILED  ] SSTimerArm.TriggerArmedOnStateEntryIsStillFireable
+[  FAILED  ] SSTimerArm.FiringTheArmedWakeRequestsARecheck
+```
+
+**Gate 2 — `test_timer_wake` (queue fix):**
+
+```
+[ RUN      ] TimerWakeTest.PreservesWakeRequestedDuringStableStateEvaluation
+  machine_->queuedForStableStateTest(): Actual: false  Expected: true   FAILED
+[ RUN      ] TimerWakeTest.OverdueHoldingTimerQueuesOnlyOneFollowUpPerDeadline
+  machine_->queuedForStableStateTest(): Actual: false  Expected: true   FAILED
+[ RUN      ] TimerWakeTest.NewAbsoluteDeadlineCanRecoverAgain               OK
+```
+
+Same results as Addendum 10.7/10.8, so B has no accidental partial fix.
+
+### Port caution: B already has its own overdue-recovery plumbing
+
+B is **not** missing `TimerOverduePolicy`. `78f62e0e` (2026-08-25,
+"mask DIGITALVALUE idle wakeups and load-safe TIMER recovery") already ported
+`9acb2656`/`4fb15794`/`4e7ec4ba`/`2f13765d` and added `TimerOverduePolicy`,
+`RecoverOverdue` on matched holds, and `ArmFutureOnly` on false-rule scans —
+the same surface `c6ebcb6b` modifies on A. The part B lacks is only the one-shot
+bounding: B's `RecoverOverdue` re-requests on every evaluation of a still-overdue
+deadline, which is the load-storm risk Addendum 10.5 describes.
+
+So the `c6ebcb6b` port to B is **smaller and more delicate** than a cherry-pick:
+
+1. add `has_recovered_overdue_deadline`/`recovered_overdue_deadline` to B's
+   `Predicate` and bound the `RecoverOverdue` branch in `scheduleTimerEvents`
+   (the deadline arithmetic is the same: `start_time + scheduled_time * 1000`);
+2. repair B's `checkStableStates` — **not** by copying A's block, because B's is
+   the `steps`/`keep_pending` loop. In B the erase at the end runs when
+   `!keep_pending`, and the "machine has other work" branch erases then
+   activates. The fix must preserve the entry when a wake was requested during
+   `setStableState()` while keeping B's 32-step bound and its
+   `SharedWorkSet`/`activate` behaviour intact;
+3. do **not** reset the recovered-deadline fields in B's copy/assign paths
+   without checking them — `c6ebcb6b` added that to A's `Predicate::operator=`,
+   and B's `Predicate` copy/assign surface differs.
+
+Gate for the port: `test_timer_wake`'s first two cases must pass on B and the
+`SSTimerArm` probe must still be reviewed against the `0e163446` backport
+(item 1), then the full B suite must stay green.
+
+### Baseline
+
+Full sequential `ctest` on B, with no product change beyond the doc commit:
+**104/104 pass** (197 s). This is the clean baseline for the port. Note it
+supersedes the 103/104 figure in Addendum 10.6 — `test_two_dbd` passes when run
+sequentially, confirming it as a load-sensitive flake.
+
+The B tree was left clean after the check: both temporary probe files and the
+`CMakeLists.txt` registrations were removed; `git status` shows no modifications.
