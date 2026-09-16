@@ -152,8 +152,9 @@ Still open (not in this slice): `QUERY` in Clockwork can only target
 ## Non-issues (verified)
 
 - Reading N rows into a LIST works and is covered: `QUERY … INTO` injects
-  `respond_to`; `dbd` routes the `response` payload (row array); the author assigns it
-  with `list := response AS LIST`. See `iod/tests/test_cw_system.cpp` and
-  `docs/JSON.md`.
+  `respond_to`; `dbd` routes the `response` payload (row array); the `INTO <list>`
+  target is filled automatically (clear + `response AS LIST`) on `response_changed`,
+  or by the author's own `RECEIVE response_changed`. See `iod/tests/test_cw_system.cpp`,
+  `tests/query_into_fill.cw`, and `docs/JSON.md`.
 - `LIKE` is a supported bound `where` operator (`RECORD_DB.md`), so a fixed-width
   padded key can be matched without an equality bind.

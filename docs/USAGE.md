@@ -527,18 +527,18 @@ ed MACHINE {
     COMMAND refresh {
         QUERY q INTO all;                   # SEND q to DATABASE_CHANNEL
     }
-
-    RECEIVE response_changed {
-        all := response AS LIST;            # JSON array -> LIST
-    }
 }
 ```
 
+The `INTO all` installs the fill: when the reply lands, `all` is cleared and
+refilled from `response`. No handler is needed.
+
 1. `QUERY q INTO all` SENDs the JSON property `q` to `DATABASE_CHANNEL`, adding a
    `respond_to` field so the reply comes back to **this** machine's `response`
-   OPTION. (`QUERY { … } INTO all` sends a literal object.) The `INTO all` names
-   the list you will fill — a hint. The scan cannot wait for `dbsvr`, so `QUERY`
-   itself does **not** fill the list; the fill happens when the reply arrives.
+   OPTION, and registers an automatic `response_changed` fill for `all`. (`QUERY
+   { … } INTO all` sends a literal object.) The scan cannot wait for `dbsvr`, so
+   `QUERY` itself does **not** fill the list synchronously; the fill happens when
+   the reply arrives.
 2. `dbd` (subscribed as `DATABASE_CHANNEL`) forwards the payload to `dbsvr`.
 3. `dbsvr` compiles it to SQL (`SQLInterface` → `Store`), runs it in one
    transaction, and returns a JSON reply.
@@ -549,7 +549,7 @@ ed MACHINE {
    `Class#key` cache instances accumulate). `find`/`insert`/`update`/`delete`
    replies *are* `RECORD APPLY`-ed onto held RECORDs by `(type, key)` — that is
    how `load` materialises rows for `COPY ALL FROM`.
-5. `ed`'s `RECEIVE response_changed` fires and turns the array into a LIST:
+5. The automatic fill turns the array into a LIST:
 
 ```clockwork
 all := response AS LIST;                   # a JSON array becomes a LIST
@@ -559,6 +559,24 @@ all := response AS LIST;                   # a JSON array becomes a LIST
 After it, `TAKE FIRST FROM all`, `SIZE OF all`, and `COPY PROPERTIES FROM x TO
 cust` all work. Each list member is a JSON object keyed by the query's column
 names (`ITEM ${name} OF x` reads a field).
+
+**Handling the reply yourself.** If the machine declares its own `RECEIVE
+response_changed`, that handler wins and no automatic fill is installed — the
+author owns the reply (fill the list, drain it with `TAKE FIRST`, and so on).
+Adding one leaves the older behavioural pattern unchanged:
+
+```clockwork
+RECEIVE response_changed {
+    all := response AS LIST;               # optional: the explicit fill
+    row := TAKE FIRST FROM all;
+    COPY PROPERTIES FROM row TO cust;
+}
+```
+
+Because the reply is asynchronous, a command that reads `SIZE OF all` must run
+*after* `response_changed` has fired (or read the size inside the handler).
+Sending `QUERY` and reading the list in the same pass sees the previous reply —
+the fill has not happened yet.
 
 ### 4.4 Responses
 

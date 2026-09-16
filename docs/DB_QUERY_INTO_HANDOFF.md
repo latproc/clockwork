@@ -12,9 +12,13 @@
 > - `QUERY q INTO list` / `QUERY JSON_VALUE {…} INTO list` parse and SEND the JSON to
 >   `DATABASE_CHANNEL`. `QUERY` now injects `respond_to` = `<issuing machine>.response`,
 >   so the reply routes back to the querying machine (a `QueryAction`, not the old
->   `(void)$4` `SendMessageAction`). The `INTO <list>` is a *hint*: it names the LIST the
->   reply will become. The scan cannot wait for dbsvr, so `QUERY` itself does **not** fill
->   the list. (PR 7.)
+>   `(void)$4` `SendMessageAction`). The scan cannot wait for dbsvr, so `QUERY` itself
+>   does **not** fill the list synchronously. (PR 7.)
+>   **Update:** `INTO <list>` is no longer only a hint. When the machine body ends,
+>   the parser installs an automatic `response_changed` fill for the LIST (clear +
+>   refill from `response`), so the list is populated without an explicit handler.
+>   A machine that declares its own `RECEIVE response_changed` keeps that handler
+>   and gets no synthetic fill.
 > - `list := reply AS LIST` (or `PUSH ITEMS FROM reply TO list`) turns the returned JSON
 >   array into the LIST. (`json AS LIST` = PR 8.) dbd routes the reply's `response`
 >   **payload** (the row array, not the `{status,request,response}` envelope) to the
