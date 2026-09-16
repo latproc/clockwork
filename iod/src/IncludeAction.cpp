@@ -54,6 +54,8 @@ void debugParameterChange(MachineInstance *dest_machine) {
     snprintf(buf + n, bufsize - n, "]");
 }
 
+}
+
 tl::expected<bool, std::string> add_json_array(MachineInstance *list_machine, const Value &to_insert, int64_t pos,
                         bool before) {
     if (!to_insert.json) {
@@ -80,8 +82,6 @@ tl::expected<bool, std::string> add_json_array(MachineInstance *list_machine, co
         debugParameterChange(list_machine);
     }
     return true;
-}
-
 }
 
 IncludeActionTemplate::IncludeActionTemplate(const std::string &name, Value val, Value pos,

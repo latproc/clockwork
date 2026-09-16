@@ -55,4 +55,8 @@ struct ClearListAction : public Action {
     MachineInstance *dest_machine;
 };
 
+// Clear the contents of a LIST machine (detaching any member machines), the
+// same work CLEAR does for a LIST. A no-op when the machine is not a LIST.
+void clearListContents(MachineInstance *list_machine);
+
 #endif

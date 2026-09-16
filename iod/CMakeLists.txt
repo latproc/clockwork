@@ -543,6 +543,11 @@ add_test(NAME record_parse_query_into COMMAND ${CMAKE_COMMAND}
 add_test(NAME record_parse_query_into_json COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/query_into_json.cw -DEXPECT_RC=0
   -P ${_record_parse})
+# QUERY ... INTO with the author's own RECEIVE response_changed: the explicit
+# handler wins and no synthetic fill is added (regression: duplicate handler).
+add_test(NAME record_parse_query_into_receive COMMAND ${CMAKE_COMMAND}
+  -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/query_into_receive.cw -DEXPECT_RC=0
+  -P ${_record_parse})
 add_test(NAME record_parse_private COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_record_fix}/record_private.cw -DEXPECT_RC=0
   -P ${_record_parse})
@@ -620,6 +625,17 @@ add_test(NAME runtime_list_changes_local_state COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/list_changes_event.cw
   --must-contain "OBSERVED plain loud_enter"
   --must-not-contain "LEAK local quiet_enter")
+
+# QUERY ... INTO <list> installs an automatic response_changed fill. Without an
+# explicit handler the list is filled for the author; with one, the author's
+# handler wins and parsing must not report a duplicate.
+add_test(NAME runtime_query_into_fill_auto COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/query_into_fill.cw
+  --must-contain "AUTO size=3")
+add_test(NAME runtime_query_into_fill_manual COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/query_into_fill.cw
+  --must-contain "MANUAL size=2"
+  --must-not-contain "Already have a RECEIVES handler")
 
 # Part B: WAITFOR / CALL ON TIMEOUT ABORT|RETURN|THROW <msg> with TIMEOUT <ms>.
 add_test(NAME parse_waitfor_timeout COMMAND ${CMAKE_COMMAND}

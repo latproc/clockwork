@@ -20,8 +20,16 @@
 
 #include "Action.h"
 #include "symboltable.h"
+#include "tl/expected.hpp"
+#include <string>
 
 class MachineInstance;
+
+// Expand a JSON array onto a LIST, one member per element. This is the fill used
+// by `PUSH ITEMS FROM <json> TO <list>`, `list := <json> AS LIST`, and the
+// automatic fill behind `QUERY ... INTO <list>`.
+tl::expected<bool, std::string> add_json_array(MachineInstance *list_machine,
+                                               const Value &to_insert, int64_t pos, bool before);
 
 struct IncludeActionTemplate : public ActionTemplate {
 

@@ -210,14 +210,32 @@ int main() {
                "        x := TAKE FIRST FROM all;\n"
                "        COPY PROPERTIES FROM x TO slot;\n"
                "    }\n"
+               "}\n"
+               // No RECEIVE response_changed: QUERY ... INTO auto_all installs its
+               // own reply fill, so count_auto sees the rows without a handler.
+               "AutoEditor MACHINE {\n"
+               "    OPTION response JSON_VALUE {};\n"
+               "    OPTION auto_size -1;\n"
+               "    auto_all LIST;\n"
+               "    OPTION qa JSON_VALUE {\n"
+               "        \"action\": \"select\", \"auth\": \"xxx\", \"type\": \"customer\",\n"
+               "        \"where\": {\"name\": {\"like\": \"A%\"}}, \"order\": [\"name\"]\n"
+               "    };\n"
+               "    COMMAND refresh_auto {\n"
+               "        QUERY qa INTO auto_all;\n"
+               "    }\n"
+               "    COMMAND count_auto {\n"
+               "        auto_size := SIZE OF auto_all;\n"
+               "    }\n"
                "}\n");
 
-    char amain[512];
+    char amain[640];
     snprintf(amain, sizeof(amain),
              "link Link(host: \"127.0.0.1\", port: %d);\n"
              "ping_a Ping;\n"
              "cust Customer;\n"
              "ed Editor;\n"
+             "auto_ed AutoEditor;\n"
              "DATABASE_CHANNEL CHANNEL {\n"
              "    OPTION HOST \"localhost\";\n"
              "    OPTION port %d;\n"
@@ -228,11 +246,12 @@ int main() {
              cmd_b, ch_a);
     write_text(dira + "/main.cw", amain);
 
-    char bmain[512];
+    char bmain[640];
     snprintf(bmain, sizeof(bmain),
              "ping_b Ping;\n"
              "cust Customer;\n"
              "ed Editor;\n"
+             "auto_ed AutoEditor;\n"
              "DATABASE_CHANNEL CHANNEL {\n"
              "    OPTION HOST \"localhost\";\n"
              "    OPTION port %d;\n"
@@ -413,6 +432,47 @@ int main() {
                      "TAKE FIRST -> COPY PROPERTIES)\n";
         kill_all(pids);
         return 15;
+    }
+
+    // Automatic INTO fill: AutoEditor has no RECEIVE response_changed, so
+    // `QUERY qa INTO auto_all` installs its own fill and count_auto sees the row.
+    std::string refresh_auto =
+        MessageEncoding::encodeCommand("SEND", Value("refresh_auto"), Value("TO"), Value("auto_ed"));
+    if (!cw_cmd(iod_a, refresh_auto, reply, 10)) {
+        std::cerr << "SEND refresh_auto TO auto_ed failed: " << reply << "\n";
+        kill_all(pids);
+        return 18;
+    }
+    {
+        // The reply is asynchronous: wait for it before counting the list.
+        std::string getresp =
+            MessageEncoding::encodeCommand("GET", Value("auto_ed"), Value("response"));
+        bool routed = false;
+        for (int i = 0; i < 50; ++i) {
+            std::string r;
+            if (cw_cmd(iod_a, getresp, r, 2) && r.find("Ann") != std::string::npos) {
+                routed = true;
+                break;
+            }
+            usleep(100000);
+        }
+        if (!routed) {
+            std::cerr << "auto_ed QUERY reply did not arrive\n";
+            kill_all(pids);
+            return 19;
+        }
+    }
+    std::string count_auto =
+        MessageEncoding::encodeCommand("SEND", Value("count_auto"), Value("TO"), Value("auto_ed"));
+    if (!cw_cmd(iod_a, count_auto, reply, 10)) {
+        std::cerr << "SEND count_auto TO auto_ed failed: " << reply << "\n";
+        kill_all(pids);
+        return 20;
+    }
+    if (!wait_get(iod_a, "auto_ed", "auto_size", "1", 50)) {
+        std::cerr << "QUERY ... INTO did not auto-fill the list (SIZE OF auto_all != 1)\n";
+        kill_all(pids);
+        return 21;
     }
 
     // select must NOT spawn Class#key cache instances. Bob (id=2) was seeded

@@ -41,6 +41,25 @@ std::ostream &ClearListAction::operator<<(std::ostream &out) const {
     return out << "Clear List or Reference Action " << dest << "\n";
 }
 
+void clearListContents(MachineInstance *list_machine) {
+    if (!list_machine || list_machine->_type != "LIST") {
+        return;
+    }
+    for (unsigned int i = 0; i < list_machine->parameters.size(); ++i) {
+        Parameter &p = list_machine->parameters[i];
+        if (p.machine) {
+            list_machine->stopListening(p.machine);
+            p.machine->removeDependancy(list_machine);
+        }
+    }
+    list_machine->parameters.clear();
+    fixListState(*list_machine);
+    list_machine->updateLastEvaluationTime();
+    list_machine->setNeedsCheck();
+    list_machine->notifyDependents();
+    list_machine->idleReadyDependents();
+}
+
 Action::Status ClearListAction::run() {
     owner->start(this);
     // Handle the special case: CLEAR MESSAGES if needed
@@ -52,22 +71,7 @@ Action::Status ClearListAction::run() {
     }
     dest_machine = owner->lookup(dest);
     if (dest_machine && dest_machine->_type == "LIST") {
-#if 1
-        // TBD needs further testing
-        for (unsigned int i = 0; i < dest_machine->parameters.size(); ++i) {
-            Parameter &p = dest_machine->parameters[i];
-            if (p.machine) {
-                dest_machine->stopListening(p.machine);
-                p.machine->removeDependancy(dest_machine);
-            }
-        }
-#endif
-        dest_machine->parameters.clear();
-        fixListState(*dest_machine);
-        dest_machine->updateLastEvaluationTime();
-        dest_machine->setNeedsCheck();
-        dest_machine->notifyDependents();
-        dest_machine->idleReadyDependents();
+        clearListContents(dest_machine);
         status = Complete;
     }
     else if (dest_machine && dest_machine->_type == "REFERENCE") {

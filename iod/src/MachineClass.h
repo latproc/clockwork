@@ -51,6 +51,10 @@ class MachineClass {
     std::multimap<std::string, MachineCommandTemplate *> commands;
     std::map<Message, MachineCommandTemplate *> enter_functions;
     std::multimap<Message, MachineCommandTemplate *> receives;
+    // QUERY ... INTO <list> targets seen in this class. At the end of the body an
+    // automatic `response_changed` fill handler is added for them, unless the
+    // author wrote their own RECEIVE response_changed handler.
+    std::vector<std::string> query_fill_targets;
     std::map<std::string, MachineInstance *> global_references;
     std::list<Transition> transitions;
     std::list<ModbusAddressTemplate> exports;

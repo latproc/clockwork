@@ -9,6 +9,7 @@
 #include <string>
 #include <sstream>
 #include <vector>
+#include <algorithm>
 #include <boost/foreach.hpp>
 #include "symboltable.h"
 #include "Logger.h"
@@ -334,6 +335,46 @@ static bool registerReceiveHandler(const char *name, std::vector<std::string> wi
     current_actions->clear();
     cleanupErrorClause(true);
     return true;
+}
+
+// QUERY <json> INTO <list> targets are collected here and turned into an
+// automatic reply fill when the machine body ends (finalizeQueryReplyFill). The
+// dbsvr reply lands on this machine's `response` OPTION and dbd sends
+// `response_changed`, so the fill replaces the named LIST's contents with the
+// reply array (QueryFillListAction). The INTO target may also name a RECORD —
+// the fill is a no-op for a non-LIST at run time.
+static void registerQueryReplyFill(const char *list_name) {
+    if (!current_machineclass || !list_name || !*list_name) {
+        return;
+    }
+    std::vector<std::string> &targets = current_machineclass->query_fill_targets;
+    if (std::find(targets.begin(), targets.end(), list_name) == targets.end()) {
+        targets.push_back(list_name);
+    }
+}
+
+// Called when a machine body ends. If the class names any QUERY ... INTO targets
+// and has no `response_changed` handler of its own, install one that fills each
+// target from `response`. An explicit RECEIVE response_changed wins, so programs
+// written around the older "INTO is a hint" model keep working unchanged.
+static void finalizeQueryReplyFill() {
+    if (!current_machineclass || current_machineclass->query_fill_targets.empty()) {
+        return;
+    }
+    const Message changed("response_changed");
+    auto range = current_machineclass->receives.equal_range(changed);
+    if (range.first != range.second) {
+        DBG_PARSER << "QUERY ... INTO fill not installed: " << current_machineclass->name
+                   << " has its own RECEIVE response_changed\n";
+        return;
+    }
+    std::list<ActionTemplate *> actions;
+    for (const std::string &target : current_machineclass->query_fill_targets) {
+        actions.push_back(new QueryFillListActionTemplate(Value(target), Value("response")));
+    }
+    MachineCommandTemplate *mc = new MachineCommandTemplate("response_changed", "");
+    mc->setActionTemplates(actions);
+    current_machineclass->receives.insert(std::make_pair(changed, mc));
 }
 
 static void cleanupErrorClause(bool deallocate) {
@@ -692,6 +733,7 @@ definition_header '{' definition_body '}' {
 
         validate_exports(current_machineclass);
         validate_persistence(current_machineclass);
+        finalizeQueryReplyFill();
         current_machineclass = NULL;
     }
 }
@@ -2019,14 +2061,17 @@ SET SYMBOL TO expression error_clause with_timeout_opt {
 }
 | QUERY SYMBOL INTO SYMBOL {
     /* JSON on DATABASE_CHANNEL; the reply comes back via respond_to (routed to
-       this machine's `response` OPTION) and becomes a LIST via "list := response
-       AS LIST" (or PUSH ITEMS FROM). $4 names that LIST (a hint). */
+       this machine's `response` OPTION) and is turned into the LIST named by
+       INTO when `response_changed` arrives. "list := response AS LIST" in an
+       explicit RECEIVE handler also works. */
     if (current_action) current_actions->push_back(current_action);
     current_action = new QueryActionTemplate(Value($2), Value($4));
+    registerQueryReplyFill($4);
 }
 | QUERY JSONVAL INTO SYMBOL {
     if (current_action) current_actions->push_back(current_action);
     current_action = new QueryActionTemplate(Value($2), Value($4));
+    registerQueryReplyFill($4);
 }
 | THROW SYMBOL /* send a generic message/command */ {
 	DBG_PARSER << "adding THROW " << $2 << "\n";

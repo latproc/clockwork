@@ -19,6 +19,9 @@
 */
 
 #include "QueryAction.h"
+#include "ClearListAction.h"
+#include "IncludeAction.h"
+#include "Logger.h"
 #include "cJSON.h"
 #include "MachineInstance.h"
 #include "SendMessageAction.h"
@@ -89,3 +92,71 @@ Action::Status QueryAction::run() {
 }
 
 Action::Status QueryAction::checkComplete() { return Action::Complete; }
+
+QueryFillListActionTemplate::QueryFillListActionTemplate(Value list_name, Value source_name)
+    : list_name(list_name), source_name(source_name) {}
+
+Action *QueryFillListActionTemplate::factory(MachineInstance *mi) {
+    return new QueryFillListAction(mi, *this);
+}
+
+std::ostream &QueryFillListActionTemplate::operator<<(std::ostream &out) const {
+    return out << "QueryFillListActionTemplate " << list_name << " FROM " << source_name << "\n";
+}
+
+QueryFillListAction::QueryFillListAction(MachineInstance *mi, QueryFillListActionTemplate &qfat)
+    : Action(mi), list_name(qfat.list_name), source_name(qfat.source_name) {}
+
+std::ostream &QueryFillListAction::operator<<(std::ostream &out) const {
+    return out << owner->getName() << ": fill " << list_name << " FROM " << source_name << "\n";
+}
+
+Action::Status QueryFillListAction::run() {
+    owner->start(this);
+
+    MachineInstance *list_machine = owner->lookup(list_name.asString());
+    if (!list_machine || list_machine->_type != "LIST") {
+        // QUERY ... INTO a RECORD (or a name that is not a LIST) keeps the old
+        // behaviour: the reply stays on `response` only.
+        status = Complete;
+        owner->stop(this);
+        return status;
+    }
+
+    // Resolve the source: a symbol names a property on the owner (normally the
+    // machine's `response` OPTION); anything else is used as-is.
+    Value src = source_name;
+    if (source_name.kind == Value::t_symbol) {
+        Value resolved = owner->getValue(source_name);
+        if (resolved != SymbolTable::Null) {
+            src = resolved;
+        }
+    }
+
+    // Replace the list contents, matching `list := <json> AS LIST`: clear first.
+    // A reply that is not a JSON array (an error string, say) leaves the list
+    // empty rather than failing the receive handler.
+    clearListContents(list_machine);
+    if (src.kind == Value::t_json && src.json && src.json->type == cJSON_Array) {
+        add_json_array(list_machine, src, -1, false);
+    }
+
+    status = Complete;
+    owner->stop(this);
+    return status;
+}
+
+Action::Status QueryFillListAction::checkComplete() {
+    if (status == Complete || status == Failed) {
+        return status;
+    }
+    if (this != owner->executingCommand()) {
+        DBG_MSG << "checking complete on " << *this << " when it is not the top of stack \n";
+    }
+    else {
+        status = Complete;
+        owner->stop(this);
+    }
+    return status;
+}
+
