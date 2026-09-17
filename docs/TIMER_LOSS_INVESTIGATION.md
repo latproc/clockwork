@@ -1297,3 +1297,71 @@ there has been no recurrence to compare against.
 4. **The port stays queued on merit, not urgency** (Addendum 12/13): it is the
    right thing to do because the defect is real and the lines are diverging, not
    because the plant is currently failing.
+
+
+---
+
+## Addendum 15 — yes, the logs are reachable; and all three boxes post-date the fix
+
+Checked 2026-09-17 ~01:02 UTC from the engineering Mac via
+`RemoteAdminLinux/dsh-plant` (read-only allowlist; no writes, no restarts).
+All three boxes are reachable on port 2222 and running.
+
+### Which code is deployed
+
+Ran `ps -eo pid,etimes,comm` on each box and compared the `iod_main` start time
+with the `c6ebcb6b` commit time (`2026-09-16 21:27:53 +09:30` = **11:57:53 UTC**):
+
+| Box | `iod_main` PID | uptime | started (UTC) | after `c6ebcb6b`? |
+|---|---|---|---|---|
+| `2G-120` | 579346 | 44101 s = 12.25 h | 2026-09-16 12:46:42 | **yes**, +0.81 h |
+| `2G-115` | 506222 | 43300 s = 12.03 h | 2026-09-16 13:00:03 | **yes**, +1.04 h |
+| `2G-118` | 21421 | 4591 s = 1.28 h | 2026-09-16 23:45:12 | **yes**, +11.8 h |
+
+All three iod processes started **after** the bounded-overdue-wakes commit, so the
+deployed binaries contain the queue fix and the bounded recovery. That is the
+first positive evidence that the fix is actually live in the field — stronger
+than "operator reports no issues", because it does not depend on someone
+noticing.
+
+This also resolves the line question: the boxes run `iod_main` (no separate
+ecrt/kernel module process observed), so they are on line A
+(`prod-experimental-mqtt-fix`), which is what carries `c6ebcb6b`. Note the boxes
+were at `c6ebcb6b`-or-later by process start time; if a later `bbb68f45`/`b7665fd6`
+was also deployed, those are doc-only commits and change no behaviour.
+
+### Field exposure so far
+
+`2G-120` and `2G-115` have each run the fixed binary for ~12 h with no reported
+incident. `2G-118` was restarted ~2.3 h *after* the fix landed and has run ~1.3 h
+since. It also runs under an `iod.sh` wrapper (PIDs 21470/21471) that the other
+two do not show, which is worth a note to whoever maintains the service — it is
+not necessarily meaningful, but it means its start path differs.
+
+### The one question the logs must answer
+
+Nothing above shows the defect *present* before the deploy, so it still does not
+demonstrate that the fix recovered a plant stall. That needs the STALLSNAP data,
+and the specific thing to look for is now well defined:
+
+- **the fingerprint** — `runnable=1`, `pending_state_change`/`stable=0`,
+  `needs_check>0`, and no `Timer`/`SSTimer` item for that machine (Addendum 10.5);
+- **the fix working** — a soft clock whose `TIMER` exceeded its rate and then
+  *recovered*, versus the pre-fix signature of one that never does until restart
+  or an unrelated input (§1, §4).
+
+If SNAP has been on across the deploy window, the pre-deploy portion of the
+journal on any of the three boxes is the control group: the same signature before
+and after is the production A/B that Addenda 5, 6 and 11 could not construct. If
+SNAP was only enabled after the deploy, then there is no control and the honest
+position stays Addendum 14's — no regression, causation unproven.
+
+Captures to pull (read-only, no plant impact):
+
+```
+dsh-plant run 2G-120 journalctl -u iod --since "2026-09-16 00:00" 
+dsh-plant run 2G-118 journalctl -u iod --since "2026-09-15 00:00"
+```
+
+plus `DEBUG DEBUG_STALLSNAP on` if it is not already enabled, and the
+`SHOW SCHEDULER` / `SHOW TRIGGERS` pair for any soft clock suspected of stalling.
