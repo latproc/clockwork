@@ -1365,3 +1365,103 @@ dsh-plant run 2G-118 journalctl -u iod --since "2026-09-15 00:00"
 
 plus `DEBUG DEBUG_STALLSNAP on` if it is not already enabled, and the
 `SHOW SCHEDULER` / `SHOW TRIGGERS` pair for any soft clock suspected of stalling.
+
+
+---
+
+## Addendum 16 — the SNAP data across the deploy: 10 production stalls before, 0 after
+
+Pulled 2026-09-17 via `dsh-plant` (`journalctl -g STALLSNAP`), read-only. This is
+the production A/B that Addenda 5, 6, 11 and 14 said was missing. **SNAP is
+enabled and live on all three boxes** — the startup warning
+`Warning: unrecognised DEBUG Flag STALLSNAP` appears at every iod start, so the
+flag is in the config, and `StallTrace.h`'s "not built/installed yet" comment is
+stale for this fleet.
+
+### Deploy boundary (measured, not inferred)
+
+Use the journal, not `etimes`: on 2G-120 the current iod started at
+**22:44:05 box-local** (`inproc://… monitor started`), and the first SNAP record
+from that PID (`579543`) is at 22:44:16, i.e. 12 s after start — inside
+initialisation. An `etimes`-derived boundary using the box clock was out by ~28
+minutes, so all boundaries here come from journal-adjacent events.
+
+### 2G-120: production stalls before and after
+
+Splitting the 24 records by shape — the ~8.9 s `machine=-` records are the iod
+startup transient, and the machine-attributed 120–400 ms records are production:
+
+| | pre-deploy | post-deploy |
+|---|---|---|
+| production stalls | **10** | **0** |
+| machine-attributed | 10 | 0 (1 at +12 s, see below) |
+| window | 2026-09-15 12:34 → 09-16 21:14 (32.7 h) | 09-16 22:44 → 09-17 11:40 (13.4 h) |
+
+The pre-deploy records are not uniform — there is a cluster of **8 stalls in
+1.44 h (5.5/h)** on the morning of 09-16 (~10:30–11:56 box-local), which is what a
+burst looks like when the line is busy. That burst is the strongest part of the
+comparison: the same workload window has no counterpart after the deploy.
+
+The one post-deploy machine record (`R_GrabFeederConveyorReverse`, 270 ms) fires
+**12 seconds after iod start**, during the machine-activation wave, so it is
+startup — the same class as the `runnable=843` record from before the deploy.
+
+### What the stall signature actually is — and it is not the wake-loss defect
+
+Across all 11 production records on 2G-120:
+
+- **`stage=poll_machines` in 10 of 11** (the 11th is `stage=outer`, 123 ms).
+- **`stable=0` in 9 of 11.**
+- durations 123–391 ms, i.e. far shorter than the ~8.9 s startup transient.
+
+`poll_machines` is the batch that `MachineInstance::processAll` runs, so these are
+exactly the unbounded busy-pass holes of Addendum 10.1, not the erased
+`pending_state_change` entry of §1. The queue fix does not target that batch. So
+the honest read is:
+
+- The correlation is real and clean: **no production stall in 13.4 h after the
+  fix, against a 5.5/h burst in the hours before it.**
+- The mechanism by which the queue fix would suppress a `poll_machines` stall is
+  **not established**. A plausible but unevidenced link is that pre-fix,
+  `RecoverOverdue` re-queued every evaluation (unbounded recovery), inflating the
+  per-pass work that `poll_machines` then had to grind through; `c6ebcb6b` bounds
+  that to one follow-up per deadline. Treat that as a hypothesis to test, not a
+  conclusion.
+- Note also that `stable=0` with a machine name is *consistent* with the
+  runnable-orphan fingerprint (Addendum 10.5) but does not prove it: attribution
+  needs `needs_check` at stall time, which SNAP does not record.
+
+### 2G-115 and 2G-118
+
+- `2G-115`: **one** SNAP record ever, `duration_us=5458343 stage=outer`, at its
+  22:28 start — startup transient only. No production stall in its 12 h window.
+- `2G-118`: **zero** SNAP records since 09-10, including across the restart noted
+  in Addendum 15. Its `iod.sh` wrapper and short uptime make it the weakest
+  sample, but it is not contradicting anything.
+
+### Caveats before this is called a fix
+
+1. **The bars differ.** The 5.5/h figure is one busy hour; the 32.7 h pre-window
+   averages ~0.3/h. Zero events in 13.4 h is a meaningful drop against the burst,
+   weak against the average.
+2. **SNAP attribution is coarse.** It records stage, machine and queue depth — not
+   `needs_check`, not which clock was late. It can show *that* the loop stalled,
+   not *why*.
+3. **Operator-activity confound.** Whether the line ran comparable work in the
+   post-deploy 13.4 h is not established from these logs. If it idled, the
+   comparison weakens.
+4. **Nothing here dates the SNAP enable point.** The flag is present at every
+   start in the window, so it was on throughout — but the pre-deploy side is a
+   single box (2G-120).
+
+### Conclusion for the port decision
+
+Addendum 14's "no regression" now has field support, and the pre/post split is
+suggestive enough that a B port is no longer a speculative change with no
+demonstrated plant effect. It is still **not** evidence that the wake-loss
+mechanism of §1 caused these stalls: the observed stalls sit in the busy-pass
+batch, which `c6ebcb6b` does not touch and `3ce87578` addresses only partially.
+The right next step is unchanged and now cheaper to justify — leave all three
+boxes as controls, enable SNAP continuously, and treat any recurrence of a
+`poll_machines` stall as the trigger to investigate the batch bound (10.1) rather
+than the queue.
