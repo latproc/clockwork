@@ -1239,3 +1239,61 @@ legacy-ecrt vs kernel-elc transport forces it. None of `checkStableStates`,
 transport-conditional line on either branch, so a shared transport-neutral
 stable-state/TIMER core is *technically* feasible. It is not worth doing while the
 fix sets are still diverging — converge the fixes first, then decide.
+
+
+---
+
+## Addendum 14 — operator reports no issues on 2G-115 / 2G-118 / 2G-120
+
+Reported 2026-09-16 (operator knowledge, not a capture): the three boxes are
+running these updates and **no incident has been reported** since. Recording what
+that does and does not settle, because it is easy to read as "fixed".
+
+### What it does establish — no regression
+
+Three plant boxes are running the deployed changes with no reported incident. That
+is the first real negative signal available for these patches, and it is worth
+having: Addendum 5/6 could only say the fix was unvalidated and that no production
+impact had been demonstrated. A silent regression across three boxes is now much
+less likely than it was before the deploy.
+
+It also materially weakens the case in Addendum 4 for `3ce87578` being a
+correlated aggravator: 2G-120's episode was the one field event blamed on it, and
+there has been no recurrence to compare against.
+
+### What it does not establish — that this document's mechanism was the cause
+
+- **No recurrence is not the same as observed recovery.** The fix would show up as
+  a stalled clock *recovering* — an event that is only visible in a capture. A
+  quiet plant is equally consistent with "the fix works", "the affected clocks
+  never stalled again", and "the field stalls were never this mechanism".
+- **The detectability gap has not changed.** The residual symptom recorded in
+  Addendum 10.5's fingerprint (`runnable=1`, `pending_state_change=0`,
+  `needs_check>0`) requires `DEBUG DEBUG_STALLSNAP on`, and `StallTrace.h` still
+  says *"Not built/installed until operator-approved plant deploy."* Only 2G-120
+  has ever produced a STALLSNAP record, and its records were a startup transient
+  plus the `runnable=843` mass-enable burst — none matching this defect.
+- **"No call" is not a measurement.** If the only monitor is operator
+  observation, a stall that self-clears on the next unrelated wake is invisible,
+  and so is a latent wedge in a clock nobody is watching. Addendum 6 already
+  established that this defect needs no state change to occur, so it is exactly
+  the kind that stays quiet until it is expensive.
+
+### Effect on the recommendations
+
+1. **Do not treat the port as a hotfix.** The B-side gap is real but latent: 104/104
+   green, and no plant incident pointing at it. The cost of waiting is low because
+   the failure requires a matched hold with no state change *and* no future arm.
+2. **Do not roll anything further to the plant on the strength of this.** Addendum
+   11's "keep, do not revert" position is unchanged and now better supported, but
+   "nothing reported" must not be turned into "deploy more".
+3. **If you want the answer, instrument rather than change code.** The three boxes
+   are now identical hardware/software, which makes a read-only A/B available for
+   the first time: enable STALLSNAP (or capture `SHOW SCHEDULER` / `SHOW TRIGGERS`
+   for the soft clocks) on all three, then apply the B port to **one** and compare
+   recovery behaviour across the other two as controls. That is the production
+   demonstration Addenda 5, 6 and 11 all said was missing — and it does not
+   require touching the control boxes.
+4. **The port stays queued on merit, not urgency** (Addendum 12/13): it is the
+   right thing to do because the defect is real and the lines are diverging, not
+   because the plant is currently failing.
