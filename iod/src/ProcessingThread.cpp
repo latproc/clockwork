@@ -1214,13 +1214,23 @@ void ProcessingThread::operator()() {
                     }
                 }
 #if !defined(USE_ETHERCAT)
-                else if (MachineInstance::commandClockCount()) {
-                    // cw: keep the idle absorb at the process poll floor while
-                    // COMMANDCLOCKs are registered, so notify_period values below
-                    // the 20 ms idle wait are honoured. The dispatch itself runs
-                    // after this poll returns (below).
-                    const unsigned long clock_us = get_polling_time();
-                    wait_ms = (clock_us < 1000) ? 1 : static_cast<int>(clock_us / 1000);
+                // cw has no bus clock to pace the loop, so wake at the earliest
+                // COMMANDCLOCK boundary instead of the idle/paced wait. Capping
+                // after the branches above means a busy dependant cannot push the
+                // next tick out to the 20 ms clamp. The dispatch itself runs after
+                // this poll returns (below).
+                if (status == e_waiting && processing_state == eIdle) {
+                    const uint64_t clock_wake_us =
+                        MachineInstance::nextCommandClockWakeUs(curr_t);
+                    if (clock_wake_us != 0) {
+                        int clock_wait_ms =
+                            (clock_wake_us > curr_t)
+                                ? static_cast<int>((clock_wake_us - curr_t) / 1000)
+                                : 0;
+                        if (clock_wait_ms < wait_ms) {
+                            wait_ms = clock_wait_ms;
+                        }
+                    }
                 }
 #endif
                 if (wait_ms < 1) {
@@ -1275,9 +1285,9 @@ void ProcessingThread::operator()() {
             // sample path that normally dispatches COMMANDCLOCKs
             // (handle_io_sampling) therefore never runs. This wait loop is where
             // such a runtime spends its idle time, so drive the COMMANDCLOCK
-            // cadence here from the monotonic runtime clock. The poll wait was
-            // shortened while clocks are registered (above) so notify_period is
-            // honoured rather than rounded up to the 20 ms idle absorb.
+            // cadence here from the monotonic runtime clock. The poll wait above
+            // is capped to the next clock boundary, so a due tick is dispatched
+            // within ~1 ms of it rather than at the idle absorb.
             if (status == e_waiting && processing_state == eIdle &&
                 MachineInstance::commandClockCount()) {
                 MachineInstance::dispatchCommandClocks(curr_t);

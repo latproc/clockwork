@@ -100,6 +100,13 @@ target_link_libraries(test_clock gmock_main cw_client cw_interpreter ${ZeroMQ_LI
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_clock COMMAND test_clock)
 
+# COMMANDCLOCK cadence scheduling: CommandClock is header-only, so this stays a
+# fast deterministic unit test (no runtime, no ports).
+add_executable(test_command_clock test_command_clock.cpp )
+target_include_directories(test_command_clock PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test_command_clock gtest_main pthread)
+add_test(NAME test_command_clock COMMAND test_command_clock)
+
 add_executable(test_msg_encoding test_msg_encoding.cpp)
 set_target_properties (test_msg_encoding PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(test_msg_encoding gmock_main cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)

@@ -3011,15 +3011,7 @@ void MachineInstance::dispatchCommandClocks(uint64_t now_us) {
         const uint64_t period_ms = clock->cached_notify_period_ms;
         const uint64_t phase_ms = clock->cached_notify_phase_ms;
 
-        // Local CW state is visible to DESCRIBE; also fail-closed on Guard while a
-        // transition is queued or Guard becomes disabled/off/false.
-        MachineInstance *guard = clock->cached_clock_guard;
-        bool enabled = strcmp(clock->getCurrentStateString(), "on") == 0;
-        enabled = enabled && guard && guard->enabled();
-        if (enabled) {
-            const char *state = guard->getCurrentStateString();
-            enabled = state && strcasecmp(state, "off") != 0 && strcasecmp(state, "false") != 0;
-        }
+        const bool enabled = clock->commandClockEnabled();
 
         if (clock->hasCommandFanoutPending()) {
             clock->notifyCommandConsumers(clock->cached_command_name.c_str(), period_ms, true);
@@ -3036,6 +3028,39 @@ void MachineInstance::dispatchCommandClocks(uint64_t now_us) {
         clock->notifyCommandConsumers(clock->cached_command_name.c_str(), period_ms, false);
         IOComponent::noteClockSend();
     }
+}
+
+bool MachineInstance::commandClockEnabled() {
+    // Local CW state is visible to DESCRIBE; also fail-closed on Guard while a
+    // transition is queued or Guard becomes disabled/off/false.
+    MachineInstance *guard = cached_clock_guard;
+    bool enabled = strcmp(getCurrentStateString(), "on") == 0;
+    enabled = enabled && guard && guard->enabled();
+    if (enabled) {
+        const char *state = guard->getCurrentStateString();
+        enabled = state && strcasecmp(state, "off") != 0 && strcasecmp(state, "false") != 0;
+    }
+    return enabled;
+}
+
+uint64_t MachineInstance::nextCommandClockWakeUs(uint64_t now_us) {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
+    uint64_t earliest = 0;
+    for (MachineInstance *clock : command_clocks) {
+        if (!clock) {
+            continue;
+        }
+        if (!clock->command_clock_cache_valid) {
+            clock->refreshCommandClockCache();
+        }
+        const uint64_t wake = clock->command_clock.nextDueUs(
+            now_us, clock->cached_notify_period_ms, clock->commandClockEnabled(),
+            clock->cached_notify_phase_ms);
+        if (wake != 0 && (earliest == 0 || wake < earliest)) {
+            earliest = wake;
+        }
+    }
+    return earliest;
 }
 
 bool MachineInstance::acceptsCommandInCurrentState(const char *command_name) const {

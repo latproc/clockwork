@@ -49,6 +49,27 @@ class CommandClock {
         return slot != slot_;
     }
 
+    // Absolute µs at which the runtime must next call due() for this clock, or
+    // 0 when it needs no wake (disabled). Returns now_us when the clock is not
+    // yet armed or the current slot has not been dispatched, so the caller wakes
+    // immediately rather than waiting out an idle poll; otherwise returns the
+    // next slot boundary. Scheduling from this value keeps ticks on their
+    // boundary instead of quantising them to the runtime poll interval.
+    // Read-only: it never arms or advances the slot.
+    uint64_t nextDueUs(uint64_t now_us, uint64_t period_ms, bool enabled,
+                       uint64_t phase_ms = 0) const {
+        if (!enabled) {
+            return 0;
+        }
+        uint64_t period_us = 0;
+        uint64_t phase_us = 0;
+        const uint64_t slot = slotAt(now_us, period_ms, phase_ms, period_us, phase_us);
+        if (!seen_ || period_us != period_us_ || phase_us != phase_us_ || slot != slot_) {
+            return now_us;
+        }
+        return phase_us + (slot + 1) * period_us;
+    }
+
   private:
     static uint64_t slotAt(uint64_t now_us, uint64_t period_ms, uint64_t phase_ms,
                            uint64_t &period_us, uint64_t &phase_us) {

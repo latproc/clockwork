@@ -50,8 +50,28 @@ transport-less runtime spends its idle time, so:
 - dispatch registered clocks there (`MachineInstance::dispatchCommandClocks()`),
   but only while no scheduler handshake owns the machines
   (`status == e_waiting && processing_state == eIdle`), and
-- shorten the idle absorb to the process poll floor while any clock is
-  registered, so `notify_period` below the 20 ms idle wait is honoured.
+- poll **to the next clock boundary**: `CommandClock::nextDueUs()` reports the
+  absolute µs the clock next needs a dispatch at, `MachineInstance::
+  nextCommandClockWakeUs()` takes the earliest across registered clocks, and the
+  wait loop caps its `zmq::poll` timeout to that deadline.
+
+The deadline cap is what makes the cadence accurate. Without it the loop merely
+woke on its own schedule (idle absorb up to 20 ms, or a stale `paced_only`
+deadline), so a due tick was dispatched up to a whole period late — measured at
+a median 22.9 ms for a 10 ms clock once a dependant was running. With the cap a
+due tick is dispatched within ~1 ms of its boundary, and because the slot comes
+from the absolute boundary a late dispatch realigns instead of drifting.
+
+Measured on the real binary (10 ms clock, dependant handling `calcAdjust`),
+before → after:
+
+| `notify_period` | before median | after mean / median | after p95 |
+|---|---|---|---|
+| 10 ms | 22.9 ms | 10.0 / 10.0 ms | 11.4 ms |
+| 5 ms | — | 5.0 / 4.8 ms | 6.3 ms |
+| 20 ms | — | 20.0 / 20.0 ms | 21.2 ms |
+| 50 ms | — | 50.0 / 49.9 ms | 51.4 ms |
+| 200 ms | — | 200.0 / 200.0 ms | 200.5 ms |
 
 Both additions are under `#if !defined(USE_ETHERCAT)`, so `iod-elc` behaviour is
 unchanged: on the plant line the existing `handle_io_sampling()` dispatch stays
@@ -64,17 +84,24 @@ runtime.
 
 ## Regression gate
 
-`tests/command_clock.cw` defines a `COMMANDCLOCK`, a guard and a dependant that
-logs on every `calcAdjust`; CTest `runtime_command_clock` runs it under `cw` and
-requires the marker. It fails on the base (no tick) and passes with the fix. It
-is generic (no site machines) and is covered by
-`no_site_tree_in_product_tests`.
+- `iod/tests/test_command_clock.cpp` — deterministic unit tests for
+  `CommandClock::nextDueUs()`: arm/next-boundary, not-yet-dispatched slot wakes
+  immediately, late dispatch realigns to the absolute boundary (no drift),
+  phase offset, period change re-arms, disabled needs no wake.
+- `tests/command_clock.cw` defines a `COMMANDCLOCK`, a guard and a dependant that
+  logs on every `calcAdjust`; CTest `runtime_command_clock` runs it under `cw` and
+  requires the marker. It fails on the base (no tick) and passes with the fix. It
+  is generic (no site machines) and is covered by
+  `no_site_tree_in_product_tests`.
 
 ## Limits
 
-- Cadence in `cw` is bounded by the runtime poll, not by a bus clock. While a
-  clock's dependants are busy the loop runs at the poll floor; when fully idle
-  the wait floor is `get_polling_time()` (default 5 ms quiet), so very short
-  `notify_period` values are approximate in simulation.
+- The `zmq::poll` timeout is milliseconds, so ~1 ms is the floor on dispatch
+  lateness. A 1 ms `notify_period` therefore measures ~1.8 ms in practice; periods
+  of 5 ms and above track their boundary to about ±1.5 ms. That is well inside
+  the plant's shortest useful controller periods.
 - Only `cw`/`cw-scaffold` (`EC_SIMULATOR` without `USE_ETHERCAT`) take this
-  path. `cw_ecat` and `iod-elc` are unchanged.
+  path. `cw_ecat` and `iod-elc` are unchanged, so on `iod-elc` ticks are still
+  quantised to the bus/IO poll rate (fine when the bus period divides the
+  `notify_period`, otherwise late by up to one bus period).
+

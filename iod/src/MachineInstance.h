@@ -454,6 +454,10 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     // Dispatch COMMANDCLOCK instances whose monotonic cadence is due.
     // Called once from the regular EtherCAT input sampling path.
     static void dispatchCommandClocks(uint64_t now_us);
+    // Absolute µs of the earliest boundary a registered, enabled COMMANDCLOCK
+    // needs a dispatch at, or 0 if none. The runtime polls to this deadline so
+    // ticks land on their boundary rather than on the poll interval.
+    static uint64_t nextCommandClockWakeUs(uint64_t now_us);
     static size_t commandClockCount();
     static bool workToDo();
     static std::list<Package *> &pendingEvents();
@@ -523,6 +527,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     static std::list<MachineInstance *> command_clocks;
     void registerCommandClockLocked();
     void refreshCommandClockCache();
+    // Clock is in state on and its cached Guard is enabled and neither off nor
+    // false. Must be called with global_lists_mutex held (reads the clock cache).
+    bool commandClockEnabled();
     // CLOCKED* update wrappers: copy IA props without HandleMessage.
     // False → caller should sendMessageToReceiver as usual.
     bool applyThinClockedUpdate(MachineInstance *dep);
