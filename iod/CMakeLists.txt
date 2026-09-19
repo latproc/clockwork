@@ -733,6 +733,13 @@ add_test(NAME runtime_wait_timeout COMMAND sh ${_runtime}
 add_test(NAME runtime_receive_timeout COMMAND sh ${_runtime}
   $<TARGET_FILE:cw> ${_runtime_tests}/receive_timeout_runtime.cw
   --must-contain "receive timed out")
+# COMMANDCLOCK cadence is a Clockwork language feature: cw must tick registered
+# clocks even though it has no EtherCAT transport / IO sample path (the only
+# other dispatch site is handle_io_sampling). Gate: without the runtime dispatch
+# the dependant's calcAdjust handler never runs.
+add_test(NAME runtime_command_clock COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_runtime_tests}/command_clock.cw
+  --must-contain "COMMANDCLOCK calcAdjust tick")
 # SET ... WITH TIMEOUT (parse-only; a synchronous SET has no observable deadline).
 add_test(NAME parse_set_timeout COMMAND ${CMAKE_COMMAND}
   -DCW=$<TARGET_FILE:cw> -DFILE=${_runtime_tests}/set_timeout.cw -DEXPECT_RC=0

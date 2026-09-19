@@ -1213,6 +1213,16 @@ void ProcessingThread::operator()() {
                         }
                     }
                 }
+#if !defined(USE_ETHERCAT)
+                else if (MachineInstance::commandClockCount()) {
+                    // cw: keep the idle absorb at the process poll floor while
+                    // COMMANDCLOCKs are registered, so notify_period values below
+                    // the 20 ms idle wait are honoured. The dispatch itself runs
+                    // after this poll returns (below).
+                    const unsigned long clock_us = get_polling_time();
+                    wait_ms = (clock_us < 1000) ? 1 : static_cast<int>(clock_us / 1000);
+                }
+#endif
                 if (wait_ms < 1) {
                     wait_ms = 1;
                 }
@@ -1258,6 +1268,21 @@ void ProcessingThread::operator()() {
                                            resource_mgr, sched_sync, ecat_out);
             curr_t = microsecs();
             StallTrace::markStage(StallTrace::StageOuterHousekeeping);
+
+#if !defined(USE_ETHERCAT)
+            // cw is the Clockwork runtime without an EtherCAT transport: there is
+            // no bus sample clock, machine_is_ready never latches, and the IO
+            // sample path that normally dispatches COMMANDCLOCKs
+            // (handle_io_sampling) therefore never runs. This wait loop is where
+            // such a runtime spends its idle time, so drive the COMMANDCLOCK
+            // cadence here from the monotonic runtime clock. The poll wait was
+            // shortened while clocks are registered (above) so notify_period is
+            // honoured rather than rounded up to the 20 ms idle absorb.
+            if (status == e_waiting && processing_state == eIdle &&
+                MachineInstance::commandClockCount()) {
+                MachineInstance::dispatchCommandClocks(curr_t);
+            }
+#endif
 
             // ---- In-wait EC + scheduler service (event-safe, no usleep) ----
             // Drain EC first so digital edges are never delayed by a TIMER poke.
