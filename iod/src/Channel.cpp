@@ -187,7 +187,8 @@ Channel::Channel(const std::string &ch_name, const std::string &type)
       monit_subs(0), monit_pubs(0), connect_responder(0), disconnect_responder(0), throttle_time(0),
       connections(0), aborted(false), started_(false), cmd_client(0), cmd_server(0),
       last_throttled_send(0), does_monitor(false), does_share(false), does_update(false),
-      last_client_status_send_us_(0), pending_client_status_(false) {
+      last_client_status_send_us_(0), pending_client_status_(false),
+      active_status_first_us_(0), active_status_last_us_(0) {
     internals = new ChannelInternals();
     if (all == nullptr) {
         all = new std::map<std::string, Channel *>;
@@ -466,6 +467,12 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
         MessageLog::instance()->add(buf);
         DBG_CHANNELS << buf << "\n";
         return res;
+    }
+    // Sustained-status latch is only meaningful while ACTIVE. Leaving ACTIVE
+    // (including UPLOADING) drops it so one late status cannot restart sync.
+    if (new_state != ChannelImplementation::ACTIVE) {
+        active_status_first_us_ = 0;
+        active_status_last_us_ = 0;
     }
     if (new_state == ChannelImplementation::CONNECTED) {
         snprintf(buf, 100, "Channel %s CONNECTED", channel_name.c_str());
@@ -1050,14 +1057,22 @@ void Channel::checkStateChange(std::string event) {
             setState(ChannelImplementation::UPLOADING);
         }
         else if (current_state == ChannelImplementation::ACTIVE && event == "status") {
-            // Ignore late/duplicate status while ACTIVE. Re-entering UPLOADING on every
-            // client retry stacked SyncRemoteStates and could regress ACTIVE→DOWNLOADING.
-            // Fresh reconnects go DISCONNECTED→WAITSTART and accept status there.
-            {
+            // Do not call setState here. A single late status must not restart
+            // sync (that reopened the UPLOADING thrash). Sustained status is a
+            // reconnect whose DISCONNECTED was missed; checkCommunications
+            // turns that latch into one UPLOADING.
+            const uint64_t now = microsecs();
+            if (active_status_first_us_ == 0) {
+                active_status_first_us_ = now;
+                snprintf(buf, sizeof(buf),
+                         "Channel %s: client status while ACTIVE, latching reconnect",
+                         channel_name.c_str());
+                MessageLog::instance()->add(buf);
+                DBG_CHANNELS << buf << "\n";
                 FileLogger fl(program_name);
-                fl.f() << channel_name << " ignoring " << event << " while active\n";
-                DBG_CHANNELS << channel_name << " ignoring " << event << " while active\n";
+                fl.f() << buf << "\n";
             }
+            active_status_last_us_ = now;
         }
         else if (current_state == ChannelImplementation::UPLOADING) {
             if (event == "status") {
@@ -2892,6 +2907,33 @@ void Channel::checkCommunications() {
         MessageLog::instance()->add(buf);
         DBG_CHANNELS << buf << "\n";
         setState(ChannelImplementation::UPLOADING);
+    }
+    else if (!isClient() && current_state == ChannelImplementation::ACTIVE &&
+             active_status_first_us_ != 0) {
+        // Quiet gap drops one late status. Status that keeps arriving is one
+        // re-handshake. Duplicate status during the following UPLOADING is
+        // already ignored.
+        const uint64_t now = microsecs();
+        if ((now - active_status_last_us_) >= active_status_quiet_us_) {
+            active_status_first_us_ = 0;
+            active_status_last_us_ = 0;
+        }
+        else if ((now - active_status_first_us_) >= active_status_sustain_us_ &&
+                 (now - active_status_last_us_) < active_status_quiet_us_) {
+            active_status_first_us_ = 0;
+            active_status_last_us_ = 0;
+            char buf[160];
+            snprintf(buf, sizeof(buf),
+                     "Channel %s: re-handshake on sustained client status while ACTIVE",
+                     channel_name.c_str());
+            MessageLog::instance()->add(buf);
+            DBG_CHANNELS << buf << "\n";
+            {
+                FileLogger fl(program_name);
+                fl.f() << buf << "\n";
+            }
+            setState(ChannelImplementation::UPLOADING);
+        }
     }
 }
 

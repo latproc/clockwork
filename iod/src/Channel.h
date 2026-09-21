@@ -377,8 +377,15 @@ class Channel : public MachineInstance, public ChannelImplementation {
     uint64_t last_client_status_send_us_;
     // Server: "status" arrived before WAITSTART (or was otherwise not applied yet).
     bool pending_client_status_;
+    // Server: span of client "status" while ACTIVE. 0 means no latch.
+    // A gap of active_status_quiet_us_ drops the latch. Status that continues
+    // for active_status_sustain_us_ starts one UPLOADING.
+    uint64_t active_status_first_us_;
+    uint64_t active_status_last_us_;
     // Resend interval while client remains in DOWNLOADING (microseconds).
     static const uint64_t client_status_retry_us_ = 500000; // 500 ms
+    static const uint64_t active_status_sustain_us_ = 2000000; // 2 s
+    static const uint64_t active_status_quiet_us_ = 1000000;   // 1 s
 
     friend class SyncRemoteStatesAction;
     friend class ChannelDefinition;
