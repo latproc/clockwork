@@ -189,6 +189,9 @@ TEST_F(TimerWakeTest, DInputDueRuleWakesPastSelfHold) {
     usleep(3000);
     Scheduler::instance()->fireDueItems(microsecs());
     ASSERT_TRUE(machine_->needsCheck());
+    const std::string scheduler_status = Scheduler::instance()->getStatus();
+    EXPECT_NE(scheduler_status.find("telemetry scheduled="), std::string::npos);
+    EXPECT_NE(scheduler_status.find("trigger_fired="), std::string::npos);
 
     to_process.clear();
     to_process.insert(machine_);

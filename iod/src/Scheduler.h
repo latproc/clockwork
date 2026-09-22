@@ -22,7 +22,9 @@
 
 #include <boost/thread/thread.hpp>
 
+#include <atomic>
 #include <cstddef>
+#include <deque>
 #include <list>
 #include <ostream>
 #include <queue>
@@ -114,6 +116,7 @@ class Scheduler {
     int64_t getNextDelay();
     int64_t getNextDelay(uint64_t start);
     void setThreadRef(boost::thread &ref);
+    void noteMachineWake() { machine_wake_count.fetch_add(1, std::memory_order_relaxed); }
 
   protected:
     SchedulerInternals *internals;
@@ -134,6 +137,25 @@ class Scheduler {
     zmq::socket_t *update_notify;
     long next_delay_time;
     uint64_t notification_sent; // the scheduler has been notified that an item is scheduled
+
+    // Long-lived, low-overhead scheduler telemetry.  These counters are
+    // intentionally process-local and reset on restart; operators can sample
+    // SCHEDULER periodically without enabling verbose scheduler logging.
+    std::atomic<uint64_t> scheduled_count;
+    std::atomic<uint64_t> fired_count;
+    std::atomic<uint64_t> overdue_count;
+    std::atomic<uint64_t> trigger_fired_count;
+    std::atomic<uint64_t> trigger_skipped_count;
+    std::atomic<uint64_t> machine_wake_count;
+    std::atomic<uint64_t> wake_interrupt_count;
+    std::atomic<uint64_t> max_lateness_us;
+    std::atomic<uint64_t> queue_high_water;
+    std::deque<std::string> anomaly_events;
+    static const size_t anomaly_event_limit = 32;
+    static const uint64_t anomaly_threshold_us = 1000;
+
+    void recordAnomaly(const ScheduledItem *item, uint64_t now, uint64_t lateness);
+    static void updateMax(std::atomic<uint64_t> &target, uint64_t value);
 
     friend class PriorityQueue;
 };

@@ -94,6 +94,22 @@ std::string Scheduler::getStatus() {
     }
     std::stringstream ss;
     ss << buf << "\n";
+    ss << "telemetry scheduled=" << scheduled_count.load(std::memory_order_relaxed)
+       << " fired=" << fired_count.load(std::memory_order_relaxed)
+       << " overdue=" << overdue_count.load(std::memory_order_relaxed)
+       << " trigger_fired=" << trigger_fired_count.load(std::memory_order_relaxed)
+       << " trigger_skipped=" << trigger_skipped_count.load(std::memory_order_relaxed)
+       << " machine_wakes=" << machine_wake_count.load(std::memory_order_relaxed)
+       << " wake_interrupts=" << wake_interrupt_count.load(std::memory_order_relaxed)
+       << " max_lateness_us=" << max_lateness_us.load(std::memory_order_relaxed)
+       << " queue_high_water=" << queue_high_water.load(std::memory_order_relaxed) << "\n";
+    if (!anomaly_events.empty()) {
+        ss << "recent_overdue:\n";
+        for (std::deque<std::string>::const_iterator iter = anomaly_events.begin();
+             iter != anomaly_events.end(); ++iter) {
+            ss << "  " << *iter << "\n";
+        }
+    }
     std::list<ScheduledItem *>::const_iterator iter = items.queue.begin();
     while (iter != items.queue.end()) {
         ScheduledItem *item = *iter++;
@@ -236,11 +252,34 @@ std::ostream &operator<<(std::ostream &out, const ScheduledItem &item) {
 
 Scheduler::Scheduler()
     : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PAIR), update_notify(0),
-      next_delay_time(0), notification_sent(0) {
+      next_delay_time(0), notification_sent(0), scheduled_count(0), fired_count(0),
+      overdue_count(0), trigger_fired_count(0), trigger_skipped_count(0),
+      machine_wake_count(0), wake_interrupt_count(0), max_lateness_us(0), queue_high_water(0) {
     internals = new SchedulerInternals;
     watch_dog = new Watchdog("Scheduler", 300, false);
     update_sync.bind("inproc://sch_items");
     next_time = 0;
+}
+
+void Scheduler::updateMax(std::atomic<uint64_t> &target, uint64_t value) {
+    uint64_t current = target.load(std::memory_order_relaxed);
+    while (current < value &&
+           !target.compare_exchange_weak(current, value, std::memory_order_relaxed,
+                                         std::memory_order_relaxed)) {
+    }
+}
+
+void Scheduler::recordAnomaly(const ScheduledItem *item, uint64_t now, uint64_t lateness) {
+    // This path only runs for overdue items, so the normal timer path does not
+    // allocate or take this lock.
+    std::stringstream event;
+    event << "overdue lateness_us=" << lateness << " due=" << item->delivery_time
+          << " now=" << now << " item=" << *item;
+    boost::recursive_mutex::scoped_lock scoped_lock(internals->q_mutex);
+    anomaly_events.push_back(event.str());
+    if (anomaly_events.size() > anomaly_event_limit) {
+        anomaly_events.pop_front();
+    }
 }
 
 Scheduler::~Scheduler() {
@@ -296,12 +335,14 @@ int64_t Scheduler::getNextDelay(uint64_t start) {
 }
 
 void Scheduler::add(ScheduledItem *item) {
+    scheduled_count.fetch_add(1, std::memory_order_relaxed);
     next_delay_time = getNextDelay();
     ScheduledItem *top = 0;
     {
         boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
         DBG_SCHEDULER << "Scheduling item: " << *item << "\n";
         items.push(item);
+        updateMax(queue_high_water, items.size());
     }
     top = next();
     next_time = top->delivery_time;
@@ -312,6 +353,7 @@ void Scheduler::add(ScheduledItem *item) {
     if (delay + 200 < next_delay_time || next_delay_time <= 0) {
         next_delay_time = delay;
         if (internals->thread_ptr) {
+            wake_interrupt_count.fetch_add(1, std::memory_order_relaxed);
             internals->thread_ptr->interrupt();
         }
     }
@@ -411,6 +453,23 @@ size_t Scheduler::fireDueItems(uint64_t now) {
             pop();
         }
         next_time = 0;
+        const uint64_t lateness = now > item->delivery_time ? now - item->delivery_time : 0;
+        if (lateness) {
+            overdue_count.fetch_add(1, std::memory_order_relaxed);
+            updateMax(max_lateness_us, lateness);
+            if (lateness >= anomaly_threshold_us) {
+                recordAnomaly(item, now, lateness);
+            }
+        }
+        fired_count.fetch_add(1, std::memory_order_relaxed);
+        if (item->trigger) {
+            if (item->trigger->enabled()) {
+                trigger_fired_count.fetch_add(1, std::memory_order_relaxed);
+            }
+            else {
+                trigger_skipped_count.fetch_add(1, std::memory_order_relaxed);
+            }
+        }
         dispatchScheduledItem(item);
         ++n;
         now = microsecs();
