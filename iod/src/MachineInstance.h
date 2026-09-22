@@ -225,6 +225,11 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     // indicate that dependent machine should check their state
     void notifyDependents();
 
+    // Hold setNeedsCheck and notifyDependents across several setValue calls.
+    // endDeferredPropertyNotify runs them once if any of those values changed.
+    void beginDeferredPropertyNotify();
+    void endDeferredPropertyNotify();
+
     // forward the message to dependents and notify them to check their state
     void notifyDependents(Message &msg);
 
@@ -392,6 +397,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
   protected:
     int needs_check;
+    // >0 while a caller is applying several properties that wake dependents once.
+    int deferred_property_notify_;
+    bool deferred_property_dirty_;
 
   public:
     bool uses_timer;
