@@ -150,4 +150,48 @@ TEST_F(TimerWakeTest, NewAbsoluteDeadlineCanRecoverAgain) {
     EXPECT_TRUE(ProcessingThread::is_pending(machine_));
 }
 
+TEST_F(TimerWakeTest, DInputDueRuleWakesPastSelfHold) {
+    // This is the production DINPUT shape: while the input is still true the
+    // machine holds its current state, while a false TIMER >= stable rule must
+    // wake it when the debounce interval expires.
+    machine_class_ = new MachineClass("DINPUT_TIMER_WAKE_TEST");
+    machine_class_->initial_state = State("on");
+    machine_class_->addState("on");
+    machine_class_->addState("off");
+
+    Predicate *self_on = new Predicate(new Predicate("SELF"), opEQ, new Predicate("on"));
+    Predicate *due = new Predicate(new Predicate(new Predicate("TIMER"), opGE, new Predicate(20)),
+                                   opAND, self_on);
+    machine_class_->stable_states.push_back(StableState("off", due));
+    machine_class_->stable_states.push_back(StableState("on", new Predicate(true)));
+
+    machine_ = MachineInstanceFactory::create("dinput_timer_wake_test", machine_class_->name);
+    machine_->setStateMachine(machine_class_);
+    machine_->markActive();
+    machine_->enable();
+
+    // Remove startup timer items; this pass must be caused by the due rule.
+    while (Scheduler::instance()->next()) {
+        ScheduledItem *item = Scheduler::instance()->next();
+        Scheduler::instance()->pop();
+        delete item;
+    }
+
+    machine_->start_time = microsecs() - 19 * 1000;
+    machine_->setNeedsCheck();
+    std::set<MachineInstance *> to_process{machine_};
+    ASSERT_TRUE(MachineInstance::checkStableStates(to_process, 150000));
+    ASSERT_TRUE(Scheduler::instance()->pendingCount() > 0);
+
+    usleep(3000);
+    Scheduler::instance()->fireDueItems(microsecs());
+    ASSERT_TRUE(machine_->needsCheck());
+
+    to_process.clear();
+    to_process.insert(machine_);
+    ASSERT_TRUE(MachineInstance::checkStableStates(to_process, 150000));
+    machine_->idle();
+    EXPECT_STREQ(machine_->getCurrentStateString(), "off");
+}
+
 } // namespace
