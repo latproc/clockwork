@@ -187,7 +187,7 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
                 // stays at its default until this channel is ACTIVE.
                 MachineShadowInstance *shadow = dynamic_cast<MachineShadowInstance *>(mi);
                 Channel *chn = shadow ? shadow->ownerChannel() : 0;
-                if (shadow && chn && chn->current_state != ChannelImplementation::ACTIVE) {
+                if (shadow && chn && chn->getCurrent() != ChannelImplementation::ACTIVE) {
                     shadow->stageRemoteState(s->getName());
                     result_str = "OK";
                     return true;
@@ -474,7 +474,7 @@ static bool deliverRemoteProperty(MachineInstance *m, const std::string &name, c
     MachineShadowInstance *shadow = dynamic_cast<MachineShadowInstance *>(m);
     if (shadow) {
         Channel *chn = shadow->ownerChannel();
-        if (chn && chn->current_state != ChannelImplementation::ACTIVE) {
+        if (chn && chn->getCurrent() != ChannelImplementation::ACTIVE) {
             shadow->stageRemoteProperty(name, value);
             return true;
         }

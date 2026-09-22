@@ -889,6 +889,7 @@ DynamicValue *MachineTimerValue::clone() const {
 
 MachineInstance::MachineInstance(InstanceType instance_type)
     : Receiver(""), _type("Undefined"), io_interface(0), mq_interface(0), owner(0), needs_check(0),
+      deferred_property_notify_(0), deferred_property_dirty_(false),
       uses_timer(false), my_instance_type(instance_type), state_change(0), state_machine(0),
       current_state("undefined"), is_enabled(false), state_timer(0), locked(0),
       modbus_exported(ModbusExport::none), saved_state("undefined"), current_state_val("undefined"),
@@ -928,6 +929,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
 MachineInstance::MachineInstance(const CStringHolder name, const char *type,
                                  InstanceType instance_type)
     : Receiver(name), _type(type), io_interface(0), mq_interface(0), owner(0), needs_check(0),
+      deferred_property_notify_(0), deferred_property_dirty_(false),
       uses_timer(false), my_instance_type(instance_type), state_change(0), state_machine(0),
       current_state("undefined"), is_enabled(false), state_timer(0), locked(0),
       modbus_exported(ModbusExport::none), saved_state("undefined"), current_state_val("undefined"),
@@ -2802,6 +2804,20 @@ void MachineInstance::notifyDependents() {
         }
         dep->setNeedsCheck();
         //      if (dep->state_machine->token_id == ClockworkToken::LIST ) dep->notifyDependents();
+    }
+}
+
+void MachineInstance::beginDeferredPropertyNotify() { ++deferred_property_notify_; }
+
+void MachineInstance::endDeferredPropertyNotify() {
+    if (deferred_property_notify_ == 0) {
+        return;
+    }
+    --deferred_property_notify_;
+    if (deferred_property_notify_ == 0 && deferred_property_dirty_) {
+        deferred_property_dirty_ = false;
+        setNeedsCheck();
+        notifyDependents();
     }
 }
 
@@ -5577,8 +5593,13 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         // actually changes value
         if (property_val.token_id != ClockworkToken::TRACE &&
             property_val.token_id != ClockworkToken::DEBUG) {
-            setNeedsCheck();
-            notifyDependents();
+            if (deferred_property_notify_ > 0) {
+                deferred_property_dirty_ = true;
+            }
+            else {
+                setNeedsCheck();
+                notifyDependents();
+            }
         }
         return true;
     }
