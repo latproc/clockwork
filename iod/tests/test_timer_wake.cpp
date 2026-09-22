@@ -12,7 +12,10 @@
 #include "ThreadSafeQueue.h"
 
 #include <boost/thread.hpp>
+#include <chrono>
 #include <set>
+#include <thread>
+#include <vector>
 
 #include "library_globals.cpp"
 
@@ -192,6 +195,78 @@ TEST_F(TimerWakeTest, DInputDueRuleWakesPastSelfHold) {
     ASSERT_TRUE(MachineInstance::checkStableStates(to_process, 150000));
     machine_->idle();
     EXPECT_STREQ(machine_->getCurrentStateString(), "off");
+}
+
+TEST_F(TimerWakeTest, DInputTimerStressWithTriggerReplacement) {
+    constexpr size_t machine_count = 128;
+    constexpr unsigned rounds = 100;
+
+    auto *machine_class = new MachineClass("DINPUT_TIMER_STRESS");
+    machine_class->initial_state = State("on");
+    machine_class->addState("on");
+    machine_class->addState("off");
+
+    Predicate *self_on = new Predicate(new Predicate("SELF"), opEQ, new Predicate("on"));
+    Predicate *due = new Predicate(new Predicate(new Predicate("TIMER"), opGE, new Predicate(2)),
+                                   opAND, self_on);
+    machine_class->stable_states.push_back(StableState("off", due));
+    machine_class->stable_states.push_back(StableState("on", new Predicate(true)));
+
+    std::vector<MachineInstance *> machines;
+    machines.reserve(machine_count);
+    for (size_t i = 0; i < machine_count; ++i) {
+        auto name = std::string("dinput_timer_stress_") + std::to_string(i);
+        MachineInstance *m = MachineInstanceFactory::create(name.c_str(), machine_class->name);
+        m->setStateMachine(machine_class);
+        m->markActive();
+        m->enable();
+        machines.push_back(m);
+    }
+
+    // Remove startup items before the stress loop.
+    while (Scheduler::instance()->next()) {
+        ScheduledItem *item = Scheduler::instance()->next();
+        Scheduler::instance()->pop();
+        delete item;
+    }
+
+    for (unsigned round = 0; round < rounds; ++round) {
+        const uint64_t now = microsecs();
+        std::set<MachineInstance *> to_process;
+        for (MachineInstance *m : machines) {
+            // Start just before the due edge so each pass arms a short timer.
+            m->start_time = now - 1000;
+            m->setNeedsCheck();
+            to_process.insert(m);
+        }
+        ASSERT_TRUE(MachineInstance::checkStableStates(to_process, 150000));
+
+        std::this_thread::sleep_for(std::chrono::milliseconds(3));
+        Scheduler::instance()->fireDueItems(microsecs());
+
+        to_process.clear();
+        for (MachineInstance *m : machines) {
+            if (m->queuedForStableStateTest()) {
+                to_process.insert(m);
+            }
+        }
+        ASSERT_TRUE(MachineInstance::checkStableStates(to_process, 150000));
+
+        // Complete queued state changes, then immediately re-arm the opposite
+        // state. This repeatedly disables/replaces StableState triggers.
+        for (MachineInstance *m : machines) {
+            m->idle();
+            m->resume(State("on"));
+        }
+    }
+
+    for (MachineInstance *m : machines) {
+        ProcessingThread::suspend(m);
+        delete m;
+    }
+    delete machine_class;
+    Scheduler::instance()->fireDueItems(microsecs());
+    EXPECT_LT(Scheduler::instance()->pendingCount(), machine_count);
 }
 
 } // namespace
