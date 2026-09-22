@@ -55,7 +55,7 @@ void MachineShadowInstance::applyStagedRemote(uint64_t authority) {
     }
     staged_properties_.clear();
     if (has_staged_state_ && state_machine) {
-        const State *s = state_machine->findState(staged_state_);
+        const State *s = state_machine->findState(staged_state_.c_str());
         if (!s) {
             s = state_machine->findState(state_machine->initial_state);
         }
