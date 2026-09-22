@@ -3,7 +3,6 @@
 #include "DebugExtra.h"
 #include "Logger.h"
 #include "MachineInstance.h"
-#include "Scheduler.h"
 #include <algorithm>
 
 std::ostream &operator<<(std::ostream &out, const StableState &ss) { return ss.operator<<(out); }
@@ -54,7 +53,6 @@ void StableState::collectTimerPredicates() {
 
 void StableState::triggerFired(Trigger *trig) {
     if (owner) {
-        Scheduler::instance()->noteMachineWake();
         owner->setNeedsCheck();
     }
 }

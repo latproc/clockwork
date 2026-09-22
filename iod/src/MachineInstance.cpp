@@ -356,6 +356,7 @@ void MachineInstance::triggerFired(Trigger *trig) {
     if (trig->matches(str_publish)) {
         Channel::sendPropertyChanges(this);
     }
+    Scheduler::instance()->noteMachineWake();
     setNeedsCheck();
 }
 
