@@ -474,6 +474,11 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
         active_status_first_us_ = 0;
         active_status_last_us_ = 0;
     }
+    // Shadows stay at their defaults until ACTIVE. UPLOADING and DOWNLOADING
+    // only stage the remote picture. Owners are not reset.
+    if (prior == ChannelImplementation::ACTIVE && new_state != ChannelImplementation::ACTIVE) {
+        revertShadowsToDefaults();
+    }
     if (new_state == ChannelImplementation::CONNECTED) {
         snprintf(buf, 100, "Channel %s CONNECTED", channel_name.c_str());
         MessageLog::instance()->add(buf);
@@ -560,6 +565,7 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
         // DISCONNECTED disables shadows; WAITSTART/CONNECTED may not run
         // again before ACTIVE (overlapping dual iod start).
         enableShadows();
+        applyStagedShadows();
         setNeedsCheck();
     }
     return res;
@@ -2579,6 +2585,50 @@ void ChannelDefinition::addOptionName(const char *n, Value &v) {
 /*  When a channel is created and connected, instances of updated machines on that channel are enabled.
 */
 #include "EnableAction.h"
+
+void Channel::forEachOwnedShadow(void (*op)(MachineShadowInstance *, uint64_t)) {
+    std::map<std::string, Value>::const_iterator iter = definition()->updates_names.begin();
+    while (iter != definition()->updates_names.end()) {
+        const std::pair<std::string, Value> item = *iter++;
+        MachineInstance *m = MachineInstance::find(item.first.c_str());
+        MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance *>(m);
+        if (!ms) {
+            continue;
+        }
+        uint64_t machine_auth = ms->ownerChannel() ? ms->ownerChannel()->definition()->authority
+                                                   : definition()->authority;
+        if ((isClient() && authority == machine_auth) ||
+            (definition()->authority == machine_auth)) {
+            op(ms, machine_auth);
+        }
+    }
+    iter = definition()->shares_names.begin();
+    while (iter != definition()->shares_names.end()) {
+        const std::pair<std::string, Value> item = *iter++;
+        MachineInstance *m = MachineInstance::find(item.first.c_str());
+        MachineShadowInstance *ms = dynamic_cast<MachineShadowInstance *>(m);
+        if (!ms) {
+            continue;
+        }
+        uint64_t machine_auth = ms->ownerChannel() ? ms->ownerChannel()->definition()->authority
+                                                   : definition()->authority;
+        if (authority == machine_auth) {
+            op(ms, machine_auth);
+        }
+    }
+}
+
+static void applyOneStagedShadow(MachineShadowInstance *ms, uint64_t authority) {
+    ms->applyStagedRemote(authority);
+}
+
+static void revertOneShadow(MachineShadowInstance *ms, uint64_t authority) {
+    ms->revertShadowToDefaults(authority);
+}
+
+void Channel::applyStagedShadows() { forEachOwnedShadow(applyOneStagedShadow); }
+
+void Channel::revertShadowsToDefaults() { forEachOwnedShadow(revertOneShadow); }
 
 void Channel::enableShadows() {
     // enable all machines that are owned by this channel

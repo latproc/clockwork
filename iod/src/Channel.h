@@ -32,6 +32,7 @@
 #include <set>
 #include <string>
 
+class MachineShadowInstance;
 class Channel;
 class MachineInterface;
 class SubscriptionManager;
@@ -265,6 +266,11 @@ class Channel : public MachineInstance, public ChannelImplementation {
     static void setupCommandSockets();
     void enableShadows();
     void disableShadows();
+    // Staged remote values are applied together on entry to ACTIVE.
+    // Leaving ACTIVE restores each shadow to its defaults. Owners are untouched.
+    void applyStagedShadows();
+    void revertShadowsToDefaults();
+    void forEachOwnedShadow(void (*op)(MachineShadowInstance *, uint64_t));
     void startServer(
         ProtocolType proto = eZMQ); // used by shared (publish/subscribe) and one-to-one channels
     void startClient();             // used by shared (publish/subscribe) channels
