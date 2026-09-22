@@ -3344,7 +3344,9 @@ void MachineInstance::enable() {
             setState(*s);
         }
     }
-    else {
+    else if (!isShadow() || current_state.getName() == "undefined") {
+        // Shadow fail-safe initial state applies only while still undefined.
+        // A peer state, or the state disableShadows restored, must survive enable.
         setInitialState(true);
     }
 
