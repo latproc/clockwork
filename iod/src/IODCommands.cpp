@@ -24,6 +24,7 @@
 #include "IOComponent.h"
 #include "Logger.h"
 #include "MachineInstance.h"
+#include "MachineShadowInstance.h"
 #include "MessageEncoding.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
@@ -182,6 +183,15 @@ bool IODCommandSetStatus::run(std::vector<Value> &params) {
                 return false;
             }
             if (mi->isShadow()) {
+                // UPLOADING and DOWNLOADING learn the remote picture. The shadow
+                // stays at its default until this channel is ACTIVE.
+                MachineShadowInstance *shadow = dynamic_cast<MachineShadowInstance *>(mi);
+                Channel *chn = shadow ? shadow->ownerChannel() : 0;
+                if (shadow && chn && chn->current_state != ChannelImplementation::ACTIVE) {
+                    shadow->stageRemoteState(s->getName());
+                    result_str = "OK";
+                    return true;
+                }
                 mi->setState(*s, auth, false); //Request the control to change state
             }
             else {
@@ -459,6 +469,24 @@ bool IODCommandGetProperty::run(std::vector<Value> &params) {
     }
 }
 
+static bool deliverRemoteProperty(MachineInstance *m, const std::string &name, const Value &value,
+                                  bool use_authority, uint64_t authority) {
+    MachineShadowInstance *shadow = dynamic_cast<MachineShadowInstance *>(m);
+    if (shadow) {
+        Channel *chn = shadow->ownerChannel();
+        if (chn && chn->current_state != ChannelImplementation::ACTIVE) {
+            shadow->stageRemoteProperty(name, value);
+            return true;
+        }
+        // Remember the default once, then apply this change immediately.
+        shadow->rememberPropertyDefault(name);
+    }
+    if (use_authority) {
+        return m->setValue(name, value, authority);
+    }
+    return m->setValue(name, value);
+}
+
 bool IODCommandProperty::run(std::vector<Value> &params) {
     bool changed = false;
     //if (params.size() == 4) {
@@ -483,6 +511,7 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
                 //NB_MSG << error() << "\n";
                 return false;
             }
+            Value parsed = params[3];
             if (params[3].kind == Value::t_string || params[3].kind == Value::t_symbol) {
                 const std::string raw = params[3].asString();
                 int64_t x = 0;
@@ -500,23 +529,12 @@ bool IODCommandProperty::run(std::vector<Value> &params) {
                 const bool is_integer =
                     !raw.empty() && *p == 0 &&
                     (c0 == '-' || c0 == '+' || (c0 >= '0' && c0 <= '9'));
-                if (use_authority) {
-                    changed = is_integer ? m->setValue(params[2].asString(), x, authority)
-                                         : m->setValue(params[2].asString(), params[3], authority);
-                }
-                else {
-                    changed = is_integer ? m->setValue(params[2].asString(), x)
-                                         : m->setValue(params[2].asString(), params[3]);
+                if (is_integer) {
+                    parsed = x;
                 }
             }
-            else {
-                if (use_authority) {
-                    changed = m->setValue(params[2].asString(), params[3], authority);
-                }
-                else {
-                    changed = m->setValue(params[2].asString(), params[3]);
-                }
-            }
+            changed = deliverRemoteProperty(m, params[2].asString(), parsed, use_authority,
+                                            static_cast<uint64_t>(authority));
         }
         if (changed) {
             result_str = "OK";
