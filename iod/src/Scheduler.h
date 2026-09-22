@@ -107,6 +107,7 @@ class Scheduler {
     size_t pendingCount() const { return items.size(); }
     int clear(const Transmitter *transmitter, const Receiver *receiver, const char *message);
     std::string getStatus();
+    std::string getSummary();
 
     void operator()();
     /** Abort the scheduler loop and wake the worker. Does not destroy the singleton. */

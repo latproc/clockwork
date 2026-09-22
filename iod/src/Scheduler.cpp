@@ -119,6 +119,26 @@ std::string Scheduler::getStatus() {
     return ss.str();
 }
 
+std::string Scheduler::getSummary() {
+    boost::recursive_mutex::scoped_lock scoped_lock(Scheduler::instance()->internals->q_mutex);
+    assert(scoped_lock.owns_lock());
+    const uint64_t now = microsecs();
+    std::stringstream ss;
+    ss << "scheduler_summary state=" << static_cast<int>(state)
+       << " items=" << items.size()
+       << " now=" << (now - ProcessingThread::programStartTime())
+       << " scheduled=" << scheduled_count.load(std::memory_order_relaxed)
+       << " fired=" << fired_count.load(std::memory_order_relaxed)
+       << " overdue=" << overdue_count.load(std::memory_order_relaxed)
+       << " trigger_fired=" << trigger_fired_count.load(std::memory_order_relaxed)
+       << " trigger_skipped=" << trigger_skipped_count.load(std::memory_order_relaxed)
+       << " machine_wakes=" << machine_wake_count.load(std::memory_order_relaxed)
+       << " wake_interrupts=" << wake_interrupt_count.load(std::memory_order_relaxed)
+       << " max_lateness_us=" << max_lateness_us.load(std::memory_order_relaxed)
+       << " queue_high_water=" << queue_high_water.load(std::memory_order_relaxed) << "\n";
+    return ss.str();
+}
+
 bool ScheduledItem::operator<(const ScheduledItem &other) const {
     return delivery_time < other.delivery_time;
 }
