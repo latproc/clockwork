@@ -1371,6 +1371,7 @@ bool IODCommandHelp::run(std::vector<Value> &params) {
        << "SHOW PROCSNAP / SHOW LOAD  (queue snapshot with machine samples)\n"
        << "SHOW BUSY  (machines with queued work and reasons)\n"
        << "SHOW TRIGGERS  (live triggers, owners and ages)\n"
+       << "SCHEDULER SUMMARY  (compact scheduler telemetry)\n"
        << "TOGGLE output_name\n"
        << "ERRORS [JSON]\n";
     std::string s = ss.str();
@@ -1611,9 +1612,14 @@ bool IODCommandPersistentState::run(std::vector<Value> &params) {
 
 bool IODCommandSchedulerState::run(std::vector<Value> &params) {
     std::stringstream ss;
-    ss << "Status: " << Scheduler::instance()->getStatus() << "\n";
-    if (!Scheduler::instance()->empty()) {
-        ss << "next: " << *(Scheduler::instance()->next());
+    if (params.size() > 1 && params[1] == "SUMMARY") {
+        ss << Scheduler::instance()->getSummary();
+    }
+    else {
+        ss << "Status: " << Scheduler::instance()->getStatus() << "\n";
+        if (!Scheduler::instance()->empty()) {
+            ss << "next: " << *(Scheduler::instance()->next());
+        }
     }
     result_str = ss.str();
     return true;

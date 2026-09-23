@@ -98,6 +98,8 @@ class Scheduler {
     size_t pendingCount() const { return items.size(); }
     int clear(const Transmitter *transmitter, const Receiver *receiver, const char *message);
     std::string getStatus();
+    std::string getSummary();
+    void noteMachineWake() { machine_wake_count.fetch_add(1, std::memory_order_relaxed); }
 
     void operator()();
     /** Signal the idle loop to exit and interrupt the worker thread. Does not destroy the singleton. */
@@ -127,6 +129,23 @@ class Scheduler {
     zmq::socket_t *update_notify;
     long next_delay_time;
     uint64_t notification_sent; // the scheduler has been notified that an item is scheduled
+
+    // Process-local counters sampled by the read-only SCHEDULER command.
+    std::atomic<uint64_t> scheduled_count;
+    std::atomic<uint64_t> fired_count;
+    std::atomic<uint64_t> overdue_count;
+    std::atomic<uint64_t> trigger_fired_count;
+    std::atomic<uint64_t> trigger_skipped_count;
+    std::atomic<uint64_t> machine_wake_count;
+    std::atomic<uint64_t> wake_interrupt_count;
+    std::atomic<uint64_t> max_lateness_us;
+    std::atomic<uint64_t> queue_high_water;
+    std::deque<std::string> anomaly_events;
+    static const size_t anomaly_event_limit = 32;
+    static const uint64_t anomaly_threshold_us = 1000;
+
+    void recordAnomaly(const ScheduledItem *item, uint64_t now, uint64_t lateness);
+    static void updateMax(std::atomic<uint64_t> &target, uint64_t value);
 
     friend class PriorityQueue;
 };
