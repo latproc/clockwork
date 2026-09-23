@@ -22,6 +22,8 @@
 
 #include <boost/thread/thread.hpp>
 
+#include <atomic>
+#include <deque>
 #include <list>
 #include <ostream>
 #include <queue>
