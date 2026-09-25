@@ -349,7 +349,7 @@ Action::Status SetStateAction::executeStateChange(bool use_transitions) {
                     if (ptd) {
                         Trigger *trigger = new Trigger(ptd->label);
                         FireTriggerAction *fta = new FireTriggerAction(owner, trigger);
-                        Scheduler::instance()->add(new ScheduledItem(ptd->delay, fta));
+                        Scheduler::instance()->add(new ScheduledItem(ptd->delay, fta, true));
                         trigger->release();
                         delete ptd;
                     }

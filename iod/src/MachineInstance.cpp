@@ -2375,7 +2375,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
             if (timer_val > 0) {
                 earliestTimerState->trigger = new Trigger(this, trigger_name);
                 Scheduler::instance()->add(new ScheduledItem(
-                    stable_state_timer_base, timer_val * 1000, earliestTimerState->trigger));
+                    stable_state_timer_base, timer_val * 1000, earliestTimerState->trigger, true));
             }
             else if (timer_val >= -2) {
                 ProcessingThread::activate(this);
@@ -3749,7 +3749,7 @@ bool MachineInstance::setStableState() {
         }
         if (ptd) {
             Trigger *trigger = new Trigger(this, ptd->label);
-            Scheduler::instance()->add(new ScheduledItem(ptd->delay, trigger));
+            Scheduler::instance()->add(new ScheduledItem(ptd->delay, trigger, true));
             trigger->release();
             delete ptd;
         }

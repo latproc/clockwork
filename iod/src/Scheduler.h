@@ -41,14 +41,21 @@ struct ScheduledItem {
     Action *action;
     Trigger *trigger;
     uint64_t delivery_time;
+    bool machine_timer;
+    bool dispatched;
+    uint64_t timer_sequence;
     // this operator produces a reverse ordering because the standard priority queue is a max value queue.
     bool operator<(const ScheduledItem &other) const;
     bool operator>=(const ScheduledItem &other) const;
     ScheduledItem(long delay, Package *p);
     ScheduledItem(long delay, Action *a);
+    ScheduledItem(long delay, Action *a, bool machine_timer);
     ScheduledItem(long delay, Trigger *t);
+    ScheduledItem(long delay, Trigger *t, bool machine_timer);
     ScheduledItem(uint64_t starting, long delay, Action *a);
     ScheduledItem(uint64_t starting, long delay, Trigger *t);
+    ScheduledItem(uint64_t starting, long delay, Action *a, bool machine_timer);
+    ScheduledItem(uint64_t starting, long delay, Trigger *t, bool machine_timer);
     ~ScheduledItem();
     std::ostream &operator<<(std::ostream &out) const;
 
@@ -114,6 +121,8 @@ class Scheduler {
     void stop();
     /** stop() then delete the singleton once (joins worker via destructor). */
     static void shutdown();
+    static void noteTimerDispatched(ScheduledItem *item);
+    static void noteTimerCancelled(const ScheduledItem *item);
     int64_t getNextDelay();
     int64_t getNextDelay(uint64_t start);
     void setThreadRef(boost::thread &ref);
@@ -151,6 +160,11 @@ class Scheduler {
     std::atomic<uint64_t> wake_interrupt_count;
     std::atomic<uint64_t> max_lateness_us;
     std::atomic<uint64_t> queue_high_water;
+    std::atomic<uint64_t> timer_armed_count;
+    std::atomic<uint64_t> timer_dispatched_count;
+    std::atomic<uint64_t> timer_cancelled_count;
+    std::atomic<uint64_t> timer_cancelled_overdue_count;
+    std::atomic<uint64_t> next_timer_sequence;
     std::deque<std::string> anomaly_events;
     static const size_t anomaly_event_limit = 32;
     static const uint64_t anomaly_threshold_us = 1000;

@@ -60,6 +60,9 @@ class Trigger {
     void fire();
     void disable();
     virtual const std::string &getName() const;
+    // The owner is used by low-rate scheduler diagnostics only.  It is not
+    // consulted on the normal trigger dispatch path.
+    TriggerOwner *getOwner() const { return owner; }
     //const std::string &getName();
     bool matches(const std::string &event);
 

@@ -192,6 +192,10 @@ TEST_F(TimerWakeTest, DInputDueRuleWakesPastSelfHold) {
     const std::string scheduler_status = Scheduler::instance()->getStatus();
     EXPECT_NE(scheduler_status.find("telemetry scheduled="), std::string::npos);
     EXPECT_NE(scheduler_status.find("trigger_fired="), std::string::npos);
+    EXPECT_NE(scheduler_status.find("delta_us=+"), std::string::npos);
+    EXPECT_NE(scheduler_status.find("machine=dinput_timer_wake_test"), std::string::npos);
+    EXPECT_NE(scheduler_status.find("timer_armed="), std::string::npos);
+    EXPECT_NE(scheduler_status.find("timer_dispatched="), std::string::npos);
 
     to_process.clear();
     to_process.insert(machine_);

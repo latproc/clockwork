@@ -102,7 +102,12 @@ std::string Scheduler::getStatus() {
        << " machine_wakes=" << machine_wake_count.load(std::memory_order_relaxed)
        << " wake_interrupts=" << wake_interrupt_count.load(std::memory_order_relaxed)
        << " max_lateness_us=" << max_lateness_us.load(std::memory_order_relaxed)
-       << " queue_high_water=" << queue_high_water.load(std::memory_order_relaxed) << "\n";
+       << " queue_high_water=" << queue_high_water.load(std::memory_order_relaxed)
+       << " timer_armed=" << timer_armed_count.load(std::memory_order_relaxed)
+       << " timer_dispatched=" << timer_dispatched_count.load(std::memory_order_relaxed)
+       << " timer_cancelled=" << timer_cancelled_count.load(std::memory_order_relaxed)
+       << " timer_cancelled_overdue="
+       << timer_cancelled_overdue_count.load(std::memory_order_relaxed) << "\n";
     if (!anomaly_events.empty()) {
         ss << "recent_overdue:\n";
         for (std::deque<std::string>::const_iterator iter = anomaly_events.begin();
@@ -135,7 +140,12 @@ std::string Scheduler::getSummary() {
        << " machine_wakes=" << machine_wake_count.load(std::memory_order_relaxed)
        << " wake_interrupts=" << wake_interrupt_count.load(std::memory_order_relaxed)
        << " max_lateness_us=" << max_lateness_us.load(std::memory_order_relaxed)
-       << " queue_high_water=" << queue_high_water.load(std::memory_order_relaxed) << "\n";
+       << " queue_high_water=" << queue_high_water.load(std::memory_order_relaxed)
+       << " timer_armed=" << timer_armed_count.load(std::memory_order_relaxed)
+       << " timer_dispatched=" << timer_dispatched_count.load(std::memory_order_relaxed)
+       << " timer_cancelled=" << timer_cancelled_count.load(std::memory_order_relaxed)
+       << " timer_cancelled_overdue="
+       << timer_cancelled_overdue_count.load(std::memory_order_relaxed) << "\n";
     return ss.str();
 }
 
@@ -211,34 +221,54 @@ bool PriorityQueue::check() const {
     return true;
 }
 
-ScheduledItem::ScheduledItem(long delay, Package *p) : package(p), action(0), trigger(0) {
+ScheduledItem::ScheduledItem(long delay, Package *p)
+    : package(p), action(0), trigger(0), machine_timer(false), dispatched(false), timer_sequence(0) {
     delivery_time = calcDeliveryTime(delay);
     DBG_SCHEDULER << "scheduled package: " << delivery_time << "\n";
 }
 
-ScheduledItem::ScheduledItem(long delay, Action *a) : package(0), action(a), trigger(0) {
+ScheduledItem::ScheduledItem(long delay, Action *a)
+    : ScheduledItem(delay, a, false) {}
+
+ScheduledItem::ScheduledItem(long delay, Action *a, bool machine_timer_)
+    : package(0), action(a), trigger(0), machine_timer(machine_timer_), dispatched(false), timer_sequence(0) {
     delivery_time = calcDeliveryTime(delay);
     DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
-ScheduledItem::ScheduledItem(long delay, Trigger *t) : package(0), action(0), trigger(t->retain()) {
+ScheduledItem::ScheduledItem(long delay, Trigger *t) : ScheduledItem(delay, t, false) {}
+
+ScheduledItem::ScheduledItem(long delay, Trigger *t, bool machine_timer_)
+    : package(0), action(0), trigger(t->retain()), machine_timer(machine_timer_), dispatched(false), timer_sequence(0) {
     delivery_time = calcDeliveryTime(delay);
     DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 ScheduledItem::ScheduledItem(uint64_t starting, long delay, Action *a)
-    : package(0), action(a), trigger(0) {
+    : package(0), action(a), trigger(0), machine_timer(false), dispatched(false), timer_sequence(0) {
     delivery_time = starting + delay;
     DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 ScheduledItem::ScheduledItem(uint64_t starting, long delay, Trigger *t)
-    : package(0), action(0), trigger(t->retain()) {
+    : ScheduledItem(starting, delay, t, false) {}
+
+ScheduledItem::ScheduledItem(uint64_t starting, long delay, Trigger *t, bool machine_timer_)
+    : package(0), action(0), trigger(t->retain()), machine_timer(machine_timer_), dispatched(false), timer_sequence(0) {
+    delivery_time = starting + delay;
+    DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
+}
+
+ScheduledItem::ScheduledItem(uint64_t starting, long delay, Action *a, bool machine_timer_)
+    : package(0), action(a), trigger(0), machine_timer(machine_timer_), dispatched(false), timer_sequence(0) {
     delivery_time = starting + delay;
     DBG_SCHEDULER << "scheduled action: " << delay << "(" << delivery_time << ")\n";
 }
 
 ScheduledItem::~ScheduledItem() {
+    if (machine_timer && !dispatched) {
+        Scheduler::noteTimerCancelled(this);
+    }
     if (trigger) {
         trigger->release();
     }
@@ -251,6 +281,9 @@ std::ostream &ScheduledItem::operator<<(std::ostream &out) const {
     uint64_t now = microsecs();
     int64_t delta = delivery_time - now;
     out << delivery_time << " (" << delta << ") ";
+    if (machine_timer) {
+        out << "timer_seq=" << timer_sequence << " ";
+    }
     if (package) {
         out << *package;
     }
@@ -274,11 +307,49 @@ Scheduler::Scheduler()
     : state(e_waiting), update_sync(*MessagingInterface::getContext(), ZMQ_PAIR), update_notify(0),
       next_delay_time(0), notification_sent(0), scheduled_count(0), fired_count(0),
       overdue_count(0), trigger_fired_count(0), trigger_skipped_count(0),
-      machine_wake_count(0), wake_interrupt_count(0), max_lateness_us(0), queue_high_water(0) {
+      machine_wake_count(0), wake_interrupt_count(0), max_lateness_us(0), queue_high_water(0),
+      timer_armed_count(0), timer_dispatched_count(0), timer_cancelled_count(0),
+      timer_cancelled_overdue_count(0), next_timer_sequence(0) {
     internals = new SchedulerInternals;
     watch_dog = new Watchdog("Scheduler", 300, false);
     update_sync.bind("inproc://sch_items");
     next_time = 0;
+}
+
+void Scheduler::noteTimerDispatched(ScheduledItem *item) {
+    if (!item || !item->machine_timer || !instance_) {
+        return;
+    }
+    item->dispatched = true;
+    instance_->timer_dispatched_count.fetch_add(1, std::memory_order_relaxed);
+}
+
+void Scheduler::noteTimerCancelled(const ScheduledItem *item) {
+    if (!item || !item->machine_timer || !instance_) {
+        return;
+    }
+    instance_->timer_cancelled_count.fetch_add(1, std::memory_order_relaxed);
+    const uint64_t now = microsecs();
+    if (now >= item->delivery_time) {
+        instance_->timer_cancelled_overdue_count.fetch_add(1, std::memory_order_relaxed);
+        const int64_t delta_us = static_cast<int64_t>(now) - static_cast<int64_t>(item->delivery_time);
+        std::stringstream event;
+        event << "timer_cancelled_overdue seq=" << item->timer_sequence
+              << " delta_us=+" << delta_us << " due=" << item->delivery_time
+              << " now=" << now;
+        if (item->trigger && item->trigger->getOwner()) {
+            MachineInstance *machine = dynamic_cast<MachineInstance *>(item->trigger->getOwner());
+            if (machine) {
+                event << " machine=" << machine->getName();
+            }
+        }
+        event << " item=" << *item;
+        boost::recursive_mutex::scoped_lock scoped_lock(instance_->internals->q_mutex);
+        instance_->anomaly_events.push_back(event.str());
+        if (instance_->anomaly_events.size() > anomaly_event_limit) {
+            instance_->anomaly_events.pop_front();
+        }
+    }
 }
 
 void Scheduler::updateMax(std::atomic<uint64_t> &target, uint64_t value) {
@@ -293,8 +364,16 @@ void Scheduler::recordAnomaly(const ScheduledItem *item, uint64_t now, uint64_t 
     // This path only runs for overdue items, so the normal timer path does not
     // allocate or take this lock.
     std::stringstream event;
-    event << "overdue lateness_us=" << lateness << " due=" << item->delivery_time
-          << " now=" << now << " item=" << *item;
+    const int64_t delta_us = static_cast<int64_t>(now) - static_cast<int64_t>(item->delivery_time);
+    event << "overdue delta_us=" << (delta_us >= 0 ? "+" : "") << delta_us
+          << " due=" << item->delivery_time << " now=" << now;
+    if (item->trigger && item->trigger->getOwner()) {
+        MachineInstance *machine = dynamic_cast<MachineInstance *>(item->trigger->getOwner());
+        if (machine) {
+            event << " machine=" << machine->getName();
+        }
+    }
+    event << " item=" << *item;
     boost::recursive_mutex::scoped_lock scoped_lock(internals->q_mutex);
     anomaly_events.push_back(event.str());
     if (anomaly_events.size() > anomaly_event_limit) {
@@ -356,6 +435,10 @@ int64_t Scheduler::getNextDelay(uint64_t start) {
 
 void Scheduler::add(ScheduledItem *item) {
     scheduled_count.fetch_add(1, std::memory_order_relaxed);
+    if (item && item->machine_timer) {
+        item->timer_sequence = next_timer_sequence.fetch_add(1, std::memory_order_relaxed) + 1;
+        timer_armed_count.fetch_add(1, std::memory_order_relaxed);
+    }
     next_delay_time = getNextDelay();
     ScheduledItem *top = 0;
     {
@@ -433,6 +516,7 @@ static void dispatchScheduledItem(ScheduledItem *item) {
         return;
     }
     if (item->trigger) {
+        Scheduler::noteTimerDispatched(item);
         if (item->trigger->enabled()) {
             DBG_SCHEDULER << "Scheduler firing trigger " << item->trigger->getName() << "\n";
             item->trigger->fire();
@@ -440,12 +524,14 @@ static void dispatchScheduledItem(ScheduledItem *item) {
         delete item;
     }
     else if (item->package) {
+        Scheduler::noteTimerDispatched(item);
         DBG_SCHEDULER << "Scheduler activating package on "
                       << item->package->receiver->getName() << "\n";
         item->package->receiver->handle(*item->package->message, item->package->transmitter);
         delete item;
     }
     else if (item->action) {
+        Scheduler::noteTimerDispatched(item);
         DBG_SCHEDULER << "Scheduler activating pushing action to  "
                       << item->action->getOwner()->getName() << "\n";
         item->action->getOwner()->push(item->action);
