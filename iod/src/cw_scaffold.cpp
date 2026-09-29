@@ -207,7 +207,7 @@ void emit_interface(std::ostream &out, const MachineClass *mc) {
         out << "}\n    };\n";
         out << "    OPTION update_template JSON_VALUE {\n";
         out << "        \"action\": \"update\", \"type\": \"" << type
-            << "\", \"auth\": \"xxx\", \"keys\": {";
+            << "\", \"auth\": \"xxx\", \"mode\": \"dirty\", \"dirty\": \"\", \"keys\": {";
         emit_object_fields(out, keys);
         out << "}, \"data\": {";
         emit_object_fields(out, cols);
@@ -240,6 +240,8 @@ void emit_interface(std::ostream &out, const MachineClass *mc) {
         out << "    }\n";
         out << "    COMMAND update {\n";
         out << "        request := update_template;\n";
+        out << "        ITEM ${mode} OF request := \"dirty\";\n";
+        out << "        ITEM ${dirty} OF request := record.dirty;\n";
         emit_copies(out, "        ", "keys", keys);
         emit_copies(out, "        ", "data", cols);
         out << "        SEND request TO DATABASE_CHANNEL;\n";

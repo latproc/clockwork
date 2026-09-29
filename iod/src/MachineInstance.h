@@ -38,6 +38,7 @@
 #include "State.h"
 #include "Statistic.h"
 #include "Transition.h"
+#include <vector>
 #include "dynamic_value.h"
 #include "symboltable.h"
 #include <array>
@@ -193,6 +194,11 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     // RECORD: Clockwork state empty/dirty/clean. MACHINE TABLE: LOCAL OPTION
     // "state" (WHEN owns InCycle/Idle). No-op if the class has no such LOCAL.
     void setRowLifecycle(const char *name);
+    // Non-key, non-LOCAL column on a RECORD or table-bound MACHINE.
+    bool tracksDirtyColumn(const std::string &property) const;
+    // Replace the pending column list and the read-only `dirty` property.
+    void replaceDirtyColumns(const std::vector<std::string> &names);
+    const std::vector<std::string> &dirtyColumnNames() const { return dirty_columns; }
     const Value *resolve(
         std::string
             property); // provides a pointer to the value of an object that can be evaluated in the future
@@ -545,6 +551,11 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     int property_notify_defer;
     bool deferred_property_notify;
     bool record_apply_mode;
+    // Column names assigned since the last clean/empty, in first-change order.
+    std::vector<std::string> dirty_columns;
+    void noteDirtyColumn(const std::string &property);
+    void clearDirtyColumns();
+    void writeDirtyProperty();
     // APPLY/calcAdjust defer setValue before sendModbusUpdate. Flush on end.
     std::map<std::string, Value> deferred_modbus_updates;
 

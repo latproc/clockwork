@@ -18,6 +18,7 @@
 #include <boost/thread/mutex.hpp>
 #include <iostream>
 #include <sstream>
+#include <list>
 #include <vector>
 #include <zmq.hpp>
 
@@ -58,10 +59,50 @@ int main() {
         return 31;
     }
     // live column assign -> dirty
+    if (cust->getValue("dirty").asString() != "") {
+        std::cerr << "dirty list not empty before edit: '" << cust->getValue("dirty").asString()
+                  << "'\n";
+        return 70;
+    }
     cust->setValue("name", Value("Ann", Value::t_string));
     if (std::string(cust->getCurrentStateString()) != "dirty") {
         std::cerr << "live column assign did not dirty: " << cust->getCurrentStateString() << "\n";
         return 32;
+    }
+    if (cust->getValue("dirty").asString() != "name") {
+        std::cerr << "dirty list after name: '" << cust->getValue("dirty").asString() << "'\n";
+        return 71;
+    }
+    cust->setValue("name", Value("Ann", Value::t_string));
+    if (cust->getValue("dirty").asString() != "name") {
+        std::cerr << "identical assign changed dirty list\n";
+        return 72;
+    }
+    cust->setValue("id", Value(static_cast<int64_t>(5)));
+    cust->setValue("id", Value(static_cast<int64_t>(1)));
+    if (cust->getValue("dirty").asString() != "name" ||
+        std::string(cust->getCurrentStateString()) != "dirty") {
+        std::cerr << "key assign entered the dirty list: '" << cust->getValue("dirty").asString()
+                  << "'\n";
+        return 73;
+    }
+    cust->setValue("tmp", Value(false));
+    cust->setValue("tmp", Value(true));
+    if (cust->getValue("dirty").asString() != "name") {
+        std::cerr << "LOCAL assign entered the dirty list\n";
+        return 74;
+    }
+    cust->setValue("password", Value("nope", Value::t_string));
+    if (cust->getValue("dirty").asString() != "name,password") {
+        std::cerr << "private column missing from dirty list: '"
+                  << cust->getValue("dirty").asString() << "'\n";
+        return 75;
+    }
+    cust->setValue("not_a_column", Value("z", Value::t_string));
+    if (cust->getValue("dirty").asString() != "name,password") {
+        std::cerr << "non-column entered the dirty list: '" << cust->getValue("dirty").asString()
+                  << "'\n";
+        return 76;
     }
     machines[cust->getName()] = cust;
 
@@ -91,6 +132,19 @@ int main() {
         std::cerr << "cust not clean after APPLY: " << cust->getCurrentStateString() << "\n";
         return 33;
     }
+    if (cust->getValue("dirty").asString() != "") {
+        std::cerr << "APPLY left dirty list: '" << cust->getValue("dirty").asString() << "'\n";
+        return 77;
+    }
+    cust->setRecordApplyMode(true);
+    cust->setValue("name", Value("Temp", Value::t_string));
+    cust->setRecordApplyMode(false);
+    if (std::string(cust->getCurrentStateString()) != "clean" ||
+        cust->getValue("dirty").asString() != "") {
+        std::cerr << "record apply mode recorded a dirty column\n";
+        return 78;
+    }
+    cust->setValue("name", Value("Fred", Value::t_string));
     if (cust->getValue("password").asString() != "secret") {
         std::cerr << "PRIVATE column was not applied\n";
         return 34;
@@ -261,6 +315,11 @@ int main() {
                   << cust->getCurrentStateString() << "\n";
         return 37;
     }
+    if (cust->getValue("dirty").asString() != "") {
+        std::cerr << "delete-all left dirty list: '" << cust->getValue("dirty").asString()
+                  << "'\n";
+        return 83;
+    }
     if (cust->getValue("name").asString() != "") {
         std::cerr << "delete-all did not reset name to default\n";
         return 38;
@@ -281,7 +340,7 @@ int main() {
         return 15;
     }
 
-    // COPY PROPERTIES onto a RECORD: projection + clean (not dirty).
+    // COPY PROPERTIES onto a RECORD: columns that change become the dirty list.
     {
         MachineInstance *src = MachineInstanceFactory::create("src", "Customer");
         src->setStateMachine(mc);
@@ -308,12 +367,22 @@ int main() {
             std::cerr << "COPY PROPERTIES did not copy name\n";
             return 42;
         }
-        if (std::string(dst->getCurrentStateString()) != "clean") {
-            std::cerr << "COPY PROPERTIES did not set clean: "
-                      << dst->getCurrentStateString() << "\n";
+        if (std::string(dst->getCurrentStateString()) != "dirty" ||
+            dst->getValue("dirty").asString() != "name") {
+            std::cerr << "COPY PROPERTIES dirty='" << dst->getValue("dirty").asString()
+                      << "' state=" << dst->getCurrentStateString() << "\n";
             return 43;
         }
+        Action *cp_again = cpt.factory(ed);
+        if ((*cp_again)() != Action::Complete ||
+            std::string(dst->getCurrentStateString()) != "clean" ||
+            dst->getValue("dirty").asString() != "") {
+            std::cerr << "second COPY PROPERTIES of the same row stayed dirty: "
+                      << dst->getValue("dirty").asString() << "\n";
+            return 60;
+        }
         delete cp_act;
+        delete cp_again;
     }
 
     // COPY PROPERTIES from a JSON object (a row taken from a query-result LIST
@@ -346,9 +415,10 @@ int main() {
             std::cerr << "COPY PROPERTIES from JSON copied LOCAL property tmp\n";
             return 46;
         }
-        if (std::string(dst2->getCurrentStateString()) != "clean") {
-            std::cerr << "COPY PROPERTIES from JSON did not set clean: "
-                      << dst2->getCurrentStateString() << "\n";
+        if (std::string(dst2->getCurrentStateString()) != "dirty" ||
+            dst2->getValue("dirty").asString() != "name") {
+            std::cerr << "COPY PROPERTIES from JSON dirty='" << dst2->getValue("dirty").asString()
+                      << "' state=" << dst2->getCurrentStateString() << "\n";
             return 47;
         }
         delete cp2;
@@ -441,6 +511,10 @@ int main() {
                       << panel->getValue("state") << "\n";
             return 53;
         }
+        if (panel->getValue("dirty").asString() != "") {
+            std::cerr << "MACHINE TABLE APPLY left dirty list\n";
+            return 56;
+        }
         panel->setValue("name", Value("Bob", Value::t_string));
         if (panel->getValue("state").asString() != "dirty") {
             std::cerr << "MACHINE TABLE LOCAL state not dirty after column assign: "
@@ -451,6 +525,247 @@ int main() {
             std::cerr << "MACHINE TABLE Clockwork STATE was set to dirty\n";
             return 55;
         }
+        if (panel->getValue("dirty").asString() != "name") {
+            std::cerr << "MACHINE TABLE dirty list: '" << panel->getValue("dirty").asString()
+                      << "'\n";
+            return 57;
+        }
+        panel->setValue("id", Value(static_cast<int64_t>(9)));
+        if (panel->getValue("dirty").asString() != "name" ||
+            panel->getValue("state").asString() != "dirty") {
+            std::cerr << "MACHINE TABLE key entered dirty list\n";
+            return 58;
+        }
+        panel->setRowLifecycle("empty");
+        if (panel->getValue("state").asString() != "empty" ||
+            panel->getValue("dirty").asString() != "") {
+            std::cerr << "MACHINE TABLE empty did not clear dirty\n";
+            return 59;
+        }
+        MachineInstance *psrc = MachineInstanceFactory::create("panel_src", "CustomerPanel");
+        psrc->setStateMachine(panelc);
+        psrc->setRecordApplyMode(true);
+        psrc->setValue("id", Value(static_cast<int64_t>(3)));
+        psrc->setValue("name", Value("Sam", Value::t_string));
+        psrc->setRecordApplyMode(false);
+        machines[psrc->getName()] = psrc;
+        std::list<std::string> only_id;
+        only_id.push_back("id");
+        CopyPropertiesActionTemplate key_only(Value("panel_src"), Value("panel"), only_id);
+        Action *key_copy = key_only.factory(ed);
+        if ((*key_copy)() != Action::Complete ||
+            panel->getValue("dirty").asString() != "" ||
+            panel->getValue("state").asString() != "clean") {
+            std::cerr << "MACHINE TABLE key-only copy dirty='"
+                      << panel->getValue("dirty").asString()
+                      << "' state=" << panel->getValue("state").asString() << "\n";
+            delete key_copy;
+            return 84;
+        }
+        delete key_copy;
+        int64_t panel_id = 0;
+        if (!panel->getValue("id").asInteger(panel_id) || panel_id != 3) {
+            std::cerr << "MACHINE TABLE key-only copy did not write id\n";
+            return 85;
+        }
+        if (std::string(panel->getCurrentStateString()) == "dirty" ||
+            std::string(panel->getCurrentStateString()) == "clean") {
+            std::cerr << "MACHINE TABLE copy moved Clockwork STATE\n";
+            return 86;
+        }
+        CopyPropertiesActionTemplate name_copy(Value("panel_src"), Value("panel"));
+        Action *name_act = name_copy.factory(ed);
+        if ((*name_act)() != Action::Complete ||
+            panel->getValue("name").asString() != "Sam" ||
+            panel->getValue("dirty").asString() != "name" ||
+            panel->getValue("state").asString() != "dirty") {
+            std::cerr << "MACHINE TABLE copy dirty='" << panel->getValue("dirty").asString()
+                      << "' name=" << panel->getValue("name").asString() << "\n";
+            delete name_act;
+            return 87;
+        }
+        delete name_act;
+    }
+
+    // Column list: first-change order, full copy replaces, unchanged partial copy keeps it.
+    {
+        mc->setOption("email", Value("", Value::t_string));
+        mc->setOption("age", Value(static_cast<int64_t>(0)));
+        mc->setOption("code", Value("", Value::t_string));
+        RecordClass::addUnique(mc, "code");
+        mc->setOption("dirty", Value(true));
+
+        MachineInstance *ord = MachineInstanceFactory::create("ord", "Customer");
+        ord->setStateMachine(mc);
+        if (ord->getValue("dirty").asString() != "" || ord->getValue("dirty").kind != Value::t_string) {
+            std::cerr << "author OPTION dirty survived setStateMachine: "
+                      << ord->getValue("dirty") << "\n";
+            return 88;
+        }
+        ord->setValue("email", Value("a@b", Value::t_string));
+        ord->setValue("name", Value("Ann", Value::t_string));
+        ord->setValue("email", Value("a@b", Value::t_string));
+        if (ord->getValue("dirty").asString() != "email,name") {
+            std::cerr << "first-change order: '" << ord->getValue("dirty").asString() << "'\n";
+            return 89;
+        }
+        ord->setValue("age", Value(static_cast<int64_t>(4)));
+        ord->setValue("code", Value("ab", Value::t_string));
+        if (ord->getValue("dirty").asString() != "email,name,age,code") {
+            std::cerr << "age/unique append: '" << ord->getValue("dirty").asString() << "'\n";
+            return 90;
+        }
+        ord->setValue("dirty", Value("hacked", Value::t_string));
+        if (ord->getValue("dirty").asString() != "email,name,age,code" ||
+            std::string(ord->getCurrentStateString()) != "dirty") {
+            std::cerr << "assignment to dirty stuck: '" << ord->getValue("dirty").asString()
+                      << "'\n";
+            return 91;
+        }
+        ord->setRowLifecycle("empty");
+        if (std::string(ord->getCurrentStateString()) != "empty" ||
+            ord->getValue("dirty").asString() != "") {
+            std::cerr << "empty did not clear the column list\n";
+            return 92;
+        }
+
+        MachineInstance *full_src = MachineInstanceFactory::create("full_src", "Customer");
+        full_src->setStateMachine(mc);
+        full_src->setRecordApplyMode(true);
+        full_src->setValue("id", Value(static_cast<int64_t>(7)));
+        full_src->setValue("name", Value("New", Value::t_string));
+        full_src->setValue("email", Value("e@e", Value::t_string));
+        full_src->setValue("password", Value("", Value::t_string));
+        full_src->setRecordApplyMode(false);
+        MachineInstance *full_dst = MachineInstanceFactory::create("full_dst", "Customer");
+        full_dst->setStateMachine(mc);
+        full_dst->setRecordApplyMode(true);
+        full_dst->setValue("id", Value(static_cast<int64_t>(7)));
+        full_dst->setValue("name", Value("Old", Value::t_string));
+        full_dst->setValue("email", Value("", Value::t_string));
+        full_dst->setValue("password", Value("", Value::t_string));
+        full_dst->setRecordApplyMode(false);
+        full_dst->setValue("name", Value("Keep", Value::t_string));
+        if (full_dst->getValue("dirty").asString() != "name") {
+            std::cerr << "full-copy setup: '" << full_dst->getValue("dirty").asString() << "'\n";
+            return 93;
+        }
+        machines[full_src->getName()] = full_src;
+        machines[full_dst->getName()] = full_dst;
+        CopyPropertiesActionTemplate full(Value("full_src"), Value("full_dst"));
+        Action *full_act = full.factory(ed);
+        if ((*full_act)() != Action::Complete ||
+            full_dst->getValue("name").asString() != "New" ||
+            full_dst->getValue("email").asString() != "e@e" ||
+            full_dst->getValue("dirty").asString() != "email,name" ||
+            std::string(full_dst->getCurrentStateString()) != "dirty") {
+            std::cerr << "full COPY replaced list with '" << full_dst->getValue("dirty").asString()
+                      << "'\n";
+            delete full_act;
+            return 94;
+        }
+        delete full_act;
+
+        MachineInstance *same_src = MachineInstanceFactory::create("same_src", "Customer");
+        same_src->setStateMachine(mc);
+        same_src->setRecordApplyMode(true);
+        same_src->setValue("id", Value(static_cast<int64_t>(8)));
+        same_src->setValue("email", Value("a@b", Value::t_string));
+        same_src->setRecordApplyMode(false);
+        MachineInstance *same_dst = MachineInstanceFactory::create("same_dst", "Customer");
+        same_dst->setStateMachine(mc);
+        same_dst->setRecordApplyMode(true);
+        same_dst->setValue("id", Value(static_cast<int64_t>(1)));
+        same_dst->setValue("email", Value("a@b", Value::t_string));
+        same_dst->setRecordApplyMode(false);
+        same_dst->setValue("name", Value("Stay", Value::t_string));
+        machines[same_src->getName()] = same_src;
+        machines[same_dst->getName()] = same_dst;
+        std::list<std::string> only_email_same;
+        only_email_same.push_back("email");
+        CopyPropertiesActionTemplate same_email(Value("same_src"), Value("same_dst"), only_email_same);
+        Action *same_act = same_email.factory(ed);
+        if ((*same_act)() != Action::Complete ||
+            same_dst->getValue("dirty").asString() != "name" ||
+            std::string(same_dst->getCurrentStateString()) != "dirty") {
+            std::cerr << "unchanged partial copy cleared dirty: '"
+                      << same_dst->getValue("dirty").asString() << "'\n";
+            delete same_act;
+            return 95;
+        }
+        delete same_act;
+        std::list<std::string> only_key;
+        only_key.push_back("id");
+        CopyPropertiesActionTemplate key_copy(Value("same_src"), Value("same_dst"), only_key);
+        Action *key_act = key_copy.factory(ed);
+        int64_t copied_id = 0;
+        if ((*key_act)() != Action::Complete ||
+            !same_dst->getValue("id").asInteger(copied_id) || copied_id != 8 ||
+            same_dst->getValue("dirty").asString() != "name") {
+            std::cerr << "key-only partial copy changed the list: '"
+                      << same_dst->getValue("dirty").asString() << "'\n";
+            delete key_act;
+            return 96;
+        }
+        delete key_act;
+
+        MachineClass *viewc = new MachineClass("CustomerView");
+        RecordClass::mark(viewc);
+        RecordClass::setView(viewc, "customer_with_address");
+        viewc->setOption("id", Value(static_cast<int64_t>(0)));
+        RecordClass::addKey(viewc, "id");
+        viewc->setOption("name", Value("", Value::t_string));
+        MachineInstance *view = MachineInstanceFactory::create("view", "CustomerView");
+        view->setStateMachine(viewc);
+        view->setValue("name", Value("Via", Value::t_string));
+        if (view->getValue("dirty").asString() != "name" ||
+            std::string(view->getCurrentStateString()) != "dirty") {
+            std::cerr << "VIEW dirty='" << view->getValue("dirty").asString() << "'\n";
+            return 97;
+        }
+    }
+
+    // Partial COPY PROPERTIES keeps columns already dirty and adds the ones it changes.
+    {
+        MachineInstance *ps = MachineInstanceFactory::create("psrc", "Customer");
+        ps->setStateMachine(mc);
+        ps->setRecordApplyMode(true);
+        ps->setValue("id", Value(static_cast<int64_t>(4)));
+        ps->setValue("name", Value("Ann", Value::t_string));
+        ps->setValue("email", Value("eve@example", Value::t_string));
+        ps->setRecordApplyMode(false);
+        MachineInstance *pd = MachineInstanceFactory::create("pdst", "Customer");
+        pd->setStateMachine(mc);
+        pd->setRecordApplyMode(true);
+        pd->setValue("id", Value(static_cast<int64_t>(4)));
+        pd->setValue("name", Value("Ann", Value::t_string));
+        pd->setValue("email", Value("", Value::t_string));
+        pd->setRecordApplyMode(false);
+        pd->setValue("name", Value("Bea", Value::t_string));
+        if (pd->getValue("dirty").asString() != "name") {
+            std::cerr << "partial setup dirty: '" << pd->getValue("dirty").asString() << "'\n";
+            return 80;
+        }
+        machines[ps->getName()] = ps;
+        machines[pd->getName()] = pd;
+        std::list<std::string> only_email;
+        only_email.push_back("email");
+        CopyPropertiesActionTemplate partial(Value("psrc"), Value("pdst"), only_email);
+        Action *pp = partial.factory(ed);
+        if ((*pp)() != Action::Complete) {
+            std::cerr << "partial COPY PROPERTIES failed\n";
+            return 81;
+        }
+        if (pd->getValue("name").asString() != "Bea" ||
+            pd->getValue("email").asString() != "eve@example" ||
+            pd->getValue("dirty").asString() != "name,email" ||
+            std::string(pd->getCurrentStateString()) != "dirty") {
+            std::cerr << "partial COPY dirty='" << pd->getValue("dirty").asString()
+                      << "' name=" << pd->getValue("name").asString()
+                      << " email=" << pd->getValue("email").asString() << "\n";
+            return 82;
+        }
+        delete pp;
     }
 
     MachineInstance::delete_pending();

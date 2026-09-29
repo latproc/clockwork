@@ -24,6 +24,7 @@
 #include "MessageLog.h"
 #include "RecordClass.h"
 #include "cJSON.h"
+#include <vector>
 
 namespace {
 
@@ -31,6 +32,27 @@ namespace {
 // stays owned by its holder); objects/arrays are deep-cloned. Mirrors the value
 // conversion used elsewhere for JSON rows without coupling this generic action
 // to the RECORD layer.
+bool valueChanged(const Value &before, const Value &after) {
+    return !before.identical(after) || before.kind != after.kind ||
+           (after != SymbolTable::Null && before == SymbolTable::Null);
+}
+
+void rememberColumnChange(MachineInstance *dest, const std::string &prop, const Value &before,
+                          std::vector<std::string> &changed) {
+    if (!dest || !dest->tracksDirtyColumn(prop)) {
+        return;
+    }
+    if (!valueChanged(before, dest->getValue(prop.c_str()))) {
+        return;
+    }
+    for (size_t i = 0; i < changed.size(); ++i) {
+        if (changed[i] == prop) {
+            return;
+        }
+    }
+    changed.push_back(prop);
+}
+
 Value jsonFieldToValue(cJSON *item) {
     if (!item) {
         return Value();
@@ -117,6 +139,7 @@ Action::Status CopyPropertiesAction::run() {
 
     if (dest_machine && (source_machine || source_json)) {
         size_t count = 0; // how many direct symbol updates did we do?
+        std::vector<std::string> changed;
         if (dest_is_row) {
             dest_machine->setRecordApplyMode(true);
         }
@@ -130,7 +153,9 @@ Action::Status CopyPropertiesAction::run() {
                         (!dest_class || !dest_class->propertyIsLocal(prop)) &&
                         (!dest_is_record ||
                          dest_class->getOptions().find(prop) != dest_class->getOptions().end())) {
+                        Value before = dest_machine->getValue(prop.c_str());
                         dest_machine->setValue(prop, (*iter).second);
+                        rememberColumnChange(dest_machine, prop, before, changed);
                         ++count;
                     }
                     iter++;
@@ -143,7 +168,9 @@ Action::Status CopyPropertiesAction::run() {
                     if (prop != "STATE" && prop != "NAME") {
                         const Value &val = source_machine->properties.lookup(prop.c_str());
                         if (val != SymbolTable::Null) {
+                            Value before = dest_machine->getValue(prop.c_str());
                             dest_machine->setValue(prop, val);
+                            rememberColumnChange(dest_machine, prop, before, changed);
                         }
                         else {
                             DBG_MSG << "ignoring null property " << source_machine->getName() << "."
@@ -164,7 +191,9 @@ Action::Status CopyPropertiesAction::run() {
                         (!dest_class || !dest_class->propertyIsLocal(prop)) &&
                         (!dest_is_record ||
                          dest_class->getOptions().find(prop) != dest_class->getOptions().end())) {
+                        Value before = dest_machine->getValue(prop.c_str());
                         dest_machine->setValue(prop, jsonFieldToValue(f));
+                        rememberColumnChange(dest_machine, prop, before, changed);
                         ++count;
                     }
                     f = f->next;
@@ -177,7 +206,9 @@ Action::Status CopyPropertiesAction::run() {
                     if (prop != "STATE" && prop != "NAME") {
                         cJSON *f = cJSON_GetObjectItem(source_json, prop.c_str());
                         if (f) {
+                            Value before = dest_machine->getValue(prop.c_str());
                             dest_machine->setValue(prop, jsonFieldToValue(f));
+                            rememberColumnChange(dest_machine, prop, before, changed);
                             ++count;
                         }
                         else {
@@ -190,7 +221,29 @@ Action::Status CopyPropertiesAction::run() {
         }
         if (dest_is_row) {
             dest_machine->setRecordApplyMode(false);
-            dest_machine->setRowLifecycle("clean");
+            std::vector<std::string> pending = changed;
+            if (!property_list.empty()) {
+                pending = dest_machine->dirtyColumnNames();
+                for (size_t i = 0; i < changed.size(); ++i) {
+                    bool found = false;
+                    for (size_t j = 0; j < pending.size(); ++j) {
+                        if (pending[j] == changed[i]) {
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        pending.push_back(changed[i]);
+                    }
+                }
+            }
+            if (pending.empty()) {
+                dest_machine->setRowLifecycle("clean");
+            }
+            else {
+                dest_machine->replaceDirtyColumns(pending);
+                dest_machine->setRowLifecycle("dirty");
+            }
         }
         if (count) {
             dest_machine->setNeedsCheck();

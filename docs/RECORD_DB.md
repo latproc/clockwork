@@ -266,6 +266,14 @@ Looking at `cust` from outside, its Clockwork state is **`empty`**, **`dirty`**,
 
 `LOCAL OPTION` on a RECORD is still allowed for ephemeral flags the author needs, but the lifecycle is the **state**, not a `state` OPTION. Do not put `COMMAND save` or `dirty WHEN SELF IS changed` in the RECORD body.
 
+iod also keeps a read-only property `dirty` on every row (a RECORD and a table-bound MACHINE). It is not a SQL column: the class marks it private, which makes it local, so scaffold omits it and a channel does not publish it. The value is a comma-separated list of column names whose values changed, in first-change order. The same value again does not add the name. A KEY assignment still moves the row to `dirty`, and the key stays off the list and in the update `keys`. LOCAL properties and names that are not OPTIONs stay off the list. Machine code reads `dirty`; assigning it does not stick.
+
+`RECORD APPLY`, and lifecycle `clean` or `empty`, clear the list. A full `COPY PROPERTIES` replaces the list with the columns whose values changed and leaves the row `dirty`. If none changed, the row is `clean` and the list is empty. A partial copy keeps names already listed and appends newly changed ones. A key-only copy leaves the list empty and the lifecycle `clean`.
+
+Generated INTERFACE `update` sends `"mode": "dirty"` and `"dirty": record.dirty` together with the full `data` object. dbsvr then `SET`s only those columns. Data-object order decides `SET` order. No `mode` is still a full-data `UPDATE`. An empty list, an unknown mode, or a name that is not an identifier is rejected and writes nothing. `create` stays a full insert. A VIEW has the property and has no `update` command.
+
+Hydrate a slot with `RECORD APPLY` when it must finish `clean`. Use `COPY PROPERTIES` when the next step is `update`: a copy that changes columns is what fills `dirty`.
+
 `Customer` is the Clockwork **class**. Datastore JSON `type` is the **table or view name** (default lowercase class, here `customer`; override with `TABLE "…"` / `VIEW "…"`). Do not store that name on an ordinary OPTION — OPTIONS are columns, and `OPTION type "piston"` is already a discriminator in existing programs.
 
 Persist stays the proven path until a later comment specifies builtins: INTERFACE + JSON templates + `SEND … TO DATABASE_CHANNEL`. Logic that reacts to the row lives on a **MACHINE** that depends on the RECORD, **or** on a MACHINE that *is* the row (next section):
@@ -327,7 +335,7 @@ A RECORD class is still the place for **canonical schema** (`cw-scaffold`, migra
 **Fill** is the same as a RECORD. Declaring `cust CustomerPanel (id: 1)` does **not** read the database. OPTIONS start at class defaults; `state` is `empty`. A row arrives only by an explicit find (INTERFACE `find` / `load`, or `QUERY`) then `RECORD APPLY` (or `COPY PROPERTIES` from a LIST member). Two patterns:
 
 1. **KEY known in the program** — `cust CustomerPanel (id: 1)`. INTERFACE `find` with that KEY. `RECORD APPLY` writes `cust` and sets `state` to `clean`.
-2. **Slot, KEY from a query** — `slot CustomerPanel;`. A **loader MACHINE** owns a static selector (e.g. `OPTION city "Perth"`), hydrates (`SEND` find so APPLY fills held rows), `COPY ALL FROM Customer TO occupancy WHERE … city`, then binds: SIZE 0 → `clear` on `slot` (`state` `empty`); SIZE ≥ 1 → `COPY PROPERTIES` / APPLY onto `slot` (`state` `clean`). Notify: loader `load`s again and rebinds.
+2. **Slot, KEY from a query** — `slot CustomerPanel;`. A **loader MACHINE** owns a static selector (e.g. `OPTION city "Perth"`), hydrates (`SEND` find so APPLY fills held rows), `COPY ALL FROM Customer TO occupancy WHERE … city`, then binds: SIZE 0 → `clear` on `slot` (`state` `empty`); SIZE ≥ 1 → `RECORD APPLY` onto `slot` (`state` `clean`). `COPY PROPERTIES` onto the slot leaves `dirty` listing the columns that changed, which is the persist path, not the hydrate path. Notify: loader `load`s again and rebinds.
 
 `QUERY` / INTERFACE `load` are SEND; the scan cannot wait for `dbsvr`. The loader uses its own WHEN / `WAITFOR` for “hydrate done” then bind. Do not treat `COPY ALL FROM Customer` as a database fetch.
 
@@ -457,7 +465,7 @@ SlotLoader MACHINE slot, occupancy {
     }
     ENTER occupied {
         x := TAKE FIRST FROM occupancy;
-        COPY PROPERTIES FROM x TO slot;     # bind; slot.state "clean"
+        COPY PROPERTIES FROM x TO slot;     # columns that changed stay dirty for update
     }
     ENTER vacant {
         CALL clear ON slot;                 # slot.state "empty"
@@ -482,7 +490,8 @@ Rebind MACHINE enter, db {
 # panel is exported; humid writes name, then age.
 # after first write: panel.state "dirty", still idle if age==0
 # after age := 21: WHEN → active, still not in sqlite
-# CALL update ON db: JSON data is name+age (+id key). email, note, tmp omitted.
+# CALL update ON db: mode "dirty", dirty "name,age", data still carries every column.
+# dbsvr SETs name and age. id stays in keys. email, note, tmp are not columns.
 ```
 
 **LOCAL / extra OPTION are not columns.**
@@ -492,7 +501,7 @@ WhatPersists MACHINE panel, db {
     COMMAND touch {
         panel.tmp := 1;          # LOCAL: not APPLY, not update payload
         panel.note := "hello";   # not in table "customer" → not a column
-        panel.name := "Ann";     # column → dirty; only this (and KEY) go on update
+        panel.name := "Ann";     # column → state dirty, dirty "name"; update SETs name
         CALL update ON db;
     }
 }
@@ -1284,7 +1293,7 @@ default_state = empty;
 | Instance constructed / `setStateMachine` | `empty` | Class option defaults. Constructor params e.g. `(id: 1)` set KEY and **must not** go `dirty` (still no row). |
 | Column `setValue` from program/HMI/iosh PROPERTY | `dirty` | Only if the name is a non-LOCAL OPTION, value actually changed, and the write is **not** APPLY / not `COPY PROPERTIES` onto this RECORD / not class-init. LOCAL assign does not dirty. Assign on `empty` → `dirty` (user edited an unbound slot). |
 | `RECORD APPLY` (reply or PUB) | `clean` | After projected fields. Named match **and** `Class#key` cache. |
-| `COPY PROPERTIES` onto a RECORD | `clean` | Bind, not a local edit. Apply-mode for the copy (no per-field dirty), then `clean` if any column was written. |
+| `COPY PROPERTIES` onto a RECORD | `dirty` or `clean` | Superseded by the `dirty` column list above. A copy that changes columns leaves those names dirty. A copy that changes none leaves the row `clean`. |
 | `RECORD REMOVE` of a **named** instance | `empty` | Instance stays (program-owned). Non-KEY columns reset to class option defaults. **KEY is left** so the window still has identity (`cust Customer (id: 1)` still has `id` 1). |
 | `RECORD REMOVE` of `Class#key` | (destroyed) | Unlink LISTs; unchanged. |
 
@@ -1292,7 +1301,7 @@ Do **not** `setState` on a MACHINE that has WHEN. This PR only touches `RecordCl
 
 **Init vs live:** `setValue` during `setStateMachine` (copy class options) and instantiation parameters must not dirty. Use an instance flag (`initializing` / apply-mode) around those paths. `RecordApply::applyFields` already uses `beginDeferredPropertyNotify` — keep that, and set apply-mode so dirty is skipped, then `setState(clean)` after the row.
 
-Fixture clash: `iod/tests/fixtures/record/customer.cw` has `LOCAL OPTION dirty false`. Lifecycle is the **state** `dirty`, not an OPTION. Rename that LOCAL to `tmp` (and the same LOCAL in `test_record_apply.cpp`). `cust IS dirty` means Clockwork state.
+Fixture clash: do not declare `OPTION dirty` in `customer.cw`. The lifecycle is the Clockwork state `dirty`. The column list is the iod property `dirty`, seeded empty on the instance. The fixture keeps `LOCAL OPTION tmp`. `cust IS dirty` means Clockwork state.
 
 #### C. Skip-dirty / no echo persist
 
@@ -1336,7 +1345,7 @@ Subprocess (`cw --parse-only`):
 4. APPLY still skips LOCAL (rename the current `dirty` LOCAL test).
 5. APPLY creates `Customer#2` in `clean`.
 6. `RECORD REMOVE` of `Customer#2` destroys cache. REMOVE of named `cust` leaves `cust`, state `empty`, `name` default, `id` still 1.
-7. `COPY PROPERTIES` from `Customer#2` onto `cust` → `clean`, projected columns only.
+7. `COPY PROPERTIES` from `Customer#2` onto `cust` projects columns only. Columns whose values change are the `dirty` list and the row is `dirty`. The same copy again leaves `clean` and an empty list.
 
 Do not add iod-elc or two-iod tests here. `test_cw_system` should keep passing (APPLY still writes `name`).
 

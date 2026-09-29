@@ -4538,6 +4538,10 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     // properties already loaded
     properties.add(state_machine->getProperties(), SymbolTable::NO_REPLACE);
     properties.add("NAME", _name.c_str(), SymbolTable::ST_REPLACE);
+    if (RecordClass::isRow(machine_class)) {
+        // iod owns this list. Replace an author OPTION of the same name.
+        properties.add("dirty", Value("", Value::t_string), SymbolTable::ST_REPLACE);
+    }
     if (locals.size() == 0) {
         for (Parameter p : state_machine->locals) {
             Parameter newp(p.val.sValue.c_str());
@@ -5305,9 +5309,84 @@ void MachineInstance::sendModbusUpdate(const std::string &property_name, const V
     }
 }
 
+bool MachineInstance::tracksDirtyColumn(const std::string &property) const {
+    if (!state_machine || !RecordClass::isRow(state_machine)) {
+        return false;
+    }
+    if (property.empty() || property == "state" || property == "dirty" || property == "STATE" ||
+        property == "NAME") {
+        return false;
+    }
+    if (state_machine->propertyIsLocal(property)) {
+        return false;
+    }
+    if (state_machine->getOptions().find(property) == state_machine->getOptions().end()) {
+        return false;
+    }
+    if (RecordClass::columnFlags(state_machine, property) & RecordClass::COL_KEY) {
+        return false;
+    }
+    return true;
+}
+
+void MachineInstance::writeDirtyProperty() {
+    if (!state_machine || !RecordClass::isRow(state_machine)) {
+        return;
+    }
+    std::string csv;
+    for (size_t i = 0; i < dirty_columns.size(); ++i) {
+        if (i) {
+            csv += ",";
+        }
+        csv += dirty_columns[i];
+    }
+    properties.add("dirty", Value(csv.c_str(), Value::t_string), SymbolTable::ST_REPLACE);
+}
+
+void MachineInstance::clearDirtyColumns() {
+    dirty_columns.clear();
+    writeDirtyProperty();
+}
+
+void MachineInstance::noteDirtyColumn(const std::string &property) {
+    if (record_apply_mode || !tracksDirtyColumn(property)) {
+        return;
+    }
+    for (size_t i = 0; i < dirty_columns.size(); ++i) {
+        if (dirty_columns[i] == property) {
+            return;
+        }
+    }
+    dirty_columns.push_back(property);
+    writeDirtyProperty();
+}
+
+void MachineInstance::replaceDirtyColumns(const std::vector<std::string> &names) {
+    dirty_columns.clear();
+    for (size_t i = 0; i < names.size(); ++i) {
+        if (!tracksDirtyColumn(names[i])) {
+            continue;
+        }
+        bool found = false;
+        for (size_t j = 0; j < dirty_columns.size(); ++j) {
+            if (dirty_columns[j] == names[i]) {
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            dirty_columns.push_back(names[i]);
+        }
+    }
+    writeDirtyProperty();
+}
+
 void MachineInstance::setRowLifecycle(const char *name) {
     if (!name || !state_machine) {
         return;
+    }
+    if (std::string(name) == "clean" || std::string(name) == "empty") {
+        clearDirtyColumns();
     }
     if (RecordClass::isRecord(state_machine)) {
         setRecordSystemState(name);
@@ -5488,6 +5567,11 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
                 properties.add(property, new_value, SymbolTable::ST_REPLACE);
             }
         }
+        // `dirty` is the column list iod maintains. A program assignment does not stick.
+        if (was_changed && property == "dirty" && state_machine &&
+            RecordClass::isRow(state_machine)) {
+            writeDirtyProperty();
+        }
         if (!was_changed) {
             return true; // value was ok but was already the same
         }
@@ -5500,6 +5584,7 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             else if (RecordClass::hasTableBinding(state_machine)) {
                 setRowLifecycle("dirty");
             }
+            noteDirtyColumn(property);
         }
         // calcAdjust temps: one notify at endDeferredPropertyNotify.
         // Never defer VALUE / IO (outputs, plugins, analog owners).

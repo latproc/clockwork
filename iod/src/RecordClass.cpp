@@ -106,6 +106,8 @@ void mark(MachineClass *mc) {
     mc->addState("clean", true);
     mc->initial_state = State("empty");
     mc->default_state = State("empty");
+    // Read by Clockwork. Not a table column.
+    mc->addPrivateProperty("dirty");
 }
 
 void setTable(MachineClass *mc, const std::string &name) {
@@ -114,6 +116,7 @@ void setTable(MachineClass *mc, const std::string &name) {
     }
     hideSchemaProps(mc);
     mc->setProperty(kTable, Value(name.c_str(), Value::t_string));
+    mc->addPrivateProperty("dirty");
 }
 
 void setView(MachineClass *mc, const std::string &name) {
@@ -123,6 +126,7 @@ void setView(MachineClass *mc, const std::string &name) {
     hideSchemaProps(mc);
     mc->setProperty(kView, Value(name.c_str(), Value::t_string));
     mc->setProperty(kTable, Value(name.c_str(), Value::t_string));
+    mc->addPrivateProperty("dirty");
 }
 
 void addKey(MachineClass *mc, const std::string &column) { appendCsv(mc, kKey, column); }

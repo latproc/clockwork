@@ -5,7 +5,7 @@ CustomerINTERFACE MACHINE record, items {
         "action": "insert", "type": "customer", "auth": "xxx", "data": {"age": 0, "email": "", "id": 0, "name": ""}
     };
     OPTION update_template JSON_VALUE {
-        "action": "update", "type": "customer", "auth": "xxx", "keys": {"id": 0}, "data": {"age": 0, "email": "", "id": 0, "name": ""}
+        "action": "update", "type": "customer", "auth": "xxx", "mode": "dirty", "dirty": "", "keys": {"id": 0}, "data": {"age": 0, "email": "", "id": 0, "name": ""}
     };
     OPTION delete_template JSON_VALUE {
         "action": "delete", "type": "customer", "auth": "xxx", "keys": {"id": 0}
@@ -26,6 +26,8 @@ CustomerINTERFACE MACHINE record, items {
     }
     COMMAND update {
         request := update_template;
+        ITEM ${mode} OF request := "dirty";
+        ITEM ${dirty} OF request := record.dirty;
         ITEM ${keys.id} OF request := record.id;
         ITEM ${data.age} OF request := record.age;
         ITEM ${data.email} OF request := record.email;
