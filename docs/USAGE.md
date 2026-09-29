@@ -218,9 +218,9 @@ they are set by the runtime):
 
 | state | when |
 | --- | --- |
-| `empty` | just declared; nothing loaded |
-| `dirty` | a program/HMI edit changed a column OPTION |
-| `clean` | a row was applied (APPLY / `COPY PROPERTIES`) |
+| `empty` | just declared, or a named instance was cleared |
+| `dirty` | a column value changed here and has not been applied back |
+| `clean` | `RECORD APPLY` wrote the row (a find, load, insert, update, or notify) |
 
 ```clockwork
 Watcher MACHINE cust {
@@ -229,6 +229,45 @@ Watcher MACHINE cust {
 }
 w Watcher cust;
 ```
+
+The state says the row was edited. The property `dirty` says which columns.
+iod keeps that property on every row (a `RECORD` and a table-bound `MACHINE`).
+It is a comma-separated list of column names, in the order they first changed.
+It is not a column: scaffold omits it, and a channel does not publish it.
+Leave the name to iod. An author `OPTION dirty` is hidden from SQL and
+overwritten on the instance. `cust IS dirty` is the state; `cust.dirty` is
+the list. Machine code reads the list. Assigning it does not stick.
+
+| What changed | List | Lifecycle |
+| --- | --- | --- |
+| `name := "Ann"` then `age := 21` | `name,age` | `dirty` |
+| the same value again | unchanged | stays `dirty` |
+| assigning the `KEY` | key stays off the list | `dirty` |
+| `LOCAL` property | stays off the list | unchanged |
+| a name that is not an OPTION | stays off the list | `dirty` |
+| `RECORD APPLY`, or lifecycle `clean` / `empty` | empty | `clean` or `empty` |
+| full `COPY PROPERTIES`, some columns differ | those columns, in name order | `dirty` |
+| full `COPY PROPERTIES`, nothing tracked differs | empty | `clean` |
+| partial `COPY PROPERTIES` | names already listed, plus columns this copy changed | `dirty` if the list is not empty |
+
+A partial copy that changes nothing tracked leaves the previous list in place.
+A full copy replaces it, including a copy that only changes the key: the list
+is empty and the row is `clean`.
+
+`CALL update` on the generated INTERFACE sends the list:
+
+```json
+{ "action": "update", "type": "customer", "mode": "dirty",
+  "dirty": "name,age",
+  "keys": { "id": 1 },
+  "data": { "id": 1, "name": "Ann", "age": 21, "email": "" } }
+```
+
+`data` still carries every column. `dbsvr` writes only the names in `dirty`.
+The key stays in `keys`. A view has the property and has no `update` command.
+Hydrate with `find` / `load`: the reply is `RECORD APPLY`, which clears the
+list and leaves the row `clean`. Use `COPY PROPERTIES` when the next step is
+`update`, because a copy that changes columns is what fills the list.
 
 Column flags: `KEY`, `UNIQUE`, `NOT NULL`, `PRIVATE` (a column that is stored but
 not published), and `LOCAL OPTION` (not a column at all).
@@ -288,7 +327,8 @@ Notes:
 - `RECORD APPLY` matches `(type, key)` and writes only the declared column
   OPTIONS (extra JSON fields like `email` are ignored). It does **not**
   `setState` on a MACHINE — your `WHEN` owns `STATE`; the row lifecycle is the
-  `LOCAL OPTION state`.
+  `LOCAL OPTION state`. The `dirty` list is the same property as on a RECORD.
+  APPLY clears it and sets `state` to `clean`.
 
 ### Fill — a bind does not read the database
 
@@ -316,14 +356,16 @@ loader MACHINE {
             SEND clear TO slot;                 # slot -> empty
         } ELSE {
             row := TAKE FIRST FROM occupancy;
-            COPY PROPERTIES FROM row TO slot;   # slot -> clean
+            COPY PROPERTIES FROM row TO slot;   # slot.dirty lists columns that changed
         }
     }
 }
 ```
 
 `QUERY` and INTERFACE `load` are SENDs; they do not wait for `dbsvr`. The loader
-uses its own `WHEN`/`WAITFOR` for "hydrate done", then binds.
+uses its own `WHEN`/`WAITFOR` for "hydrate done", then binds. A `find` / `load`
+reply is `RECORD APPLY`: `state` becomes `clean` and `dirty` is empty. The
+`COPY PROPERTIES` above is the path that fills `dirty` for a following `update`.
 
 ### Rules
 
@@ -470,7 +512,7 @@ action-specific fields. `auth` is the token (placeholder `"xxx"`).
 | `insert` | add one row | `data` |
 | `find` | matching rows (by `keys`) | `keys`, `fields` |
 | `select` | matching rows (rich filter) | `where`, `order`, `limit`, `fields` |
-| `update` | update matching rows | `keys`, `data` |
+| `update` | update matching rows | `keys`, `data`; optional `mode`, `dirty` |
 | `delete` | delete matching rows | `keys` (omit to delete all) |
 | `create` | **CREATE TABLE** (schema), not a row | `schema` |
 
@@ -486,6 +528,10 @@ normally superseded by `cw-migrate`). `action: "sql"` is rejected.
 
 { "action": "update", "auth": "xxx", "type": "customer",
   "keys": { "name": "Fred" }, "data": { "age": 20 } }
+
+{ "action": "update", "auth": "xxx", "type": "customer", "mode": "dirty",
+  "dirty": "age", "keys": { "id": 1 },
+  "data": { "id": 1, "name": "Fred", "age": 20 } }
 
 { "action": "delete", "auth": "xxx", "type": "customer",
   "keys": { "name": "Bill" } }
@@ -633,13 +679,16 @@ COMMAND newest {
 }
 ```
 
-`COPY PROPERTIES FROM <row> TO <record>` binds one row onto a **named** RECORD,
-projecting only the declared columns (extra fields ignored) and leaving it
-`clean`:
+`COPY PROPERTIES FROM <row> TO <record>` projects the declared columns onto a
+**named** RECORD (extra fields ignored). Columns whose values change become
+`cust.dirty`, in name order, and the row is `dirty`. The same copy again, with
+no further change, leaves the row `clean` and `dirty` empty. A copy of a named
+property list keeps names already on the list and appends columns that copy
+changed.
 
 ```clockwork
 row := TAKE FIRST FROM items;
-COPY PROPERTIES FROM row TO cust;        # cust gets id/name/age; cust is clean
+COPY PROPERTIES FROM row TO cust;        # cust.dirty lists columns that changed
 ```
 
 Reactions go through a statically-declared RECORD that other machines already
@@ -659,6 +708,8 @@ w Watcher cust;
 `create`/`update`/`delete`/`find`/`load`/`list` commands. `create` maps to a JSON
 `insert` (a row insert, not a schema create); `list` is `COPY ALL FROM <Class>`;
 `load` is a `find` with empty keys so `dbd` materializes the rows first.
+`update` sends `"mode": "dirty"` and `"dirty": record.dirty`, then copies every
+column into `data` and every key into `keys`. A view gets no `update` command.
 
 ```
 cw-scaffold --from customer.cw --out dir/          # generate the INTERFACE

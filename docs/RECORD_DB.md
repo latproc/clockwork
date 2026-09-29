@@ -266,13 +266,57 @@ Looking at `cust` from outside, its Clockwork state is **`empty`**, **`dirty`**,
 
 `LOCAL OPTION` on a RECORD is still allowed for ephemeral flags the author needs, but the lifecycle is the **state**, not a `state` OPTION. Do not put `COMMAND save` or `dirty WHEN SELF IS changed` in the RECORD body.
 
-iod also keeps a read-only property `dirty` on every row (a RECORD and a table-bound MACHINE). It is not a SQL column: the class marks it private, which makes it local, so scaffold omits it and a channel does not publish it. The value is a comma-separated list of column names whose values changed, in first-change order. The same value again does not add the name. A KEY assignment still moves the row to `dirty`, and the key stays off the list and in the update `keys`. LOCAL properties and names that are not OPTIONs stay off the list. Machine code reads `dirty`; assigning it does not stick.
+### Which columns are dirty
 
-`RECORD APPLY`, and lifecycle `clean` or `empty`, clear the list. A full `COPY PROPERTIES` replaces the list with the columns whose values changed and leaves the row `dirty`. If none changed, the row is `clean` and the list is empty. A partial copy keeps names already listed and appends newly changed ones. A key-only copy leaves the list empty and the lifecycle `clean`.
+The state says the row was edited. The property `dirty` says which columns. iod keeps it on every row: a RECORD and a table-bound MACHINE. On a MACHINE the lifecycle is still `LOCAL OPTION state`; Clockwork `STATE` stays WHEN-owned. The property is not a SQL column. `RecordClass` marks it private, which makes it local, so scaffold omits it from `CREATE TABLE` and from the JSON column list, and a channel does not publish it. Leave the name to iod. An author `OPTION dirty` is hidden from SQL and overwritten when the instance is created. `cust IS dirty` is the state. `cust.dirty` is the list. Machine code reads the list. An assignment to it does not stick.
 
-Generated INTERFACE `update` sends `"mode": "dirty"` and `"dirty": record.dirty` together with the full `data` object. dbsvr then `SET`s only those columns. Data-object order decides `SET` order. No `mode` is still a full-data `UPDATE`. An empty list, an unknown mode, or a name that is not an identifier is rejected and writes nothing. `create` stays a full insert. A VIEW has the property and has no `update` command.
+The value is a comma-separated list of column names.
 
-Hydrate a slot with `RECORD APPLY` when it must finish `clean`. Use `COPY PROPERTIES` when the next step is `update`: a copy that changes columns is what fills `dirty`.
+| What changed | `dirty` | Lifecycle |
+| --- | --- | --- |
+| `name := "Ann"` then `age := 21` | `name,age` (first change first) | `dirty` |
+| the same value written again | unchanged | stays `dirty` |
+| assigning the KEY | key stays off the list; it stays in update `keys` | `dirty` |
+| `LOCAL` property | stays off the list | unchanged |
+| a name that is not an OPTION | stays off the list | `dirty` |
+| `RECORD APPLY`, or lifecycle `clean` / `empty` | `""` | `clean` or `empty` |
+| full `COPY PROPERTIES`, some columns differ | those columns, in name order | `dirty` |
+| full `COPY PROPERTIES`, nothing tracked differs (including a key-only change) | `""` | `clean` |
+| partial `COPY PROPERTIES` | names already listed, plus columns this copy changed | `dirty` when the list is not empty |
+
+A partial copy that changes nothing tracked leaves the previous list. A full copy replaces the list.
+
+Generated INTERFACE `update` does this after copying the template:
+
+```
+ITEM ${mode} OF request := "dirty";
+ITEM ${dirty} OF request := record.dirty;
+```
+
+The request still copies every column into `data` and every key into `keys`:
+
+```json
+{ "action": "update", "type": "customer", "mode": "dirty",
+  "dirty": "name,age",
+  "keys": { "id": 1 },
+  "data": { "id": 1, "name": "Ann", "age": 21, "email": "" } }
+```
+
+dbsvr `SET`s only the names in `dirty`. `SET` clause order follows the `data` object, not the list. With no `mode`, an update still writes every field in `data`. `create` / `insert` stay a full insert; `mode` on an insert is ignored. A VIEW has the property and has no `update` command.
+
+Rejected, and the row is left unchanged:
+
+| Request | Error |
+| --- | --- |
+| `mode` present and not the string `dirty` | `invalid update mode` |
+| `mode` is `dirty` and `dirty` is missing | `dirty mode requires dirty` |
+| `dirty` is not a string or an array of strings | `dirty must be a string or array` |
+| a name is not an identifier (`age;drop`, a number, a blank element) | `invalid dirty column` |
+| the list is empty, or none of its names are in `data` | `no dirty columns to update` |
+
+`dirty` may be `"name, age"` or `["name","age"]`. Spaces and tabs around names are trimmed. A name in the list that is absent from `data` is skipped. One bad name rejects the whole request.
+
+Hydrate with `find` / `load`. The reply is `RECORD APPLY`, which clears the list and leaves the row `clean`. Use `COPY PROPERTIES` when the next step is `update`: a copy that changes columns is what fills the list. A successful update reply is also `RECORD APPLY`, so the list is cleared when the written row comes back.
 
 `Customer` is the Clockwork **class**. Datastore JSON `type` is the **table or view name** (default lowercase class, here `customer`; override with `TABLE "…"` / `VIEW "…"`). Do not store that name on an ordinary OPTION — OPTIONS are columns, and `OPTION type "piston"` is already a discriminator in existing programs.
 
@@ -1291,9 +1335,9 @@ default_state = empty;
 | Event | State | Notes |
 | --- | --- | --- |
 | Instance constructed / `setStateMachine` | `empty` | Class option defaults. Constructor params e.g. `(id: 1)` set KEY and **must not** go `dirty` (still no row). |
-| Column `setValue` from program/HMI/iosh PROPERTY | `dirty` | Only if the name is a non-LOCAL OPTION, value actually changed, and the write is **not** APPLY / not `COPY PROPERTIES` onto this RECORD / not class-init. LOCAL assign does not dirty. Assign on `empty` → `dirty` (user edited an unbound slot). |
-| `RECORD APPLY` (reply or PUB) | `clean` | After projected fields. Named match **and** `Class#key` cache. |
-| `COPY PROPERTIES` onto a RECORD | `dirty` or `clean` | Superseded by the `dirty` column list above. A copy that changes columns leaves those names dirty. A copy that changes none leaves the row `clean`. |
+| Column `setValue` from program/HMI/iosh PROPERTY | `dirty` | A non-LOCAL property whose value changed, and the write is not APPLY and not class-init. A declared non-key column is appended to the `dirty` property. A KEY assignment dirties the row and stays off the list. A LOCAL assign does not dirty. Assign on `empty` → `dirty` (user edited an unbound slot). See [Which columns are dirty](#which-columns-are-dirty). |
+| `RECORD APPLY` (reply or PUB) | `clean` | After projected fields. Named match **and** `Class#key` cache. Clears the `dirty` property. |
+| `COPY PROPERTIES` onto a RECORD | `dirty` or `clean` | Full copy replaces the `dirty` list with the columns whose values changed (name order). Nothing tracked changed → `clean` and an empty list. A partial copy keeps names already listed and appends columns that copy changed. |
 | `RECORD REMOVE` of a **named** instance | `empty` | Instance stays (program-owned). Non-KEY columns reset to class option defaults. **KEY is left** so the window still has identity (`cust Customer (id: 1)` still has `id` 1). |
 | `RECORD REMOVE` of `Class#key` | (destroyed) | Unlink LISTs; unchanged. |
 
