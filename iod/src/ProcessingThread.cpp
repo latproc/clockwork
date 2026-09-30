@@ -32,6 +32,7 @@
 #include <boost/thread/mutex.hpp>
 #include <list>
 #include <set>
+#include <vector>
 
 #include "ClientInterface.h"
 #include "DebugExtra.h"
@@ -146,6 +147,7 @@ class ProcessingThreadInternals {
     Watchdog processing_wd;
     ClockworkProcessManager process_manager;
     std::list<CommandSocketInfo *> channel_sockets;
+    boost::mutex channel_sockets_mutex;
 
     ProcessingThreadInternals()
         : sequence(0), cycle_delay(1000), processing_wd("Processing Loop Watchdog", 2000) {}
@@ -183,14 +185,18 @@ void ProcessingThread::join() {
 }
 
 CommandSocketInfo *ProcessingThread::addCommandChannel(CommandSocketInfo *csi) {
+    if (!csi) {
+        return 0;
+    }
+    boost::mutex::scoped_lock lock(internals->channel_sockets_mutex);
     std::list<CommandSocketInfo *>::iterator iter = internals->channel_sockets.begin();
     int idx = 0;
     while (iter != internals->channel_sockets.end()) {
         CommandSocketInfo *info = *iter++;
         ++idx;
         if (info == csi) {
-            NB_MSG << "Processing thread already has command socket info for " << csi->address
-                   << " at index " << idx << "\n";
+            DBG_CHANNELS << "Processing thread already has command socket info for " << csi->address
+                         << " at index " << idx << "\n";
             return csi; // already configured
         }
     }
@@ -199,12 +205,21 @@ CommandSocketInfo *ProcessingThread::addCommandChannel(CommandSocketInfo *csi) {
 }
 
 CommandSocketInfo *ProcessingThread::addCommandChannel(Channel *chn) {
-    if (chn->definition()->isPublisher()) {
+    if (!chn || !chn->definition() || chn->definition()->isPublisher()) {
         return 0;
     }
+    if (CommandSocketInfo *existing = chn->commandSocketInfo()) {
+        return addCommandChannel(existing);
+    }
     CommandSocketInfo *info = new CommandSocketInfo(chn);
+    boost::mutex::scoped_lock lock(internals->channel_sockets_mutex);
     internals->channel_sockets.push_back(info);
     return info;
+}
+
+size_t ProcessingThread::commandChannelCount() {
+    boost::mutex::scoped_lock lock(internals->channel_sockets_mutex);
+    return internals->channel_sockets.size();
 }
 
 bool ProcessingThread::checkAndUpdateCycleDelay() {
@@ -826,6 +841,7 @@ void ProcessingThread::operator()() {
     const int MAX_UNCONTROLLED_POLLS = 5;
     int io_unsafe_polls_remaining = MAX_UNCONTROLLED_POLLS;
     while (!program_done) {
+        std::vector<CommandSocketInfo *> polled_channels;
         StallTrace::syncEnabledFromDebug();
         StallTrace::markStage(StallTrace::StageOuterHousekeeping);
         if (IOComponent::getHardwareState() == IOComponent::s_hardware_preinit) {
@@ -987,11 +1003,16 @@ void ProcessingThread::operator()() {
 
             // add the channel sockets to our poll info
             {
-                std::list<CommandSocketInfo *>::iterator csi_iter =
-                    internals->channel_sockets.begin();
+                boost::mutex::scoped_lock lock(internals->channel_sockets_mutex);
+                polled_channels.assign(internals->channel_sockets.begin(),
+                                       internals->channel_sockets.end());
+            }
+            {
                 int idx = dynamic_poll_start_idx;
-                while (csi_iter != internals->channel_sockets.end()) {
-                    CommandSocketInfo *info = *csi_iter++;
+                for (CommandSocketInfo *info : polled_channels) {
+                    if (!info || !info->sock) {
+                        continue;
+                    }
                     items[idx].socket = (void *)(*info->sock);
                     items[idx].fd = 0;
                     items[idx].events = ZMQ_POLLERR | ZMQ_POLLIN;
@@ -1619,8 +1640,7 @@ void ProcessingThread::operator()() {
 #ifdef KEEPSTATS
             AutoStat stats(avg_cmd_processing);
 #endif
-            std::list<CommandSocketInfo *>::iterator csi_iter =
-                internals->channel_sockets.begin();
+            auto csi_iter = polled_channels.begin();
             const unsigned int last_i = CommandSocketInfo::lastIndex();
             for (unsigned int i = internals->CMD_SYNC_ITEM; i <= last_i; ++i) {
                 zmq::socket_t *sock = nullptr;
@@ -1628,10 +1648,14 @@ void ProcessingThread::operator()() {
                     sock = &command_sync;
                 }
                 else {
-                    if (csi_iter == internals->channel_sockets.end()) {
+                    if (csi_iter == polled_channels.end()) {
                         break;
                     }
-                    sock = (*csi_iter++)->sock;
+                    CommandSocketInfo *info = *csi_iter++;
+                    sock = info ? info->sock : nullptr;
+                    if (!sock) {
+                        continue;
+                    }
                 }
                 if (i >= static_cast<unsigned int>(max_poll_sockets) ||
                     !(items[i].revents & ZMQ_POLLIN)) {

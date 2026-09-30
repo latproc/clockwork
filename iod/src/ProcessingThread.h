@@ -39,6 +39,7 @@ class ProcessingThread : public ClockworkProcessManager {
     static void setProcessingThreadInstance(ProcessingThread *pti);
     CommandSocketInfo *addCommandChannel(Channel *);
     CommandSocketInfo *addCommandChannel(CommandSocketInfo *);
+    size_t commandChannelCount();
 
     static void activate(MachineInstance *m);
     static void suspend(MachineInstance *m);

@@ -26,6 +26,7 @@
 #include "SocketMonitor.h"
 #include "symboltable.h"
 #include "value.h"
+#include <boost/thread/mutex.hpp>
 #include <boost/thread/recursive_mutex.hpp>
 #include <map>
 #include <ostream>
@@ -264,6 +265,9 @@ class Channel : public MachineInstance, public ChannelImplementation {
     void setupFilters();
     void setupShadows();
     static void setupCommandSockets();
+    bool hasCommandSocket() const;
+    const std::string &commandSocketAddress() const;
+    CommandSocketInfo *commandSocketInfo() const;
     void enableShadows();
     void disableShadows();
     // Staged remote values are applied together on entry to ACTIVE.
@@ -364,6 +368,7 @@ class Channel : public MachineInstance, public ChannelImplementation {
 
     unsigned int throttle_time;
     static boost::mutex update_mutex;
+    static boost::mutex command_socket_mutex;
 
     int connections;
     bool aborted;
