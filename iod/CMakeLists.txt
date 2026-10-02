@@ -612,6 +612,20 @@ add_test(NAME runtime_exceptions COMMAND sh ${_runtime}
   --must-contain "Overrun detected"
   --must-not-contain "should not be displayed")
 
+# Persist load filter (IOD_PERSIST_FILTER). The fixture carries one property the
+# class declares and one it does not; the log markers separate off, dryrun and
+# enforce, prove dryrun changes no behaviour, and prove enforce still applies a
+# declared property. Self-contained: this test must also run on branches that
+# carry no runtime harness.
+add_test(NAME runtime_persist_load_filter COMMAND sh
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_persist_filter.sh
+  $<TARGET_FILE:cw>
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/persist_load_filter.cw
+  ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/persist_load_filter.persist)
+# Starts real cw processes on real ports three times; keep it out of the way of
+# the other runtime tests rather than contending with them under ctest -j.
+set_tests_properties(runtime_persist_load_filter PROPERTIES RUN_SERIAL TRUE)
+
 # LIST membership events for a supervisor that watches a list.
 #   same_size_swap: CHANGES OF changes on a remove+add that leaves SIZE
 #   unchanged; the size-based watcher must miss it.

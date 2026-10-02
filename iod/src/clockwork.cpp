@@ -26,6 +26,7 @@
 #include <stdlib.h>
 #include <string>
 #include <sys/param.h>
+#include <vector>
 #include <unistd.h>
 
 #include <boost/filesystem.hpp>
@@ -1555,9 +1556,151 @@ void disable_all_machines() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Persist load filter.
+//
+// This loader has always applied every store entry belonging to a machine that
+// exists; the gate below is machine-level only. There is no per-property check,
+// and setValue() ends in SymbolTable::add(ST_REPLACE), which *creates* the key
+// when it is absent. A property dropped from the CW source is therefore
+// re-created from the store on every boot, and persistd dumps it straight back
+// -- it can never die.
+//
+// The filter admits a value only when the property is already on the instance
+// before the store is applied, i.e. the source still sets it. That test must be
+// made against the live instance table, not against a scan of .lpc files:
+// classes such as VARIABLE are constructed in C++ and have no source
+// declaration for VALUE, so a source-layer predicate would drop them.
+//
+//   IOD_PERSIST_FILTER      off (default) | dryrun | enforce
+//   IOD_PERSIST_FILTER_LOG  optional path for the per-entry reject detail
+//
+// dryrun computes the decision, reports it, and applies everything as before.
+// enforce additionally skips the rejected entries.
+// ---------------------------------------------------------------------------
+
+enum PersistFilterMode { PERSIST_FILTER_OFF, PERSIST_FILTER_DRYRUN, PERSIST_FILTER_ENFORCE };
+
+static PersistFilterMode persist_filter_mode() {
+    static int cached = -1;
+    if (cached < 0) {
+        const char *v = getenv("IOD_PERSIST_FILTER");
+        if (!v || strcmp(v, "") == 0 || strcmp(v, "off") == 0) {
+            cached = PERSIST_FILTER_OFF;
+        }
+        else if (strcmp(v, "enforce") == 0) {
+            cached = PERSIST_FILTER_ENFORCE;
+        }
+        else if (strcmp(v, "dryrun") == 0) {
+            cached = PERSIST_FILTER_DRYRUN;
+        }
+        else {
+            fprintf(stderr, "IOD_PERSIST_FILTER: unknown value \"%s\", using off\n", v);
+            cached = PERSIST_FILTER_OFF;
+        }
+    }
+    return (PersistFilterMode)cached;
+}
+
+// NULL when the entry is admitted, otherwise a short stable reason string.
+static const char *persist_entry_reject_reason(MachineInstance *m, const std::string &prop,
+                                               bool only_persistent) {
+    if (!m) {
+        return "no-such-machine";
+    }
+    if (only_persistent && !(m->_type == "CONSTANT" || m->isPersistent())) {
+        return "machine-not-persistent";
+    }
+    const MachineClass *mc = m->getStateMachine();
+    if (mc && mc->hasPersistentProperties() && !mc->propertyIsPersistent(prop)) {
+        return "not-per-field-persistent";
+    }
+    if (!m->properties.exists(prop.c_str())) {
+        return "not-on-instance";
+    }
+    return 0;
+}
+
 void load_properties_file(const std::string &filename, bool only_persistent) {
     PersistentStore store(filename);
     store.load();
+
+    const PersistFilterMode filter_mode = persist_filter_mode();
+
+    // Accounting pass. This walks the store rather than the machine list so that
+    // entries naming a machine that no longer exists are counted too -- the
+    // apply loop below never sees them.
+    std::vector<std::string> reject_detail;
+    std::map<std::string, uint64_t> reject_by_reason;
+    uint64_t entries = 0, accepted = 0, rejected = 0, would_change = 0;
+    if (filter_mode != PERSIST_FILTER_OFF) {
+        std::map<std::string, MachineInstance *> by_full_name;
+        for (auto it = MachineInstance::begin(); it != MachineInstance::end(); ++it) {
+            if (*it) {
+                by_full_name[(*it)->fullName()] = *it;
+            }
+        }
+        std::map<std::string, std::map<std::string, Value>>::const_iterator me =
+            store.init_values.begin();
+        while (me != store.init_values.end()) {
+            std::map<std::string, MachineInstance *>::const_iterator mi = by_full_name.find(me->first);
+            MachineInstance *m = (mi == by_full_name.end()) ? 0 : mi->second;
+            std::map<std::string, Value>::const_iterator pe = me->second.begin();
+            while (pe != me->second.end()) {
+                ++entries;
+                const char *why = persist_entry_reject_reason(m, pe->first, only_persistent);
+                if (!why) {
+                    ++accepted;
+                }
+                else {
+                    ++rejected;
+                    ++reject_by_reason[why];
+                    // "would_change": the current code applies this entry, so the
+                    // filter is what stops it. The other reasons were already
+                    // skipped before this change.
+                    if (m && (!only_persistent || m->_type == "CONSTANT" || m->isPersistent())) {
+                        ++would_change;
+                    }
+                    std::ostringstream row;
+                    row << me->first << " " << pe->first << " " << pe->second << "  # " << why;
+                    reject_detail.push_back(row.str());
+                }
+                ++pe;
+            }
+            ++me;
+        }
+
+        std::ostringstream summary;
+        summary << "PERSIST_FILTER mode="
+                << (filter_mode == PERSIST_FILTER_ENFORCE ? "enforce" : "dryrun")
+                << " store=" << filename << " entries=" << entries << " accepted=" << accepted
+                << " rejected=" << rejected << " would_change=" << would_change;
+        std::map<std::string, uint64_t>::const_iterator r = reject_by_reason.begin();
+        while (r != reject_by_reason.end()) {
+            summary << " " << r->first << "=" << r->second;
+            ++r;
+        }
+        {
+            FileLogger fl(program_name);
+            fl.f() << summary.str() << "\n" << std::flush;
+        }
+        const char *logpath = getenv("IOD_PERSIST_FILTER_LOG");
+        if (logpath && *logpath) {
+            std::ofstream out(logpath, std::ios::out | std::ios::trunc);
+            if (out) {
+                out << summary.str() << "\n";
+                for (size_t i = 0; i < reject_detail.size(); ++i) {
+                    out << reject_detail[i] << "\n";
+                }
+                out.close();
+            }
+            else {
+                FileLogger fl(program_name);
+                fl.f() << "PERSIST_FILTER could not write detail to " << logpath << "\n"
+                       << std::flush;
+            }
+        }
+    }
 
     // enable all persistent variables and set their value to the
     // value in the map.
@@ -1573,6 +1716,10 @@ void load_properties_file(const std::string &filename, bool only_persistent) {
                 std::map<std::string, Value> &list((*found).second);
                 PersistentStore::PropertyPair node;
                 BOOST_FOREACH (node, list) {
+                    if (filter_mode == PERSIST_FILTER_ENFORCE &&
+                        persist_entry_reject_reason(m, node.first, only_persistent)) {
+                        continue;
+                    }
                     int64_t v;
                     double d;
                     DBG_INITIALISATION << name << " initialising " << node.first << " to "
