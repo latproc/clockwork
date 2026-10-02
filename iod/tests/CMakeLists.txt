@@ -223,4 +223,18 @@ target_link_libraries(test_timer_clock_probe gmock_main cw_client cw_interpreter
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_timer_clock_probe COMMAND test_timer_clock_probe)
 
+# Persist load filter (IOD_PERSIST_FILTER). The fixture carries one property the
+# class declares and one it does not; the log markers separate off, dryrun and
+# enforce, prove dryrun changes no behaviour, and prove enforce still applies a
+# declared property. Self-contained: this test must also run on branches that
+# carry no runtime harness.
+add_test(NAME runtime_persist_load_filter COMMAND sh
+  ${PROJECT_SOURCE_DIR}/tests/run_cw_persist_filter.sh
+  $<TARGET_FILE:cw>
+  ${PROJECT_SOURCE_DIR}/tests/fixtures/persist_load_filter.cw
+  ${PROJECT_SOURCE_DIR}/tests/fixtures/persist_load_filter.persist)
+# Starts real cw processes on real ports three times; keep it out of the way of
+# the other runtime tests rather than contending with them under ctest -j.
+set_tests_properties(runtime_persist_load_filter PROPERTIES RUN_SERIAL TRUE)
+
 endif()
