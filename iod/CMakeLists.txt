@@ -322,6 +322,7 @@ set (Clockwork_Headers
     src/MachineCommandAction.h
     src/MachineCommandList.h
     src/MachineDetails.h
+    src/MachineGraph.h
     src/MachineInstance.h
     src/MachineInterface.h
     src/MachineShadowInstance.h
@@ -432,6 +433,7 @@ set (Clockwork_SRCS
     src/MachineCommandAction.cpp
     src/MachineCommandList.cpp
     src/MachineDetails.cpp
+    src/MachineGraph.cpp
     src/MachineInstance.cpp
     src/MachineInterface.cpp
     src/MachineShadowInstance.cpp
@@ -926,6 +928,24 @@ add_test(NAME record_scaffold_view COMMAND ${CMAKE_COMMAND}
   -DSQL_NAME=CustomerWithAddress.sql
   -DCHANNEL=${CMAKE_CURRENT_SOURCE_DIR}/../tests/db-channel.cw
   -P ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_scaffold.cmake)
+
+# Dependency graph export (-g FILE). The graph must carry evaluation-order rule
+# edges, guards, class OPTIONs, per-instance property overrides and labelled
+# relations, and it must be writable in --parse-only mode so that it needs no
+# runtime.
+set(_graph_run ${CMAKE_CURRENT_SOURCE_DIR}/tests/run_cw_graph.sh)
+set(_graph_fix ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/graph)
+add_test(NAME dependency_graph_export COMMAND sh ${_graph_run}
+  --cw $<TARGET_FILE:cw>
+  --file ${_graph_fix}/dependency_graph.cw
+  --out ${CMAKE_CURRENT_BINARY_DIR}/dependency_graph.dot
+  --expect ${_graph_fix}/dependency_graph.expected)
+add_test(NAME dependency_graph_export_root COMMAND sh ${_graph_run}
+  --cw $<TARGET_FILE:cw>
+  --file ${_graph_fix}/dependency_graph.cw
+  --out ${CMAKE_CURRENT_BINARY_DIR}/dependency_graph_root.dot
+  --root ctrl
+  --expect ${_graph_fix}/dependency_graph_root.expected)
 
 if (USE_ETHERCAT)
 # Experimental cw with SOEM EtherCAT library support

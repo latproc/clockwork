@@ -75,6 +75,18 @@ target_link_libraries(test_list_walkers gmock_main cw_interpreter cw_client
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_list_walkers COMMAND test_list_walkers)
 
+# Dependency graph export: library API, including the Options the CLI does not
+# expose. The CLI and the written file are covered by dependency_graph_export*
+# in iod/CMakeLists.txt.
+add_executable(test_machine_graph test_machine_graph.cpp)
+set_target_properties (test_machine_graph PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_compile_definitions(test_machine_graph PRIVATE
+  MACHINE_GRAPH_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/graph")
+target_link_libraries(test_machine_graph gmock_main cw_interpreter cw_client
+  ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_machine_graph COMMAND test_machine_graph)
+
 add_executable(test_sync_remote_states_action iod_mock.h test_sync_remote_states_action.cpp)
 target_link_libraries(test_sync_remote_states_action gmock_main cw_interpreter cw_client
         ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)

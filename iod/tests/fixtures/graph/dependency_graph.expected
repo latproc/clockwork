@@ -1,0 +1,34 @@
+# Substrings the dependency graph for dependency_graph.cw must contain.
+# Blank lines and lines starting with '#' are ignored.
+# A line starting with '!' must NOT appear anywhere in the graph.
+
+# Class OPTIONs are class-level constants and carry their value.
+class:Gate::opt:TravelTime" [shape=note, label="TravelTime = 150"
+class:GateController::opt:GateDelay" [shape=note, label="GateDelay = 40"
+class:GateController::opt:RampRate" [shape=note, label="RampRate = 100"
+
+# The construction-time override appears on gate_two only. gate_one keeps the
+# class default, so it must not produce a property node at all.
+prop:gate_two::TravelTime" [shape=note, label="TravelTime = 40"
+!prop:gate_one::TravelTime
+
+# Parameter binding and the dependency it implies, each labelled with the
+# relation it is. Both used to be emitted as bare, unlabelled edges.
+"gate_one" -> "ctrl" [label="parameter"]
+"gate_one" -> "ctrl" [label="depends"]
+
+# WHEN rules keep their evaluation order (the rule index), their guard text and
+# whether the target state has ENTER / LEAVE actions.
+class:Gate::rules" -> "class:Gate::state:open" [rule="0", kind="when", enter="true", leave="true"
+class:Gate::rules" -> "class:Gate::state:closed" [rule="1", kind="when", enter="false", leave="false"
+class:GateController::rules" -> "class:GateController::state:opening" [rule="0", kind="when", enter="true"
+class:GateController::rules" -> "class:GateController::state:closing" [rule="1", kind="when", enter="false"
+class:GateController::rules" -> "class:GateController::state:fault" [rule="2", kind="when", enter="false"
+
+# TRANSITION rules continue the same ordering and carry their REQUIRES guard.
+"class:GateController::state:opening" -> "class:GateController::state:fault" [rule="3", kind="transition", trigger="NOTRIGGER", guard="( gate ==  stopped)"
+
+# A class local is instantiated once per owner; the two must stay distinct nodes
+# while still reporting the short name they were written with.
+"gate_one.demand" [label="demand", name="demand"
+"gate_two.demand" [label="demand", name="demand"
