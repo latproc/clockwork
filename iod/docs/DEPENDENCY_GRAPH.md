@@ -49,7 +49,7 @@ digraph G {
 | `class:NAME::opt:OPT` | a class `OPTION`, with its value |
 | `prop:INSTANCE::PROP` | a property this instance carries that differs from the class default |
 | `class:NAME::rules` | the class rule list; its outgoing edges are the `WHEN` rules |
-| `class:NAME::state:S` | a state named by a rule or transition |
+| `class:NAME::state:S` | a declared state; carries `initial="true"` / `default="true"` |
 
 | Edge label | Direction | Meaning |
 |---|---|---|
@@ -75,6 +75,23 @@ three `WHEN` rules is `rule="3"`.
 `enter` / `leave` are what make a rule's *effect* visible rather than just its
 existence: a rule that moves a machine into a state with no `ENTER` action does
 nothing else, and that is a property of the state, not of the rule.
+
+`initial` and `default` are separate declarations and are **not** the same thing.
+`X INITIAL` sets the state the machine starts in; `X DEFAULT` is the rule that
+applies when no other rule matches. A state can be either, both or neither, so
+the two are written as independent flags on the state node and both are
+reported:
+
+```dot
+"class:Gate::state:stopped"        [shape=ellipse, label="stopped", initial="true"];
+"class:Gate::state:parked"         [shape=ellipse, label="parked",  default="true"];
+"class:FLAG::state:off"            [shape=ellipse, label="off", initial="true", default="true"];
+```
+
+Every declared state gets a node, so a state that only an `INITIAL` or `DEFAULT`
+declaration names is present rather than missing. That includes the built-in
+`INIT` state every class carries, which appears unflagged where the class
+declares its own `INITIAL`.
 
 An instance property node appears only where the class declares the property and
 the instance holds a different value. Those are the values the instance was

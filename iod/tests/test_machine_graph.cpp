@@ -103,6 +103,26 @@ TEST_F(MachineGraphTest, same_named_locals_stay_distinct) {
     EXPECT_TRUE(has(g, "\"gate_two.demand\" [label=\"demand\", name=\"demand\"")) << g;
 }
 
+// INITIAL and DEFAULT are separate declarations: a state can be either, both or
+// neither, and the closing ']' in these needles pins the absence of the other
+// flag. A state named only by one of the two still gets a node.
+TEST_F(MachineGraphTest, initial_and_default_are_distinct) {
+    const std::string g = graph();
+    EXPECT_TRUE(has(g, "class:Gate::state:stopped\" [shape=ellipse, label=\"stopped\", "
+                       "initial=\"true\"]"))
+        << g;
+    EXPECT_TRUE(has(g, "class:Gate::state:parked\" [shape=ellipse, label=\"parked\", "
+                       "default=\"true\"]"))
+        << g;
+    EXPECT_TRUE(has(g, "class:GateController::state:idle\" [shape=ellipse, label=\"idle\", "
+                       "initial=\"true\"]"))
+        << g;
+    // The built-in classes set both flags on one state.
+    EXPECT_TRUE(has(g, "class:FLAG::state:off\" [shape=ellipse, label=\"off\", initial=\"true\", "
+                       "default=\"true\""))
+        << g;
+}
+
 // Two runs over the same loaded configuration must agree exactly. depends is a
 // pointer-keyed set, so without sorting its edges come out in address order.
 TEST_F(MachineGraphTest, output_is_deterministic) { EXPECT_EQ(graph(), graph()); }

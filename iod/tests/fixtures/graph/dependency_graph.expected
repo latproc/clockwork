@@ -32,3 +32,15 @@ class:GateController::rules" -> "class:GateController::state:fault" [rule="2", k
 # while still reporting the short name they were written with.
 "gate_one.demand" [label="demand", name="demand"
 "gate_two.demand" [label="demand", name="demand"
+
+# INITIAL and DEFAULT are separate declarations and a state can be either, both
+# or neither. The closing ']' pins the absence of the other flag, so these also
+# assert that the two are not conflated.
+class:Gate::state:stopped" [shape=ellipse, label="stopped", initial="true"]
+class:Gate::state:parked" [shape=ellipse, label="parked", default="true"]
+class:GateController::state:idle" [shape=ellipse, label="idle", initial="true"]
+# The built-in classes set both on the same state.
+class:FLAG::state:off" [shape=ellipse, label="off", initial="true", default="true"
+# A state that is named only by an INITIAL / DEFAULT declaration still gets a
+# node; before this it was absent from the graph entirely.
+!class:Gate::state:idle
