@@ -446,7 +446,7 @@ done_polling_actions:
 	startupError WHEN SELF IS starting && TIMER > settings.StartTimeout;
 	starting WHEN state IS ramping && freq_sampler.VALUE < 5 AND freq_sampler.VALUE > -5;
 
-	ENTER StartupError { SET state TO failed_to_start; SET M_Control TO Error }
+	ENTER startupError { SET state TO failed_to_start; SET M_Control TO Error }
 
  	COMMAND halt {
 		SetPoint := 0; 
