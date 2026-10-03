@@ -818,6 +818,71 @@ void predefine_special_machines() {
     settings->setValue("NAME", Value(device_name(), Value::t_string));
 }
 
+// ENTER / LEAVE name a state, and a name that matches no state in the class (or
+// in a class it inherits from) attaches to nothing: the action never runs and
+// nothing is reported. Catch those names here, after the whole class is known,
+// so that a forward reference within the body is not a false positive.
+//
+// This is a warning, not an error: removing a STATE while leaving its ENTER /
+// LEAVE in place is a normal thing to do while testing a program.
+static bool sameIgnoringCase(const std::string &a, const std::string &b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < a.size(); ++i) {
+        if (tolower((unsigned char)a[i]) != tolower((unsigned char)b[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void warnOnUnmatchedStateActions(MachineClass *mc) {
+    std::set<std::string> reported;
+    for (std::multimap<Message, MachineCommandTemplate *>::const_iterator it = mc->receives.begin();
+         it != mc->receives.end(); ++it) {
+        const Message &msg = it->first;
+        if (!msg.isEnter() && !msg.isLeave()) {
+            continue;
+        }
+        const bool is_enter = msg.isEnter();
+        const std::string suffix = is_enter ? "_enter" : "_leave";
+        const std::string &name = msg.getText();
+        if (name.size() <= suffix.size() ||
+            name.compare(name.size() - suffix.size(), suffix.size(), suffix) != 0) {
+            continue;
+        }
+        const std::string state = name.substr(0, name.size() - suffix.size());
+        bool found = false;
+        std::string suggestion;
+        for (MachineClass *c = mc; c && !found; c = c->parent) {
+            if (c->findState(state.c_str())) {
+                found = true;
+                break;
+            }
+            // A case-only difference is the common typo, so offer the real name.
+            for (std::list<State *>::const_iterator s = c->states.begin();
+                 s != c->states.end() && suggestion.empty(); ++s) {
+                if (*s && sameIgnoringCase((*s)->getName(), state)) {
+                    suggestion = (*s)->getName();
+                }
+            }
+        }
+        if (found) {
+            continue;
+        }
+        if (!reported.insert(state + (is_enter ? "E" : "L")).second) {
+            continue;
+        }
+        std::cerr << "## - Warning: " << mc->name << " has " << (is_enter ? "ENTER " : "LEAVE ")
+                  << state << " but no such state, so that action will never run";
+        if (!suggestion.empty()) {
+            std::cerr << " (did you mean " << suggestion << "?)";
+        }
+        std::cerr << "\n";
+    }
+}
+
 void semantic_analysis() {
 
     std::map<std::string, MachineInstance *> machine_instances;
@@ -882,6 +947,7 @@ void semantic_analysis() {
                 ++num_errors;
             }
         }
+        warnOnUnmatchedStateActions(mc);
     }
     // setup references for each global
     BOOST_FOREACH (MachineClass *mc, MachineClass::all_machine_classes) {
