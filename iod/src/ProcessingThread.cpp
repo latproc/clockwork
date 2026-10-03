@@ -204,19 +204,6 @@ CommandSocketInfo *ProcessingThread::addCommandChannel(CommandSocketInfo *csi) {
     return csi;
 }
 
-CommandSocketInfo *ProcessingThread::addCommandChannel(Channel *chn) {
-    if (!chn || !chn->definition() || chn->definition()->isPublisher()) {
-        return 0;
-    }
-    if (CommandSocketInfo *existing = chn->commandSocketInfo()) {
-        return addCommandChannel(existing);
-    }
-    CommandSocketInfo *info = new CommandSocketInfo(chn);
-    boost::mutex::scoped_lock lock(internals->channel_sockets_mutex);
-    internals->channel_sockets.push_back(info);
-    return info;
-}
-
 size_t ProcessingThread::commandChannelCount() {
     boost::mutex::scoped_lock lock(internals->channel_sockets_mutex);
     return internals->channel_sockets.size();
