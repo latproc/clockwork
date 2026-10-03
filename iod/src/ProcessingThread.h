@@ -37,8 +37,11 @@ class ProcessingThread : public ClockworkProcessManager {
 
     static ProcessingThread *instance();
     static void setProcessingThreadInstance(ProcessingThread *pti);
-    CommandSocketInfo *addCommandChannel(Channel *);
+    // Register an already-constructed command socket. Construction belongs to
+    // the channel (see Channel::setupCommandSockets / setDefinition), so that a
+    // channel cannot end up with two sockets bound to the same address.
     CommandSocketInfo *addCommandChannel(CommandSocketInfo *);
+    size_t commandChannelCount();
 
     static void activate(MachineInstance *m);
     static void suspend(MachineInstance *m);
