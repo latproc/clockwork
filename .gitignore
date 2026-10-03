@@ -102,6 +102,8 @@ etc/*
 
 #project runtime scraps
 modbus_mappings.bak
+# modbus export cw/iod write into the working directory (also on -t)
+modbus_mappings.txt
 persist.dat
 webio.db
 devices.dat
