@@ -1,0 +1,12 @@
+# Substrings the dependency graph must contain when restricted with -r ctrl.
+#
+# The root is the controller. Its parameter gate_one, and gate_one's own local
+# demand, are reachable; gate_two and everything under it is not. The old root
+# walk followed parameter bindings downwards only, so a root could silently drop
+# the machines it depends on.
+"ctrl" -> "class:GateController" [label="instance_of"]
+"gate_one" -> "ctrl" [label="parameter"]
+"gate_one" -> "ctrl" [label="depends"]
+"gate_one.demand" -> "gate_one" [label="owner"
+!gate_two
+!SYSTEMSETTINGS

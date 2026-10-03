@@ -223,6 +223,18 @@ target_link_libraries(test_timer_clock_probe gmock_main cw_client cw_interpreter
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_timer_clock_probe COMMAND test_timer_clock_probe)
 
+# Scratch diagnostics (untracked; see docs/TIMER_LOSS_INVESTIGATION.md Add. 10)
+add_executable(test_sstimer_arm_probe test_sstimer_arm_probe.cpp library_globals.cpp iod_mock.h)
+set_target_properties (test_sstimer_arm_probe PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_sstimer_arm_probe gmock_main cw_client cw_interpreter
+    ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+
+add_executable(test_sstimer_diag test_sstimer_diag.cpp library_globals.cpp)
+target_link_libraries(test_sstimer_diag gmock_main cw_client cw_interpreter
+    ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+
 # Persist load filter (IOD_PERSIST_FILTER). The fixture carries one property the
 # class declares and one it does not; the log markers separate off, dryrun and
 # enforce, prove dryrun changes no behaviour, and prove enforce still applies a
@@ -236,5 +248,36 @@ add_test(NAME runtime_persist_load_filter COMMAND sh
 # Starts real cw processes on real ports three times; keep it out of the way of
 # the other runtime tests rather than contending with them under ctest -j.
 set_tests_properties(runtime_persist_load_filter PROPERTIES RUN_SERIAL TRUE)
+
+# Dependency graph export (-g FILE): evaluation-order rule edges, guards, class
+# OPTIONs, per-instance property overrides and labelled relations. Covers the
+# CLI and the written file; test_machine_graph below covers the library API.
+set(_graph_run ${PROJECT_SOURCE_DIR}/tests/run_cw_graph.sh)
+set(_graph_fix ${PROJECT_SOURCE_DIR}/tests/fixtures/graph)
+add_test(NAME dependency_graph_export COMMAND sh ${_graph_run}
+  --cw $<TARGET_FILE:cw>
+  --file ${_graph_fix}/dependency_graph.cw
+  --out ${CMAKE_CURRENT_BINARY_DIR}/dependency_graph.dot
+  --expect ${_graph_fix}/dependency_graph.expected)
+add_test(NAME dependency_graph_export_root COMMAND sh ${_graph_run}
+  --cw $<TARGET_FILE:cw>
+  --file ${_graph_fix}/dependency_graph.cw
+  --out ${CMAKE_CURRENT_BINARY_DIR}/dependency_graph_root.dot
+  --root ctrl
+  --expect ${_graph_fix}/dependency_graph_root.expected)
+# Each export runs a real cw process; keep it clear of the other runtime tests.
+set_tests_properties(dependency_graph_export dependency_graph_export_root
+  PROPERTIES RUN_SERIAL TRUE)
+
+# Dependency graph export: library API, including the Options that the command
+# line does not expose.
+add_executable(test_machine_graph test_machine_graph.cpp)
+set_target_properties (test_machine_graph PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_compile_definitions(test_machine_graph PRIVATE
+  MACHINE_GRAPH_FIXTURE_DIR="${PROJECT_SOURCE_DIR}/tests/fixtures/graph")
+target_link_libraries(test_machine_graph gmock_main cw_interpreter cw_client
+  ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_machine_graph COMMAND test_machine_graph)
 
 endif()

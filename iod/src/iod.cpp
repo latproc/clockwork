@@ -55,6 +55,7 @@
 #include "IODCommands.h"
 #include "Logger.h"
 #include "MQTTInterface.h"
+#include "MachineGraph.h"
 #include "MachineInstance.h"
 #include "MessageLog.h"
 #include "MessagingInterface.h"
@@ -436,18 +437,9 @@ int main(int argc, char const *argv[]) {
         DBG_INITIALISATION << "writing dependency graph to " << dependency_graph() << "\n";
         std::ofstream graph(dependency_graph());
         if (graph) {
-            graph << "digraph G {\n";
-            std::list<MachineInstance *>::iterator m_iter;
-            m_iter = MachineInstance::begin();
-            while (m_iter != MachineInstance::end()) {
-                MachineInstance *mi = *m_iter++;
-                if (!mi->depends.empty()) {
-                    BOOST_FOREACH (MachineInstance *dep, mi->depends) {
-                        graph << mi->getName() << " -> " << dep->getName() << ";\n";
-                    }
-                }
-            }
-            graph << "}\n";
+            MachineGraph::Options graph_options;
+            graph_options.root = graph_root();
+            MachineGraph::writeDot(graph, graph_options);
         }
         else {
             std::cerr << "not able to open " << dependency_graph() << " for write\n";

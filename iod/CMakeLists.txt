@@ -295,6 +295,7 @@ set (Clockwork_Headers
     src/MachineCommandAction.h
     src/MachineCommandList.h
     src/MachineDetails.h
+    src/MachineGraph.h
     src/MachineInstance.h
     src/MachineInterface.h
     src/MachineShadowInstance.h
@@ -402,6 +403,7 @@ set (Clockwork_SRCS
     src/MachineCommandAction.cpp
     src/MachineCommandList.cpp
     src/MachineDetails.cpp
+    src/MachineGraph.cpp
     src/MachineInstance.cpp
     src/MachineInterface.cpp
     src/MachineShadowInstance.cpp
