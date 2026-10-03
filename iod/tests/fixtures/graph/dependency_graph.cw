@@ -19,6 +19,7 @@ Gate MACHINE (TravelTime: 150) {
     stopped INITIAL;
     open WHEN demand IS on;
     closed WHEN demand IS off;
+    parked DEFAULT;
     ENTER open { LOG "gate open"; }
     LEAVE open { LOG "gate leaving open"; }
 }

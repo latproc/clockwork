@@ -332,14 +332,21 @@ std::ostream &writeDot(std::ostream &out, const Options &opts) {
         for (std::map<std::string, MachineClass *>::iterator c = classes.begin(); c != classes.end();
              ++c) {
             MachineClass *mc = c->second;
-            if (mc->stable_states.empty() && mc->transitions.empty()) {
-                continue;
-            }
 
             // WHEN rules. These carry no source state: the rule fires from
             // wherever the machine is, so they hang off a per-class rule node in
             // evaluation order. `rule` is the order the interpreter tests them.
+            //
+            // Every declared state gets a node, not just the ones a rule names,
+            // so a state that only an INITIAL or DEFAULT declaration mentions
+            // still appears and can carry its flag.
             std::set<std::string> states;
+            for (std::list<State *>::const_iterator st = mc->states.begin();
+                 st != mc->states.end(); ++st) {
+                if (*st) {
+                    states.insert((*st)->getName());
+                }
+            }
             for (size_t i = 0; i < mc->stable_states.size(); ++i) {
                 states.insert(mc->stable_states[i].state_name);
             }
@@ -348,8 +355,34 @@ std::ostream &writeDot(std::ostream &out, const Options &opts) {
                 states.insert(t->source.getName());
                 states.insert(t->dest.getName());
             }
+
+            // INITIAL and DEFAULT are separate declarations and a state can be
+            // either, both or neither. A program's `X DEFAULT` is the authority
+            // for the default state; the built-in classes set default_state
+            // instead and have no DEFAULT rule.
+            std::string default_state;
+            for (size_t i = 0; i < mc->stable_states.size(); ++i) {
+                const StableState &ss = mc->stable_states[i];
+                if (ss.condition.predicate && ss.condition.predicate->priority == 1) {
+                    default_state = ss.state_name;
+                    break;
+                }
+            }
+            if (default_state.empty() &&
+                states.find(mc->default_state.getName()) != states.end()) {
+                default_state = mc->default_state.getName();
+            }
+            const std::string initial_state = mc->initial_state.getName();
+
             for (std::set<std::string>::const_iterator s = states.begin(); s != states.end(); ++s) {
-                out << "  " << stateId(mc, *s) << " [shape=ellipse, label=" << q(*s) << "];\n";
+                out << "  " << stateId(mc, *s) << " [shape=ellipse, label=" << q(*s);
+                if (*s == initial_state) {
+                    out << ", initial=\"true\"";
+                }
+                if (!default_state.empty() && *s == default_state) {
+                    out << ", default=\"true\"";
+                }
+                out << "];\n";
             }
 
             if (!mc->stable_states.empty()) {
