@@ -662,10 +662,8 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
     static unsigned long total_mp_time = 0;
     static unsigned long mp_count = 0;
 #endif
-    // Always absorb the coherent domain image when a frame arrives.
-    // Do not skip when the ecat update_mask is all-zero (quiet diff): processAll
-    // uses the static process map so multi-bit DIGITALVALUE (alarms/statuswords)
-    // still leave 0 when the wire already has A.76 / fault bits.
+    // processAll only on a 1-bit POINT edge (or first image). Analog-only
+    // frames still run sampleRegularPolls at POLLING_DELAY.
     if (incoming_data_size && incoming_process_data && incoming_process_mask) {
         if (machine_is_ready) {
 #if VERBOSE_DEBUG
@@ -674,8 +672,12 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
 #ifdef KEEPSTATS
             AutoStat stats(avg_io_time);
 #endif
-            IOComponent::processAll(global_clock, incoming_data_size, incoming_process_mask,
-                                    incoming_process_data, io_work_queue);
+            if (IOComponent::incomingHasPointEdge(incoming_process_data,
+                                                  incoming_data_size)) {
+                IOComponent::processAll(global_clock, incoming_data_size,
+                                        incoming_process_mask, incoming_process_data,
+                                        io_work_queue);
+            }
         }
         else {
             std::cout << "Processing received EtherCAT data but machine is not ready\n";

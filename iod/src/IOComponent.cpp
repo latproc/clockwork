@@ -407,9 +407,11 @@ bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *pre
     if (!curr || len == 0) {
         return false;
     }
-    // No previous sample: treat as digital so the first frame is pushed.
+    // No previous sample / no bit index: analog pull_due and first_run
+    // still push. Do not treat this as a POINT edge or processAll free-runs
+    // at CYCLE_DELAY on every snapshot.
     if (!prev || !indexed_components || indexed_components->empty()) {
-        return true;
+        return false;
     }
     const uint8_t *pm = io_process_mask;
     size_t n = len;
@@ -434,9 +436,10 @@ bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *pre
             if (!ioc) {
                 continue;
             }
-            // ANALOGINPUT / COUNTER / multi-bit DIGITALVALUE on regular_polls:
-            // not a digital ASAP edge (sampled from handle_io_sampling).
-            if (regular_polls.count(ioc) && ioc->address.bitlen > 1) {
+            // Dig ASAP is 1-bit input POINTs only. Analog/COUNTER/DIGITALVALUE
+            // and anything on regular_polls wait for POLLING_DELAY (pull_due).
+            if (ioc->address.bitlen != 1 || ioc->direction() != DirInput ||
+                regular_polls.count(ioc)) {
                 continue;
             }
             // Masked DIGITALVALUE bits (e.g. 0x6041 outside MASK) must not
@@ -448,6 +451,16 @@ bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *pre
         }
     }
     return false;
+}
+
+bool IOComponent::incomingHasPointEdge(const uint8_t *curr, size_t len) {
+    if (!curr || len == 0) {
+        return false;
+    }
+    if (!last_process_data) {
+        return true;
+    }
+    return domainHasDigitalChange(curr, last_process_data, len);
 }
 
 void IOComponent::clearPendingOutputUpdates() {
@@ -654,7 +667,7 @@ void IOComponent::processAll(uint64_t clock, uint64_t data_size, const uint8_t *
         std::list<Package *> no_machine_events;
         for (IOComponent *ioc : regular_poll_dirty) {
             if (ioc) {
-                ioc->handleChange(no_machine_events);
+                ioc->handleChange(no_machine_events, false);
             }
         }
     }
@@ -1321,9 +1334,6 @@ void AnalogueInput::setupProperties(MachineInstance *m) {
 }
 
 int64_t AnalogueInput::filter(int64_t raw) {
-    /*  Plugins (and CW) need IOTIME/raw on every EtherCAT sample, even when the
-        filtered VALUE is unchanged. properties.add does not notify dependents. */
-    publishSampleTime(read_time, true, raw);
     ++g_sample_polls;
 
     // Lazy rebind: setupProperties often runs before Settings machine properties
@@ -1350,6 +1360,8 @@ int64_t AnalogueInput::filter(int64_t raw) {
         return static_cast<int64_t>(config->last_sent);
     }
     ++g_filter_run;
+    // IOTIME/raw only when this sample will publish VALUE or a notify is due.
+    publishSampleTime(read_time, true, raw);
 
     if (filter_due) {
         if (config->property_changed) {
@@ -1856,7 +1868,7 @@ PIDController::~PIDController() { delete config; }
 
 void PIDController::update() { config->property_changed = true; }
 
-void PIDController::handleChange(std::list<Package *> &work_queue) {
+void PIDController::handleChange(std::list<Package *> &work_queue, bool run_filter) {
     //calculate..
 
     if (config->property_changed) {
@@ -1867,7 +1879,7 @@ void PIDController::handleChange(std::list<Package *> &work_queue) {
         //config->
     }
 
-    IOComponent::handleChange(work_queue);
+    IOComponent::handleChange(work_queue, run_filter);
 }
 
 /* ---------- */
@@ -2302,7 +2314,7 @@ void IOComponent::markChange() {
     }
 }
 
-void IOComponent::handleChange(std::list<Package *> &work_queue) {
+void IOComponent::handleChange(std::list<Package *> &work_queue, bool run_filter) {
     assert(io_process_data);
     uint8_t *offset = io_process_data + address.io_offset;
     int bitpos = address.io_bitpos;
@@ -2415,11 +2427,13 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
         // UDINT wire bits as int32 when owner (signed:1): wrap past 0 → −1, −2, …
         val = signExtendWireValue(val, address.bitlen, address.is_signed);
         if (regular_polls.count(this)) {
-            // Polled multi-bit: always absorb wire value and run filter so machine
-            // VALUE/ENG/IOTIME track (ANALOGINPUT/COUNTER/DIGITALVALUE). Skipping
-            // filter left Error.VALUE=0 while address.value already held 0x76.
+            // Polled multi-bit: always absorb the wire. Filter/IOTIME/CW
+            // publish at POLLING_DELAY (sampleRegularPolls, run_filter=true).
+            // processAll passes run_filter=false so analog dither does not
+            // publish on every CYCLE_DELAY frame. Skipping filter entirely
+            // used to leave Error.VALUE=0; sampleRegularPolls still filters.
             raw_value = val;
-            address.value = filter(val);
+            address.value = run_filter ? filter(val) : val;
         }
         else if (hardware_state == s_hardware_init ||
                  (hardware_state == s_operational && raw_value != val)) {

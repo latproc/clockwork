@@ -172,7 +172,9 @@ class IOComponent : public Transmitter {
     virtual void setInitialState();
     const char *getStateString();
     virtual void markChange();
-    virtual void handleChange(std::list<Package *> &work_queue);
+    // run_filter=false: copy wire into raw_value/address.value only.
+    // Filter/IOTIME/CW publish belongs at POLLING_DELAY (sampleRegularPolls).
+    virtual void handleChange(std::list<Package *> &work_queue, bool run_filter = true);
     virtual void turnOn();
     virtual void turnOff();
     bool isOn();
@@ -245,6 +247,8 @@ class IOComponent : public Transmitter {
      */
     static bool domainHasDigitalChange(const uint8_t *curr, const uint8_t *prev,
                                        size_t len);
+    // First frame, or a 1-bit POINT edge vs last processAll image.
+    static bool incomingHasPointEdge(const uint8_t *curr, size_t len);
     Direction direction() { return direction_; }
 
     enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };
@@ -351,7 +355,7 @@ class PIDController : public Output {
     ~PIDController();
     //  AnalogueOutput(unsigned int offset, int bitpos, unsigned int bitlen) : Output(offset, bitpos, bitlen) { }
     const char *type() override { return "SpeedController"; }
-    void handleChange(std::list<Package *> &work_queue) override;
+    void handleChange(std::list<Package *> &work_queue, bool run_filter = true) override;
     int64_t filter(int64_t raw) override;
     void update(); // clockwork uses this to notify of updates
     PID_Settings *config;

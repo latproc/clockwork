@@ -1017,9 +1017,12 @@ void EtherCATThread::operator()() {
         next_ecat_receive = microsecs() + period / 2;
 
         // Paced pull for analog-only / keep-alive (not digital).
-        unsigned long pull_us = get_polling_time();
-        if (pull_us < 100) {
-            pull_us = 100;
+        // Use SYSTEM.POLLING_DELAY, not get_polling_time() (ProcessingThread
+        // quiet/busy stretch can drag that toward CYCLE_DELAY).
+        unsigned long pull_us = 2000;
+        if (MachineInstance::polling_delay &&
+            MachineInstance::polling_delay->iValue >= 100) {
+            pull_us = static_cast<unsigned long>(MachineInstance::polling_delay->iValue);
         }
         static uint64_t last_cw_process_push = 0;
         const bool pull_due = first_run || (now - last_cw_process_push >= pull_us);
