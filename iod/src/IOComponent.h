@@ -128,6 +128,10 @@ class IOComponent : public Transmitter {
         size_t regular_polls = 0;
         uint64_t pa_run = 0;
         uint64_t pa_skip = 0;
+        uint64_t hi_n = 0;
+        uint64_t hi_edge_us = 0;
+        uint64_t hi_copy_us = 0;
+        uint64_t hi_samp_us = 0;
     };
     static SampleStats sampleStats();
     static void noteClockVisit();
@@ -254,6 +258,9 @@ class IOComponent : public Transmitter {
     static void copyProcessImage(const uint8_t *data, size_t len);
     static void noteProcessAllRun();
     static void noteProcessAllSkip();
+    static void noteHiEdge(uint64_t us);
+    static void noteHiCopy(uint64_t us);
+    static void noteHiSample(uint64_t us);
     Direction direction() { return direction_; }
 
     enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };

@@ -672,8 +672,12 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
 #ifdef KEEPSTATS
             AutoStat stats(avg_io_time);
 #endif
-            if (IOComponent::incomingHasPointEdge(incoming_process_data,
-                                                  incoming_data_size)) {
+            const uint64_t t_edge0 = microsecs();
+            const bool point_edge = IOComponent::incomingHasPointEdge(
+                incoming_process_data, incoming_data_size);
+            IOComponent::noteHiEdge(microsecs() - t_edge0);
+            const uint64_t t_copy0 = microsecs();
+            if (point_edge) {
                 IOComponent::noteProcessAllRun();
                 IOComponent::processAll(global_clock, incoming_data_size,
                                         incoming_process_mask, incoming_process_data,
@@ -684,13 +688,18 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
                 IOComponent::copyProcessImage(incoming_process_data,
                                               incoming_data_size);
             }
+            IOComponent::noteHiCopy(microsecs() - t_copy0);
         }
         else {
             std::cout << "Processing received EtherCAT data but machine is not ready\n";
         }
     }
     // Analog/counter sampling (same lock as processAll — do not re-lock).
-    sampleRegularPolls(curr_t);
+    {
+        const uint64_t t_samp0 = microsecs();
+        sampleRegularPolls(curr_t);
+        IOComponent::noteHiSample(microsecs() - t_samp0);
+    }
     StallTrace::markStage(StallTrace::StageOuterHousekeeping);
 }
 
@@ -1668,7 +1677,9 @@ if (IOComponent::updatesWaiting()
             // No domain message this cycle (unchanged image / no push). Still
             // advance ANALOG/COUNTER IOTIME from the live application clock.
             IOLockHelper io_lock;
+            const uint64_t t_samp0 = microsecs();
             sampleRegularPolls(curr_t);
+            IOComponent::noteHiSample(microsecs() - t_samp0);
         }
 
         if (program_done) {

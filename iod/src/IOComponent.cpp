@@ -52,6 +52,10 @@ std::atomic<uint64_t> g_clock_due{0};
 std::atomic<uint64_t> g_clock_send{0};
 std::atomic<uint64_t> g_pa_run{0};
 std::atomic<uint64_t> g_pa_skip{0};
+std::atomic<uint64_t> g_hi_n{0};
+std::atomic<uint64_t> g_hi_edge_us{0};
+std::atomic<uint64_t> g_hi_copy_us{0};
+std::atomic<uint64_t> g_hi_samp_us{0};
 } // namespace
 
 void IOComponent::noteClockVisit() { ++g_clock_visits; }
@@ -133,6 +137,10 @@ IOComponent::SampleStats IOComponent::sampleStats() {
     s.regular_polls = regular_polls.size();
     s.pa_run = g_pa_run.load();
     s.pa_skip = g_pa_skip.load();
+    s.hi_n = g_hi_n.load();
+    s.hi_edge_us = g_hi_edge_us.load();
+    s.hi_copy_us = g_hi_copy_us.load();
+    s.hi_samp_us = g_hi_samp_us.load();
     return s;
 }
 
@@ -406,6 +414,10 @@ void IOComponent::describePendingOutputUpdates(std::ostream &out) {
     }
 }
 
+static uint8_t *digital_care_mask = 0;
+static size_t digital_care_size = 0;
+static size_t digital_care_polls_n = static_cast<size_t>(-1);
+
 bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *prev,
                                          size_t len) {
     if (!curr || len == 0) {
@@ -417,6 +429,36 @@ bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *pre
     if (!prev || !indexed_components || indexed_components->empty()) {
         return false;
     }
+    if (!digital_care_mask || digital_care_size != process_data_size ||
+        digital_care_polls_n != regular_polls.size()) {
+        delete[] digital_care_mask;
+        digital_care_mask = 0;
+        digital_care_size = process_data_size;
+        digital_care_polls_n = regular_polls.size();
+        if (process_data_size) {
+            digital_care_mask = new uint8_t[process_data_size];
+            memset(digital_care_mask, 0, process_data_size);
+            const size_t nbits = indexed_components->size();
+            for (size_t idx = 0; idx < nbits; ++idx) {
+                IOComponent *ioc = (*indexed_components)[idx];
+                if (!ioc) {
+                    continue;
+                }
+                if (ioc->address.bitlen != 1 || ioc->direction() != DirInput ||
+                    regular_polls.count(ioc)) {
+                    continue;
+                }
+                if (!ioc->indexedInputBitTriggersWork(idx)) {
+                    continue;
+                }
+                const size_t byte = idx / 8;
+                if (byte >= process_data_size) {
+                    continue;
+                }
+                digital_care_mask[byte] |= static_cast<uint8_t>(1u << (idx % 8));
+            }
+        }
+    }
     const uint8_t *pm = io_process_mask;
     size_t n = len;
     if (process_data_size && n > process_data_size) {
@@ -424,6 +466,9 @@ bool IOComponent::domainHasDigitalChange(const uint8_t *curr, const uint8_t *pre
     }
     for (size_t i = 0; i < n; ++i) {
         uint8_t care = pm ? pm[i] : 0xff;
+        if (digital_care_mask && i < digital_care_size) {
+            care &= digital_care_mask[i];
+        }
         uint8_t diff = static_cast<uint8_t>((curr[i] ^ prev[i]) & care);
         if (!diff) {
             continue;
@@ -469,6 +514,12 @@ bool IOComponent::incomingHasPointEdge(const uint8_t *curr, size_t len) {
 
 void IOComponent::noteProcessAllRun() { ++g_pa_run; }
 void IOComponent::noteProcessAllSkip() { ++g_pa_skip; }
+void IOComponent::noteHiEdge(uint64_t us) {
+    ++g_hi_n;
+    g_hi_edge_us += us;
+}
+void IOComponent::noteHiCopy(uint64_t us) { g_hi_copy_us += us; }
+void IOComponent::noteHiSample(uint64_t us) { g_hi_samp_us += us; }
 
 void IOComponent::copyProcessImage(const uint8_t *data, size_t len) {
     if (!data || !io_process_data || process_data_size == 0) {
@@ -1379,6 +1430,14 @@ int64_t AnalogueInput::filter(int64_t raw) {
         ++g_filter_skip;
         return static_cast<int64_t>(config->last_sent);
     }
+    // filter:0 is passthrough, not "always run". Unchanged wire (closed-loop
+    // zeros on 4C-115) was a 500 Hz filter body. Changing analog still
+    // publishes this POLLING_DELAY sample.
+    if (raw_mode && config->startup_emitted &&
+        raw == static_cast<int64_t>(config->last_sent) && !notify_due) {
+        ++g_filter_skip;
+        return raw;
+    }
     ++g_filter_run;
     // IOTIME/raw only when this sample will publish VALUE or a notify is due.
     publishSampleTime(read_time, true, raw);
@@ -2181,6 +2240,10 @@ IOUpdate *IOComponent::getDefaults() {
 
 void IOComponent::setupIOMap() {
     boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
+    delete[] digital_care_mask;
+    digital_care_mask = 0;
+    digital_care_size = 0;
+    digital_care_polls_n = static_cast<size_t>(-1);
     max_offset = 0;
     min_offset = 1000000L;
     io_map.clear();
