@@ -1075,14 +1075,14 @@ void EtherCATThread::operator()() {
             static size_t dig_shadow_size = 0;
             static size_t dig_shadow_cap = 0;
 
-            // Peek every bus tick (receiveState above). Do not push on
-            // domainHasDigitalChange: on 4C-115 that was true ~every cycle
-            // with brk_dig=0, so processAll ran at bus rate with no POINT work.
-            // CW frames only at POLLING_DELAY (plus first/keep-alive).
-            const bool want_cw = first_run || need_ping || pull_due;
+            const bool dig_edge = ECInterface::instance()->domainHasDigitalChange(
+                dig_shadow, dig_shadow_size);
+            // POINT edge: push this bus period. Analog/keep-alive: POLLING_DELAY.
+            const bool want_cw = first_run || need_ping || pull_due || dig_edge;
 
             if (status == e_collect && want_cw) {
-                DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state (paced)\n";
+                DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state"
+                                     << (dig_edge ? " (digital edge)" : "") << "\n";
                 num_updates = ECInterface::instance()->collectState();
                 DBG_ETHERCAT_PACKETS << "Num updates from ecat_thread: " << num_updates << "\n";
 
@@ -1106,6 +1106,7 @@ void EtherCATThread::operator()() {
                     else if (now - push_t0 >= 1000000ULL) {
                         std::cerr << "ecat_push/s=" << push_n
                                   << " pull_us=" << pull_us
+                                  << " dig=" << (dig_edge ? 1 : 0)
                                   << " driver="
                                   << (driver_state == s_driver_operational
                                           ? "op"
