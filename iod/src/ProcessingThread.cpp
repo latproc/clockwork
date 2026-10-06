@@ -623,8 +623,10 @@ void ProcessingThread::handle_package(Package *p) {
 }
 
 void ProcessingThread::sampleRegularPolls(uint64_t curr_t) {
+    const uint64_t now = microsecs();
+    MachineInstance::dispatchCommandClocks(now);
     static uint64_t last_sample_poll = 0;
-    unsigned long sample_us = get_polling_time();
+    uint64_t sample_us = IOComponent::minRegularPollNotifyMs() * 1000ULL;
     if (sample_us < 1000) {
         sample_us = 1000;
     }

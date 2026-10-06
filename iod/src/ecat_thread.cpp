@@ -1014,16 +1014,19 @@ void EtherCATThread::operator()() {
         // sees the full analog delta since the last CW frame (latest wins).
         next_ecat_receive = microsecs() + period / 2;
 
-        // Paced pull for analog-only / keep-alive (not digital).
-        // Use SYSTEM.POLLING_DELAY, not get_polling_time() (ProcessingThread
-        // quiet/busy stretch can drag that toward CYCLE_DELAY).
-        unsigned long pull_us = 2000;
-        if (MachineInstance::polling_delay &&
-            MachineInstance::polling_delay->iValue >= 100) {
-            pull_us = static_cast<unsigned long>(MachineInstance::polling_delay->iValue);
+        // Analog-only CW push: soonest ANALOGINPUT/COUNTER notify_period.
+        // POINT edges still push this bus period. POLLING_DELAY is the
+        // Clockwork wait, not analog sample.
+        unsigned long analog_us = 100000;
+        {
+            uint64_t ms = IOComponent::minRegularPollNotifyMs();
+            if (ms < 1) {
+                ms = 100;
+            }
+            analog_us = static_cast<unsigned long>(ms * 1000ULL);
         }
         static uint64_t last_cw_process_push = 0;
-        const bool pull_due = first_run || (now - last_cw_process_push >= pull_us);
+        const bool analog_due = first_run || (now - last_cw_process_push >= analog_us);
 
 #ifdef USE_KERNEL_ETHERCAT
         // Dig ASAP: always snapshot while collecting so POINT edges are visible
@@ -1077,8 +1080,8 @@ void EtherCATThread::operator()() {
 
             const bool dig_edge = ECInterface::instance()->domainHasDigitalChange(
                 dig_shadow, dig_shadow_size);
-            // POINT edge: push this bus period. Analog/keep-alive: POLLING_DELAY.
-            const bool want_cw = first_run || need_ping || pull_due || dig_edge;
+            // POINT edge: push this bus period. Analog: owner notify_period.
+            const bool want_cw = first_run || need_ping || analog_due || dig_edge;
 
             if (status == e_collect && want_cw) {
                 DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state"
@@ -1105,7 +1108,7 @@ void EtherCATThread::operator()() {
                     }
                     else if (now - push_t0 >= 1000000ULL) {
                         std::cerr << "ecat_push/s=" << push_n
-                                  << " pull_us=" << pull_us
+                                  << " analog_us=" << analog_us
                                   << " dig=" << (dig_edge ? 1 : 0)
                                   << " driver="
                                   << (driver_state == s_driver_operational

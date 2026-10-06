@@ -154,25 +154,48 @@ IOComponent::SampleStats IOComponent::sampleStats() {
     return s;
 }
 
-static uint64_t last_sample = 0; // retains a timestamp for the last sample
+uint64_t IOComponent::notifyPeriodMs() const {
+    if (owners.empty() || !owners.front()) {
+        return 100;
+    }
+    const Value &v = owners.front()->getValue("notify_period");
+    if (v.kind == Value::t_integer && v.iValue > 0) {
+        return static_cast<uint64_t>(v.iValue);
+    }
+    return 100;
+}
 
-// as long as there has been a sufficient delay, run the filter for each
-// of the nominated components.
-// ProcessingThread rate-limits calls to POLLING_DELAY; min_period is a floor.
+uint64_t IOComponent::minRegularPollNotifyMs() {
+    uint64_t min_ms = 0;
+    for (IOComponent *ioc : regular_polls) {
+        if (!ioc) {
+            continue;
+        }
+        const uint64_t ms = ioc->notifyPeriodMs();
+        if (ms == 0) {
+            continue;
+        }
+        if (min_ms == 0 || ms < min_ms) {
+            min_ms = ms;
+        }
+    }
+    return min_ms ? min_ms : 100;
+}
+
+bool IOComponent::regularPollDue(uint64_t) {
+    return true;
+}
+
+// Per-owner notify_period: skip channels that are not due. COMMANDCLOCK
+// dispatch lives in sampleRegularPolls so analog rate does not quantise it.
 void handle_io_sampling(uint64_t io_clock) {
     uint64_t now = microsecs();
-    if (now - last_sample < 1000) {
-        return;
-    }
-    last_sample = now;
     std::list<Package *> no_machine_events;
-    std::set<IOComponent *>::iterator iter = regular_polls.begin();
-    while (iter != regular_polls.end()) {
-        IOComponent *ioc = *iter++;
+    for (IOComponent *ioc : regular_polls) {
+        if (!ioc || !ioc->regularPollDue(now)) {
+            continue;
+        }
         ioc->read_time = io_clock;
-        // Read live process image into address.value, then filter/publish.
-        // (Previously only re-filtered a stale address.value, so analogs stuck
-        // at 0 when processAll never enqueued a bit-edge for that sample.)
         if (IOComponent::getProcessData()) {
             ioc->handleChange(no_machine_events);
         }
@@ -180,9 +203,6 @@ void handle_io_sampling(uint64_t io_clock) {
             ioc->filter(ioc->address.value);
         }
     }
-    // Periodic control is distinct from ANALOGINPUT/COUNTER change emits.
-    // One IOD-monotonic tick dispatches every due COMMANDCLOCK instance.
-    MachineInstance::dispatchCommandClocks(now);
 }
 
 void IOComponent::publishSampleTime(uint64_t sample_clock, bool publish_raw, int64_t raw) {
@@ -1028,38 +1048,15 @@ void replaceFloatIfChanged(MachineInstance *o, const char *key, double val) {
     o->properties.add(key, val, SymbolTable::ST_REPLACE);
 }
 
-// First emit, or eng/raw moved past owner window (max-rate limited by notify_period).
+// First emit, or raw moved. window is ENG scale, not a send gate.
 bool notifyValueChanged(const std::list<MachineInstance *> &owners, int64_t raw_val,
                         int64_t last_raw, double last_eng, bool startup_done) {
+    (void)owners;
+    (void)last_eng;
     if (!startup_done) {
         return true;
     }
-    if (owners.empty()) {
-        return raw_val != last_raw;
-    }
-    for (MachineInstance *o : owners) {
-        if (!o) {
-            continue;
-        }
-        double factor = 1.0, base = 0.0, window = 0.0;
-        readScaleOptions(o, factor, base, window);
-        const double eng = engFromRaw(raw_val, factor, base);
-        if (window <= 0.0) {
-            if (raw_val != last_raw) {
-                return true;
-            }
-        }
-        else {
-            double deng = eng - last_eng;
-            if (deng < 0) {
-                deng = -deng;
-            }
-            if (deng > window) {
-                return true;
-            }
-        }
-    }
-    return false;
+    return raw_val != last_raw;
 }
 } // namespace
 
@@ -1457,6 +1454,7 @@ int64_t AnalogueInput::filter(int64_t raw) {
     ++g_filter_run;
     // IOTIME/raw only when this sample will publish VALUE or a notify is due.
     publishSampleTime(read_time, true, raw);
+    config->startup_emitted = true;
 
     if (filter_due) {
         if (config->property_changed) {
@@ -1573,6 +1571,13 @@ int64_t AnalogueInput::filter(int64_t raw) {
 }
 
 void AnalogueInput::update() { config->property_changed = false; }
+
+bool AnalogueInput::regularPollDue(uint64_t now_us) {
+    if (!config || !config->startup_emitted) {
+        return true;
+    }
+    return config->notify_clock.wouldBeDue(now_us, notifyPeriodMs());
+}
 
 class CounterInternals {
   public:
@@ -1732,6 +1737,13 @@ Counter::Counter(IOAddress addr) : IOComponent(addr), internals(0) {
     regular_polls.insert(this);
 }
 
+bool Counter::regularPollDue(uint64_t now_us) {
+    if (!internals || !internals->startup_emitted) {
+        return true;
+    }
+    return internals->notify_clock.wouldBeDue(now_us, notifyPeriodMs());
+}
+
 void Counter::setupProperties(MachineInstance *m) {
     const Value &v = m->getValue("tolerance");
     if (v.kind == Value::t_integer) {
@@ -1790,6 +1802,7 @@ void Counter::setupProperties(MachineInstance *m) {
 
 int64_t Counter::filter(int64_t val) {
     publishSampleTime(read_time);
+    internals->startup_emitted = true;
     ++g_sample_polls;
 
     // Wall-clock periods only (see AnalogueInput::filter).

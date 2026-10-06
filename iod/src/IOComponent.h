@@ -219,6 +219,12 @@ class IOComponent : public Transmitter {
 
     void addOwner(MachineInstance *m) { owners.push_back(m); }
     bool ownersEnabled() const;
+    // Owner notify_period (ms). Default 100. Analog/COUNTER sample and
+    // analog-only CW push use this, not POLLING_DELAY.
+    uint64_t notifyPeriodMs() const;
+    static uint64_t minRegularPollNotifyMs();
+    // True when this ANALOGINPUT/COUNTER should publish this sample.
+    virtual bool regularPollDue(uint64_t now_us);
 
     virtual void setupProperties(
         MachineInstance *m); // link properties in the component to the MachineInstance properties
@@ -325,6 +331,7 @@ class AnalogueInput : public IOComponent {
     void setupProperties(MachineInstance *m)
         override; // link properties in the component to the MachineInstance properties
     int64_t filter(int64_t raw) override;
+    bool regularPollDue(uint64_t now_us) override;
     void update(); // clockwork uses this to notify of updates
     InputFilterSettings *config;
 };
@@ -336,6 +343,7 @@ class Counter : public IOComponent {
     const char *type() override { return "Counter"; }
     void update(); // clockwork uses this to notify of updates
     int64_t filter(int64_t raw) override;
+    bool regularPollDue(uint64_t now_us) override;
     void setupProperties(MachineInstance *m)
         override; // link properties in the component to the MachineInstance properties
   private:
