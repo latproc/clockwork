@@ -1481,17 +1481,10 @@ void ProcessingThread::operator()() {
                     systems_waiting = 1;
                     break;
                 }
-                if (has_immediate_machine_work()) {
-                    ++snap_brk_exec;
-                    systems_waiting = 1;
-                    break;
-                }
-                if (has_paced_machine_work() &&
-                    curr_t - last_checked_machines >= stable_check_us) {
-                    ++snap_brk_exec;
-                    systems_waiting = 1;
-                    break;
-                }
+                // Analog-only absorb: do not walk runnable[] every POLLING_DELAY
+                // tick (hasMail/executingCommand). POINT already broke out above.
+                // Command sockets still force other_non_sched. Mail/stable wait
+                // for the next non-EC poll (<= poll_wait, ~POLLING_DELAY).
                 if (other_non_sched) {
                     systems_waiting = 1;
                     break;
