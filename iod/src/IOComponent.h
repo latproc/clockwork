@@ -126,6 +126,8 @@ class IOComponent : public Transmitter {
         uint64_t clock_send = 0;
         size_t command_clocks = 0;
         size_t regular_polls = 0;
+        uint64_t pa_run = 0;
+        uint64_t pa_skip = 0;
     };
     static SampleStats sampleStats();
     static void noteClockVisit();
@@ -249,6 +251,9 @@ class IOComponent : public Transmitter {
                                        size_t len);
     // First frame, or a 1-bit POINT edge vs last processAll image.
     static bool incomingHasPointEdge(const uint8_t *curr, size_t len);
+    static void copyProcessImage(const uint8_t *data, size_t len);
+    static void noteProcessAllRun();
+    static void noteProcessAllSkip();
     Direction direction() { return direction_; }
 
     enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };

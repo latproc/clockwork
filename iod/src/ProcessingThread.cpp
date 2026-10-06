@@ -674,9 +674,15 @@ void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_wo
 #endif
             if (IOComponent::incomingHasPointEdge(incoming_process_data,
                                                   incoming_data_size)) {
+                IOComponent::noteProcessAllRun();
                 IOComponent::processAll(global_clock, incoming_data_size,
                                         incoming_process_mask, incoming_process_data,
                                         io_work_queue);
+            }
+            else {
+                IOComponent::noteProcessAllSkip();
+                IOComponent::copyProcessImage(incoming_process_data,
+                                              incoming_data_size);
             }
         }
         else {

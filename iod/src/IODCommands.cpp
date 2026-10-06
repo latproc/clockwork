@@ -936,7 +936,8 @@ bool IODCommandHealth::run(std::vector<Value> &params) {
            << " filt=" << io.filter_run << " ntfy=" << io.notify_send
            << " clocks=" << io.command_clocks << " cvis=" << io.clock_visits
            << " cdue=" << io.clock_due << " csend=" << io.clock_send
-           << " pollsN=" << io.regular_polls;
+           << " pollsN=" << io.regular_polls
+           << " pa_run=" << io.pa_run << " pa_skip=" << io.pa_skip;
     }
     if (issue) {
         ss << "  ** check **";

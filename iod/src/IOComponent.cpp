@@ -50,6 +50,8 @@ std::atomic<uint64_t> g_notify_send{0};
 std::atomic<uint64_t> g_clock_visits{0};
 std::atomic<uint64_t> g_clock_due{0};
 std::atomic<uint64_t> g_clock_send{0};
+std::atomic<uint64_t> g_pa_run{0};
+std::atomic<uint64_t> g_pa_skip{0};
 } // namespace
 
 void IOComponent::noteClockVisit() { ++g_clock_visits; }
@@ -129,6 +131,8 @@ IOComponent::SampleStats IOComponent::sampleStats() {
     s.clock_send = g_clock_send.load();
     s.command_clocks = MachineInstance::commandClockCount();
     s.regular_polls = regular_polls.size();
+    s.pa_run = g_pa_run.load();
+    s.pa_skip = g_pa_skip.load();
     return s;
 }
 
@@ -461,6 +465,22 @@ bool IOComponent::incomingHasPointEdge(const uint8_t *curr, size_t len) {
         return true;
     }
     return domainHasDigitalChange(curr, last_process_data, len);
+}
+
+void IOComponent::noteProcessAllRun() { ++g_pa_run; }
+void IOComponent::noteProcessAllSkip() { ++g_pa_skip; }
+
+void IOComponent::copyProcessImage(const uint8_t *data, size_t len) {
+    if (!data || !io_process_data || process_data_size == 0) {
+        return;
+    }
+    const size_t n = len < process_data_size ? len : process_data_size;
+    memcpy(io_process_data, data, n);
+    if (!last_process_data) {
+        last_process_data = new uint8_t[process_data_size];
+        memset(last_process_data, 0, process_data_size);
+    }
+    memcpy(last_process_data, data, n);
 }
 
 void IOComponent::clearPendingOutputUpdates() {
