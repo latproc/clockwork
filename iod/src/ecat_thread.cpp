@@ -1006,11 +1006,9 @@ void EtherCATThread::operator()() {
 
         // Bus (CYCLE_DELAY; POINTSSTARTUP on → ~1000 µs).
         //
-        // Digital POINT edges: snapshot+peek every cycle; collect+push to CW
-        // immediately so end-stops / guards event within ~1 bus period.
-        // Analog/COUNTER noise alone does not force a push every cycle — those
-        // use pull_due (get_polling_time quiet stretch) so LIST/PID stay fed
-        // without free-running CW at 1 kHz on analog dither.
+        // Snapshot every CYCLE_DELAY. Collect+push to CW only at POLLING_DELAY
+        // (plus first frame / keep-alive). Dig ASAP push was free-running
+        // processAll on 4C-115 with brk_dig=0.
         //
         // dig_shadow advances only on a successful push so collectState still
         // sees the full analog delta since the last CW frame (latest wins).
@@ -1077,48 +1075,39 @@ void EtherCATThread::operator()() {
             static size_t dig_shadow_size = 0;
             static size_t dig_shadow_cap = 0;
 
-            const bool dig_edge = ECInterface::instance()->domainHasDigitalChange(
-                dig_shadow, dig_shadow_size);
-
-            // Collect+push when: first frame, digital edge, analog pace due, or keep-alive.
-            const bool want_cw = first_run || dig_edge || need_ping || pull_due;
+            // Peek every bus tick (receiveState above). Do not push on
+            // domainHasDigitalChange: on 4C-115 that was true ~every cycle
+            // with brk_dig=0, so processAll ran at bus rate with no POINT work.
+            // CW frames only at POLLING_DELAY (plus first/keep-alive).
+            const bool want_cw = first_run || need_ping || pull_due;
 
             if (status == e_collect && want_cw) {
-                DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state"
-                                     << (dig_edge ? " (digital edge)" : "") << "\n";
+                DBG_ETHERCAT_PACKETS << "Asking ECInterface to collect state (paced)\n";
                 num_updates = ECInterface::instance()->collectState();
                 DBG_ETHERCAT_PACKETS << "Num updates from ecat_thread: " << num_updates << "\n";
 
-                // Digital edge always pushes. Analog-only: push if bits changed or ping.
-                if (first_run || dig_edge || num_updates || need_ping) {
-                    if (driver_state == s_driver_operational) {
-                        first_run = false;
-                    }
-                    int stage = sendMultiPart(sync_sock, global_clock);
-#if VERBOSE_DEBUG
-                    if (stage == 5) {
-                        DBG_MSG << "send done\n";
-                    }
-#endif
-                    assert(stage == 5);
-                    status = e_update; // wait for CW ack of process data
-                    last_cw_process_push = now;
-
-                    // Advance dig shadow to the image we just offered CW.
-                    size_t dsz = ECInterface::instance()->copyDomainData(nullptr, 0);
-                    if (dsz > dig_shadow_cap) {
-                        delete[] dig_shadow;
-                        dig_shadow = new uint8_t[dsz];
-                        dig_shadow_cap = dsz;
-                    }
-                    if (dig_shadow && dsz) {
-                        dig_shadow_size =
-                            ECInterface::instance()->copyDomainData(dig_shadow, dsz);
-                    }
+                if (driver_state == s_driver_operational) {
+                    first_run = false;
                 }
-                else if (pull_due) {
-                    // Quiet window with no domain change: still advance pace clock.
-                    last_cw_process_push = now;
+                int stage = sendMultiPart(sync_sock, global_clock);
+#if VERBOSE_DEBUG
+                if (stage == 5) {
+                    DBG_MSG << "send done\n";
+                }
+#endif
+                assert(stage == 5);
+                status = e_update; // wait for CW ack of process data
+                last_cw_process_push = now;
+
+                size_t dsz = ECInterface::instance()->copyDomainData(nullptr, 0);
+                if (dsz > dig_shadow_cap) {
+                    delete[] dig_shadow;
+                    dig_shadow = new uint8_t[dsz];
+                    dig_shadow_cap = dsz;
+                }
+                if (dig_shadow && dsz) {
+                    dig_shadow_size =
+                        ECInterface::instance()->copyDomainData(dig_shadow, dsz);
                 }
             }
             if (status == e_update &&
