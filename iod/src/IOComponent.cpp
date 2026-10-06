@@ -56,6 +56,11 @@ std::atomic<uint64_t> g_hi_n{0};
 std::atomic<uint64_t> g_hi_edge_us{0};
 std::atomic<uint64_t> g_hi_copy_us{0};
 std::atomic<uint64_t> g_hi_samp_us{0};
+std::atomic<uint64_t> g_hi_house_us{0};
+std::atomic<uint64_t> g_hi_scan_us{0};
+std::atomic<uint64_t> g_hi_go_us{0};
+std::atomic<uint64_t> g_hi_recv_us{0};
+std::atomic<uint64_t> g_hi_tight_n{0};
 } // namespace
 
 void IOComponent::noteClockVisit() { ++g_clock_visits; }
@@ -141,6 +146,11 @@ IOComponent::SampleStats IOComponent::sampleStats() {
     s.hi_edge_us = g_hi_edge_us.load();
     s.hi_copy_us = g_hi_copy_us.load();
     s.hi_samp_us = g_hi_samp_us.load();
+    s.hi_house_us = g_hi_house_us.load();
+    s.hi_scan_us = g_hi_scan_us.load();
+    s.hi_go_us = g_hi_go_us.load();
+    s.hi_recv_us = g_hi_recv_us.load();
+    s.hi_tight_n = g_hi_tight_n.load();
     return s;
 }
 
@@ -520,6 +530,11 @@ void IOComponent::noteHiEdge(uint64_t us) {
 }
 void IOComponent::noteHiCopy(uint64_t us) { g_hi_copy_us += us; }
 void IOComponent::noteHiSample(uint64_t us) { g_hi_samp_us += us; }
+void IOComponent::noteHiHouse(uint64_t us) { g_hi_house_us += us; }
+void IOComponent::noteHiScan(uint64_t us) { g_hi_scan_us += us; }
+void IOComponent::noteHiGo(uint64_t us) { g_hi_go_us += us; }
+void IOComponent::noteHiRecv(uint64_t us) { g_hi_recv_us += us; }
+void IOComponent::noteHiTight() { ++g_hi_tight_n; }
 
 void IOComponent::copyProcessImage(const uint8_t *data, size_t len) {
     if (!data || !io_process_data || process_data_size == 0) {

@@ -941,7 +941,12 @@ bool IODCommandHealth::run(std::vector<Value> &params) {
            << " hi_n=" << io.hi_n
            << " edge_us=" << io.hi_edge_us
            << " copy_us=" << io.hi_copy_us
-           << " samp_us=" << io.hi_samp_us;
+           << " samp_us=" << io.hi_samp_us
+           << " house_us=" << io.hi_house_us
+           << " scan_us=" << io.hi_scan_us
+           << " go_us=" << io.hi_go_us
+           << " recv_us=" << io.hi_recv_us
+           << " tight_n=" << io.hi_tight_n;
     }
     if (issue) {
         ss << "  ** check **";

@@ -338,6 +338,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
 #endif
             if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
                 IOLockHelper io_lock;
+                const uint64_t t_recv0 = microsecs();
                 // the EtherCAT message carries a mask and data
 
                 int64_t more;
@@ -432,6 +433,7 @@ int ProcessingThread::pollZMQItems(int poll_wait, zmq::pollitem_t items[], int n
                         }
                     }
                 }
+                IOComponent::noteHiRecv(microsecs() - t_recv0);
                 break;
             }
             break;
@@ -973,6 +975,16 @@ void ProcessingThread::operator()() {
         uint64_t curr_t = 0;
         bool machines_have_work = false;
         unsigned int num_channels = 0;
+        bool io_urgent = false;
+        bool machine_urgent = false;
+        bool exec_only_waiting = false;
+        bool stable_pending = false;
+        bool urgent_work = false;
+        bool plant_quiet = true;
+        bool paced_only = false;
+        uint64_t stable_check_us = 4000;
+        uint64_t plugin_due_us = 2000;
+        bool tight_absorb = false;
         {
             // MQTT subscriber messages
             std::list<MQTTInterface::MQTTReceivedMessage*> to_handle;
@@ -1011,10 +1023,14 @@ void ProcessingThread::operator()() {
             }
             curr_t = nowMicrosecs();
             internals->process_manager.SetTime(curr_t);
+            if (!tight_absorb) {
 #ifndef EC_SIMULATOR
+            const uint64_t t_house0 = microsecs();
             ElcSetupRecipe::pollFromProcessingThread();
             ECInterface::flushDomainClockworkMirrors();
+            IOComponent::noteHiHouse(microsecs() - t_house0);
 #endif
+            }
             // MEMSNAPSHOT: opt-in via DEBUG DEBUG_MEMSNAPSHOT on|off (default off).
             static uint64_t last_memory_snapshot = 0;
             if (LOGS(DebugExtra::instance()->DEBUG_MEMSNAPSHOT) &&
@@ -1063,6 +1079,8 @@ void ProcessingThread::operator()() {
             }
             //TBD add a guard here to detect/prevent rapid cycling
 
+            if (!tight_absorb) {
+            const uint64_t t_scan0 = microsecs();
             for (int i = 0; i < dynamic_poll_start_idx; ++i) {
                 items[i] = fixed_items[i];
             }
@@ -1099,11 +1117,11 @@ void ProcessingThread::operator()() {
             //  - stable_pending: TIMER re-queues only
             // updatesWaiting is paced separately (not full-urgent).
             // Waiting SetState alone must not pin busy EC pull forever.
-            bool io_urgent =
+            io_urgent =
                 !MachineInstance::pendingEvents().empty() || !io_work_queue.empty();
-            bool machine_urgent = false;
-            bool exec_only_waiting = false;
-            bool stable_pending = false;
+            machine_urgent = false;
+            exec_only_waiting = false;
+            stable_pending = false;
             {
                 static size_t last_runnable_count = 0;
                 boost::recursive_mutex::scoped_lock lock(runnable_mutex);
@@ -1159,17 +1177,17 @@ void ProcessingThread::operator()() {
                     last_runnable_count = runnable_count;
                 }
             }
-            const bool urgent_work = io_urgent || machine_urgent;
+            urgent_work = io_urgent || machine_urgent;
             curr_t = microsecs();
             // Quiet = no urgent work. Stable/exec-only are "semi-quiet" (paced).
-            const bool plant_quiet =
+            plant_quiet =
                 !urgent_work && !stable_pending && !exec_only_waiting;
-            const bool paced_only =
+            paced_only =
                 !urgent_work && (stable_pending || exec_only_waiting);
             // Stable-state / waiting-exec recheck interval (µs).
             // Track SYSTEM.POLLING_DELAY (≈ internals->cycle_delay): 2× poll so
             // POINTSSTARTUP (1 ms) → 2 ms, idle 2 ms poll → 4 ms. Not fixed 2 ms.
-            uint64_t stable_check_us =
+            stable_check_us =
                 static_cast<uint64_t>(internals->cycle_delay > 100
                                           ? internals->cycle_delay
                                           : 100) *
@@ -1267,13 +1285,16 @@ void ProcessingThread::operator()() {
 
             // Plugins while quiet: service in-wait (below), not every 10 ms full
             // outer iteration. Busy: POLLING_DELAY (min 1 ms).
-            uint64_t plugin_due_us = static_cast<uint64_t>(internals->cycle_delay);
+            plugin_due_us = static_cast<uint64_t>(internals->cycle_delay);
             if (plugin_due_us < 1000) {
                 plugin_due_us = 1000;
             }
             if (plant_quiet && plugin_due_us < 10000) {
                 plugin_due_us = 10000; // 10 ms while idle
             }
+            IOComponent::noteHiScan(microsecs() - t_scan0);
+            } // !tight_absorb: poll rebuild + runnable scan
+            tight_absorb = false;
 
             //if (Watchdog::anyTriggered(curr_t))
             //  Watchdog::showTriggered(curr_t, true, std::cerr);
@@ -1472,7 +1493,11 @@ void ProcessingThread::operator()() {
 
             if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
                 HandleIncomingEtherCatData(io_work_queue, curr_t, avg_io_time);
-                safeSend(ecat_sync, "go", 2);
+                {
+                    const uint64_t t_go0 = microsecs();
+                    safeSend(ecat_sync, "go", 2);
+                    IOComponent::noteHiGo(microsecs() - t_go0);
+                }
                 items[internals->ECAT_ITEM].revents = 0;
 
                 if (!io_work_queue.empty() ||
@@ -1532,6 +1557,8 @@ void ProcessingThread::operator()() {
                 }
                 ++snap_absorb;
                 systems_waiting = 0;
+                tight_absorb = true;
+                IOComponent::noteHiTight();
 #ifdef KEEPSTATS
                 avg_poll_time.update();
                 avg_poll_time.start();
@@ -1663,7 +1690,11 @@ if (IOComponent::updatesWaiting()
         */
         if (items[internals->ECAT_ITEM].revents & ZMQ_POLLIN) {
             HandleIncomingEtherCatData(io_work_queue, curr_t, avg_io_time);
-            safeSend(ecat_sync, "go", 2);
+            {
+                const uint64_t t_go0 = microsecs();
+                safeSend(ecat_sync, "go", 2);
+                IOComponent::noteHiGo(microsecs() - t_go0);
+            }
             items[internals->ECAT_ITEM].revents = 0;
         }
         else {

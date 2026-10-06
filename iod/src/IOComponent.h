@@ -132,6 +132,11 @@ class IOComponent : public Transmitter {
         uint64_t hi_edge_us = 0;
         uint64_t hi_copy_us = 0;
         uint64_t hi_samp_us = 0;
+        uint64_t hi_house_us = 0;
+        uint64_t hi_scan_us = 0;
+        uint64_t hi_go_us = 0;
+        uint64_t hi_recv_us = 0;
+        uint64_t hi_tight_n = 0;
     };
     static SampleStats sampleStats();
     static void noteClockVisit();
@@ -261,6 +266,11 @@ class IOComponent : public Transmitter {
     static void noteHiEdge(uint64_t us);
     static void noteHiCopy(uint64_t us);
     static void noteHiSample(uint64_t us);
+    static void noteHiHouse(uint64_t us);
+    static void noteHiScan(uint64_t us);
+    static void noteHiGo(uint64_t us);
+    static void noteHiRecv(uint64_t us);
+    static void noteHiTight();
     Direction direction() { return direction_; }
 
     enum HardwareState { s_hardware_preinit, s_hardware_init, s_operational };
