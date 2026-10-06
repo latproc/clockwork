@@ -283,6 +283,8 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     void notifyClockedUpdateConsumers(uint64_t notify_period_ms = 100) {
         notifyCommandConsumers("update", notify_period_ms);
     }
+    // Direct IOTIME/VALUE copy onto CLOCKED* wrappers. No RECEIVE / mail.
+    void publishThinClockedDependants();
 
     bool needsCheck();
     void resetNeedsCheck();

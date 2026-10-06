@@ -208,6 +208,7 @@ void IOComponent::publishSampleTime(uint64_t sample_clock, bool publish_raw, int
                 o->properties.add("raw", raw, SymbolTable::ST_REPLACE);
             }
         }
+        o->publishThinClockedDependants();
     }
 }
 

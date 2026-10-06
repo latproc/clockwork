@@ -2861,6 +2861,15 @@ bool MachineInstance::applyThinClockedUpdate(MachineInstance *dep) {
     return false;
 }
 
+void MachineInstance::publishThinClockedDependants() {
+    for (MachineInstance *dep : depends) {
+        if (!dep || dep == this) {
+            continue;
+        }
+        applyThinClockedUpdate(dep);
+    }
+}
+
 void MachineInstance::notifyCommandConsumers(const char *command_name,
                                              uint64_t notify_period_ms, bool continue_fanout) {
     // Only dependants that declare the command (RECEIVE/COMMAND handlers).
