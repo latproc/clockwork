@@ -1086,9 +1086,7 @@ void EtherCATThread::operator()() {
                 num_updates = ECInterface::instance()->collectState();
                 DBG_ETHERCAT_PACKETS << "Num updates from ecat_thread: " << num_updates << "\n";
 
-                if (driver_state == s_driver_operational) {
-                    first_run = false;
-                }
+                first_run = false;
                 int stage = sendMultiPart(sync_sock, global_clock);
 #if VERBOSE_DEBUG
                 if (stage == 5) {
@@ -1098,6 +1096,25 @@ void EtherCATThread::operator()() {
                 assert(stage == 5);
                 status = e_update; // wait for CW ack of process data
                 last_cw_process_push = now;
+                {
+                    static uint64_t push_n = 0;
+                    static uint64_t push_t0 = 0;
+                    ++push_n;
+                    if (push_t0 == 0) {
+                        push_t0 = now;
+                    }
+                    else if (now - push_t0 >= 1000000ULL) {
+                        std::cerr << "ecat_push/s=" << push_n
+                                  << " pull_us=" << pull_us
+                                  << " driver="
+                                  << (driver_state == s_driver_operational
+                                          ? "op"
+                                          : "init")
+                                  << "\n";
+                        push_n = 0;
+                        push_t0 = now;
+                    }
+                }
 
                 size_t dsz = ECInterface::instance()->copyDomainData(nullptr, 0);
                 if (dsz > dig_shadow_cap) {
