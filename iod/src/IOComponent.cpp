@@ -996,13 +996,13 @@ bool emitAllowed(MachineInstance *guard, const int64_t *emit_flag) {
     return true;
 }
 
-// Engineering scale from machine OPTION (same as CLOCKEDANALOGINPUT A_*):
-//   VALUE = raw_filtered * factor + base
-//   window = eng-unit hysteresis before change-emit
-void readScaleOptions(MachineInstance *m, double &factor, double &base, double &window) {
+// Engineering scale from machine OPTION:
+//   ENG = raw * factor + base
+//   eng_tol = ENG deadband for VALUE / notify (window is the old name)
+void readScaleOptions(MachineInstance *m, double &factor, double &base, double &eng_tol) {
     factor = 1.0;
     base = 0.0;
-    window = 0.0;
+    eng_tol = 0.0;
     if (!m) {
         return;
     }
@@ -1019,7 +1019,11 @@ void readScaleOptions(MachineInstance *m, double &factor, double &base, double &
     };
     as_float(m->properties.lookup("factor"), factor);
     as_float(m->properties.lookup("base"), base);
-    as_float(m->properties.lookup("window"), window);
+    const Value &et = m->properties.lookup("eng_tol");
+    if (et != SymbolTable::Null && as_float(et, eng_tol)) {
+        return;
+    }
+    as_float(m->properties.lookup("window"), eng_tol);
 }
 
 double engFromRaw(int64_t raw, double factor, double base) {
@@ -1048,15 +1052,38 @@ void replaceFloatIfChanged(MachineInstance *o, const char *key, double val) {
     o->properties.add(key, val, SymbolTable::ST_REPLACE);
 }
 
-// First emit, or raw moved. window is ENG scale, not a send gate.
+// First emit, or ENG moved past eng_tol (alias window). eng_tol <= 0: any raw change.
 bool notifyValueChanged(const std::list<MachineInstance *> &owners, int64_t raw_val,
                         int64_t last_raw, double last_eng, bool startup_done) {
-    (void)owners;
-    (void)last_eng;
     if (!startup_done) {
         return true;
     }
-    return raw_val != last_raw;
+    if (owners.empty()) {
+        return raw_val != last_raw;
+    }
+    for (MachineInstance *o : owners) {
+        if (!o) {
+            continue;
+        }
+        double factor = 1.0, base = 0.0, eng_tol = 0.0;
+        readScaleOptions(o, factor, base, eng_tol);
+        const double eng = engFromRaw(raw_val, factor, base);
+        if (eng_tol <= 0.0) {
+            if (raw_val != last_raw) {
+                return true;
+            }
+        }
+        else {
+            double deng = eng - last_eng;
+            if (deng < 0) {
+                deng = -deng;
+            }
+            if (deng > eng_tol) {
+                return true;
+            }
+        }
+    }
+    return false;
 }
 } // namespace
 
@@ -1512,14 +1539,16 @@ int64_t AnalogueInput::filter(int64_t raw) {
     const bool allowed = emitAllowed(config->emit_guard, config->emit_flag);
     const bool raw_moved =
         !config->startup_emitted || raw_val != config->last_emitted_raw || filter_due;
+    const bool eng_changed = notifyValueChanged(owners, raw_val, config->last_emitted_raw,
+                                                config->last_emitted_eng, config->startup_emitted);
 
-    if (raw_moved) {
+    if (raw_moved && eng_changed) {
         for (MachineInstance *o : owners) {
             if (!o) {
                 continue;
             }
-            double factor = 1.0, base = 0.0, window = 0.0;
-            readScaleOptions(o, factor, base, window);
+            double factor = 1.0, base = 0.0, eng_tol = 0.0;
+            readScaleOptions(o, factor, base, eng_tol);
             const double eng = engFromRaw(raw_val, factor, base);
             replaceIntIfChanged(o, "VALUE", raw_val);
             replaceFloatIfChanged(o, "ENG", eng);
@@ -1553,8 +1582,8 @@ int64_t AnalogueInput::filter(int64_t raw) {
                 if (!o) {
                     continue;
                 }
-                double factor = 1.0, base = 0.0, window = 0.0;
-                readScaleOptions(o, factor, base, window);
+                double factor = 1.0, base = 0.0, eng_tol = 0.0;
+                readScaleOptions(o, factor, base, eng_tol);
                 eng_for_track = engFromRaw(raw_val, factor, base);
                 DBG_MESSAGING << o->getName() << " iod " << cmd
                               << " notify_period=" << period_ms << "ms (change)\n";
@@ -1845,14 +1874,17 @@ int64_t Counter::filter(int64_t val) {
     // Property write when raw moves or filter advanced (Velocity may update on filter tick).
     const bool raw_moved =
         !internals->startup_emitted || raw_val != internals->last_emitted_raw || filter_due;
+    const bool eng_changed =
+        notifyValueChanged(owners, raw_val, internals->last_emitted_raw,
+                           internals->last_emitted_eng, internals->startup_emitted);
 
-    if (raw_moved) {
+    if (raw_moved && eng_changed) {
         for (MachineInstance *o : owners) {
             if (!o) {
                 continue;
             }
-            double factor = 1.0, base = 0.0, window = 0.0;
-            readScaleOptions(o, factor, base, window);
+            double factor = 1.0, base = 0.0, eng_tol = 0.0;
+            readScaleOptions(o, factor, base, eng_tol);
             const double eng = engFromRaw(raw_val, factor, base);
             replaceIntIfChanged(o, "VALUE", raw_val);
             replaceIntIfChanged(o, "Position", raw_val);
@@ -1881,8 +1913,8 @@ int64_t Counter::filter(int64_t val) {
                 if (!o) {
                     continue;
                 }
-                double factor = 1.0, base = 0.0, window = 0.0;
-                readScaleOptions(o, factor, base, window);
+                double factor = 1.0, base = 0.0, eng_tol = 0.0;
+                readScaleOptions(o, factor, base, eng_tol);
                 eng_for_track = engFromRaw(raw_val, factor, base);
                 DBG_MESSAGING << o->getName() << " iod " << cmd
                               << " notify_period=" << period_ms << "ms (change)\n";
@@ -1898,8 +1930,7 @@ int64_t Counter::filter(int64_t val) {
     // Track last silent property raw even when no command was sent (skip redundant writes).
     if (raw_moved && !notifyValueChanged(owners, raw_val, internals->last_emitted_raw,
                                          internals->last_emitted_eng, true)) {
-        // Value within window: still remember raw so we do not rewrite every filter tick.
-        // last_emitted_raw is only for notify hysteresis; use last_sent equality via raw_moved.
+        // Inside eng_tol: IOTIME already stamped; skip VALUE/notify noise.
     }
     return raw_val;
 }

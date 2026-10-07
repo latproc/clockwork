@@ -426,7 +426,7 @@ MachineClass *makeAnalogueInMachineClass() {
     result->setProperty("Position", Value(0));
     result->setProperty("Velocity", Value(0.0));
     result->setProperty("Acceleration", Value(0.0));
-    // Engineering scale (same role as CLOCKEDANALOGINPUT factor/base/window).
+    // Engineering scale. eng_tol is the VALUE/notify deadband; window is alias.
     result->setProperty("factor", Value(1.0));
     result->setProperty("base", Value(0.0));
     result->setProperty("window", Value(0.0));
@@ -465,7 +465,7 @@ MachineClass *makeCounterMachineClass() {
     result->setProperty("VALUE", Value(0));
     result->setProperty("Position", Value(0));
     result->setProperty("Velocity", Value(0));
-    // Engineering scale (CLOCKEDCOUTER* factor/base/window).
+    // Engineering scale. eng_tol is the VALUE/notify deadband; window is alias.
     result->setProperty("factor", Value(1.0));
     result->setProperty("base", Value(0.0));
     result->setProperty("window", Value(0.0));
