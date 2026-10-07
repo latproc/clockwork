@@ -22,6 +22,40 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+// Publisher PROPERTY/STATE must not block Clockwork. safeSend() spins on
+// EAGAIN; a slow Humid fills the PAIR/PUB HWM and processing stalls for
+// hundreds of ms. One DONTWAIT attempt; caller drops (next change resends).
+static bool trySendChannel(zmq::socket_t &sock, const char *buf, size_t buflen,
+                           const MessageHeader &header) {
+    try {
+        if (header.dest || header.source) {
+            zmq::message_t hdr(sizeof(MessageHeader));
+            memcpy(hdr.data(), &header, sizeof(MessageHeader));
+            if (!sock.send(hdr, ZMQ_SNDMORE | ZMQ_DONTWAIT)) {
+                return false;
+            }
+        }
+        zmq::message_t msg(buflen);
+        memcpy(msg.data(), buf, buflen);
+        return sock.send(msg, ZMQ_DONTWAIT);
+    }
+    catch (const zmq::error_t &) {
+        return false;
+    }
+}
+
+// Humid/sampler publishers may drop a VALUE if the socket is full.
+// CW2CW client channels must deliver STATE/PROPERTY or shadows wait forever.
+static void sendChannelOut(bool publisher, zmq::socket_t &sock, const char *buf, size_t buflen,
+                           const MessageHeader &header) {
+    if (publisher) {
+        trySendChannel(sock, buf, buflen, header);
+        return;
+    }
+    safeSend(sock, buf, buflen, header);
+}
+
 std::map<std::string, Channel *> *Channel::all = 0;
 std::map<std::string, ChannelDefinition *> *ChannelDefinition::all = 0;
 
@@ -1869,9 +1903,10 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
         }
         MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
         mh.start_time = microsecs();
+        const bool publisher = definition()->isPublisher();
         if (isClient()) {
             if (communications_manager->setupStatus() == SubscriptionManager::e_done) {
-                safeSend(*cmd_client, cmd.c_str(), cmd.size(), mh);
+                sendChannelOut(publisher, *cmd_client, cmd.c_str(), cmd.size(), mh);
             }
             else {
                 DBG_CHANNELS << "Not sending '" << cmd
@@ -1879,11 +1914,10 @@ void Channel::sendPropertyChangeMessage(MachineInstance *m, const std::string &c
             }
         }
         else if (communications_manager) {
-            safeSend(*cmd_client, cmd.c_str(), cmd.size(), mh);
+            sendChannelOut(publisher, *cmd_client, cmd.c_str(), cmd.size(), mh);
         }
         else if (mif) {
-            //mif->send(cmd);
-            safeSend(*mif->getSocket(), cmd.c_str(), cmd.size(), mh);
+            sendChannelOut(publisher, *mif->getSocket(), cmd.c_str(), cmd.size(), mh);
         }
         else {
             char buf[150];
@@ -2285,14 +2319,14 @@ void Channel::sendStateChange(MachineInstance *machine, std::string new_state, u
                 std::string response;
                 MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                 mh.start_time = microsecs();
-                safeSend(*chn->cmd_client, cmdstr.c_str(), cmdstr.size(), mh);
+                sendChannelOut(chn->definition()->isPublisher(), *chn->cmd_client, cmdstr.c_str(), cmdstr.size(), mh);
                 //chn->sendMessage(cmdstr, *chn->cmd_client, response);
             }
             else if (chn->communications_manager &&
                      chn->communications_manager->setupStatus() == SubscriptionManager::e_done) {
                 MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                 mh.start_time = microsecs();
-                safeSend(*chn->cmd_client, cmdstr, mh);
+                sendChannelOut(chn->definition()->isPublisher(), *chn->cmd_client, cmdstr.c_str(), cmdstr.size(), mh);
             }
             else if (chn->mif) {
 #if 0
