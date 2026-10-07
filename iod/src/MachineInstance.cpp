@@ -382,9 +382,9 @@ void MachineInstance::setNeedsCheck() {
         return;
     }
     // Already queued for a check: bump the counter only. Overdue TIMER recovery
-    // (TimerOverduePolicy::RecoverOverdue on matched holds) can call setNeedsCheck
-    // when a due time is already past; do not re-activate if already pending.
-    // False-rule scans use ArmFutureOnly so they do not call setNeedsCheck at all.
+    // (RecoverOverdue on matched holds, ArmFutureOnly on rising TIMER >= N)
+    // can call setNeedsCheck when a due time is already past; do not re-activate
+    // if already pending. False falling TIMER < N still does not setNeedsCheck.
     if (needs_check > 0 &&
         (ProcessingThread::is_pending(this) || queuedForStableStateTest() ||
          !active_actions.empty() || !mail_queue.empty())) {
@@ -1821,7 +1821,10 @@ bool MachineInstance::checkStableStates(std::set<MachineInstance *> &to_process,
                     break;
                 }
                 if (!mi->setStableState()) {
-                    keep_pending = false;
+                    // Preserve a wake requested during this evaluation
+                    // (ArmFutureOnly rising TIMER >= N 19→20). setStableState
+                    // suspends first; dropping pending here would lose it.
+                    keep_pending = mi->needsCheck();
                     break;
                 }
                 ++steps;

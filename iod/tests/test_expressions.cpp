@@ -414,6 +414,70 @@ TEST(TimerOverduePolicy, FutureTimerStillArmsUnderArmFutureOnly) {
     delete scope;
 }
 
+TEST(TimerOverduePolicy, ArmFutureOnlyRequeuesOverdueTimerGe) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_arm_ge");
+    scope->start_time = microsecs() - 50 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opGE, new Predicate(20));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_TRUE(scope->needsCheck());
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, ArmFutureOnlyRequeuesTimerGeAfterSampleCrossesThreshold) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_arm_ge_cross");
+    const uint64_t now = microsecs();
+    scope->start_time = now - 19 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opGE, new Predicate(20));
+    Evaluator eval;
+    const Value first = eval.evaluate(&pred, scope);
+    ASSERT_EQ(first.kind, Value::t_bool);
+    EXPECT_FALSE(first.bValue);
+
+    scope->start_time = now - 50 * 1000;
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_TRUE(scope->needsCheck());
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, ArmFutureOnlyRequeuesOverdueLeTimerOnRight) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_arm_le");
+    scope->start_time = microsecs() - 50 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate(20), opLE, new Predicate("TIMER"));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_TRUE(scope->needsCheck());
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, ArmFutureOnlyOverdueTimerGeOncePerDeadline) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_arm_ge_once");
+    scope->start_time = microsecs() - 50 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opGE, new Predicate(20));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_TRUE(scope->needsCheck());
+
+    scope->resetNeedsCheck();
+    ptd = pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_FALSE(scope->needsCheck());
+    delete scope;
+}
+
 TEST(DigitalValueMask, UnmaskedBitDoesNotTriggerWork) {
     IOAddress addr(0, 0, 0, 0, 16);
     DigitalValue dv(addr);

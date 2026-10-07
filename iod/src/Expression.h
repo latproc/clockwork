@@ -128,12 +128,18 @@ struct PredicateTimerDetails {
     (scheduled_time <= current_time).
 
     ArmFutureOnly — only arm future wakes (t > 0). Do not setNeedsCheck for
-    overdue clauses. Use when scanning *false* stable-state rules: a false
-    `TIMER < N` with TIMER already past would otherwise re-queue the machine
-    every evaluation and storm processing load.
+    overdue `TIMER < N` / `<= N` clauses. Use when scanning *false* stable-state
+    rules: a false `TIMER < N` with TIMER already past would otherwise re-queue
+    the machine every evaluation and storm processing load.
 
-    RecoverOverdue — if already past due, call setNeedsCheck so a late check
-    still re-arms / transitions. Use only on the *matched holding* rule (and
+    Exception: overdue *rising* thresholds (`TIMER >= N` / `> N`, or
+    `N <= TIMER` / `< TIMER`) still call setNeedsCheck. condition() can sample
+    TIMER just below N and scheduleTimerEvents can re-read it already due
+    (DINPUT 19→20 debounce). Dropping that leaves no queued wake.
+
+    RecoverOverdue — when a deadline is past due, call setNeedsCheck for one
+    follow-up pass per absolute deadline. Further evaluations of that same
+    overdue deadline do not requeue. Use only on the matched holding rule (and
     its subconditions), not on false rules walked before the match.
 */
 enum class TimerOverduePolicy { ArmFutureOnly, RecoverOverdue };
@@ -194,6 +200,11 @@ class Predicate {
     bool lookup_error;
     std::string error_str;
     bool needs_reevaluation;
+    // RecoverOverdue / ArmFutureOnly-rising may request at most one follow-up
+    // for an absolute TIMER deadline. A new state entry produces a new deadline
+    // and can recover again.
+    bool has_recovered_overdue_deadline = false;
+    int64_t recovered_overdue_deadline = 0;
     Stack stack;
     uint64_t last_evaluation_time;
 };
