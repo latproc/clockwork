@@ -224,16 +224,20 @@ include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_timer_clock_probe COMMAND test_timer_clock_probe)
 
 # Scratch diagnostics (untracked; see docs/TIMER_LOSS_INVESTIGATION.md Add. 10)
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test_sstimer_arm_probe.cpp")
 add_executable(test_sstimer_arm_probe test_sstimer_arm_probe.cpp library_globals.cpp iod_mock.h)
 set_target_properties (test_sstimer_arm_probe PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(test_sstimer_arm_probe gmock_main cw_client cw_interpreter
     ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
+endif()
 
+if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test_sstimer_diag.cpp")
 add_executable(test_sstimer_diag test_sstimer_diag.cpp library_globals.cpp)
 target_link_libraries(test_sstimer_diag gmock_main cw_client cw_interpreter
     ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
+endif()
 
 # Persist load filter (IOD_PERSIST_FILTER). The fixture carries one property the
 # class declares and one it does not; the log markers separate off, dryrun and

@@ -1,5 +1,6 @@
 #include "gtest/gtest.h"
 #include <Expression.h>
+#include <MachineClass.h>
 #include <MachineInstance.h>
 #include <MessageLog.h>
 #include <cstdlib>
@@ -316,6 +317,124 @@ TEST_F(EvaluatorTest, assigns_null_value_if_key_not_found_and_no_default) {
     EXPECT_EQ(json_str, std::string(res_str)) << "changed the original json";
 }
 
+namespace {
+
+MachineInstance *makeEnabledTimerMachine(const char *name) {
+    auto *cls = new MachineClass(name);
+    cls->addState("idle");
+    MachineInstance *mi = MachineInstanceFactory::create(name, name);
+    mi->setStateMachine(cls);
+    mi->enable();
+    mi->resetNeedsCheck();
+    return mi;
+}
+
+} // namespace
+
+TEST(TimerOverduePolicy, ArmFutureOnlyDoesNotRequeueOverdueTimerLt) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_arm_future");
+    scope->start_time = microsecs() - 5000 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opLT, new Predicate(1));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_FALSE(scope->needsCheck());
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, RecoverOverdueRequeuesOverdueTimerLt) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_recover");
+    scope->start_time = microsecs() - 5000 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opLT, new Predicate(1));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::RecoverOverdue);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_TRUE(scope->needsCheck());
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, FutureTimerStillArmsUnderArmFutureOnly) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_future");
+    scope->start_time = microsecs();
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opGE, new Predicate(10));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    ASSERT_NE(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_GT(ptd->delay, 0);
+    EXPECT_FALSE(scope->needsCheck());
+    delete ptd;
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, ArmFutureOnlyRequeuesOverdueTimerGe) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_arm_ge");
+    scope->start_time = microsecs() - 50 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opGE, new Predicate(20));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_TRUE(scope->needsCheck());
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, ArmFutureOnlyRequeuesTimerGeAfterSampleCrossesThreshold) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_arm_ge_cross");
+    const uint64_t now = microsecs();
+    scope->start_time = now - 19 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opGE, new Predicate(20));
+    Evaluator eval;
+    const Value first = eval.evaluate(&pred, scope);
+    ASSERT_EQ(first.kind, Value::t_bool);
+    EXPECT_FALSE(first.bValue);
+
+    scope->start_time = now - 50 * 1000;
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_TRUE(scope->needsCheck());
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, ArmFutureOnlyRequeuesOverdueLeTimerOnRight) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_arm_le");
+    scope->start_time = microsecs() - 50 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate(20), opLE, new Predicate("TIMER"));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_TRUE(scope->needsCheck());
+    delete scope;
+}
+
+TEST(TimerOverduePolicy, ArmFutureOnlyOverdueTimerGeOncePerDeadline) {
+    MachineInstance *scope = makeEnabledTimerMachine("timer_arm_ge_once");
+    scope->start_time = microsecs() - 50 * 1000;
+    scope->resetNeedsCheck();
+
+    Predicate pred(new Predicate("TIMER"), opGE, new Predicate(20));
+    PredicateTimerDetails *ptd =
+        pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_TRUE(scope->needsCheck());
+
+    scope->resetNeedsCheck();
+    ptd = pred.scheduleTimerEvents(nullptr, scope, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    EXPECT_FALSE(scope->needsCheck());
+    delete scope;
+}
 
 #include <Dispatcher.h>
 #include <Logger.h>

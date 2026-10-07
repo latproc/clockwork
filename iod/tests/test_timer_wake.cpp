@@ -153,6 +153,55 @@ TEST_F(TimerWakeTest, NewAbsoluteDeadlineCanRecoverAgain) {
     EXPECT_TRUE(ProcessingThread::is_pending(machine_));
 }
 
+TEST_F(TimerWakeTest, DInputDebounceOnRecoversWhenGeSampleCrossesDuringScan) {
+    // 2G-117: debounce-on `TIMER >= 20` was false at 19 ms; the 1 ms arm was
+    // never queued because scheduleTimerEvents re-read TIMER already due.
+    // After the lost wake, an ArmFutureOnly scan of that rising rule must
+    // setNeedsCheck so the next checkStableStates takes `on`.
+    machine_class_ = new MachineClass("DINPUT_GE_CROSS_TEST");
+    machine_class_->initial_state = State("off");
+    machine_class_->addState("on");
+    machine_class_->addState("off");
+    machine_class_->stable_states.push_back(
+        StableState("on", new Predicate(new Predicate("TIMER"), opGE, new Predicate(20))));
+    machine_class_->stable_states.push_back(StableState("off", new Predicate(true)));
+
+    machine_ = MachineInstanceFactory::create("dinput_ge_cross", machine_class_->name);
+    machine_->setStateMachine(machine_class_);
+    machine_->markActive();
+    machine_->enable();
+    machine_->resume(State("off"));
+
+    while (Scheduler::instance()->next()) {
+        ScheduledItem *item = Scheduler::instance()->next();
+        Scheduler::instance()->pop();
+        delete item;
+    }
+
+    const uint64_t now = microsecs();
+    machine_->start_time = now - 19 * 1000;
+    ProcessingThread::suspend(machine_);
+    machine_->resetNeedsCheck();
+
+    Predicate due(new Predicate("TIMER"), opGE, new Predicate(20));
+    Evaluator eval;
+    const Value first = eval.evaluate(&due, machine_);
+    ASSERT_EQ(first.kind, Value::t_bool);
+    ASSERT_FALSE(first.bValue);
+
+    machine_->start_time = now - 50 * 1000;
+    PredicateTimerDetails *ptd =
+        due.scheduleTimerEvents(nullptr, machine_, TimerOverduePolicy::ArmFutureOnly);
+    EXPECT_EQ(static_cast<PredicateTimerDetails *>(nullptr), ptd);
+    ASSERT_TRUE(machine_->needsCheck());
+    ASSERT_TRUE(machine_->queuedForStableStateTest());
+
+    std::set<MachineInstance *> to_process{machine_};
+    ASSERT_TRUE(MachineInstance::checkStableStates(to_process, 150000));
+    machine_->idle();
+    EXPECT_STREQ(machine_->getCurrentStateString(), "on");
+}
+
 TEST_F(TimerWakeTest, DInputDueRuleWakesPastSelfHold) {
     // This is the production DINPUT shape: while the input is still true the
     // machine holds its current state, while a false TIMER >= stable rule must

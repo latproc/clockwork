@@ -325,6 +325,7 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
     const long MIN_TIMER = -100000;
     int64_t scheduled_time = MIN_TIMER;
     int64_t current_time = 0;
+    bool rising_timer_threshold = false;
     MachineInstance *timed_machine = 0; // the machine that the timer is on if not SELF
     // timer usage can be of the form TIMER >= value or TIMER <= value
     // in the first case, the predicate is initially false and eventually becomes true
@@ -342,6 +343,7 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
         Value rhs = evaluator.evaluate(right_p, target);
         if (rhs.asInteger(scheduled_time)) {
             current_time = target->getTimerVal()->iValue;
+            rising_timer_threshold = (op == opGE || op == opGT);
             if (op == opGT) {
                 ++scheduled_time;
             }
@@ -368,6 +370,7 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             Value rhs = evaluator.evaluate(right_p, target);
             if (rhs.asInteger(scheduled_time)) {
                 current_time = timed_machine->getTimerVal()->iValue;
+                rising_timer_threshold = (op == opGE || op == opGT);
                 if (op == opGT) {
                     ++scheduled_time;
                 }
@@ -391,6 +394,7 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
         Value lhs = evaluator.evaluate(left_p, target);
         if (lhs.asInteger(scheduled_time)) {
             current_time = target->getTimerVal()->iValue;
+            rising_timer_threshold = (op == opLE || op == opLT);
             if (op == opGT) {
                 ++scheduled_time;
                 // rescheduleWhenTrue = true;
@@ -419,6 +423,7 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             Value lhs = evaluator.evaluate(left_p, target);
             if (lhs.asInteger(scheduled_time)) {
                 current_time = timed_machine->getTimerVal()->iValue;
+                rising_timer_threshold = (op == opLE || op == opLT);
                 if (op == opGT) {
                     ++scheduled_time;
                     // rescheduleWhenTrue = true;
@@ -489,9 +494,10 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
             delete prev;
         }
     }
-    // Future TIMER wakes: t > 0. Overdue (t <= 0) only re-checks when the caller
-    // used RecoverOverdue (matched holding rule). ArmFutureOnly is used while
-    // scanning false rules so a dead `TIMER < N` clause cannot re-queue forever.
+    // Future TIMER wakes: t > 0. Overdue (t <= 0) re-checks on RecoverOverdue
+    // (matched holding rule) and on ArmFutureOnly *rising* thresholds
+    // (TIMER >= N sampled just below N, then already due on the second read).
+    // False `TIMER < N` stays drop-only so it cannot re-queue forever.
 
     if (scheduled_time != MIN_TIMER) {
         long t = (scheduled_time - current_time) * 1000;
@@ -517,11 +523,15 @@ PredicateTimerDetails *Predicate::scheduleTimerEvents(
                 DBG_SCHEDULER << "skipping event in " << t << "us as an earlier one exists\n";
             }
         }
-        else if (overdue_policy == TimerOverduePolicy::RecoverOverdue && target) {
-            // Recover this absolute deadline once. Keeping the follow-up queued
-            // is necessary when the wake arrives during another evaluation, but
-            // requeueing the same overdue deadline on every pass creates a load
-            // storm for a matched `TIMER >= N` hold.
+        else if (target &&
+                 (overdue_policy == TimerOverduePolicy::RecoverOverdue ||
+                  (overdue_policy == TimerOverduePolicy::ArmFutureOnly &&
+                   rising_timer_threshold))) {
+            // RecoverOverdue: matched hold, once per absolute deadline.
+            // ArmFutureOnly + rising: DINPUT debounce-on (TIMER >= stable)
+            // whose condition() saw TIMER = 19 and this getTimerVal() already
+            // sees 20. Dropping t<=0 left no queued item (2G-117 Safe).
+            // Same once-per-deadline gate so a stuck GE does not storm.
             MachineInstance *clock = timed_machine ? timed_machine : target;
             const int64_t deadline = static_cast<int64_t>(clock->start_time) +
                                      scheduled_time * 1000;

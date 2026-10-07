@@ -128,9 +128,14 @@ struct PredicateTimerDetails {
     (scheduled_time <= current_time).
 
     ArmFutureOnly — only arm future wakes (t > 0). Do not setNeedsCheck for
-    overdue clauses. Use when scanning *false* stable-state rules: a false
-    `TIMER < N` with TIMER already past would otherwise re-queue the machine
-    every evaluation and storm processing load.
+    overdue `TIMER < N` / `<= N` clauses. Use when scanning *false* stable-state
+    rules: a false `TIMER < N` with TIMER already past would otherwise re-queue
+    the machine every evaluation and storm processing load.
+
+    Exception: overdue *rising* thresholds (`TIMER >= N` / `> N`, or
+    `N <= TIMER` / `< TIMER`) still call setNeedsCheck. condition() can sample
+    TIMER just below N and scheduleTimerEvents can re-read it already due
+    (DINPUT 19→20 debounce). Dropping that leaves no queued wake.
 
     RecoverOverdue — when a deadline is past due, call setNeedsCheck for one
     follow-up pass per absolute deadline. Further evaluations of that same
