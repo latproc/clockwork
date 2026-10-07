@@ -1508,11 +1508,26 @@ void ProcessingThread::operator()() {
                     systems_waiting = 1;
                     break;
                 }
-                // Analog-only absorb: do not walk runnable[] every POLLING_DELAY
-                // tick (hasMail/executingCommand). POINT already broke out above.
-                // Command sockets still force other_non_sched. Mail/stable wait
-                // for the next non-EC poll (<= poll_wait, ~POLLING_DELAY).
+                // Analog-only absorb: skip house/scan when Clockwork is idle.
+                // POINT already broke out above. Do not skip if runnable[] has
+                // mail, exec, or events — setState listeners and SYSTEMEXEC Done
+                // sit there; a one-eval state is gone by the next full pass.
+                // The check is O(runnable) under runnable_mutex; 897c58ea showed
+                // that walk is not the 29% house/poll rebuild. Empty queue still
+                // takes the tight continue.
                 if (other_non_sched) {
+                    systems_waiting = 1;
+                    break;
+                }
+                if (has_immediate_machine_work() || !io_work_queue.empty() ||
+                    !MachineInstance::pendingEvents().empty()) {
+                    ++snap_brk_exec;
+                    systems_waiting = 1;
+                    break;
+                }
+                if (has_paced_machine_work() &&
+                    curr_t - last_checked_machines >= stable_check_us) {
+                    ++snap_brk_exec;
                     systems_waiting = 1;
                     break;
                 }
