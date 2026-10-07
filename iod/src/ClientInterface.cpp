@@ -582,7 +582,14 @@ void IODCommandThread::operator()() {
     while (!done) {
         try {
             wd->stop(); // disable the watchdog while we wait for something to do
-            zmq::pollitem_t items[] = {{(void *)cti->socket, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0},
+            // REQ command_sync allows one request at a time. While processing
+            // holds a CHANNEL create (Grab persist setupFilters), do not take
+            // another client command or ZMQ EFSM abort()s the thread.
+            zmq::pollitem_t items[] = {{(void *)cti->socket, 0,
+                                        static_cast<short>(cmd_outstanding
+                                                               ? ZMQ_POLLERR
+                                                               : (ZMQ_POLLERR | ZMQ_POLLIN)),
+                                        0},
                                        {(void *)access_req, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0},
                                        {(void *)command_sync, 0, ZMQ_POLLERR | ZMQ_POLLIN, 0}};
             int rc;
@@ -598,7 +605,6 @@ void IODCommandThread::operator()() {
                                  (unsigned long long)StallTrace::heartbeatAgeUs(),
                                  (int)getpid());
                         safeSend(cti->socket, msg, strlen(msg));
-                        cmd_outstanding = false;
                         cmd_discard_next_sync = true;
                     }
                 }
@@ -653,8 +659,8 @@ void IODCommandThread::operator()() {
                     }
                     else {
                         safeSend(cti->socket, buf, response_len);
-                        cmd_outstanding = false;
                     }
+                    cmd_outstanding = false;
                     delete[] buf;
                 }
             }
@@ -696,6 +702,10 @@ void IODCommandThread::operator()() {
                                  static_cast<StallTrace::Stage>(StallTrace::stage())),
                              (unsigned long long)StallTrace::heartbeatAgeUs());
                     safeSend(cti->socket, msg, strlen(msg));
+                    free(data);
+                    continue;
+                }
+                if (cmd_outstanding) {
                     free(data);
                     continue;
                 }
