@@ -239,6 +239,14 @@ target_link_libraries(test_sstimer_diag gmock_main cw_client cw_interpreter
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 endif()
 
+# COMMANDCLOCK is a no-op type on this branch (no calcAdjust dispatch). The
+# builtin class must make an instance load without an LPC body, and an LPC
+# COMMANDCLOCK MACHINE body must still be accepted.
+add_test(NAME commandclock_builtin_parses COMMAND $<TARGET_FILE:cw> -t
+  ${PROJECT_SOURCE_DIR}/tests/fixtures/commandclock_builtin.cw)
+add_test(NAME commandclock_lpc_class_parses COMMAND $<TARGET_FILE:cw> -t
+  ${PROJECT_SOURCE_DIR}/tests/fixtures/commandclock_lpc_class.cw)
+
 # Persist load filter (IOD_PERSIST_FILTER). The fixture carries one property the
 # class declares and one it does not; the log markers separate off, dryrun and
 # enforce, prove dryrun changes no behaviour, and prove enforce still applies a
