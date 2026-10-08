@@ -1381,6 +1381,53 @@ void MachineInstance::addDependancy(MachineInstance *m) {
     }
 }
 
+/* WHEN <machine> ENTERED <state> -- the listener-side edge slot.
+
+   Called from the SOURCE's setState() for each machine in its depends set, so
+   that a listener whose WHEN pass has not run yet still sees the enter. The
+   slot is consumed by the listener's next WHEN pass (see setStableState).
+
+   Last enter wins: there is deliberately no count, so two enters of the same
+   state before the listener runs produce exactly one true, not two. */
+void MachineInstance::noteEntered(MachineInstance *source, const std::string &state_name) {
+    if (!source || source == this) {
+        return;
+    }
+    std::map<MachineInstance *, std::string>::iterator found = just_entered.find(source);
+    if (found == just_entered.end()) {
+        just_entered.insert(std::make_pair(source, state_name));
+    }
+    else {
+        found->second = state_name;
+    }
+}
+
+bool MachineInstance::hasJustEntered(MachineInstance *source,
+                                     const std::string &state_name) const {
+    return justEnteredState(source) == state_name;
+}
+
+std::string MachineInstance::justEnteredState(MachineInstance *source) const {
+    if (!source) {
+        return std::string();
+    }
+    std::map<MachineInstance *, std::string>::const_iterator found = just_entered.find(source);
+    if (found == just_entered.end()) {
+        return std::string();
+    }
+    std::string entered = found->second;
+    // Reading the edge consumes it. That is not just tidiness: it is what makes
+    // "maximum staleness: one listener WHEN pass" true even when passes are
+    // re-ordered, and it stops a second rule in a first-WHEN-wins list from
+    // firing on an edge the first rule already matched. Note the read is the
+    // *whole* edge for that source; comparing it to state_name happens after,
+    // so a read for a different state still consumes the edge this pass.
+    const_cast<MachineInstance *>(this)->just_entered.erase(source);
+    return entered;
+}
+
+void MachineInstance::clearJustEntered() { just_entered.clear(); }
+
 void MachineInstance::removeDependancy(MachineInstance *m) {
     if (m && m != this && depends.count(m)) {
         std::set<MachineInstance *>::iterator found = depends.find(m);
@@ -2616,6 +2663,23 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
         std::string last = current_state.getName();
         current_state = new_state;
         current_state_val = new_state.getName();
+
+        /* WHEN <machine> ENTERED <state>: record the edge on every machine that
+           listens to us, so a listener whose WHEN pass has already run this tick
+           still sees the enter on its next pass. Local states are not published
+           to dependants elsewhere in this function either, so they are skipped
+           here for the same reason. The slot is cleared at the end of each
+           listener's WHEN pass -- see clearJustEntered(). */
+        if (enabled() && !machine_class_state->isLocal()) {
+            std::set<MachineInstance *>::iterator entered_iter = depends.begin();
+            while (entered_iter != depends.end()) {
+                MachineInstance *entered_dep = *entered_iter++;
+                if (entered_dep == this) {
+                    continue;
+                }
+                entered_dep->noteEntered(this, current_state.getName());
+            }
+        }
 
         // call the internal enter function for the machine if available
         if (machine_class_state) {
@@ -4285,6 +4349,27 @@ bool MachineInstance::setStableState() {
         DBG_MSG << _name << " aborting stable states check due to command execution\n";
         return false;
     }
+
+    /* WHEN <machine> ENTERED <state>: this is the listener's WHEN pass and the
+       edge it evaluates must not survive it. Past the two gates above we are
+       definitely about to run WHENs, so:
+         - a slot already pending when the pass began is consumed by this pass and
+           is cleared when we leave, on every path out of this function;
+         - a slot written *during* the pass (a source on this machine's own action
+           path entering a state) has not been read yet, so it is kept for exactly
+           one more pass.
+       The two gates return before this point on purpose: a machine that is
+       disabled or busy never ran WHENs, so it has not consumed anything. */
+    struct EnteredSlotClearer {
+        MachineInstance *mi;
+        bool active;
+        ~EnteredSlotClearer() {
+            if (active) {
+                mi->clearJustEntered();
+            }
+        }
+    } entered_slot_clearer = {this, !just_entered.empty()};
+
     // we must not set our stable state if objects we depend on are still updating their own state
     needs_check = 0;
     updateLastEvaluationTime();

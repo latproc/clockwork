@@ -214,6 +214,26 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     bool isStableState(const std::string state_name);
     std::string firstValidStableState(const std::string state_name);
     bool setStableState();   // returns true if a state change was made
+
+    /* `WHEN <machine> ENTERED <state>`: an edge that lives for exactly ONE of
+       this machine's WHEN passes.
+
+       The slot is per listener, keyed by the source machine. `noteEntered` is
+       called from the SOURCE's setState() for every machine in its dependants
+       set. `hasJustEntered` is read while this (the listener) evaluates its WHEN
+       rules. `clearJustEntered` runs at the end of this machine's
+       setStableState(), so the edge is never visible for more than one pass --
+       that bound is the whole point; a longer-lived edge is a stale WAS.
+
+       If a listener's WHEN pass is skipped (it is disabled, or busy executing a
+       command) the slot is retained until the pass it actually runs, which is
+       still at most one pass of that listener. */
+    bool hasJustEntered(MachineInstance *source, const std::string &state_name) const;
+    /* The state this machine's enter-edge slot holds for `source`, or "" if there
+       is no edge. Reading it consumes the slot (see hasJustEntered). */
+    std::string justEnteredState(MachineInstance *source) const;
+    void noteEntered(MachineInstance *source, const std::string &state_name);
+    void clearJustEntered();
     virtual bool isShadow(); // is this machine a shadow instance?
     virtual Channel *ownerChannel();
 
@@ -341,6 +361,10 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     bool uses(MachineInstance *other);
     std::set<MachineInstance *> depends;
+
+    /* enter-edge slots written by noteEntered() on THIS machine as a listener.
+       Keyed by source machine; value is the state that source just entered. */
+    std::map<MachineInstance *, std::string> just_entered;
 
     virtual void enable();
     virtual void resume();
