@@ -1402,11 +1402,6 @@ void MachineInstance::noteEntered(MachineInstance *source, const std::string &st
     }
 }
 
-bool MachineInstance::hasJustEntered(MachineInstance *source,
-                                     const std::string &state_name) const {
-    return justEnteredState(source, state_name) == state_name;
-}
-
 std::string MachineInstance::justEnteredState(MachineInstance *source,
                                               const std::string &state_name) const {
     if (!source) {
@@ -2676,7 +2671,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
            still sees the enter on its next pass. Local states are not published
            to dependants elsewhere in this function either, so they are skipped
            here for the same reason. The slot is cleared at the end of each
-           listener's WHEN pass -- see clearJustEntered(). */
+           listener's WHEN pass -- see clearPendingEntered(). */
         if (enabled() && !machine_class_state->isLocal()) {
             std::set<MachineInstance *>::iterator entered_iter = depends.begin();
             while (entered_iter != depends.end()) {

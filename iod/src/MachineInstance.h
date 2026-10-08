@@ -228,9 +228,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
        If a listener's WHEN pass is skipped (it is disabled, or busy executing a
        command) the slot is retained until the pass it actually runs, which is
        still at most one pass of that listener. */
-    bool hasJustEntered(MachineInstance *source, const std::string &state_name) const;
     /* The state this machine's enter-edge slot holds for `source`, or "" if there
-       is no edge. Reading it consumes the slot (see hasJustEntered). */
+       is no edge. Reading it consumes the slot when it matches (see
+       justEnteredState). */
     std::string justEnteredState(MachineInstance *source, const std::string &state_name) const;
     void noteEntered(MachineInstance *source, const std::string &state_name);
     /* Forget the enter edges that were pending for the given sources. The caller
