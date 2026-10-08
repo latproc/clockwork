@@ -1161,6 +1161,19 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
         m->setValue(a.node->sValue, lhs);
     }
     switch (o.op) {
+    case opENTERED:
+        // Unreachable in normal operation, and handled explicitly so the evaluator
+        // switch stays total (-Wswitch) rather than falling through to `return o`.
+        // prep() answers an ENTERED operand itself and pushes a boolean (see
+        // prepEnteredOperand), and a whole-predicate ENTERED never builds a stack
+        // (see Predicate::evaluate/Condition::operator()). Reaching here means the
+        // three disagree, which is a bug worth a loud message rather than a quiet
+        // wrong answer -- an ENTERED read falls back to the source's LIVE state
+        // through resolve(), i.e. it would silently behave like IS.
+        MessageLog::instance()->add(
+            "Internal error: ENTERED reached eval_stack; it must be resolved in prep()");
+        NB_MSG << "Internal error: ENTERED reached eval_stack\n";
+        return SymbolTable::False;
     case opGetSubExpr:
         return rhs;
     case opPutSubExpr:
