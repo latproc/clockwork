@@ -64,7 +64,12 @@ enum PredicateOperator {
     opString,
     opSymbol,
     opGetSubExpr,
-    opPutSubExpr
+    opPutSubExpr,
+    // WHEN <machine> ENTERED <state>: an edge, not a level. It is answered by
+    // evaluateEntered() from Predicate::evaluate()/Condition::operator(), not by
+    // the stack (see Expression.cpp). It must stay last so existing operator
+    // values are unchanged.
+    opENTERED
 };
 std::ostream &operator<<(std::ostream &out, const PredicateOperator op);
 void toC(std::ostream &out, const PredicateOperator op);

@@ -238,7 +238,7 @@ struct Subcondition {
 
 %token MODULES MODULE DEFAULTS DEFAULT
 %token STATE ENTER NUMBER SEPARATOR OEXPR EEXPR OBRACE
-%token EBRACE QUOTE LE LT GE GT NE EQ
+%token EBRACE QUOTE LE LT GE GT NE EQ ENTERED
 %token NOT SET AND OR SQUOTE LOG FLAG
 %token PROPERTY DEFINE COLLECT FROM TEST EXECUTE SPAWN RUN
 %token CALL TRIM LINE OF USING MATCH IN REPLACE WITH INTERPRET
@@ -298,7 +298,7 @@ struct Subcondition {
 %left BECOMES
 %left OR
 %left AND
-%left GE LE EQ NE LT GT
+%left GE LE EQ NE LT GT ENTERED
 %left '+' '-' '|'
 %left '*' '/' '%' '&' '^'
 %nonassoc NOT
@@ -1083,6 +1083,7 @@ value {
 | expression GT expression { $$ = new Predicate($1, opGT, $3);}
 | expression LT expression { $$ = new Predicate($1, opLT, $3);}
 | expression EQ expression { $$ = new Predicate($1, opEQ, $3);}
+| expression ENTERED expression %prec ENTERED { $$ = new Predicate($1, opENTERED, $3);}
 | expression NE expression { $$ = new Predicate($1, opNE, $3);}
 | expression NOT GE expression %prec GE { $$ = new Predicate($1, opLT, $4);}
 | expression NOT LE expression %prec GE { $$ = new Predicate($1, opGT, $4);}

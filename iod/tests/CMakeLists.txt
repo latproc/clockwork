@@ -109,6 +109,14 @@ target_link_libraries(test_command_guards gmock_main cw_interpreter cw_client ${
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_command_guards COMMAND test_command_guards)
 
+# WHEN <machine> ENTERED <state>: the one-pass enter edge. See
+# docs/WHEN_ENTERED_TEST_PLAN.md and llm-rules/cw_issues/WHEN_ENTERED_SPEC_20261008.md
+add_executable(test_entered test_entered.cpp )
+set_target_properties (test_entered PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_entered gmock_main cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_entered COMMAND test_entered)
+
 add_executable(test_message test_message.cpp )
 set_target_properties (test_message PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(test_message gmock_main cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)

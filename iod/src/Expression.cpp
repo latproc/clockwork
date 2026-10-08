@@ -100,6 +100,9 @@ std::ostream &operator<<(std::ostream &out, const PredicateOperator op) {
     case opEQ:
         opstr = "==";
         break;
+    case opENTERED:
+        opstr = "ENTERED";
+        break;
     case opNE:
         opstr = "!=";
         break;
@@ -1271,7 +1274,96 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
 
 */
 
+/*
+    `WHEN <machine> ENTERED <state>`
+
+    True iff the machine named on the left just entered the state named on the
+    right, as recorded in THIS machine's (the listener's) one-pass enter slot.
+    Reading the slot consumes it, so the edge is true for exactly one evaluation
+    of the rule; a second evaluation of the same rule in the same pass is false.
+    That bound is the point of the feature: a longer-lived edge is a stale WAS.
+
+    The check has to happen here rather than in the stack machinery, because
+    resolve() binds a machine symbol to that machine's live state -- correct for
+    `IS`, wrong for an edge -- and because the slot lives on the listener, not on
+    the source.
+
+    Returns false for a malformed rule, logging why.
+*/
+static Value evaluateEntered(Predicate *p, MachineInstance *m) {
+    if (!p || !p->left_p || !p->right_p || p->left_p->op != opNone || p->right_p->op != opNone) {
+        char buf[250];
+        snprintf(buf, 250,
+                 "Error: %s: ENTERED expects a machine and a state name, as in "
+                 "'WHEN M_TipControl ENTERED Done'\n",
+                 m->getName().c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf;
+        return Value(false);
+    }
+    if (p->left_p->entry.kind != Value::t_symbol) {
+        char buf[250];
+        snprintf(buf, 250, "Error: %s: ENTERED expects a machine name on the left\n",
+                 m->getName().c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf;
+        return Value(false);
+    }
+    const std::string &source_name = p->left_p->entry.sValue;
+    const std::string &state_name = p->right_p->entry.sValue;
+    MachineInstance *source = m->lookup(source_name);
+    if (!source) {
+        char buf[300];
+        snprintf(buf, 300, "Error: %s: ENTERED names '%s', which is not a machine in scope\n",
+                 m->getName().c_str(), source_name.c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf;
+        return Value(false);
+    }
+    // `SELF ENTERED <state>` is always false by construction: noteEntered()
+    // never records an enter against self. Say so instead of never firing.
+    if (source == m) {
+        char buf[300];
+        snprintf(buf, 300,
+                 "Error: %s: 'SELF ENTERED %s' is not valid; use 'ENTER %s' on this machine "
+                 "instead\n",
+                 m->getName().c_str(), state_name.c_str(), state_name.c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf;
+        return Value(false);
+    }
+    // The state must name a state of the SOURCE, exactly as `x IS S` does.
+    if (!source->hasState(state_name)) {
+        char buf[300];
+        snprintf(buf, 300,
+                 "Warning: %s: ENTERED names state '%s' which %s does not have, so that rule "
+                 "will never run\n",
+                 m->getName().c_str(), state_name.c_str(), source->getName().c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf;
+        return Value(false);
+    }
+    return Value(m->justEnteredState(source) == state_name);
+}
+
 bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
+    // `WHEN <machine> ENTERED <state>` is not a stack expression: see
+    // evaluateEntered() above, which both Predicate::evaluate() and
+    // Condition::operator() call before they build a stack. prep() would bind the
+    // source symbol to the machine's LIVE state (that is what IS wants), which is
+    // the wrong reading for an edge. It is left here only so a nested use is
+    // diagnosed rather than silently mis-evaluated.
+    if (p->op == opENTERED) {
+        char buf[250];
+        snprintf(buf, 250,
+                 "Error: %s: ENTERED cannot be nested inside another expression; use a "
+                 "top-level 'WHEN <machine> ENTERED <state>' clause\n",
+                 m->getName().c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf;
+        return false;
+    }
+
     // check for state comparison
     if (p->left_p && p->left_p->op == opNone && p->right_p && p->right_p->op == opNone &&
         (p->op == opEQ || p->op == opNE)) {
@@ -1454,6 +1546,9 @@ Value Evaluator::evaluate(Predicate *predicate, MachineInstance *m) {
 }
 
 Value Predicate::evaluate(MachineInstance *m) {
+    if (op == opENTERED) {
+        return evaluateEntered(this, m);
+    }
     if (!stack.stack.empty()) {
         stack.stack.clear();
     }
@@ -1475,6 +1570,15 @@ Value Predicate::evaluate(MachineInstance *m) {
 
 bool Condition::operator()(MachineInstance *m) {
     if (predicate) {
+        if (predicate->op == opENTERED) {
+            last_result = evaluateEntered(predicate, m);
+            predicate->last_evaluation_time = microsecs();
+            std::ostream &out = MessageLog::instance()->get_stream();
+            out << last_result << " " << *predicate;
+            last_evaluation = MessageLog::instance()->access_stream_message();
+            MessageLog::instance()->close_stream();
+            return last_result.bValue;
+        }
         predicate->stack.stack.clear();
         if (predicate->stack.stack.empty()) {
             if (!prep(predicate->stack, predicate, m, true, predicate->needs_reevaluation)) {

@@ -95,6 +95,7 @@ ELSE				return ELSE;
 ENABLE              return ENABLE;
 ENABLED             return ENABLED;
 ENTER               return ENTER;
+ENTERED             return ENTERED;
 ENTRIES             return ENTRIES;
 ERROR				return ERROR;
 ERRORS				return ERRORS;
