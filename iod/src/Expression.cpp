@@ -1367,10 +1367,14 @@ static Value evaluateEntered(Predicate *p, MachineInstance *m) {
       * resolve() would bind the source symbol to the machine's LIVE state (right
         for IS, wrong for an edge), so the ENTERED read must not go through it.
 
-    The sub-tree is prepped into a throwaway stack and answered immediately, which
-    also performs the listener<->source registration resolve() does (a condition
-    reading a machine must be woken when that machine changes). The result is
-    pushed as a plain boolean, which is what an AND/OR child is.
+    Reading the slot here would consume the edge even when the operand is never
+    reached: in `A && x ENTERED S` with A false the AND short-circuits, and the
+    edge has to survive for a later rule in the same pass. So this only checks the
+    operand and performs the listener<->source registration resolve() does (a
+    condition reading a machine must be woken when that machine changes); the read
+    itself does happen here today -- see the residual in
+    llm-rules/cw_issues/WHEN_ENTERED_ENTERED_EDGE_20261008.md -- and moving it into
+    eval_stack() is the recorded follow-up.
 */
 static bool prepEnteredOperand(Predicate *p, MachineInstance *m, bool reevaluate) {
     if (!p->left_p || !p->right_p || p->left_p->op != opNone || p->right_p->op != opNone) {
