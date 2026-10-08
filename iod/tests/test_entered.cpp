@@ -190,7 +190,11 @@ class EnteredTest : public ::testing::Test {
         ASSERT_NE(0, changeState(src, "Idle"));
         runPass(src);
         ASSERT_EQ("Idle", currentState(src));
-        listener->clearJustEntered();
+        // Re-record the Done edge on the listener: the field leave is ENTER Done
+        // doing `SET State TO Idle`, i.e. not an enter of Idle, so nothing would
+        // have overwritten the edge. Letting noteEntered stand in for that keeps
+        // the assertion about the ENTERED read rather than about which state was
+        // recorded last.
         listener->noteEntered(src, std::string("Done"));
     }
 
@@ -435,16 +439,39 @@ TEST_F(EnteredTest, unknownMachineIsReportedAndNeverFires) {
 // 5. The operator node the parser produces
 // ---------------------------------------------------------------------------
 
-TEST_F(EnteredTest, nestedEnteredIsRejectedNotSilentlyMisread) {
-    // `WHEN (x ENTERED S) && y IS z` cannot be answered from an edge slot read by
-    // the source, and prep() must say so rather than letting resolve() bind the
-    // source to its live state and quietly answer the wrong question.
-    Predicate *inner = enteredPredicate(kSourceName, "Done");
-    Predicate *outer = new Predicate(inner, opAND, new Predicate(Value(true)));
-    MessageLog::instance()->purge();
-    EXPECT_FALSE(whenPass(outer));
-    EXPECT_NE(std::string::npos, messageLog().find("cannot be nested"))
-        << "a nested ENTERED must be diagnosed";
+TEST_F(EnteredTest, s7_enteredAsAnAndChildIsTrueOnTheOnePass) {
+    // S7: the form the 2G-115 feeder uses. `ENTERED` inside `&&` must be answered
+    // by the enter slot, not rejected as a nested expression -- this is the plant
+    // use, and it was the review's first blocker.
+    Predicate *entered = enteredPredicate(kSourceName, "Done");
+    Predicate *self_is_wait = isPredicate(kListenerName, "Wait");
+    Predicate *rule = new Predicate(self_is_wait, opAND, entered);
+
+    EXPECT_FALSE(whenPass(rule)) << "no enter yet";
+    sourceEnters("Done");
+    EXPECT_EQ("Idle", currentState(src)) << "the source has already left Done";
+    EXPECT_TRUE(whenPass(rule)) << "SELF IS Wait && M_TipControl ENTERED Done is true";
+    EXPECT_FALSE(whenPass(rule)) << "and only on that one pass";
+}
+
+TEST_F(EnteredTest, enteredOnTheLeftOfAnAndAlsoWorks) {
+    Predicate *entered = enteredPredicate(kSourceName, "Done");
+    Predicate *self_is_wait = isPredicate(kListenerName, "Wait");
+    Predicate *rule = new Predicate(entered, opAND, self_is_wait);
+    sourceEnters("Done");
+    EXPECT_TRUE(whenPass(rule));
+    EXPECT_FALSE(whenPass(rule));
+}
+
+TEST_F(EnteredTest, aMismatchedStateDoesNotConsumeTheEdge) {
+    // Review blocker 3: asking about the wrong state must not eat the edge that
+    // another rule in the same pass is about to match.
+    Predicate *wrong = enteredPredicate(kSourceName, "Clearing");
+    Predicate *right = enteredPredicate(kSourceName, "Done");
+    sourceEnters("Done");
+    EXPECT_FALSE(whenPass(wrong)) << "the source entered Done, not Clearing";
+    EXPECT_TRUE(whenPass(right)) << "the Done edge is still there for the next rule";
+    EXPECT_FALSE(whenPass(right)) << "and the matching read did consume it";
 }
 
 TEST_F(EnteredTest, printsAsEnteredNotAsEquality) {

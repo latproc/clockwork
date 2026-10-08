@@ -1117,10 +1117,11 @@ void MachineInstance::noteEntered(MachineInstance *source, const std::string &st
 
 bool MachineInstance::hasJustEntered(MachineInstance *source,
                                      const std::string &state_name) const {
-    return justEnteredState(source) == state_name;
+    return justEnteredState(source, state_name) == state_name;
 }
 
-std::string MachineInstance::justEnteredState(MachineInstance *source) const {
+std::string MachineInstance::justEnteredState(MachineInstance *source,
+                                              const std::string &state_name) const {
     if (!source) {
         return std::string();
     }
@@ -1129,17 +1130,23 @@ std::string MachineInstance::justEnteredState(MachineInstance *source) const {
         return std::string();
     }
     std::string entered = found->second;
-    // Reading the edge consumes it. That is not just tidiness: it is what makes
-    // "maximum staleness: one listener WHEN pass" true even when passes are
-    // re-ordered, and it stops a second rule in a first-WHEN-wins list from
-    // firing on an edge the first rule already matched. Note the read is the
-    // *whole* edge for that source; comparing it to state_name happens after,
-    // so a read for a different state still consumes the edge this pass.
-    const_cast<MachineInstance *>(this)->just_entered.erase(source);
+    // A read consumes the edge only when it MATCHES. A rule asking about some
+    // other state must not eat the edge another rule in the same pass is about to
+    // match: `x ENTERED Clearing` (no) followed by `x ENTERED Done` (yes) has to
+    // see Done. That still bounds staleness -- a matching read clears the slot,
+    // and the end of the pass clears whatever was pending and unread.
+    if (entered == state_name) {
+        const_cast<MachineInstance *>(this)->just_entered.erase(source);
+    }
     return entered;
 }
 
-void MachineInstance::clearJustEntered() { just_entered.clear(); }
+void MachineInstance::clearPendingEntered(const std::set<MachineInstance *> &sources) {
+    for (std::set<MachineInstance *>::const_iterator it = sources.begin(); it != sources.end();
+         ++it) {
+        just_entered.erase(*it);
+    }
+}
 
 void MachineInstance::removeDependancy(MachineInstance *m) {
     if (m && m != this && depends.count(m)) {
@@ -3641,24 +3648,26 @@ bool MachineInstance::setStableState() {
     }
 
     /* WHEN <machine> ENTERED <state>: this is the listener's WHEN pass and the
-       edge it evaluates must not survive it. Past the two gates above we are
-       definitely about to run WHENs, so:
-         - a slot already pending when the pass began is consumed by this pass and
-           is cleared when we leave, on every path out of this function;
-         - a slot written *during* the pass (a source on this machine's own action
-           path entering a state) has not been read yet, so it is kept for exactly
-           one more pass.
+       edges it was going to evaluate must not survive it. Past the two gates above
+       we are definitely about to run WHENs, so snapshot the sources that had a
+       pending edge when the pass began, and forget exactly those when we leave --
+       on every path out of this function.
+       A slot written *during* the pass (a source on this machine's own action path
+       entering a state) is deliberately NOT in the snapshot: it has not been read
+       and survives for one more pass. That is why this erases keys rather than
+       clearing the whole map.
        The two gates return before this point on purpose: a machine that is
        disabled or busy never ran WHENs, so it has not consumed anything. */
+    std::set<MachineInstance *> entered_pending_at_pass_start;
+    for (std::map<MachineInstance *, std::string>::const_iterator it = just_entered.begin();
+         it != just_entered.end(); ++it) {
+        entered_pending_at_pass_start.insert(it->first);
+    }
     struct EnteredSlotClearer {
         MachineInstance *mi;
-        bool active;
-        ~EnteredSlotClearer() {
-            if (active) {
-                mi->clearJustEntered();
-            }
-        }
-    } entered_slot_clearer = {this, !just_entered.empty()};
+        const std::set<MachineInstance *> &sources;
+        ~EnteredSlotClearer() { mi->clearPendingEntered(sources); }
+    } entered_slot_clearer = {this, entered_pending_at_pass_start};
 
     // we must not set our stable state if objects we depend on are still updating their own state
     needs_check = 0;
