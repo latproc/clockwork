@@ -1298,27 +1298,8 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
 
     Returns false for a malformed rule, logging why.
 */
-static Value evaluateEntered(Predicate *p, MachineInstance *m) {
-    if (!p || !p->left_p || !p->right_p || p->left_p->op != opNone || p->right_p->op != opNone) {
-        char buf[250];
-        snprintf(buf, 250,
-                 "Error: %s: ENTERED expects a machine and a state name, as in "
-                 "'WHEN M_TipControl ENTERED Done'\n",
-                 m->getName().c_str());
-        MessageLog::instance()->add(buf);
-        NB_MSG << buf;
-        return Value(false);
-    }
-    if (p->left_p->entry.kind != Value::t_symbol) {
-        char buf[250];
-        snprintf(buf, 250, "Error: %s: ENTERED expects a machine name on the left\n",
-                 m->getName().c_str());
-        MessageLog::instance()->add(buf);
-        NB_MSG << buf;
-        return Value(false);
-    }
-    const std::string &source_name = p->left_p->entry.sValue;
-    const std::string &state_name = p->right_p->entry.sValue;
+static Value evaluateEnteredSource(MachineInstance *m, const std::string &source_name,
+                                   const std::string &state_name) {
     MachineInstance *source = m->lookup(source_name);
     if (!source) {
         char buf[300];
@@ -1328,8 +1309,8 @@ static Value evaluateEntered(Predicate *p, MachineInstance *m) {
         NB_MSG << buf;
         return Value(false);
     }
-    // `SELF ENTERED <state>` is always false by construction: noteEntered()
-    // never records an enter against self. Say so instead of never firing.
+    // `SELF ENTERED <state>` is always false by construction: noteEntered() never
+    // records an enter against self. Say so instead of never firing.
     if (source == m) {
         char buf[300];
         snprintf(buf, 300,
@@ -1351,7 +1332,80 @@ static Value evaluateEntered(Predicate *p, MachineInstance *m) {
         NB_MSG << buf;
         return Value(false);
     }
-    return Value(m->justEnteredState(source) == state_name);
+    return Value(m->justEnteredState(source, state_name) == state_name);
+}
+
+/* Root form: `WHEN <machine> ENTERED <state>` as a whole rule. */
+static Value evaluateEntered(Predicate *p, MachineInstance *m) {
+    if (!p || !p->left_p || !p->right_p) {
+        char buf[250];
+        snprintf(buf, 250,
+                 "Error: %s: ENTERED expects a machine and a state name, as in "
+                 "'WHEN M_TipControl ENTERED Done'\n",
+                 m->getName().c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf;
+        return Value(false);
+    }
+    return evaluateEnteredSource(m, p->left_p->entry.sValue, p->right_p->entry.sValue);
+}
+
+/*
+    Resolve `WHEN <machine> ENTERED <state>` for a rule that is a CHILD of && / ||
+    (the form the feeder uses: `SELF IS TipWorking && M_TipControl ENTERED Done`).
+
+    This is done at prep() time, next to the IS state comparison prep() already
+    performs, and NOT by pushing opENTERED onto the stack. Two reasons:
+
+      * the operand order on the stack is not stable enough to depend on for a
+        nested subtree, and
+      * resolve() would bind the source symbol to the machine's LIVE state (right
+        for IS, wrong for an edge), so the ENTERED read must not go through it.
+
+    The sub-tree is prepped into a throwaway stack and answered immediately, which
+    also performs the listener<->source registration resolve() does (a condition
+    reading a machine must be woken when that machine changes). The result is
+    pushed as a plain boolean, which is what an AND/OR child is.
+*/
+static bool prepEnteredOperand(Predicate *p, MachineInstance *m, bool reevaluate) {
+    if (!p->left_p || !p->right_p || p->left_p->op != opNone || p->right_p->op != opNone) {
+        char buf[250];
+        snprintf(buf, 250,
+                 "Error: %s: ENTERED expects a machine and a state name, as in "
+                 "'WHEN M_TipControl ENTERED Done'\n",
+                 m->getName().c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf;
+        return false;
+    }
+    const std::string &source_name = p->left_p->entry.sValue;
+    const std::string &state_name = p->right_p->entry.sValue;
+    if (source_name.empty() || state_name.empty()) {
+        char buf[250];
+        snprintf(buf, 250,
+                 "Error: %s: ENTERED expects a machine and a state name, as in "
+                 "'WHEN M_TipControl ENTERED Done'\n",
+                 m->getName().c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf;
+        return false;
+    }
+    MachineInstance *source = m->lookup(source_name);
+    if (!source) {
+        char buf[300];
+        snprintf(buf, 300, "Error: %s: ENTERED names '%s', which is not a machine in scope\n",
+                 m->getName().c_str(), p->left_p->entry.sValue.c_str());
+        MessageLog::instance()->add(buf);
+        NB_MSG << buf;
+        return false;
+    }
+    if (source != m) {
+        source->addDependancy(m);
+        m->listenTo(source);
+    }
+    Value result = evaluateEnteredSource(m, source_name, state_name);
+    bool value = false;
+    return result.asBoolean(value) && value;
 }
 
 bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reevaluate) {
@@ -1362,14 +1416,12 @@ bool prep(Stack &stack, Predicate *p, MachineInstance *m, bool left, bool reeval
     // the wrong reading for an edge. It is left here only so a nested use is
     // diagnosed rather than silently mis-evaluated.
     if (p->op == opENTERED) {
-        char buf[250];
-        snprintf(buf, 250,
-                 "Error: %s: ENTERED cannot be nested inside another expression; use a "
-                 "top-level 'WHEN <machine> ENTERED <state>' clause\n",
-                 m->getName().c_str());
-        MessageLog::instance()->add(buf);
-        NB_MSG << buf;
-        return false;
+        // Answered here, not by the stack: see prepEnteredOperand(). As a child of
+        // && / || -- the form the feeder uses -- this pushes a plain boolean, which
+        // is what an AND/OR child is.
+        const bool value = prepEnteredOperand(p, m, reevaluate);
+        stack.push(ExprNode(Value(value)));
+        return true;
     }
 
     // check for state comparison

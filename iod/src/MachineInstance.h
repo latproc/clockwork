@@ -231,9 +231,12 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     bool hasJustEntered(MachineInstance *source, const std::string &state_name) const;
     /* The state this machine's enter-edge slot holds for `source`, or "" if there
        is no edge. Reading it consumes the slot (see hasJustEntered). */
-    std::string justEnteredState(MachineInstance *source) const;
+    std::string justEnteredState(MachineInstance *source, const std::string &state_name) const;
     void noteEntered(MachineInstance *source, const std::string &state_name);
-    void clearJustEntered();
+    /* Forget the enter edges that were pending for the given sources. The caller
+       passes the set it snapshotted when its WHEN pass began, so an edge written
+       *during* the pass is not wiped by the end of it. */
+    void clearPendingEntered(const std::set<MachineInstance *> &sources);
     virtual bool isShadow(); // is this machine a shadow instance?
     virtual Channel *ownerChannel();
 
