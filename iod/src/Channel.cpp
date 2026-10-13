@@ -223,7 +223,7 @@ Channel::Channel(const std::string &ch_name, const std::string &type)
       connections(0), aborted(false), started_(false), cmd_client(0), cmd_server(0),
       last_throttled_send(0), does_monitor(false), does_share(false), does_update(false),
       last_client_status_send_us_(0), pending_client_status_(false),
-      active_status_first_us_(0), active_status_last_us_(0) {
+      active_status_first_us_(0), active_status_last_us_(0), last_shadow_reconcile_us_(0) {
     internals = new ChannelInternals();
     if (all == nullptr) {
         all = new std::map<std::string, Channel *>;
@@ -602,6 +602,9 @@ Action::Status Channel::setState(const State &new_state, uint64_t authority, boo
         enableShadows();
         applyStagedShadows();
         setNeedsCheck();
+        // Check liveness on the next housekeeping pass rather than waiting out
+        // the reconcile interval.
+        last_shadow_reconcile_us_ = 0;
     }
     return res;
 }
@@ -2673,7 +2676,7 @@ void ChannelDefinition::addOptionName(const char *n, Value &v) {
 */
 #include "EnableAction.h"
 
-void Channel::forEachOwnedShadow(void (*op)(MachineShadowInstance *, uint64_t)) {
+void Channel::forEachOwnedShadow(const std::function<void(MachineShadowInstance *, uint64_t)> &op) {
     std::map<std::string, Value>::const_iterator iter = definition()->updates_names.begin();
     while (iter != definition()->updates_names.end()) {
         const std::pair<std::string, Value> item = *iter++;
@@ -2703,6 +2706,52 @@ void Channel::forEachOwnedShadow(void (*op)(MachineShadowInstance *, uint64_t)) 
             op(ms, machine_auth);
         }
     }
+}
+
+// A mirror is disabled when the channel leaves ACTIVE and enabled again from
+// CONNECTED/WAITSTART. Both are transitions, so a channel that is already ACTIVE
+// can be left holding disabled mirrors by anything that disables them, with no
+// transition afterwards to put them back. Disabled mirrors ignore state changes
+// and calls to them fail, while the channel still reports ACTIVE.
+//
+// Cheap liveness reconcile, run from the housekeeping loop: while ACTIVE,
+// re-enable any owned mirror that is disabled, and say so once. Throttled, and
+// silent when nothing is wrong.
+void Channel::reconcileShadows() {
+    // Runs from the housekeeping loop for every channel, including one whose
+    // definition has not been bound yet.
+    if (!definition() || current_state != ChannelImplementation::ACTIVE) {
+        return;
+    }
+    const uint64_t now = nowMicrosecs();
+    if (last_shadow_reconcile_us_ != 0 &&
+        now - last_shadow_reconcile_us_ < shadow_reconcile_interval_us_) {
+        return;
+    }
+    last_shadow_reconcile_us_ = now;
+
+    std::list<std::string> reenabled;
+    forEachOwnedShadow([this, &reenabled](MachineShadowInstance *ms, uint64_t) {
+        if (ms->enabled()) {
+            return;
+        }
+        reenabled.push_back(ms->getName());
+        // The same action enableShadows() queues: it resolves the name and enables.
+        EnableActionTemplate ea(ms->getName().c_str());
+        enqueueAction(ea.factory(ms));
+    });
+
+    if (reenabled.empty()) {
+        return;
+    }
+    std::stringstream ss;
+    ss << "Channel " << channel_name << " is ACTIVE; re-enabling disabled mirror(s):";
+    for (const std::string &n : reenabled) {
+        ss << " " << n;
+    }
+    MessageLog::instance()->add(ss.str().c_str());
+    DBG_CHANNELS << ss.str() << "\n";
+    modified();
 }
 
 static void applyOneStagedShadow(MachineShadowInstance *ms, uint64_t authority) {
@@ -2986,6 +3035,7 @@ void Channel::handleChannels() {
         Channel *chn = item.second;
         chn->setupFilters();
         chn->checkCommunications();
+        chn->reconcileShadows();
         if (chn->throttledItemsReady(now)) {
             chn->sendThrottledUpdates();
         }

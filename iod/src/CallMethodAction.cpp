@@ -19,6 +19,7 @@
 */
 
 #include "CallMethodAction.h"
+#include "Channel.h"
 #include "DebugExtra.h"
 #include "IOComponent.h"
 #include "Logger.h"
@@ -107,11 +108,26 @@ Action::Status CallMethodAction::run() {
         }
     }
     else {
-        char buf[100];
-        snprintf(buf, 100, "Call to disabled machine: %s", target_machine->getName().c_str());
-        MessageLog::instance()->add(buf);
+        // A CALL to a disabled target is a refusal, and stays one. Naming the
+        // mirror and its channel matters though: the bare "Call to disabled
+        // machine" line reads as a wiring or CALL fault, and was taken for one
+        // while the real defect was that the mirror should not have been
+        // disabled in the first place.
+        std::string msg = "Call to disabled machine: ";
+        msg += target_machine->getName();
+        if (target_machine->isShadow()) {
+            Channel *chn = target_machine->ownerChannel();
+            if (chn) {
+                msg += " (channel ";
+                msg += chn->getName();
+                msg += chn->getCurrent() == ChannelImplementation::ACTIVE
+                           ? " is ACTIVE: stale mirror, not a link fault)"
+                           : " is not ACTIVE)";
+            }
+        }
+        MessageLog::instance()->add(msg.c_str());
         status = Action::Failed;
-        error_str = strdup(buf);
+        error_str = strdup(msg.c_str());
     }
     return status;
 }

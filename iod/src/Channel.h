@@ -28,6 +28,7 @@
 #include "value.h"
 #include <boost/thread/mutex.hpp>
 #include <boost/thread/recursive_mutex.hpp>
+#include <functional>
 #include <map>
 #include <ostream>
 #include <set>
@@ -275,7 +276,11 @@ class Channel : public MachineInstance, public ChannelImplementation {
     // Leaving ACTIVE restores each shadow to its defaults. Owners are untouched.
     void applyStagedShadows();
     void revertShadowsToDefaults();
-    void forEachOwnedShadow(void (*op)(MachineShadowInstance *, uint64_t));
+    // Periodic liveness check: while ACTIVE, re-enable any owned shadow that has
+    // been left disabled (a transition that enables them may never run again).
+    // Throttled internally; safe to call from the housekeeping loop.
+    void reconcileShadows();
+    void forEachOwnedShadow(const std::function<void(MachineShadowInstance *, uint64_t)> &op);
     void startServer(
         ProtocolType proto = eZMQ); // used by shared (publish/subscribe) and one-to-one channels
     void startClient();             // used by shared (publish/subscribe) channels
@@ -398,6 +403,10 @@ class Channel : public MachineInstance, public ChannelImplementation {
     static const uint64_t client_status_retry_us_ = 500000; // 500 ms
     static const uint64_t active_status_sustain_us_ = 2000000; // 2 s
     static const uint64_t active_status_quiet_us_ = 1000000;   // 1 s
+    // How often a live channel re-checks that its mirrors are enabled. Cheap
+    // (an enabled() test per owned mirror), but not free, so it is periodic.
+    uint64_t last_shadow_reconcile_us_;
+    static const uint64_t shadow_reconcile_interval_us_ = 5000000; // 5 s
 
     friend class SyncRemoteStatesAction;
     friend class ChannelDefinition;
