@@ -215,22 +215,19 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     std::string firstValidStableState(const std::string state_name);
     bool setStableState();   // returns true if a state change was made
 
-    /* `WHEN <machine> ENTERED <state>`: an edge that lives for exactly ONE of
-       this machine's WHEN passes.
+    /* `WHEN <machine> ENTERED <state>`: a set of unseen enters that lives for
+       exactly ONE of this machine's WHEN passes.
 
-       The slot is per listener, keyed by the source machine. `noteEntered` is
-       called from the SOURCE's setState() for every machine in its dependants
-       set. `hasJustEntered` is read while this (the listener) evaluates its WHEN
-       rules. `clearJustEntered` runs at the end of this machine's
-       setStableState(), so the edge is never visible for more than one pass --
-       that bound is the whole point; a longer-lived edge is a stale WAS.
+       Per listener, keyed by source. Each setState(S) on the source adds S to
+       the set (Done then Unavailable keeps both). `WHEN x ENTERED S` is true
+       if S is in that set. A matching read consumes that one name so
+       first-WHEN-wins cannot double-fire the same state; other names stay
+       until the end of the pass. `clearPendingEntered` drops the whole set
+       for sources that were pending when the pass began.
 
-       If a listener's WHEN pass is skipped (it is disabled, or busy executing a
-       command) the slot is retained until the pass it actually runs, which is
-       still at most one pass of that listener. */
-    /* The state this machine's enter-edge slot holds for `source`, or "" if there
-       is no edge. Reading it consumes the slot when it matches (see
-       justEnteredState). */
+       Why a set, not last-enter-wins: on 2G-115 (2026-10-13) M_GrabBaleGateControl
+       entered Done then Unavailable (721 us) before M_GrabFeeder ran; last-wins
+       hid Done and the feeder fell TipWorking to TipWait. */
     std::string justEnteredState(MachineInstance *source, const std::string &state_name) const;
     void noteEntered(MachineInstance *source, const std::string &state_name);
     /* Forget the enter edges that were pending for the given sources. The caller
@@ -365,9 +362,10 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     bool uses(MachineInstance *other);
     std::set<MachineInstance *> depends;
 
-    /* enter-edge slots written by noteEntered() on THIS machine as a listener.
-       Keyed by source machine; value is the state that source just entered. */
-    std::map<MachineInstance *, std::string> just_entered;
+    /* enter-edge sets written by noteEntered() on THIS machine as a listener.
+       Keyed by source; value is every state that source entered since this
+       listener's last WHEN pass. */
+    std::map<MachineInstance *, std::set<std::string> > just_entered;
 
     virtual void enable();
     virtual void resume();

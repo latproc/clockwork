@@ -1381,25 +1381,19 @@ void MachineInstance::addDependancy(MachineInstance *m) {
     }
 }
 
-/* WHEN <machine> ENTERED <state> -- the listener-side edge slot.
+/* WHEN <machine> ENTERED <state> -- the listener-side enter set.
 
    Called from the SOURCE's setState() for each machine in its depends set, so
-   that a listener whose WHEN pass has not run yet still sees the enter. The
-   slot is consumed by the listener's next WHEN pass (see setStableState).
-
-   Last enter wins: there is deliberately no count, so two enters of the same
-   state before the listener runs produce exactly one true, not two. */
+   that a listener whose WHEN pass has not run yet still sees the enter. Each
+   enter is inserted; a later Unavailable does not hide an unread Done (the
+   2G-115 2026-10-13 feeder miss). Two enters of the same state before the
+   listener runs still produce one true: a set has no count. The set is
+   forgotten at the end of the listener's next WHEN pass (see setStableState). */
 void MachineInstance::noteEntered(MachineInstance *source, const std::string &state_name) {
     if (!source || source == this) {
         return;
     }
-    std::map<MachineInstance *, std::string>::iterator found = just_entered.find(source);
-    if (found == just_entered.end()) {
-        just_entered.insert(std::make_pair(source, state_name));
-    }
-    else {
-        found->second = state_name;
-    }
+    just_entered[source].insert(state_name);
 }
 
 std::string MachineInstance::justEnteredState(MachineInstance *source,
@@ -1407,20 +1401,24 @@ std::string MachineInstance::justEnteredState(MachineInstance *source,
     if (!source) {
         return std::string();
     }
-    std::map<MachineInstance *, std::string>::const_iterator found = just_entered.find(source);
-    if (found == just_entered.end()) {
+    MachineInstance *self = const_cast<MachineInstance *>(this);
+    std::map<MachineInstance *, std::set<std::string> >::iterator found =
+        self->just_entered.find(source);
+    if (found == self->just_entered.end()) {
         return std::string();
     }
-    std::string entered = found->second;
-    // A read consumes the edge only when it MATCHES. A rule asking about some
-    // other state must not eat the edge another rule in the same pass is about to
-    // match: `x ENTERED Clearing` (no) followed by `x ENTERED Done` (yes) has to
-    // see Done. That still bounds staleness -- a matching read clears the slot,
-    // and the end of the pass clears whatever was pending and unread.
-    if (entered == state_name) {
-        const_cast<MachineInstance *>(this)->just_entered.erase(source);
+    std::set<std::string>::iterator sit = found->second.find(state_name);
+    if (sit == found->second.end()) {
+        return std::string();
     }
-    return entered;
+    // Consume only the matched name. `x ENTERED Clearing` (no) must not eat
+    // Done; `x ENTERED Done` then `x ENTERED Unavailable` can both match in
+    // one pass. The rest of the set dies at end of pass.
+    found->second.erase(sit);
+    if (found->second.empty()) {
+        self->just_entered.erase(found);
+    }
+    return state_name;
 }
 
 void MachineInstance::clearPendingEntered(const std::set<MachineInstance *> &sources) {
@@ -2666,12 +2664,13 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
         current_state = new_state;
         current_state_val = new_state.getName();
 
-        /* WHEN <machine> ENTERED <state>: record the edge on every machine that
-           listens to us, so a listener whose WHEN pass has already run this tick
-           still sees the enter on its next pass. Local states are not published
-           to dependants elsewhere in this function either, so they are skipped
-           here for the same reason. The slot is cleared at the end of each
-           listener's WHEN pass -- see clearPendingEntered(). */
+        /* WHEN <machine> ENTERED <state>: add this state to every listener's
+           enter set, so a listener whose WHEN pass has already run this tick
+           still sees it on its next pass. Later enters of the same source are
+           added, not overwritten. Local states are not published to dependants
+           elsewhere in this function either, so they are skipped here for the
+           same reason. The set is cleared at the end of each listener's WHEN
+           pass -- see clearPendingEntered(). */
         if (enabled() && !machine_class_state->isLocal()) {
             std::set<MachineInstance *>::iterator entered_iter = depends.begin();
             while (entered_iter != depends.end()) {
@@ -4363,7 +4362,8 @@ bool MachineInstance::setStableState() {
        The two gates return before this point on purpose: a machine that is
        disabled or busy never ran WHENs, so it has not consumed anything. */
     std::set<MachineInstance *> entered_pending_at_pass_start;
-    for (std::map<MachineInstance *, std::string>::const_iterator it = just_entered.begin();
+    for (std::map<MachineInstance *, std::set<std::string> >::const_iterator it =
+             just_entered.begin();
          it != just_entered.end(); ++it) {
         entered_pending_at_pass_start.insert(it->first);
     }

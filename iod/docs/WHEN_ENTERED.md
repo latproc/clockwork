@@ -46,11 +46,13 @@ Illegal / ignored:
 
 On `setState(S)` of source `x`:
 
-1. For each machine `L` that **listens to** `x` (parameter / depends), set one slot  
-   `L.entered[x] = S`  
-   (last enter wins; no count).
-2. `WHEN x ENTERED S` on `L` is true iff that slot is `S` **during L’s WHEN pass**.
-3. **At the end of that pass**, clear `L.entered[x]`, whether any WHEN matched or not.
+1. For each machine `L` that **listens to** `x`, **add** `S` to `L.entered[x]`
+   (a set). Last-enter-wins hid Done when Unavailable followed before the
+   listener ran (2G-115 2026-10-13 feeder TipDone).
+2. `WHEN x ENTERED S` is true iff `S` is in that set during L’s WHEN pass.
+   `M_TipControl ENTERED Done` matches if Done is in the list.
+3. A matching read consumes that one name. The rest of the set, and any unread
+   names, clear at the **end of that pass**.
 
 Not a global iod tick. If absorb skips `L` this loop, the slot **stays** until `L` actually runs WHENs once, then dies. `d78f4cc8` (runnable drain) still matters so that pass is soon.
 
