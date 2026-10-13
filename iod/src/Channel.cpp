@@ -2513,7 +2513,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
                     MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                     mh.start_time = microsecs();
                     //chn->sendMessage(cmd, *chn->cmd_server, response, mh);//setup()
-                    safeSend(*chn->cmd_server, cmd, mh);
+                    sendChannelOut(chn->definition()->isPublisher(), *chn->cmd_server, cmd.c_str(), cmd.size(), mh);
                 }
                 else if (chn->mif) {
                     std::string cmd;
@@ -2527,7 +2527,7 @@ void Channel::sendCommand(MachineInstance *machine, std::string command, std::li
                     DBG_CHANNELS << "Channel " << chn->channel_name << " sending " << cmd << "\n";
                     MessageHeader mh(MessageHeader::SOCK_CW, MessageHeader::SOCK_CHAN, false);
                     mh.start_time = microsecs();
-                    safeSend(*chn->mif->getSocket(), cmd, mh);
+                    sendChannelOut(chn->definition()->isPublisher(), *chn->mif->getSocket(), cmd.c_str(), cmd.size(), mh);
                 }
                 else {
                     char buf[150];
