@@ -1290,11 +1290,11 @@ ExprNode eval_stack(MachineInstance *m, std::list<ExprNode>::const_iterator &sta
 /*
     `WHEN <machine> ENTERED <state>`
 
-    True iff the machine named on the left just entered the state named on the
-    right, as recorded in THIS machine's (the listener's) one-pass enter slot.
-    Reading the slot consumes it, so the edge is true for exactly one evaluation
-    of the rule; a second evaluation of the same rule in the same pass is false.
-    That bound is the point of the feature: a longer-lived edge is a stale WAS.
+    True iff the machine named on the left entered the state named on the
+    right since THIS machine's (the listener's) last WHEN pass. The slot is a
+    set: Done then Unavailable keeps both, and `ENTERED Done` matches if Done
+    is in that set. A matching read consumes that one name; the rest of the
+    set dies at the end of the pass. A longer-lived set is a stale WAS.
 
     The check has to happen here rather than in the stack machinery, because
     resolve() binds a machine symbol to that machine's live state -- correct for

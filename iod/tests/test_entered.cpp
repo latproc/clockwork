@@ -24,8 +24,11 @@
          absorb often does not);
       2. it is visible for exactly ONE WHEN pass;
       3. `IS` is unchanged — live only, never a queued enter;
-      4. reading the edge consumes it, so a first-WHEN-wins list cannot fire a
-         second rule on the same edge.
+      4. reading a matched name consumes that name, so a first-WHEN-wins list
+         cannot fire a second rule on the same state; other names in the set
+         stay until the end of the pass;
+      5. a later enter (Unavailable) does not hide an unread Done — the 2G-115
+         2026-10-13 feeder miss.
 */
 
 #include "gtest/gtest.h"
@@ -143,7 +146,7 @@ class EnteredTest : public ::testing::Test {
         // handshake: a process sets want=on, the machine enters Done, and the
         // next pass (the process having cleared want) leaves Done again. One
         // "tick" is runPass() enough times for that enter-and-leave to complete.
-        src_class = makeClass("ENTERED_SRC", {"Idle", "Done"});
+        src_class = makeClass("ENTERED_SRC", {"Idle", "Done", "Unavailable"});
         addRule(src_class, "Done", propertyIs("want", "on"));
         addRule(src_class, "Idle", propertyIs("want", "off"));
 
@@ -177,25 +180,16 @@ class EnteredTest : public ::testing::Test {
         runPass(src);
     }
 
-    // The rest of the 2G-115 tick, stated explicitly because it is the case the
-    // feature exists for: the source is back in Idle by the time the listener
-    // runs, while the listener still holds an unread Done edge. In the field the
-    // leave is ENTER Done doing `SET State TO Idle` -- not an enter of Idle -- so
-    // nothing overwrites the edge. Here the source is settled into Idle first (a
-    // real pass, which records an Idle edge of its own) and then the Done edge is
-    // restored on the listener, so the assertion is about the ENTERED read and not
-    // about which state happened to be recorded last.
+    // The rest of the 2G-115 tick: the source has left Done by the time the
+    // listener runs. Going Idle is a real setState, so Idle is added to the
+    // enter set; Done stays in the set. That is the point of the set: a later
+    // enter must not hide an unread Done (on the plant the later enter is
+    // Unavailable from ENTER EmptyWait).
     void sourceHasLeftDoneWithTheEdgeStillPending() {
         src->setValue("want", Value("off", Value::t_string));
         ASSERT_NE(0, changeState(src, "Idle"));
         runPass(src);
         ASSERT_EQ("Idle", currentState(src));
-        // Re-record the Done edge on the listener: the field leave is ENTER Done
-        // doing `SET State TO Idle`, i.e. not an enter of Idle, so nothing would
-        // have overwritten the edge. Letting noteEntered stand in for that keeps
-        // the assertion about the ENTERED read rather than about which state was
-        // recorded last.
-        listener->noteEntered(src, std::string("Done"));
     }
 
     // The common case: the source enters Done and has left it again by the time
@@ -204,6 +198,11 @@ class EnteredTest : public ::testing::Test {
         if (strcmp(state, "Done") == 0) {
             sourceEntersDone();
             sourceHasLeftDoneWithTheEdgeStillPending();
+        }
+        else if (strcmp(state, "Idle") == 0) {
+            src->setValue("want", Value("off", Value::t_string));
+            ASSERT_NE(0, changeState(src, "Idle"));
+            runPass(src);
         }
     }
 
@@ -367,10 +366,24 @@ TEST_F(EnteredTest, aSecondRuleDoesNotSeeTheSameEdge) {
 TEST_F(EnteredTest, twoEntersBeforeThePassStillFireOnce) {
     Predicate *rule = enteredPredicate(kSourceName, "Done");
     sourceEnters("Done");
-    sourceEnters("Idle");
     sourceEnters("Done");
-    EXPECT_TRUE(whenPass(rule)) << "last enter wins, no count";
+    EXPECT_TRUE(whenPass(rule)) << "Done twice is still one member of the set, no count";
     EXPECT_FALSE(whenPass(rule)) << "and exactly once, not twice";
+}
+
+TEST_F(EnteredTest, aLaterEnterDoesNotHideAnUnreadDone) {
+    // 2G-115 2026-10-13: M_GrabBaleGateControl Done then Unavailable (721 us)
+    // before M_GrabFeeder's WHEN pass. Last-enter-wins hid Done; the set keeps
+    // both, so `M_TipControl ENTERED Done` matches.
+    Predicate *done = enteredPredicate(kSourceName, "Done");
+    Predicate *unavail = enteredPredicate(kSourceName, "Unavailable");
+    sourceEntersDone();
+    ASSERT_NE(0, changeState(src, "Unavailable"));
+    runPass(src);
+    ASSERT_EQ("Unavailable", currentState(src));
+    EXPECT_TRUE(whenPass(done)) << "Done is still in the enter set after Unavailable";
+    EXPECT_TRUE(whenPass(unavail)) << "Unavailable is in the same set";
+    EXPECT_FALSE(whenPass(done)) << "the matching read consumed Done";
 }
 
 TEST_F(EnteredTest, anEnterOfADifferentStateDoesNotMatch) {
