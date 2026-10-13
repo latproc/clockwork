@@ -182,6 +182,12 @@ target_link_libraries(test_shadow_reenable_on_active gmock_main cw_interpreter c
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_shadow_reenable_on_active COMMAND test_shadow_reenable_on_active)
 
+add_executable(test_receive_enter_same_tick test_receive_enter_same_tick.cpp )
+set_target_properties (test_receive_enter_same_tick PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_receive_enter_same_tick gmock_main cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_receive_enter_same_tick COMMAND test_receive_enter_same_tick)
+
 add_executable(test_symboltable test_symboltable.cpp )
 target_link_libraries(test_symboltable gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${DL_LIBRARY} pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
