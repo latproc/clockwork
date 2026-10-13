@@ -1296,6 +1296,7 @@ void Channel::operator()() {
 
     // start routine messages through the subscriber socket
     internals->router.setRemoteSocket(&communications_manager->subscriber());
+    internals->router.setDropRemoteOnFull(true);
     internals->router.addRoute(MessageHeader::SOCK_CW, internals->command_sock);
     DBG_CHANNELS << "Clockwork command processor on other end of "
                  << internals->cmd_sock_info->address << "\n";

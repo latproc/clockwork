@@ -870,7 +870,7 @@ RouteInfo::RouteInfo(const char *addr, zmq::socket_t *s)
 class MessageRouterInternals {
   public:
     MessageRouterInternals()
-        : remote(0), default_dest(0), allocated_remote(false), done(false), destinations(0), saved_num_items(0), items(0) {}
+        : remote(0), default_dest(0), allocated_remote(false), done(false), drop_remote_on_full(false), destinations(0), saved_num_items(0), items(0) {}
     ~MessageRouterInternals();
     boost::mutex data_mutex;
     std::map<int, RouteInfo *> routes;
@@ -880,6 +880,7 @@ class MessageRouterInternals {
     zmq::socket_t *default_dest;
     bool allocated_remote;
     bool done;
+    bool drop_remote_on_full;
     int *destinations;
     size_t saved_num_items;
     zmq::pollitem_t *items;
@@ -934,7 +935,33 @@ void MessageRouter::addRoute(int route_id, zmq::socket_t *dest) {
     }
 }
 
+
+// Publisher channels (PANEL/SAMPLER) may drop an outbound VALUE if the
+// remote PAIR is full. A slow Humid (laptop) filling TCP/HWM used to
+// block this thread in safeSend and stall every subscriber on the bind.
+static bool trySendRemote(zmq::socket_t &sock, const char *buf, size_t buflen,
+                          const MessageHeader &header) {
+    try {
+        if (header.dest || header.source) {
+            zmq::message_t hdr(sizeof(MessageHeader));
+            memcpy(hdr.data(), &header, sizeof(MessageHeader));
+            if (!sock.send(hdr, ZMQ_SNDMORE | ZMQ_DONTWAIT)) {
+                return false;
+            }
+        }
+        zmq::message_t msg(buflen);
+        memcpy(msg.data(), buf, buflen);
+        return sock.send(msg, ZMQ_DONTWAIT);
+    }
+    catch (const zmq::error_t &) {
+        return false;
+    }
+}
+
 void MessageRouter::addDefaultRoute(zmq::socket_t *def) { internals->default_dest = def; }
+
+
+void MessageRouter::setDropRemoteOnFull(bool drop) { internals->drop_remote_on_full = drop; }
 
 void MessageRouter::setRemoteSocket(zmq::socket_t *remote_sock) {
     auto prev = internals->remote;
@@ -1153,7 +1180,12 @@ void MessageRouter::poll() {
                 if (do_send) {
                     DBG_CHANNELS << "message router forwarding to " << found->first << "\n";
                     mh.start_time = microsecs();
-                    safeSend(*internals->remote, buf, len, mh);
+                    if (internals->drop_remote_on_full) {
+                        trySendRemote(*internals->remote, buf, len, mh);
+                    }
+                    else {
+                        safeSend(*internals->remote, buf, len, mh);
+                    }
                 }
                 else {
                     DBG_CHANNELS << "dropped message due to filter\n";

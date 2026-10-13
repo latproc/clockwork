@@ -148,6 +148,7 @@ class MessageRouter {
     void addRoute(int route_id, zmq::socket_t *dest);
     void addDefaultRoute(zmq::socket_t *def);
     void setRemoteSocket(zmq::socket_t *remote_sock);
+    void setDropRemoteOnFull(bool drop);
 
     void removeRoute(int route_id);
 
