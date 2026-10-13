@@ -176,6 +176,12 @@ target_link_libraries(test_channels gmock_main cw_interpreter cw_client ${ZeroMQ
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_channels COMMAND test_message)
 
+add_executable(test_shadow_reenable_on_active test_shadow_reenable_on_active.cpp )
+set_target_properties (test_shadow_reenable_on_active PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
+target_link_libraries(test_shadow_reenable_on_active gmock_main cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_shadow_reenable_on_active COMMAND test_shadow_reenable_on_active)
+
 add_executable(test_symboltable test_symboltable.cpp )
 target_link_libraries(test_symboltable gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${DL_LIBRARY} pthread)
 include_directories("${PROJECT_SOURCE_DIR}/tests")
