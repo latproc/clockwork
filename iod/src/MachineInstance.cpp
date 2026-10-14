@@ -899,7 +899,8 @@ MachineInstance::MachineInstance(InstanceType instance_type)
       owner_channel(0), cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
       cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
       command_fanout_skip(0), command_fanout_pending(false), property_notify_defer(0),
-      deferred_property_notify(false), record_apply_mode(false), expected_authority(0) {
+      deferred_property_notify(false), record_apply_mode(false), expected_authority(0),
+      pending_change_check(false) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -938,7 +939,8 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
       cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
       cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
       command_fanout_skip(0), command_fanout_pending(false), property_notify_defer(0),
-      deferred_property_notify(false), record_apply_mode(false), expected_authority(0) {
+      deferred_property_notify(false), record_apply_mode(false), expected_authority(0),
+      pending_change_check(false) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -1426,6 +1428,32 @@ void MachineInstance::clearPendingEntered(const std::set<MachineInstance *> &sou
          ++it) {
         just_entered.erase(*it);
     }
+    // The WHEN pass this listener was queued for has now run, so the
+    // change-driven mark is spent. Cleared here rather than when the machine is
+    // dequeued so a listener that never runs WHENs (disabled, busy) cannot leave
+    // the absorb admitting it forever.
+    pending_change_check = false;
+}
+
+/* A machine this listener reads changed state. Record the enter edge (as before)
+   and queue the listener for a WHEN pass, marked change-driven.
+
+   The mark is what lets the wait-loop absorb tell two kinds of pending WHEN work
+   apart without changing either:
+     - this one, an internal edge that a handshake pulse depends on and that must
+       run promptly, because the pulse can be gone before the paced recheck; and
+     - a TIMER re-queue, which repeats by design and stays paced.
+
+   Deliberately NOT done for property changes: analog VALUE updates ride the
+   property/notify path, and marking those immediate is exactly the every-sample
+   fan-out the analog/counter pacing work removed. */
+void MachineInstance::noteStateChange(MachineInstance *source, const std::string &state_name) {
+    noteEntered(source, state_name);
+    if (!is_enabled || !state_machine || !state_machine->allow_auto_states) {
+        return;
+    }
+    pending_change_check = true;
+    setNeedsCheck();
 }
 
 void MachineInstance::removeDependancy(MachineInstance *m) {
@@ -2678,7 +2706,7 @@ Action::Status MachineInstance::setState(const State &new_state, uint64_t author
                 if (entered_dep == this) {
                     continue;
                 }
-                entered_dep->noteEntered(this, current_state.getName());
+                entered_dep->noteStateChange(this, current_state.getName());
             }
         }
 

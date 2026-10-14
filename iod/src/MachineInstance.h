@@ -234,6 +234,15 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
        passes the set it snapshotted when its WHEN pass began, so an edge written
        *during* the pass is not wiped by the end of it. */
     void clearPendingEntered(const std::set<MachineInstance *> &sources);
+    /* A machine this listener reads changed state: record the enter edge and queue
+       the listener for a WHEN pass, marked as change-driven (pending_change_check)
+       so the wait-loop absorb can admit it promptly instead of at the paced
+       recheck. State changes only - see pending_change_check. */
+    void noteStateChange(MachineInstance *source, const std::string &state_name);
+    /* True while a state change has queued this listener's WHEN pass and that pass
+       has not run yet. Read by the absorb to tell internal edge work from a paced
+       TIMER re-queue. */
+    bool changeCheckPending() const { return pending_change_check; }
     virtual bool isShadow(); // is this machine a shadow instance?
     virtual Channel *ownerChannel();
 
@@ -366,6 +375,22 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
        Keyed by source; value is every state that source entered since this
        listener's last WHEN pass. */
     std::map<MachineInstance *, std::set<std::string> > just_entered;
+
+    /* A listener has been queued for a WHEN pass by a *state change* on a machine
+       it reads, rather than by a TIMER re-queue.
+
+       Why the distinction exists: a state change is internal Clockwork activity
+       and is owed a WHEN pass promptly - a handshake pulse (Done, Clearing, a
+       camera flash) can be gone in one eval, and waiting out the paced recheck
+       interval loses it. A TIMER re-queue repeats by design and must stay paced,
+       or the analog/counter load reduction is undone.
+
+       Set by noteStateChange() on each listener of the machine that changed;
+       cleared when that listener's WHEN pass runs (clearPendingEntered). Only the
+       state-change path sets it. Property changes deliberately do not: analog
+       VALUE updates ride the property path, and marking those would put the
+       every-sample fan-out back. */
+    bool pending_change_check;
 
     virtual void enable();
     virtual void resume();

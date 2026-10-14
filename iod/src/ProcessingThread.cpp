@@ -1420,6 +1420,22 @@ void ProcessingThread::operator()() {
                 }
                 return false;
             };
+            // Internal edge work: a machine changed state and a listener that
+            // reads it has not had its WHEN pass yet. This is Clockwork activity,
+            // not analog fan-out, and a handshake pulse can be gone in one eval -
+            // so it is admitted as soon as it exists rather than at the paced
+            // recheck. A TIMER re-queue is not change-driven and stays paced
+            // (has_paced_machine_work), which is what keeps the analog/counter
+            // load reduction intact.
+            auto has_change_driven_check = [&]() -> bool {
+                boost::recursive_mutex::scoped_lock lock(runnable_mutex);
+                for (MachineInstance *mi : runnable) {
+                    if (mi->queuedForStableStateTest() && mi->changeCheckPending()) {
+                        return true;
+                    }
+                }
+                return false;
+            };
 
             auto finish_sched_done = [&]() -> bool {
                 char sbuf[16];
@@ -1519,7 +1535,8 @@ void ProcessingThread::operator()() {
                     systems_waiting = 1;
                     break;
                 }
-                if (has_immediate_machine_work() || !io_work_queue.empty() ||
+                if (has_immediate_machine_work() || has_change_driven_check() ||
+                    !io_work_queue.empty() ||
                     !MachineInstance::pendingEvents().empty()) {
                     ++snap_brk_exec;
                     systems_waiting = 1;
@@ -1537,7 +1554,8 @@ void ProcessingThread::operator()() {
                         systems_waiting = 1;
                         break;
                     }
-                    if (has_immediate_machine_work() || !io_work_queue.empty() ||
+                    if (has_immediate_machine_work() || has_change_driven_check() ||
+                        !io_work_queue.empty() ||
                         !MachineInstance::pendingEvents().empty()) {
                         ++snap_brk_exec;
                         systems_waiting = 1;
@@ -1590,7 +1608,8 @@ void ProcessingThread::operator()() {
                     systems_waiting = 1;
                     break;
                 }
-                if (has_immediate_machine_work() || !io_work_queue.empty() ||
+                if (has_immediate_machine_work() || has_change_driven_check() ||
+                    !io_work_queue.empty() ||
                     !MachineInstance::pendingEvents().empty()) {
                     ++snap_brk_exec;
                     systems_waiting = 1;
@@ -1612,6 +1631,15 @@ void ProcessingThread::operator()() {
 
             // Urgent ZMQ (cmd/channel) still exits wait immediately.
             if (other_non_sched) {
+                break;
+            }
+            // Internal edge work (a state change queued a listener's WHEN pass):
+            // admit it now rather than at the paced recheck, because a handshake
+            // pulse can be gone in one eval. TIMER re-queues are not marked and
+            // still wait out stable_check_us below.
+            if (has_change_driven_check()) {
+                ++snap_brk_exec;
+                systems_waiting = 1;
                 break;
             }
             // Paced-only (stable/exec-wait): leave wait at stable_check_us.
