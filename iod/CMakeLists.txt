@@ -642,6 +642,25 @@ add_test(NAME runtime_list_changes_local_state COMMAND sh ${_runtime}
   --must-contain "OBSERVED plain loud_enter"
   --must-not-contain "LEAK local quiet_enter")
 
+# A one-eval pulse: a machine is put into Done and taken straight back out inside
+# one action sequence, so the state exists only between two SETs. One listener per
+# mechanism watches it. `IS` is a level and misses it; `ENTERED` and `RECEIVE`
+# catch it. This is the LPC half of the same-tick story (see
+# cw_issues/INTERNAL_CALL_SEND_RECEIVE_SAME_TICK_20261014.md); the receive log
+# also lands before the driver's next statement, which is the synchronous
+# delivery itself.
+set(_pulse_fixture ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/enter_pulse_capture.cw)
+add_test(NAME enter_pulse_is_is_level_only COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_pulse_fixture}
+  --must-contain "PULSE-SENT"
+  --must-not-contain "PULSE-IS-SAW-DONE")
+add_test(NAME enter_pulse_entered_sees_pulse COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_pulse_fixture}
+  --must-contain "PULSE-ENTERED-SAW-DONE")
+add_test(NAME enter_pulse_receive_sees_pulse COMMAND sh ${_runtime}
+  $<TARGET_FILE:cw> ${_pulse_fixture}
+  --must-contain "PULSE-RECEIVE-SAW-DONE")
+
 # QUERY ... INTO <list> installs an automatic response_changed fill. Without an
 # explicit handler the list is filled for the author; with one, the author's
 # handler wins and parsing must not report a duplicate.
