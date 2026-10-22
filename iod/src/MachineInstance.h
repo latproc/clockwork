@@ -239,6 +239,10 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
        so the wait-loop absorb can admit it promptly instead of at the paced
        recheck. State changes only - see pending_change_check. */
     void noteStateChange(MachineInstance *source, const std::string &state_name);
+    /* Internal state-change propagation through composite LIST/REFERENCE
+       dependencies. A LIST does not run WHEN rules itself, but its dependants
+       do; they must inherit the change-driven mark too. */
+    void noteIndirectStateChange(std::set<MachineInstance *> &visited);
     /* True while a state change has queued this listener's WHEN pass and that pass
        has not run yet. Read by the absorb to tell internal edge work from a paced
        TIMER re-queue. */

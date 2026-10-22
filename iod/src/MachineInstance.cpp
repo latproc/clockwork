@@ -1449,11 +1449,55 @@ void MachineInstance::clearPendingEntered(const std::set<MachineInstance *> &sou
    fan-out the analog/counter pacing work removed. */
 void MachineInstance::noteStateChange(MachineInstance *source, const std::string &state_name) {
     noteEntered(source, state_name);
-    if (!is_enabled || !state_machine || !state_machine->allow_auto_states) {
+    if (!is_enabled || !state_machine) {
+        return;
+    }
+    if (state_machine->token_id == ClockworkToken::LIST ||
+        state_machine->token_id == ClockworkToken::REFERENCE) {
+        if (state_machine->token_id == ClockworkToken::LIST && !listPropagatesMemberChecks()) {
+            return;
+        }
+        std::set<MachineInstance *> visited;
+        visited.insert(this);
+        std::set<MachineInstance *>::iterator dep_iter = depends.begin();
+        while (dep_iter != depends.end()) {
+            MachineInstance *dep = *dep_iter++;
+            dep->noteIndirectStateChange(visited);
+        }
+        return;
+    }
+    if (!state_machine->allow_auto_states) {
         return;
     }
     pending_change_check = true;
     setNeedsCheck();
+}
+
+void MachineInstance::noteIndirectStateChange(std::set<MachineInstance *> &visited) {
+    if (!visited.insert(this).second || !is_enabled || !state_machine) {
+        return;
+    }
+    if (state_machine->token_id == ClockworkToken::LIST) {
+        if (!listPropagatesMemberChecks()) {
+            return;
+        }
+    }
+    else if (state_machine->token_id != ClockworkToken::REFERENCE &&
+             !state_machine->allow_auto_states) {
+        return;
+    }
+
+    pending_change_check = true;
+    setNeedsCheck();
+
+    if (state_machine->token_id == ClockworkToken::LIST ||
+        state_machine->token_id == ClockworkToken::REFERENCE) {
+        std::set<MachineInstance *>::iterator dep_iter = depends.begin();
+        while (dep_iter != depends.end()) {
+            MachineInstance *dep = *dep_iter++;
+            dep->noteIndirectStateChange(visited);
+        }
+    }
 }
 
 void MachineInstance::removeDependancy(MachineInstance *m) {

@@ -29,6 +29,7 @@
 #include "ProcessingThread.h"
 #include "SetStateAction.h"
 #include "StableState.h"
+#include "dynamic_value.h"
 
 #include <iostream>
 #include <list>
@@ -286,6 +287,112 @@ TEST_F(ReceiveEnterSameTickTest, InternalWorkQueuedByAChangeActuallyFinishes) {
 
     delete observer;
     delete observer_class;
+}
+
+// A LIST is an intermediate dependency. A state change on one of its members
+// must carry the change-driven mark through the LIST to a listener such as
+// `ALL M_ListMembers ARE on`; a plain setNeedsCheck() only queues paced work,
+// which the elc tight-absorb path is allowed to leave asleep indefinitely.
+TEST_F(ReceiveEnterSameTickTest, ListMemberChangeMarksListDependantsChangeDriven) {
+    MachineClass *member_class = makeClass("LIST_MEMBER", {"off", "on"});
+    MachineClass *list_class = makeClass("LIST", {"empty", "nonempty"});
+    MachineClass *observer_class = makeClass("LIST_OBSERVER", {"Wait", "SawAll"});
+    addRule(observer_class, "SawAll",
+            new Predicate(new Value(new AllInValue("on", "M_ListMembers"))));
+
+    MachineInstance *member_a = makeMachine("M_ListMemberA", member_class);
+    MachineInstance *member_b = makeMachine("M_ListMemberB", member_class);
+    MachineInstance *members = makeMachine("M_ListMembers", list_class);
+    members->addParameter(Value("M_ListMemberA"), member_a);
+    members->addParameter(Value("M_ListMemberB"), member_b);
+
+    MachineInstance *observer = makeMachine("M_ListObserver", observer_class);
+    members->addDependancy(observer);
+    observer->listenTo(members);
+
+    settle(members);
+    settle(observer);
+    {
+        std::set<MachineInstance *> initial;
+        initial.insert(observer);
+        MachineInstance::checkStableStates(initial, 150000);
+        settle(observer);
+    }
+    ASSERT_EQ("Wait", observer->getCurrent().getName());
+    ASSERT_FALSE(observer->queuedForStableStateTest());
+    ASSERT_FALSE(observer->changeCheckPending());
+
+    enterState(member_a, "on");
+
+    EXPECT_EQ("on", member_a->getCurrent().getName());
+    EXPECT_EQ("nonempty", members->getCurrent().getName());
+    EXPECT_TRUE(observer->queuedForStableStateTest())
+        << "a member's state change must wake the LIST dependant";
+    EXPECT_TRUE(observer->changeCheckPending())
+        << "the wake must retain change-driven admission through the LIST";
+
+    enterState(member_b, "on");
+    {
+        std::set<MachineInstance *> pass;
+        pass.insert(observer);
+        MachineInstance::checkStableStates(pass, 150000);
+        settle(observer);
+    }
+
+    EXPECT_EQ("SawAll", observer->getCurrent().getName())
+        << "ALL over the list must observe both member states";
+    EXPECT_FALSE(observer->changeCheckPending())
+        << "the change-driven mark must be spent by the listener pass";
+    EXPECT_FALSE(observer->queuedForStableStateTest());
+
+    delete observer;
+    delete members;
+    delete member_a;
+    delete member_b;
+    delete observer_class;
+    delete list_class;
+    delete member_class;
+}
+
+// Quiet lists intentionally suppress member-state fan-out. The change-driven
+// propagation must not turn L_Globals-style enable bags back into hot wake paths.
+TEST_F(ReceiveEnterSameTickTest, QuietListMemberChangeStaysQuiet) {
+    MachineClass *member_class = makeClass("QUIET_LIST_MEMBER", {"off", "on"});
+    MachineClass *list_class = makeClass("LIST", {"empty", "nonempty"});
+    MachineClass *observer_class = makeClass("QUIET_LIST_OBSERVER", {"Wait", "SawAll"});
+    addRule(observer_class, "SawAll",
+            new Predicate(new Value(new AllInValue("on", "M_QuietListMembers"))));
+
+    MachineInstance *member = makeMachine("M_QuietListMember", member_class);
+    MachineInstance *members = makeMachine("M_QuietListMembers", list_class);
+    members->setValue("propagate_member_checks", Value(false));
+    members->addParameter(Value("M_QuietListMember"), member);
+
+    MachineInstance *observer = makeMachine("M_QuietListObserver", observer_class);
+    members->addDependancy(observer);
+    observer->listenTo(members);
+    settle(members);
+    settle(observer);
+    {
+        std::set<MachineInstance *> initial;
+        initial.insert(observer);
+        MachineInstance::checkStableStates(initial, 150000);
+        settle(observer);
+    }
+    ASSERT_FALSE(observer->queuedForStableStateTest());
+
+    enterState(member, "on");
+
+    EXPECT_FALSE(observer->changeCheckPending());
+    EXPECT_FALSE(observer->queuedForStableStateTest())
+        << "propagate_member_checks:false must remain quiet";
+
+    delete observer;
+    delete members;
+    delete member;
+    delete observer_class;
+    delete list_class;
+    delete member_class;
 }
 
 } // namespace
