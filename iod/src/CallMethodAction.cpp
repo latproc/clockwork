@@ -80,6 +80,15 @@ Action::Status CallMethodAction::run() {
         return status;
     }
     else if (target_machine->enabled()) {
+        if (target_machine->isShadow()) {
+            std::string msg = "CALL to CW2CW mirror ";
+            msg += target_machine->getName();
+            msg += " is unsupported because its completion cannot be correlated across the "
+                   "channel; use SEND instead";
+            MessageLog::instance()->add(msg.c_str());
+            error_str = strdup(msg.c_str());
+            return Action::Failed;
+        }
         if (!getTrigger() || getTrigger()->fired() || !trigger->enabled()) {
             // Correlate this CALL with the target's _done reply: the reply echoes
             // the command message's sequence number, so a late reply from an

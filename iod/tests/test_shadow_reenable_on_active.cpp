@@ -210,4 +210,41 @@ TEST_F(ShadowReenableOnActiveTest, CallToADisabledMirrorNamesTheMirrorAndChannel
     delete caller_class;
 }
 
+// A CALL to an enabled mirror must fail immediately. The mirror command is sent
+// over the channel, but its completion cannot be correlated back through the
+// wire, so continuing leaves the caller in Running forever. SEND is the
+// supported path for a fire-and-forget command to a CW2CW mirror.
+TEST_F(ShadowReenableOnActiveTest, CallToAnEnabledMirrorFailsWithoutWaiting) {
+    makeMirrorChannel();
+
+    channel_->addConnection();
+    drainChannel();
+    channel_->setState(ChannelImplementation::ACTIVE);
+    drainChannel();
+    ASSERT_TRUE(channel_->getCurrent() == ChannelImplementation::ACTIVE);
+    ASSERT_TRUE(mirror_->enabled());
+
+    MachineClass *caller_class = new MachineClass("TESTCALLER");
+    MachineInstance *caller = MachineInstanceFactory::create("M_TestEnabledCaller", "TESTCALLER");
+    ASSERT_NE(nullptr, caller);
+    caller->setStateMachine(caller_class);
+
+    CallMethodActionTemplate tpl(CStringHolder("SomeCommand"),
+                                 CStringHolder(mirror_name_.c_str()));
+    CallMethodAction action(caller, tpl);
+
+    EXPECT_EQ(Action::Failed, action.run())
+        << "an enabled mirror must reject CALL instead of waiting for a reply that cannot "
+           "be correlated";
+
+    const std::string err = action.error() ? action.error() : "";
+    EXPECT_NE(std::string::npos, err.find(mirror_name_))
+        << "the refusal must name the mirror: " << err;
+    EXPECT_NE(std::string::npos, err.find("use SEND"))
+        << "the refusal must provide the supported alternative: " << err;
+
+    delete caller;
+    delete caller_class;
+}
+
 } // namespace

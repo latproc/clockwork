@@ -184,6 +184,10 @@ COMMAND run {
 - **Reply correlation.** A `CALL` that times out does not cancel the target's
   command; the target may finish later. Its late reply is discarded and cannot
   complete a later `CALL` to the same command.
+- **CW2CW mirrors.** `CALL` is only valid for an in-process machine. A `CALL`
+  whose target is a CW2CW mirror fails immediately rather than waiting for a
+  completion reply that cannot be correlated across the channel. Use `SEND` for
+  a fire-and-forget command to a mirror.
 - **Unhandled timeout.** A timeout with no `ON TIMEOUT` block propagates to the
   nearest enclosing timed scope, which routes it to its own `ON TIMEOUT` (not
   `ON ERROR`).
