@@ -54,7 +54,7 @@ void VelocityInstance::sampleAll(uint64_t sample_clock) {
 }
 
 void VelocityInstance::configureEstimator() {
-    int64_t window_ms = 200;
+    int64_t window_ms = 100;
     int64_t min_samples = 4;
     int64_t sample_ms = 20;
     double scale = 1.0;

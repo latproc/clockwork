@@ -42,7 +42,7 @@ class VelocityEstimator {
               state(SETTLING) {}
     };
 
-    VelocityEstimator(size_t capacity = 128, uint64_t window_us = 200000,
+    VelocityEstimator(size_t capacity = 128, uint64_t window_us = 100000,
                       size_t min_samples = 4, double scale = 1.0, uint64_t stale_us = 250000,
                       double max_abs_value = 0.0)
         : capacity_(capacity < 2 ? 2 : capacity), start_(0), count_(0), window_us_(window_us),
@@ -59,7 +59,7 @@ class VelocityEstimator {
 
     void configure(uint64_t window_us, size_t min_samples, double scale, uint64_t stale_us,
                    double max_abs_value) {
-        window_us_ = window_us == 0 ? 200000 : window_us;
+        window_us_ = window_us == 0 ? 100000 : window_us;
         min_samples_ = min_samples < 2 ? 2 : min_samples;
         scale_ = scale;
         stale_us_ = stale_us;

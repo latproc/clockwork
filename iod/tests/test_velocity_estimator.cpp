@@ -25,7 +25,7 @@ void feed_constant(VelocityEstimator &estimator, double speed_mm_s, int samples)
 }
 
 TEST(VelocityEstimator, constant_cruise_uses_a_fixed_time_window) {
-    VelocityEstimator estimator(128, 200000, 4, MM_PER_COUNT, 250000, 1000.0);
+    VelocityEstimator estimator(128, 100000, 4, MM_PER_COUNT, 250000, 1000.0);
     feed_constant(estimator, 500.0, 12);
 
     const VelocityEstimator::Result result = estimator.lastResult();
@@ -34,12 +34,19 @@ TEST(VelocityEstimator, constant_cruise_uses_a_fixed_time_window) {
     EXPECT_NEAR(500.0, result.value, 2.0);
     EXPECT_EQ(START_US + 11 * PERIOD_US, result.iotime);
     EXPECT_EQ(result.iotime, result.raw_iotime);
-    EXPECT_GE(result.sample_count, 10u);
-    EXPECT_EQ(200000u, result.window_us);
+    EXPECT_GE(result.sample_count, 6u);
+    EXPECT_EQ(100000u, result.window_us);
+}
+
+TEST(VelocityEstimator, default_window_is_100_ms) {
+    VelocityEstimator estimator;
+    feed_constant(estimator, 500.0, 8);
+
+    EXPECT_EQ(100000u, estimator.lastResult().window_us);
 }
 
 TEST(VelocityEstimator, low_speed_does_not_use_a_fixed_movement_floor) {
-    VelocityEstimator estimator(128, 200000, 4, MM_PER_COUNT, 250000, 1000.0);
+    VelocityEstimator estimator(128, 100000, 4, MM_PER_COUNT, 250000, 1000.0);
     feed_constant(estimator, 10.0, 12);
 
     const VelocityEstimator::Result result = estimator.lastResult();
@@ -48,7 +55,7 @@ TEST(VelocityEstimator, low_speed_does_not_use_a_fixed_movement_floor) {
 }
 
 TEST(VelocityEstimator, rest_becomes_zero_without_retaining_last_motion) {
-    VelocityEstimator estimator(128, 200000, 4, MM_PER_COUNT, 250000, 1000.0);
+    VelocityEstimator estimator(128, 100000, 4, MM_PER_COUNT, 250000, 1000.0);
     feed_constant(estimator, 500.0, 12);
     const int64_t stopped_position = position_at(500.0, 11 * PERIOD_US);
 
@@ -64,7 +71,7 @@ TEST(VelocityEstimator, rest_becomes_zero_without_retaining_last_motion) {
 }
 
 TEST(VelocityEstimator, reports_stale_data_instead_of_reusing_old_velocity) {
-    VelocityEstimator estimator(128, 200000, 4, MM_PER_COUNT, 250000, 1000.0);
+    VelocityEstimator estimator(128, 100000, 4, MM_PER_COUNT, 250000, 1000.0);
     feed_constant(estimator, 500.0, 12);
     const uint64_t newest = START_US + 11 * PERIOD_US;
 
@@ -75,7 +82,7 @@ TEST(VelocityEstimator, reports_stale_data_instead_of_reusing_old_velocity) {
 }
 
 TEST(VelocityEstimator, timestamp_goes_backwards_is_rejected) {
-    VelocityEstimator estimator(128, 200000, 4, MM_PER_COUNT, 250000, 1000.0);
+    VelocityEstimator estimator(128, 100000, 4, MM_PER_COUNT, 250000, 1000.0);
     feed_constant(estimator, 500.0, 12);
     const uint64_t newest = START_US + 11 * PERIOD_US;
 
@@ -87,7 +94,7 @@ TEST(VelocityEstimator, timestamp_goes_backwards_is_rejected) {
 }
 
 TEST(VelocityEstimator, implausible_value_is_rejected) {
-    VelocityEstimator estimator(128, 200000, 4, MM_PER_COUNT, 250000, 600.0);
+    VelocityEstimator estimator(128, 100000, 4, MM_PER_COUNT, 250000, 600.0);
     feed_constant(estimator, 700.0, 12);
 
     const VelocityEstimator::Result result = estimator.lastResult();

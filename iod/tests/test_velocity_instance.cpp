@@ -78,7 +78,7 @@ class VelocityInstanceTest : public ::testing::Test {
         machine_class->setProperty("VALUE", Value(0.0));
         machine_class->setProperty("Velocity", Value(0.0));
         machine_class->setProperty("IOTIME", Value(0));
-        machine_class->setOption("WindowMs", 200);
+        machine_class->setOption("WindowMs", 100);
         machine_class->setOption("MinSamples", 4);
         machine_class->setOption("SampleMs", 20);
         machine_class->setOption("Scale", 1.0);
@@ -121,6 +121,7 @@ TEST_F(VelocityInstanceTest, samples_while_the_clockwork_instance_is_disabled) {
     EXPECT_EQ(1, valid);
     EXPECT_NEAR(500.0, value, 1.0);
     EXPECT_NEAR(value, feedback_velocity, 0.001);
+    EXPECT_EQ(100000, velocity->getValue("WindowUs").iValue);
     EXPECT_EQ(static_cast<int64_t>(START_US + 11 * PERIOD_US), iotime.iValue);
 }
 

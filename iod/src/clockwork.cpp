@@ -466,7 +466,7 @@ MachineClass *makeVelocityMachineClass() {
     result->setProperty("VALUE", Value(0.0));
     result->setProperty("Velocity", Value(0.0));
     result->setProperty("IOTIME", Value(0));
-    result->setOption("WindowMs", 200);
+    result->setOption("WindowMs", 100);
     result->setOption("MinSamples", 4);
     result->setOption("SampleMs", 20);
     result->setOption("Scale", 1.0);
