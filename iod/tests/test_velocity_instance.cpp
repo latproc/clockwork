@@ -1,38 +1,48 @@
-#include "iod_mock.h"
 #include "gtest/gtest.h"
 
+#include <Dispatcher.h>
+#include <Logger.h>
 #include <MachineClass.h>
 #include <MachineInstance.h>
+#include <MessagingInterface.h>
 #include <Parameter.h>
+#include <ThreadSafeQueue.h>
 #include <VelocityInstance.h>
+#include <IOComponent.h>
+#include <zmq.hpp>
 
 #include "library_globals.cpp"
 
 namespace {
 
-const char *SOURCE_NAME = "velocity_source";
 const char *VELOCITY_NAME = "velocity_instance";
 const char *LISTENER_NAME = "velocity_listener";
+const char *MODULE_NAME = "EL5152_test";
 const uint64_t START_US = 1000000;
 const uint64_t PERIOD_US = 20000;
+
+class TestVelocityInstance : public VelocityInstance {
+  public:
+    explicit TestVelocityInstance(const char *name)
+        : VelocityInstance(CStringHolder(name), "VELOCITY", MACHINE_INSTANCE) {}
+
+    void testEnable() {
+        is_enabled = true;
+        start_time = microsecs();
+    }
+};
 
 class VelocityInstanceTest : public ::testing::Test {
   protected:
     void SetUp() override {
-        system.activate();
-
-        source_class = makeClass("VELOCITY_SOURCE");
-        source = MachineInstanceFactory::create(SOURCE_NAME, source_class->name.c_str());
-        source->setStateMachine(source_class);
-        source->enable();
-        ::machines[SOURCE_NAME] = source;
-
         velocity_class = makeVelocityClass();
         MachineClass::machine_classes["VELOCITY"] = velocity_class;
-        velocity = dynamic_cast<VelocityInstance *>(
-            MachineInstanceFactory::create(VELOCITY_NAME, "VELOCITY"));
-        ASSERT_NE(nullptr, velocity);
-        velocity->addParameter(Value(SOURCE_NAME, Value::t_symbol), source);
+        velocity = new TestVelocityInstance(VELOCITY_NAME);
+        velocity->setStateMachine(velocity_class);
+        velocity->parameters.push_back(Parameter(Value(MODULE_NAME, Value::t_symbol)));
+        velocity->parameters.push_back(Parameter(Value(static_cast<int64_t>(36))));
+        input = new Input(IOAddress(1, 0, 0, 0, 32));
+        velocity->io_interface = input;
 
         listener_class = makeClass("VELOCITY_LISTENER");
         listener = MachineInstanceFactory::create(LISTENER_NAME, listener_class->name.c_str());
@@ -44,22 +54,20 @@ class VelocityInstanceTest : public ::testing::Test {
     void TearDown() override {
         ::machines.erase(VELOCITY_NAME);
         ::machines.erase(LISTENER_NAME);
-        ::machines.erase(SOURCE_NAME);
         delete listener;
         delete listener_class;
+        velocity->io_interface = nullptr;
         delete velocity;
+        delete input;
         MachineClass::machine_classes.erase("VELOCITY");
         delete velocity_class;
-        delete source;
-        delete source_class;
-        system.deactivate();
     }
 
     void feedSamples(int count) {
         for (int i = 0; i < count; ++i) {
             const uint64_t elapsed_us = static_cast<uint64_t>(i) * PERIOD_US;
-            source->setValue("IOTIME", Value(static_cast<int64_t>(START_US + elapsed_us)));
-            source->setValue("VALUE", Value(static_cast<int64_t>(i * 10)));
+            input->read_time = START_US + elapsed_us;
+            input->address.value = i * 10;
             VelocityInstance::sampleAll(START_US + elapsed_us);
         }
     }
@@ -74,7 +82,8 @@ class VelocityInstanceTest : public ::testing::Test {
 
     static MachineClass *makeVelocityClass() {
         auto *machine_class = makeClass("VELOCITY");
-        machine_class->parameters.push_back(Parameter("source"));
+        machine_class->parameters.push_back(Parameter("module"));
+        machine_class->parameters.push_back(Parameter("offset"));
         machine_class->setProperty("VALUE", Value(0.0));
         machine_class->setProperty("Velocity", Value(0.0));
         machine_class->setProperty("IOTIME", Value(0));
@@ -98,11 +107,9 @@ class VelocityInstanceTest : public ::testing::Test {
         return machine_class;
     }
 
-    MockSystemSetup system;
-    MachineClass *source_class = nullptr;
-    MachineInstance *source = nullptr;
     MachineClass *velocity_class = nullptr;
-    VelocityInstance *velocity = nullptr;
+    TestVelocityInstance *velocity = nullptr;
+    Input *input = nullptr;
     MachineClass *listener_class = nullptr;
     MachineInstance *listener = nullptr;
 };
@@ -126,7 +133,7 @@ TEST_F(VelocityInstanceTest, samples_while_the_clockwork_instance_is_disabled) {
 }
 
 TEST_F(VelocityInstanceTest, internal_updates_do_not_wake_the_instance_or_dependants) {
-    velocity->enable();
+    velocity->testEnable();
     velocity->resetNeedsCheck();
     listener->resetNeedsCheck();
 
@@ -154,3 +161,23 @@ TEST_F(VelocityInstanceTest, unchanged_source_becomes_stale_without_changing_i_o
 }
 
 } // namespace
+
+int main(int argc, char *argv[]) {
+    zmq::context_t *context = new zmq::context_t;
+    MessagingInterface::setContext(context);
+    Logger::instance();
+    boost::condition_variable_any cond_var;
+    boost::shared_mutex cond_var_mutex;
+    SharedThreadSafeQueue<Package *> queue(cond_var, cond_var_mutex);
+    Dispatcher::create(queue);
+    zmq::socket_t dispatch_sync(*MessagingInterface::getContext(), ZMQ_REQ);
+    dispatch_sync.connect("inproc://dispatcher_sync");
+
+    ::testing::InitGoogleTest(&argc, argv);
+    const int result = RUN_ALL_TESTS();
+
+    MessagingInterface::abort();
+    Dispatcher::instance()->stop();
+    Logger::cleanup();
+    return result;
+}

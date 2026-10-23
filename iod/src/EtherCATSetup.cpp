@@ -208,6 +208,7 @@ void cleanupIOComponentModules() { IOComponent::reset(); }
 
 void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_configuration) {
     cleanupIOComponentModules();
+    std::map<std::pair<unsigned int, unsigned int>, Counter *> counter_inputs;
     {
         boost::mutex::scoped_lock lock(thread_protection_mutex);
         output_points.clear();
@@ -219,8 +220,8 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
             char error_buf[error_buf_size];
             MachineInstance *m = *iter++;
             if ((m->_type == "POINT" || m->_type == "ANALOGINPUT" || m->_type == "COUNTER" ||
-                 m->_type == "STATUS_FLAG" || m->_type == "DIGITALVALUE" ||
-                 m->_type == "ANALOGOUTPUT") &&
+                 m->_type == "VELOCITY" || m->_type == "STATUS_FLAG" ||
+                 m->_type == "DIGITALVALUE" || m->_type == "ANALOGOUTPUT") &&
                 m->parameters.size() > 1) {
                 output_points.push_back(m);
                 // points should have two parameters, the name of the io module and the bit offset
@@ -481,16 +482,29 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                         in->addOwner(m);
                     }
                     else {
-                        if (m->_type == "COUNTER") {
-                            Counter *in = new Counter(addr);
-                            char *nm = strdup(m->getName().c_str());
-                            IOComponent::devices[nm] = in;
-                            free(nm);
-                            in->setName(m->getName().c_str());
+                        if (m->_type == "COUNTER" || m->_type == "VELOCITY") {
+                            const std::pair<unsigned int, unsigned int> source_key(
+                                module_position, offset_idx);
+                            auto source = counter_inputs.find(source_key);
+                            Counter *in = 0;
+                            if (source == counter_inputs.end()) {
+                                in = new Counter(addr);
+                                char *nm = strdup(m->getName().c_str());
+                                IOComponent::devices[nm] = in;
+                                free(nm);
+                                in->setName(m->getName().c_str());
+                                counter_inputs[source_key] = in;
+                            }
+                            else {
+                                in = source->second;
+                                IOComponent::devices[m->getName()] = in;
+                            }
                             m->io_interface = in;
                             in->addDependent(m);
-                            in->addOwner(m);
-                            in->setupProperties(m);
+                            if (m->_type == "COUNTER") {
+                                in->addOwner(m);
+                                in->setupProperties(m);
+                            }
                             m->setNeedsThrottle(true);
                         }
                         else if (m->_type == "DIGITALVALUE") {

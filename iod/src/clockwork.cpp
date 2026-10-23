@@ -458,7 +458,8 @@ MachineClass *makeCounterMachineClass() {
 
 MachineClass *makeVelocityMachineClass() {
     MachineClass *result = new MachineClass("VELOCITY");
-    result->parameters.push_back(Parameter("position_input"));
+    result->parameters.push_back(Parameter("module"));
+    result->parameters.push_back(Parameter("offset"));
     result->addState("ready", true);
     result->default_state = State("ready");
     result->initial_state = State("ready");
@@ -928,7 +929,7 @@ void semantic_analysis() {
             m->setStateMachine(machine_class);
             // make sure that analogue machines have a value property
             if (machine_class->name == "ANALOGOUTPUT" || machine_class->name == "ANALOGINPUT" ||
-                machine_class->name == "COUNTER") {
+                machine_class->name == "COUNTER" || machine_class->name == "VELOCITY") {
                 m->properties.add("VALUE", 0, SymbolTable::NO_REPLACE);
             }
         }
@@ -959,7 +960,7 @@ void semantic_analysis() {
             if (sm_name == "LIST") {
                 DBG_PARSER << "List has " << num_sm_params << " parameters\n";
             }
-            else if (((sm_name == "POINT" || sm_name == "COUNTER" ||
+            else if (((sm_name == "POINT" || sm_name == "COUNTER" || sm_name == "VELOCITY" ||
                        sm_name == "DIGITALVALUE" || sm_name == "ANALOGOUTPUT" ||
                        sm_name == "STATUS_FLAG" || sm_name == "INPUTBIT" ||
                        sm_name == "OUTPUTBIT" || sm_name == "INPUTREGISTER" ||

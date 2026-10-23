@@ -282,14 +282,18 @@ void IOComponent::reset() {
     boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
     processing_queue.clear();
     regular_polls.clear();
+    std::set<IOComponent *> interfaces;
     std::list<MachineInstance *>::iterator iter = MachineInstance::begin();
     while (iter != MachineInstance::end()) {
         MachineInstance *m = *iter++;
         if (m->io_interface) {
-            delete m->io_interface;
+            if (interfaces.insert(m->io_interface).second) {
+                delete m->io_interface;
+            }
             m->io_interface = 0;
         }
     }
+    devices.clear();
     if (io_process_data) {
         delete[] io_process_data;
     }

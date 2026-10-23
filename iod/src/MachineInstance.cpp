@@ -414,6 +414,9 @@ bool MachineInstance::uses(MachineInstance *other) {
     if (other->_type == "COUNTER") {
         return true;
     }
+    if (other->_type == "VELOCITY") {
+        return true;
+    }
     if (other->_type == "DIGITALVALUE") {
         return true;
     }
@@ -433,6 +436,9 @@ bool MachineInstance::uses(MachineInstance *other) {
         return true;
     }
     if (_type == "COUNTER") {
+        return true;
+    }
+    if (_type == "VELOCITY") {
         return true;
     }
     if (_type == "DIGITALVALUE") {

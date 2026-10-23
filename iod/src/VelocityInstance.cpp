@@ -1,5 +1,6 @@
 #include "VelocityInstance.h"
 
+#include "IOComponent.h"
 #include "clockwork.h"
 #include <algorithm>
 #include <cmath>
@@ -108,23 +109,13 @@ void VelocityInstance::publishInternal(const VelocityEstimator::Result &result) 
 }
 
 void VelocityInstance::sampleSource(uint64_t sample_clock) {
-    if (parameters.empty()) {
-        return;
-    }
-    MachineInstance *source = lookup(parameters[0]);
-    if (!source) {
+    if (!io_interface) {
         return;
     }
 
-    uint64_t source_time = rate_calc_process_time;
-    int64_t source_iotime = 0;
-    if (source->getValue("IOTIME").asInteger(source_iotime) && source_iotime > 0) {
-        source_time = static_cast<uint64_t>(source_iotime);
-    }
-    double raw_value = 0.0;
-    if (!source->getValue("VALUE").asFloat(raw_value)) {
-        return;
-    }
+    const uint64_t source_time =
+        io_interface->read_time ? io_interface->read_time : rate_calc_process_time;
+    const double raw_value = static_cast<double>(io_interface->address.value);
 
     configureEstimator();
     if (source_time > last_source_time_ &&
