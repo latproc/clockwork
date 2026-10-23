@@ -61,6 +61,7 @@ bool sched_payload_is(const char *buf, size_t len, const char *word) {
 #include "ECInterface.h"
 #include "ProcessingThread.h"
 #include "StallTrace.h"
+#include "VelocityInstance.h"
 #include "watchdog.h"
 #include <pthread.h>
 #include "SharedWorkSet.h"
@@ -601,6 +602,7 @@ void ProcessingThread::sampleRegularPolls(uint64_t curr_t) {
     // regular_poll only (ANALOGINPUT/COUNTER): filter publishes IOTIME/raw.
     // POINTs stamp IOTIME only when processAll/handleChange sees a bit change.
     handle_io_sampling(sample_clock);
+    VelocityInstance::sampleAll(sample_clock);
 }
 
 void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_work_queue,

@@ -82,6 +82,13 @@ target_include_directories(test_velocity_estimator PRIVATE ${PROJECT_SOURCE_DIR}
 target_link_libraries(test_velocity_estimator gtest_main pthread)
 add_test(NAME test_velocity_estimator COMMAND test_velocity_estimator)
 
+add_executable(test_velocity_instance iod_mock.h test_velocity_instance.cpp)
+set_target_properties(test_velocity_instance PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_link_libraries(test_velocity_instance gmock_main cw_interpreter cw_client
+  ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
+include_directories("${PROJECT_SOURCE_DIR}/tests")
+add_test(NAME test_velocity_instance COMMAND test_velocity_instance)
+
 add_executable(test_bit_ops test_bit_ops.cpp
    ${PROJECT_SOURCE_DIR}/src/bit_ops.cpp
 )

@@ -464,9 +464,11 @@ MachineClass *makeVelocityMachineClass() {
     result->initial_state = State("ready");
     result->disableAutomaticStateChanges();
     result->setProperty("VALUE", Value(0.0));
+    result->setProperty("Velocity", Value(0.0));
     result->setProperty("IOTIME", Value(0));
     result->setOption("WindowMs", 200);
     result->setOption("MinSamples", 4);
+    result->setOption("SampleMs", 20);
     result->setOption("Scale", 1.0);
     result->setOption("StaleMs", 250);
     result->setOption("MaxAbsValue", 0.0);
@@ -480,6 +482,7 @@ MachineClass *makeVelocityMachineClass() {
     result->setProperty("AgeMs", Value(0));
     result->setProperty("Valid", Value(0));
     result->setProperty("Rejected", Value(0));
+    result->setProperty("State", Value("settling", Value::t_string));
     return result;
 }
 

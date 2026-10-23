@@ -3,6 +3,7 @@
 
 #include "MachineInstance.h"
 #include "VelocityEstimator.h"
+#include <list>
 
 class VelocityInstance : public MachineInstance {
   protected:
@@ -12,18 +13,21 @@ class VelocityInstance : public MachineInstance {
 
   public:
     ~VelocityInstance();
-    void idle() override;
-    void setNeedsCheck() override;
+    static void sampleAll(uint64_t sample_clock);
 
   private:
     VelocityInstance &operator=(const VelocityInstance &orig);
     VelocityInstance(const VelocityInstance &other);
 
+    void sampleSource(uint64_t sample_clock);
     void configureEstimator();
     void publishInternal(const VelocityEstimator::Result &result);
 
     VelocityEstimator estimator_;
     uint64_t last_source_time_;
+    uint64_t sample_period_us_;
+
+    static std::list<VelocityInstance *> instances;
 
     friend class MachineInstanceFactory;
 };
