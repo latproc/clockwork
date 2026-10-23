@@ -280,8 +280,6 @@ set (Clockwork_Headers
     src/ControlSystemMachine.h
     src/copy_environment.h
     src/CopyPropertiesAction.h
-    src/CounterRateFilterSettings.h
-    src/CounterRateInstance.h
     src/cw_client.h
     src/cwlang.h
     src/debug_malloc.h
@@ -344,7 +342,6 @@ set (Clockwork_Headers
     src/process.h
     src/ProcessingThread.h
     src/rate.h
-    src/RateEstimatorInstance.h
     src/read_file.h
     src/regular_expressions.h
     src/ResetAction.h
@@ -374,6 +371,8 @@ set (Clockwork_Headers
     src/UnlockAction.h
 	src/UpdateListItemsAction.cpp
 	src/value.h
+    src/VelocityEstimator.h
+    src/VelocityInstance.h
     src/WaitAction.h
 )
 if (USE_ETHERCAT)
@@ -399,7 +398,6 @@ set (Clockwork_SRCS
     src/ControlSystemMachine.cpp
     src/copy_environment.c
     src/CopyPropertiesAction.cpp
-    src/CounterRateInstance.cpp
     src/cwlang.lpp
     src/cwlang.ypp
     src/debug_malloc.c
@@ -449,9 +447,9 @@ set (Clockwork_SRCS
     src/process.cpp
     src/ProcessingThread.cpp
     src/StallTrace.cpp
-    src/RateEstimatorInstance.cpp
     src/RecordApply.cpp
     src/RecordClass.cpp
+    src/VelocityInstance.cpp
     src/read_file.c
     src/ResetAction.cpp
     src/ResumeAction.cpp

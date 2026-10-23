@@ -367,14 +367,18 @@ void IOComponent::reset() {
     boost::recursive_mutex::scoped_lock lock(processing_queue_mutex);
     processing_queue.clear();
     regular_polls.clear();
+    std::set<IOComponent *> interfaces;
     std::list<MachineInstance *>::iterator iter = MachineInstance::begin();
     while (iter != MachineInstance::end()) {
         MachineInstance *m = *iter++;
         if (m->io_interface) {
-            delete m->io_interface;
+            if (interfaces.insert(m->io_interface).second) {
+                delete m->io_interface;
+            }
             m->io_interface = 0;
         }
     }
+    devices.clear();
     if (io_process_data) {
         delete[] io_process_data;
     }
@@ -1763,6 +1767,7 @@ int64_t CounterInternals::default_input_scale = 1;
 
 Counter::Counter(IOAddress addr) : IOComponent(addr), internals(0) {
     internals = new CounterInternals;
+    direction_ = DirInput;
     regular_polls.insert(this);
 }
 
@@ -1933,25 +1938,6 @@ int64_t Counter::filter(int64_t val) {
         // Inside eng_tol: IOTIME already stamped; skip VALUE/notify noise.
     }
     return raw_val;
-}
-
-CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(0) {
-    start_t = microsecs();
-}
-
-int64_t CounterRate::filter(int64_t val) {
-#if 0
-    /*  as for the AnalogueInput, note that these 'IO' properties do not
-        cause value change notifications throughout clockwork
-    */
-    std::list<MachineInstance *>::iterator owners_iter = owners.begin();
-    while (owrars_iter != owners.end()) {
-        MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
-        o->properties.add("IOVALUE", (long)val, SymbolTable::ST_REPLACE);
-    }
-#endif
-    return IOComponent::filter(val);
 }
 
 /* The Speed Controller class */

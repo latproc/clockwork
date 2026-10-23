@@ -56,6 +56,7 @@
 #endif
 #include "ProcessingThread.h"
 #include "StallTrace.h"
+#include "VelocityInstance.h"
 #include "watchdog.h"
 #include <pthread.h>
 #include "SharedWorkSet.h"
@@ -627,6 +628,10 @@ void ProcessingThread::sampleRegularPolls(uint64_t curr_t) {
     MachineInstance::dispatchCommandClocks(now);
     static uint64_t last_sample_poll = 0;
     uint64_t sample_us = IOComponent::minRegularPollNotifyMs() * 1000ULL;
+    const uint64_t velocity_us = VelocityInstance::minSamplePeriodMs() * 1000ULL;
+    if (velocity_us && velocity_us < sample_us) {
+        sample_us = velocity_us;
+    }
     if (sample_us < 1000) {
         sample_us = 1000;
     }
@@ -655,6 +660,7 @@ void ProcessingThread::sampleRegularPolls(uint64_t curr_t) {
     // regular_poll only (ANALOGINPUT/COUNTER): filter publishes IOTIME/raw.
     // POINTs stamp IOTIME only when processAll/handleChange sees a bit change.
     handle_io_sampling(sample_clock);
+    VelocityInstance::sampleAll(sample_clock);
 }
 
 void ProcessingThread::HandleIncomingEtherCatData(std::set<IOComponent *> &io_work_queue,

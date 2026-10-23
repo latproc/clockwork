@@ -472,34 +472,34 @@ MachineClass *makeCounterMachineClass() {
     return result;
 }
 
-MachineClass *makeRateEstimatorMachineClass() {
-    MachineClass *result = new MachineClass("RATEESTIMATOR");
-    result->parameters.push_back(Parameter("position_input"));
-    result->parameters.push_back(Parameter("settings"));
-    result->addState("stable");
-    result->addState("unstable");
-    result->addState("off");
-    result->default_state = State("off");
-    result->initial_state = State("off");
-    result->disableAutomaticStateChanges();
-    result->setProperty("VALUE", Value(0));
-    result->setProperty("position", Value(0));
-    return result;
-}
-
-MachineClass *makeCounterRateMachineClass() {
-    MachineClass *result = new MachineClass("COUNTERRATE");
-    result->parameters.push_back(Parameter("position_output"));
+MachineClass *makeVelocityMachineClass() {
+    MachineClass *result = new MachineClass("VELOCITY");
     result->parameters.push_back(Parameter("module"));
     result->parameters.push_back(Parameter("offset"));
-    result->addState("stable");
-    result->addState("unstable");
-    result->addState("off");
-    result->default_state = State("off");
-    result->initial_state = State("off");
+    result->addState("ready", true);
+    result->default_state = State("ready");
+    result->initial_state = State("ready");
     result->disableAutomaticStateChanges();
-    result->setProperty("VALUE", Value(0));
-    result->setProperty("position", Value(0));
+    result->setProperty("VALUE", Value(0.0));
+    result->setProperty("Velocity", Value(0.0));
+    result->setProperty("IOTIME", Value(0));
+    result->setOption("WindowMs", 100);
+    result->setOption("MinSamples", 4);
+    result->setOption("SampleMs", 20);
+    result->setOption("Scale", 1.0);
+    result->setOption("StaleMs", 250);
+    result->setOption("MaxAbsValue", 0.0);
+    result->setProperty("RawValue", Value(0.0));
+    result->setProperty("RawIOTime", Value(0));
+    result->setProperty("WindowStart", Value(0));
+    result->setProperty("WindowUs", Value(0));
+    result->setProperty("SampleCount", Value(0));
+    result->setProperty("DeltaValue", Value(0.0));
+    result->setProperty("DeltaTimeUs", Value(0));
+    result->setProperty("AgeMs", Value(0));
+    result->setProperty("Valid", Value(0));
+    result->setProperty("Rejected", Value(0));
+    result->setProperty("State", Value("settling", Value::t_string));
     return result;
 }
 
@@ -745,9 +745,8 @@ void predefine_special_machines() {
     makeStatusFlagMachineClass();
     makeAnalogueInMachineClass();
     makeCounterMachineClass();
+    makeVelocityMachineClass();
     makeDigitalValueMachineClass();
-    makeRateEstimatorMachineClass();
-    makeCounterRateMachineClass();
     makeAnalogueOutputMachineClass();
     auto list_class = makeListMachineClass();
     makeReferenceMachineClass();
@@ -985,18 +984,8 @@ void semantic_analysis() {
             m->setStateMachine(machine_class);
             // make sure that analogue machines have a value property
             if (machine_class->name == "ANALOGOUTPUT" || machine_class->name == "ANALOGINPUT" ||
-                machine_class->name == "COUNTER" || machine_class->name == "COUNTERRATE" ||
-                machine_class->name == "RATEESTIMATOR") {
+                machine_class->name == "COUNTER" || machine_class->name == "VELOCITY") {
                 m->properties.add("VALUE", 0, SymbolTable::NO_REPLACE);
-            }
-            if (machine_class->name == "COUNTERRATE" || machine_class->name == "RATEESTIMATOR") {
-                m->properties.add("position", 0, SymbolTable::NO_REPLACE);
-                if (machine_class->name == "COUNTERRATE") {
-                    MachineInstance *pos = m->lookup(m->parameters[0]);
-                    if (pos) {
-                        pos->setValue("VALUE", 0);
-                    }
-                }
             }
         }
         else {
@@ -1026,7 +1015,7 @@ void semantic_analysis() {
             if (sm_name == "LIST") {
                 DBG_PARSER << "List has " << num_sm_params << " parameters\n";
             }
-            else if (((sm_name == "POINT" || sm_name == "COUNTER" ||
+            else if (((sm_name == "POINT" || sm_name == "COUNTER" || sm_name == "VELOCITY" ||
                        sm_name == "DIGITALVALUE" || sm_name == "ANALOGOUTPUT" ||
                        sm_name == "STATUS_FLAG" || sm_name == "INPUTBIT" ||
                        sm_name == "OUTPUTBIT" || sm_name == "INPUTREGISTER" ||
@@ -1034,10 +1023,7 @@ void semantic_analysis() {
                       mi->parameters.size() >= 2 && mi->parameters.size() <= 4) ||
                      (sm_name == "ANALOGINPUT" &&
                       mi->parameters.size() >= 2 && mi->parameters.size() <= 5) ||
-                     (sm_name == "MQTTBROKER" && (num_sm_params == 2 || num_sm_params == 4)) ||
-                     (sm_name == "COUNTERRATE" &&
-                      (mi->parameters.size() == 1 ||
-                       (mi->parameters.size() >= 3 && mi->parameters.size() <= 5)))
+                     (sm_name == "MQTTBROKER" && (num_sm_params == 2 || num_sm_params == 4))
 #ifdef USE_SDO
                      || (sm_name == "SDOENTRY" && (num_sm_params == 4 || num_sm_params == 5))
 #endif //USE_SDO

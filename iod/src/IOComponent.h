@@ -358,19 +358,6 @@ class DigitalValue : public IOComponent {
     bool inputBitTriggersWork(unsigned int relative_bit) const override;
 };
 
-class CounterRate : public IOComponent {
-  public:
-    CounterRate(IOAddress addr);
-    const char *type() override { return "CounterRate"; }
-    int64_t filter(int64_t raw) override;
-    int64_t position;
-
-  private:
-    uint64_t start_t;
-    LongBuffer times;
-    FloatBuffer positions;
-};
-
 class AnalogueOutput : public Output {
   public:
     AnalogueOutput(IOAddress addr) : Output(addr) { direction_ = DirOutput; }
