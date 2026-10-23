@@ -234,7 +234,6 @@ bool generate_c() {
     ignore.insert("CONDITION");
     ignore.insert("CONSTANT");
     ignore.insert("COUNTER");
-    ignore.insert("COUNTERRATE");
     ignore.insert("DAC");
     ignore.insert("DIGITALIN");
     ignore.insert("DIGITALIO");
@@ -244,7 +243,6 @@ bool generate_c() {
     ignore.insert("LIST");
     ignore.insert("PIN");
     ignore.insert("POINT");
-    ignore.insert("RATEESTIMATOR");
     ignore.insert("REFERENCE");
     ignore.insert("SDIO");
     ignore.insert("SPI");
@@ -253,6 +251,7 @@ bool generate_c() {
     ignore.insert("TOUCH");
     ignore.insert("UART");
     ignore.insert("VARIABLE");
+    ignore.insert("VELOCITY");
 
     // these classes are internal and can be instantiated but not exported
     std::set<std::string> internal;

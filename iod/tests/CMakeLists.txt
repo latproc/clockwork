@@ -77,6 +77,11 @@ target_link_libraries(test_buffering gmock_main cw_client ${ZeroMQ_LIBRARY} ${Bo
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_buffering COMMAND test_buffering)
 
+add_executable(test_velocity_estimator test_velocity_estimator.cpp)
+target_include_directories(test_velocity_estimator PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test_velocity_estimator gtest_main pthread)
+add_test(NAME test_velocity_estimator COMMAND test_velocity_estimator)
+
 add_executable(test_bit_ops test_bit_ops.cpp
    ${PROJECT_SOURCE_DIR}/src/bit_ops.cpp
 )
@@ -254,6 +259,10 @@ add_test(NAME commandclock_builtin_parses COMMAND $<TARGET_FILE:cw> -t
   ${PROJECT_SOURCE_DIR}/tests/fixtures/commandclock_builtin.cw)
 add_test(NAME commandclock_lpc_class_parses COMMAND $<TARGET_FILE:cw> -t
   ${PROJECT_SOURCE_DIR}/tests/fixtures/commandclock_lpc_class.cw)
+
+# VELOCITY is a built-in derived machine with one source parameter.
+add_test(NAME velocity_machine_parses COMMAND $<TARGET_FILE:cw> -t
+  ${PROJECT_SOURCE_DIR}/tests/fixtures/velocity_machine.cw)
 
 # Persist load filter (IOD_PERSIST_FILTER). The fixture carries one property the
 # class declares and one it does not; the log markers separate off, dryrun and

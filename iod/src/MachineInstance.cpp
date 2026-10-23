@@ -60,12 +60,11 @@
 #include "ECInterface.h"
 #endif
 #include "AbortAction.h"
-#include "CounterRateInstance.h"
 #include "MachineShadowInstance.h"
 #include "ProcessingThread.h"
-#include "RateEstimatorInstance.h"
 #include "SharedWorkSet.h"
 #include "Transition.h"
+#include "VelocityInstance.h"
 
 extern int num_errors;
 extern std::list<std::string> error_messages;
@@ -146,11 +145,8 @@ MachineInstance *MachineInstanceFactory::create(CStringHolder name, const std::s
     if (instance_type == MachineInstance::MACHINE_SHADOW) {
         return new MachineShadowInstance(name, type.c_str(), MachineInstance::MACHINE_INSTANCE);
     }
-    if (type == "COUNTERRATE") {
-        return new CounterRateInstance(name, type.c_str(), instance_type);
-    }
-    else if (type == "RATEESTIMATOR") {
-        return new RateEstimatorInstance(name, type.c_str(), instance_type);
+    if (type == "VELOCITY") {
+        return new VelocityInstance(name, type.c_str(), instance_type);
     }
     else {
         MachineClass *cls = MachineClass::find(type.c_str());
@@ -415,16 +411,10 @@ bool MachineInstance::uses(MachineInstance *other) {
     if (other->_type == "ANALOGINPUT") {
         return true;
     }
-    if (other->_type == "COUNTERRATE") {
-        return true;
-    }
     if (other->_type == "COUNTER") {
         return true;
     }
     if (other->_type == "DIGITALVALUE") {
-        return true;
-    }
-    if (other->_type == "COUNTERRATE") {
         return true;
     }
     if (other->_type == "ANALOGOUTPUT") {
@@ -446,9 +436,6 @@ bool MachineInstance::uses(MachineInstance *other) {
         return true;
     }
     if (_type == "DIGITALVALUE") {
-        return true;
-    }
-    if (_type == "COUNTERRATE") {
         return true;
     }
     if (_type == "ANALOGOUTPUT") {
@@ -3954,11 +3941,7 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
                              p.machine->parameters.size() <= 4) ||
                             (newsm->name == "ANALOGINPUT" &&
                              p.machine->parameters.size() >= 2 &&
-                             p.machine->parameters.size() <= 5) ||
-                            (newsm->name == "COUNTERRATE" &&
-                             (p.machine->parameters.size() == 1 ||
-                              (p.machine->parameters.size() >= 3 &&
-                               p.machine->parameters.size() <= 5)))) {
+                             p.machine->parameters.size() <= 5)) {
                         }
                         else {
                             resetTemporaryStringStream();

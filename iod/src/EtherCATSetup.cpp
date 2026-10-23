@@ -218,9 +218,9 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
             const int error_buf_size = 256;
             char error_buf[error_buf_size];
             MachineInstance *m = *iter++;
-            if ((m->_type == "POINT" || m->_type == "ANALOGINPUT" || m->_type == "COUNTERRATE" ||
-                 m->_type == "COUNTER" || m->_type == "STATUS_FLAG" || m->_type == "DIGITALVALUE"
-                 || m->_type == "ANALOGOUTPUT") &&
+            if ((m->_type == "POINT" || m->_type == "ANALOGINPUT" || m->_type == "COUNTER" ||
+                 m->_type == "STATUS_FLAG" || m->_type == "DIGITALVALUE" ||
+                 m->_type == "ANALOGOUTPUT") &&
                 m->parameters.size() > 1) {
                 output_points.push_back(m);
                 // points should have two parameters, the name of the io module and the bit offset
@@ -231,15 +231,8 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                 std::string name;
                 unsigned int entry_position = 0;
                 size_t selector_index_param = 1;
-                if (m->_type == "COUNTERRATE") {
-                    name = m->parameters[1].real_name;
-                    entry_position = m->parameters[2].val.iValue;
-                    selector_index_param = 2;
-                }
-                else {
-                    name = m->parameters[0].real_name;
-                    entry_position = m->parameters[1].val.iValue;
-                }
+                name = m->parameters[0].real_name;
+                entry_position = m->parameters[1].val.iValue;
                 int64_t positional_index = 0;
                 int64_t positional_subindex = 0;
                 int64_t positional_pdo_index = 0;
@@ -488,19 +481,7 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                         in->addOwner(m);
                     }
                     else {
-                        if (m->_type == "COUNTERRATE") {
-                            CounterRate *in = new CounterRate(addr);
-                            char *nm = strdup(m->getName().c_str());
-                            IOComponent::devices[nm] = in;
-                            free(nm);
-                            in->setName(m->getName().c_str());
-                            m->io_interface = in;
-                            in->addDependent(m);
-                            in->addOwner(m);
-                            m->setNeedsThrottle(true);
-                            in->setupProperties(m);
-                        }
-                        else if (m->_type == "COUNTER") {
+                        if (m->_type == "COUNTER") {
                             Counter *in = new Counter(addr);
                             char *nm = strdup(m->getName().c_str());
                             IOComponent::devices[nm] = in;
@@ -540,8 +521,7 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
             }
             else {
 #if 0
-                if (m->_type != "POINT" && m->_type != "STATUS_FLAG" && m->_type != "COUNTERRATE"
-                        && m->_type != "COUNTER"
+                if (m->_type != "POINT" && m->_type != "STATUS_FLAG" && m->_type != "COUNTER"
                         && m->_type != "ANALOGINPUT" && m->_type != "ANALOGOUTPUT") {
                     DBG_MSG << "Skipping " << m->_type << " " << m->getName() << " (not a POINT)\n";
                 }

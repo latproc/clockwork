@@ -16,7 +16,7 @@ import shutil
 import sys
 
 IO_TYPES = (
-    "POINT", "ANALOGINPUT", "COUNTERRATE", "COUNTER", "STATUS_FLAG",
+    "POINT", "ANALOGINPUT", "COUNTER", "STATUS_FLAG",
     "DIGITALVALUE", "ANALOGOUTPUT",
 )
 MODULE_RE = re.compile(

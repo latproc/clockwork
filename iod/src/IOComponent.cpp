@@ -1305,25 +1305,6 @@ int64_t Counter::filter(int64_t val) {
     return internals->last_sent;
 }
 
-CounterRate::CounterRate(IOAddress addr) : IOComponent(addr), times(16), positions(0) {
-    start_t = microsecs();
-}
-
-int64_t CounterRate::filter(int64_t val) {
-#if 0
-    /*  as for the AnalogueInput, note that these 'IO' properties do not
-        cause value change notifications throughout clockwork
-    */
-    std::list<MachineInstance *>::iterator owners_iter = owners.begin();
-    while (owrars_iter != owners.end()) {
-        MachineInstance *o = *owners_iter++;
-        o->properties.add("IOTIME", (long)read_time, SymbolTable::ST_REPLACE);
-        o->properties.add("IOVALUE", (long)val, SymbolTable::ST_REPLACE);
-    }
-#endif
-    return IOComponent::filter(val);
-}
-
 /* The Speed Controller class */
 
 /*
