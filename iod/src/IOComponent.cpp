@@ -1241,6 +1241,7 @@ int64_t CounterInternals::default_input_scale = 1;
 
 Counter::Counter(IOAddress addr) : IOComponent(addr), internals(0) {
     internals = new CounterInternals;
+    direction_ = DirInput;
     regular_polls.insert(this);
 }
 
