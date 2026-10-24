@@ -503,7 +503,7 @@ status open
 \begin_layout Plain Layout
 \align center
 \begin_inset Tabular
-<lyxtabular version="3" rows="12" columns="6">
+<lyxtabular version="3" rows="13" columns="6">
 <features tabularvalignment="middle">
 <column alignment="center" valignment="top">
 <column alignment="center" valignment="top">
@@ -1105,6 +1105,62 @@ binary (bool)
 \begin_layout Plain Layout
 performs the result of an or operation on the expressions on the lhs and
  rhs
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+SQRT
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Square root
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+unary
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+returns the non-negative square root of the rhs; a negative or non-numeric rhs logs a warning and evaluates to 0
 \end_layout
 
 \end_inset
@@ -2150,6 +2206,11 @@ SEND is used to send a message to a machine, this message must be captured
 \end_layout
 
 \begin_layout Description
+SQRT returns the non-negative square root of a numeric expression; negative
+ or non-numeric values log a warning and evaluate to 0
+\end_layout
+
+\begin_layout Description
 SET causes a machine to move to a given state after executing the optional
  command associated with the transition
 \end_layout
@@ -2491,7 +2552,15 @@ Expressions
 \begin_layout Standard
 Expressions are based on C language expressions, standard arithmetic and
  bitwise operations are supported (with the exception at the moment of bitwise
- shift operators).
+ shift operators). The uppercase unary builtin SQRT(expression) (equivalently
+ SQRT expression) returns the non-negative square root of a numeric value.
+ A negative or non-numeric value logs a warning and evaluates to 0. Parentheses
+ are optional for a symbol and recommended for a compound expression.
+\end_layout
+
+\begin_layout Standard
+List aggregates use SUM, MIN, MAX or MEAN as OPERATOR property FROM list or
+ OPERATOR OF list. There is no AVG; use MEAN for an average.
 \end_layout
 
 \begin_layout Subsection
@@ -2562,6 +2631,14 @@ XOR (`^')
 
 \begin_layout Itemize
 Bitwise AND ('&'), OR ('|') and negate ('!')
+\end_layout
+
+\begin_layout Itemize
+SQRT expression (normally written SQRT(expression)) for square root
+\end_layout
+
+\begin_layout Itemize
+SUM, MIN, MAX and MEAN list aggregates
 \end_layout
 
 \begin_layout Section
