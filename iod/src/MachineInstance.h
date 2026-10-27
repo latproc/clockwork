@@ -23,6 +23,7 @@
 
 #include "Action.h"
 #include "ActionList.h"
+#include "CommandClock.h"
 #include "ConditionHandler.h"
 #include "Expression.h"
 #include "MachineClass.h"
@@ -253,6 +254,19 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     // forward the message to dependents and notify them to check their state
     void notifyDependents(Message &msg);
 
+    /**
+     * Send a command only to dependants that declare a matching RECEIVE or
+     * COMMAND handler and can accept it in their current state.
+     *
+     * Fresh pending commands are coalesced; stale pending commands are dropped
+     * and replaced. K=1 sends at most one dependant per call; the caller drains
+     * the remainder on the next poll with continue_fanout=true.
+     */
+    void notifyCommandConsumers(const char *command_name, uint64_t notify_period_ms = 100,
+                                bool continue_fanout = false);
+    bool hasCommandFanoutPending() const { return command_fanout_pending; }
+    bool acceptsCommandInCurrentState(const char *command_name) const;
+
     bool needsCheck();
     void resetNeedsCheck();
     /** LIST only: default true. When false (property propagate_member_checks),
@@ -416,6 +430,10 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
 
     static void forceStableStateCheck();
     static void forceIdleCheck();
+    // Dispatch registered COMMANDCLOCK instances whose monotonic cadence is due.
+    static void dispatchCommandClocks(uint64_t now_us);
+    static uint64_t nextCommandClockWakeUs(uint64_t now_us);
+    static size_t commandClockCount();
     static bool workToDo();
     static std::list<Package *> &pendingEvents();
     static std::set<MachineInstance *> &pluginMachines();
@@ -455,6 +473,7 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     State saved_state; // save state before error
     Value current_state_val;
     bool is_active; // is this machine active or passive?
+    CommandClock command_clock;
     Value current_value_holder;
     std::stringstream ss;                // saves recreating string stream for temporary use
     uint64_t last_state_evaluation_time; // dynamic value check against this before recalculating
@@ -481,6 +500,19 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
     MachineInstance &operator=(const MachineInstance &orig);
     MachineInstance(const MachineInstance &other);
     static std::list<MachineInstance *> all_machines;
+    static std::list<MachineInstance *> command_clocks;
+    void registerCommandClockLocked();
+    void refreshCommandClockCache();
+    bool commandClockEnabled();
+
+    uint64_t cached_notify_period_ms;
+    uint64_t cached_notify_phase_ms;
+    std::string cached_command_name;
+    MachineInstance *cached_clock_guard;
+    bool command_clock_cache_valid;
+    size_t command_clock_index;
+    size_t command_fanout_skip;
+    bool command_fanout_pending;
 
   protected:
     static std::list<MachineInstance *>

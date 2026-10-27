@@ -1143,6 +1143,24 @@ void ProcessingThread::operator()() {
                         }
                     }
                 }
+#if !defined(USE_ETHERCAT)
+                // cw has no bus sample path, so wake at the earliest registered
+                // COMMANDCLOCK boundary. Capping after paced/urgent handling
+                // keeps a busy dependant from pushing the next tick out to 20 ms.
+                if (status == e_waiting && processing_state == eIdle) {
+                    const uint64_t clock_wake_us =
+                        MachineInstance::nextCommandClockWakeUs(curr_t);
+                    if (clock_wake_us != 0) {
+                        int clock_wait_ms =
+                            (clock_wake_us > curr_t)
+                                ? static_cast<int>((clock_wake_us - curr_t) / 1000)
+                                : 0;
+                        if (clock_wait_ms < wait_ms) {
+                            wait_ms = clock_wait_ms;
+                        }
+                    }
+                }
+#endif
                 if (wait_ms < 1) {
                     wait_ms = 1;
                 }
@@ -1188,6 +1206,15 @@ void ProcessingThread::operator()() {
                                            resource_mgr, sched_sync, ecat_out);
             curr_t = microsecs();
             StallTrace::markStage(StallTrace::StageOuterHousekeeping);
+
+#if !defined(USE_ETHERCAT)
+            // Transport-free cw has no regular IO sampler. Drive registered
+            // COMMANDCLOCKs from its monotonic runtime clock instead.
+            if (status == e_waiting && processing_state == eIdle &&
+                MachineInstance::commandClockCount()) {
+                MachineInstance::dispatchCommandClocks(curr_t);
+            }
+#endif
 
             // ---- In-wait EC + scheduler service (event-safe, no usleep) ----
             // Drain EC first when present so digital edges are never delayed by

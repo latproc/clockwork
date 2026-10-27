@@ -171,6 +171,31 @@ TEST(MessageTest, PackageSelfAssignmentIsSafe) {
     EXPECT_EQ(package.message->getText(), std::string("ping"));
 }
 
+TEST(MessageTest, PendingCommandAgeAndDropUseOneQueueContract) {
+    Taker receiver("pending_receiver", [](const Message &, Transmitter *) { return true; });
+    const Message command("calcAdjust");
+    const Package package(nullptr, &receiver, command);
+    receiver.enqueue(package);
+
+    uint64_t age_us = 0;
+    ASSERT_TRUE(receiver.hasPending(command, &age_us, package.enqueued_us + 50000));
+    EXPECT_EQ(50000u, age_us);
+    EXPECT_EQ(1u, receiver.dropPending(command));
+    EXPECT_FALSE(receiver.hasPending(command));
+}
+
+TEST(MessageTest, DropPendingLeavesOtherCommandsQueued) {
+    Taker receiver("pending_mixed", [](const Message &, Transmitter *) { return true; });
+    const Message update("update");
+    const Message adjust("calcAdjust");
+    receiver.enqueue(Package(nullptr, &receiver, update));
+    receiver.enqueue(Package(nullptr, &receiver, adjust));
+
+    EXPECT_EQ(1u, receiver.dropPending(adjust));
+    EXPECT_TRUE(receiver.hasPending(update));
+    EXPECT_FALSE(receiver.hasPending(adjust));
+}
+
 // The following aren't particularly useful tests, just practice TDD.
 TEST(MessageTest, default_message_type_is_simple) {
     Message m;

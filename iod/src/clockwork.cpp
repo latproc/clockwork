@@ -597,15 +597,15 @@ MachineClass *makeFlagMachineClass() {
     return result;
 }
 
-// Line A (iod_sdo) does not dispatch COMMANDCLOCK ticks. Accept the LPC type so
-// shared trees that instantiate COMMANDCLOCK load, and leave the instances inert
-// (no calcAdjust fan-out). An LPC COMMANDCLOCK MACHINE body, if present, replaces
-// this builtin in MachineClass::machine_classes because it is constructed later.
+// Line A has a real COMMANDCLOCK dispatcher, but pre-existing shared-tree
+// instances remain inert until their LPC instances opt in with dispatch:1.
+// An LPC COMMANDCLOCK MACHINE body replaces this builtin class.
 MachineClass *makeCommandClockMachineClass() {
     MachineClass *result = new MachineClass("COMMANDCLOCK");
     result->parameters.push_back(Parameter("Guard"));
     result->setOption("notify_period", 1000);
     result->setOption("command", "calcAdjust");
+    result->setOption("dispatch", 0);
     result->addState("off");
     result->addState("on");
     result->default_state = State("off");

@@ -24,6 +24,7 @@
 #include "symboltable.h"
 #include "value.h"
 #include <boost/thread/mutex.hpp>
+#include <cstdint>
 #include <list>
 #include <ostream>
 #include <set>
@@ -128,6 +129,8 @@ struct Package {
     Receiver *receiver;
     Message *message;
     bool needs_receipt;
+    /** Wall-clock-ish enqueue stamp (µs) for stale-pending recovery. */
+    uint64_t enqueued_us;
     Package();
     Package(Transmitter *t, Receiver *r, const Message &m, bool need_receipt = false);
     Package(const Package &);

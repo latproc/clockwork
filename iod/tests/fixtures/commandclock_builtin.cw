@@ -1,4 +1,4 @@
-# Line A: COMMANDCLOCK is a recognised type with no tick dispatch.
+# Line A: COMMANDCLOCK is a recognised type. Dispatch is opt-in via dispatch:1.
 # This file has no COMMANDCLOCK MACHINE body; the builtin class must be enough
 # for cw -t / iod load (no "class COMMANDCLOCK not found").
 
@@ -16,6 +16,7 @@ COMMANDCLOCKCONSUMER MACHINE Clock {
   idle INITIAL;
   COMMAND calcAdjust {
     INC ticks;
+    LOG "unexpected COMMANDCLOCK dispatch without opt-in";
   }
 }
 

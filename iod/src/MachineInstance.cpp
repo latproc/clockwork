@@ -124,6 +124,7 @@ std::map<std::string, MachineInstance *> machines;
 // All machine instances automatically join and leave this list.
 // During the poll process, all machines in this list have their idle() called.
 std::list<MachineInstance *> MachineInstance::all_machines;
+std::list<MachineInstance *> MachineInstance::command_clocks;
 std::list<MachineInstance *> MachineInstance::io_modules;
 std::list<MachineInstance *> MachineInstance::automatic_machines;
 std::list<MachineInstance *> MachineInstance::active_machines;
@@ -684,7 +685,9 @@ MachineInstance::MachineInstance(InstanceType instance_type)
       is_active(false), current_value_holder(0), last_state_evaluation_time(0),
       stable_states_stats("StableState processing"), message_handling_stats("Message handling"),
       data(0), idle_time(0), next_poll(0), is_traceable(false), published(0), action_errors(0),
-      owner_channel(0), cache(0), expected_authority(0) {
+      owner_channel(0), cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0),
+      cached_clock_guard(0), command_clock_cache_valid(false), command_clock_index(0),
+      command_fanout_skip(0), command_fanout_pending(false), expected_authority(0) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -701,6 +704,7 @@ MachineInstance::MachineInstance(InstanceType instance_type)
     if (instance_type == MACHINE_INSTANCE) {
         std::unique_lock<std::mutex> lock(global_lists_mutex);
         all_machines.push_back(this);
+        registerCommandClockLocked();
         Dispatcher::instance()->addReceiver(this);
         start_time = microsecs();
     }
@@ -720,7 +724,9 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
       is_active(false), current_value_holder(0), last_state_evaluation_time(0),
       stable_states_stats("StableState processing"), message_handling_stats("Message handling"),
       data(0), idle_time(0), is_traceable(false), published(0), action_errors(0), owner_channel(0),
-      cache(0), expected_authority(0) {
+      cache(0), cached_notify_period_ms(1000), cached_notify_phase_ms(0), cached_clock_guard(0),
+      command_clock_cache_valid(false), command_clock_index(0), command_fanout_skip(0),
+      command_fanout_pending(false), expected_authority(0) {
     if (!shared) {
         shared = new SharedCache;
     }
@@ -737,6 +743,7 @@ MachineInstance::MachineInstance(const CStringHolder name, const char *type,
     if (instance_type == MACHINE_INSTANCE) {
         std::unique_lock<std::mutex> lock(global_lists_mutex);
         all_machines.push_back(this);
+        registerCommandClockLocked();
         Dispatcher::instance()->addReceiver(this);
         start_time = microsecs();
     }
@@ -750,6 +757,7 @@ MachineInstance::~MachineInstance() {
     {
         std::unique_lock<std::mutex> lock(global_lists_mutex);
         all_machines.remove(this);
+        command_clocks.remove(this);
         automatic_machines.remove(this);
         active_machines.remove(this);
         Dispatcher::instance()->removeReceiver(this);
@@ -791,6 +799,7 @@ void MachineInstance::remove_pending() {
         {
             std::unique_lock<std::mutex> lock(global_lists_mutex);
             all_machines.remove(m);
+            command_clocks.remove(m);
             automatic_machines.remove(m);
             active_machines.remove(m);
             // Erase by pointer identity — do not call m->getName(). Channels
@@ -2504,6 +2513,205 @@ void MachineInstance::endDeferredPropertyNotify() {
     }
 }
 
+void MachineInstance::notifyCommandConsumers(const char *command_name,
+                                             uint64_t notify_period_ms,
+                                             bool continue_fanout) {
+    if (!command_name || !*command_name) {
+        command_name = "update";
+    }
+    if (notify_period_ms == 0) {
+        notify_period_ms = 100;
+    }
+    // Per dependant: keep at most one matching command in flight while fresh;
+    // replace it after 2x notify_period (minimum 50 ms) so a stuck queue cannot
+    // mute a COMMANDCLOCK permanently.
+    uint64_t stale_us = notify_period_ms * 2ULL * 1000ULL;
+    if (stale_us < 50000ULL) {
+        stale_us = 50000ULL;
+    }
+    if (!continue_fanout) {
+        command_fanout_skip = 0;
+        command_fanout_pending = false;
+    }
+
+    const Message command_msg(command_name);
+    size_t idx = 0;
+    const size_t start = command_fanout_skip;
+    for (MachineInstance *dep : depends) {
+        if (idx < start) {
+            ++idx;
+            continue;
+        }
+        if (!dep || dep == this || !dep->enabled()) {
+            ++idx;
+            continue;
+        }
+        if (dep->receives_functions.find(command_msg) == dep->receives_functions.end() ||
+            !dep->acceptsCommandInCurrentState(command_name)) {
+            ++idx;
+            continue;
+        }
+        uint64_t pending_age_us = 0;
+        if (dep->hasPending(command_msg, &pending_age_us)) {
+            if (pending_age_us < stale_us) {
+                ++idx;
+                continue;
+            }
+            const size_t dropped = dep->dropPending(command_msg);
+            DBG_MESSAGING << _name << " " << command_name << " -> " << dep->getName()
+                          << " stale pending age_us=" << pending_age_us
+                          << " dropped=" << dropped << " re-send\n";
+        }
+
+        DBG_M_MESSAGING << _name << " " << command_name << " -> " << dep->getName() << "\n";
+        sendMessageToReceiver(command_msg, dep, false);
+        ++idx;
+        command_fanout_skip = idx;
+        command_fanout_pending = true;
+        return;
+    }
+    command_fanout_skip = 0;
+    command_fanout_pending = false;
+}
+
+bool MachineInstance::acceptsCommandInCurrentState(const char *command_name) const {
+    if (!command_name || !*command_name) {
+        return false;
+    }
+    const Message command_msg(command_name);
+    for (auto it = receives_functions.find(command_msg);
+         it != receives_functions.end() && it->first == command_msg; ++it) {
+        MachineCommand *cmd = it->second;
+        if (cmd && (cmd->autoSwitch() || cmd->matches(const_cast<MachineInstance *>(this)))) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void MachineInstance::registerCommandClockLocked() {
+    if (my_instance_type != MACHINE_INSTANCE) {
+        return;
+    }
+    const bool is_clock =
+        _type == "COMMANDCLOCK" || (state_machine && state_machine->name == "COMMANDCLOCK");
+    if (!is_clock) {
+        return;
+    }
+    for (MachineInstance *clock : command_clocks) {
+        if (clock == this) {
+            return;
+        }
+    }
+    command_clock_index = command_clocks.size();
+    command_clocks.push_back(this);
+}
+
+size_t MachineInstance::commandClockCount() {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
+    return command_clocks.size();
+}
+
+void MachineInstance::refreshCommandClockCache() {
+    cached_notify_period_ms = 1000;
+    int64_t period_ms = 0;
+    if (getValue("notify_period").asInteger(period_ms) && period_ms > 0) {
+        cached_notify_period_ms = static_cast<uint64_t>(period_ms);
+    }
+    else {
+        // Transitional compatibility: older LPC COMMANDCLOCK bodies expose
+        // rate, and PID bodies still read Clock.rate until the elapsed switch.
+        period_ms = 0;
+        if (getValue("rate").asInteger(period_ms) && period_ms > 0) {
+            cached_notify_period_ms = static_cast<uint64_t>(period_ms);
+        }
+    }
+
+    cached_command_name = "calcAdjust";
+    const Value &configured_command = getValue("command");
+    if (configured_command.kind == Value::t_string && !configured_command.sValue.empty()) {
+        cached_command_name = configured_command.sValue;
+    }
+
+    if (properties.exists("notify_phase")) {
+        int64_t phase_ms = 0;
+        if (getValue("notify_phase").asInteger(phase_ms) && phase_ms >= 0) {
+            cached_notify_phase_ms = static_cast<uint64_t>(phase_ms);
+        }
+        else {
+            cached_notify_phase_ms = 0;
+        }
+    }
+    else {
+        cached_notify_phase_ms = command_clock_index % cached_notify_period_ms;
+    }
+    cached_clock_guard = lookup("Guard");
+    command_clock_cache_valid = true;
+}
+
+bool MachineInstance::commandClockEnabled() {
+    // Transitional line-A gate: COMMANDCLOCK was previously inert so shared
+    // trees could carry the class before the LPC migration. Require an explicit
+    // dispatch:1 on the instance before changing that runtime behaviour.
+    int64_t dispatch = 0;
+    if (!getValue("dispatch").asInteger(dispatch) || dispatch == 0) {
+        return false;
+    }
+    bool enabled = strcmp(getCurrentStateString(), "on") == 0;
+    enabled = enabled && cached_clock_guard && cached_clock_guard->enabled();
+    if (enabled) {
+        const char *state = cached_clock_guard->getCurrentStateString();
+        enabled = state && strcasecmp(state, "off") != 0 && strcasecmp(state, "false") != 0;
+    }
+    return enabled;
+}
+
+void MachineInstance::dispatchCommandClocks(uint64_t now_us) {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
+    for (MachineInstance *clock : command_clocks) {
+        if (!clock) {
+            continue;
+        }
+        if (!clock->command_clock_cache_valid) {
+            clock->refreshCommandClockCache();
+        }
+        const bool enabled = clock->commandClockEnabled();
+        if (clock->hasCommandFanoutPending()) {
+            clock->notifyCommandConsumers(clock->cached_command_name.c_str(),
+                                          clock->cached_notify_period_ms, true);
+        }
+        if (!clock->command_clock.due(now_us, clock->cached_notify_period_ms, enabled,
+                                      clock->cached_notify_phase_ms)) {
+            continue;
+        }
+        DBG_MESSAGING << clock->getName() << " iod " << clock->cached_command_name
+                      << " notify_period=" << clock->cached_notify_period_ms
+                      << "ms phase=" << clock->cached_notify_phase_ms << "ms\n";
+        clock->notifyCommandConsumers(clock->cached_command_name.c_str(),
+                                      clock->cached_notify_period_ms, false);
+    }
+}
+
+uint64_t MachineInstance::nextCommandClockWakeUs(uint64_t now_us) {
+    std::unique_lock<std::mutex> lock(global_lists_mutex);
+    uint64_t earliest = 0;
+    for (MachineInstance *clock : command_clocks) {
+        if (!clock) {
+            continue;
+        }
+        if (!clock->command_clock_cache_valid) {
+            clock->refreshCommandClockCache();
+        }
+        const uint64_t wake = clock->command_clock.nextDueUs(
+            now_us, clock->cached_notify_period_ms, clock->commandClockEnabled(),
+            clock->cached_notify_phase_ms);
+        if (wake != 0 && (earliest == 0 || wake < earliest)) {
+            earliest = wake;
+        }
+    }
+    return earliest;
+}
+
 void MachineInstance::notifyDependents(Message &msg) {
     std::set<MachineInstance *>::iterator dep_iter = depends.begin();
     while (dep_iter != depends.end()) {
@@ -3843,6 +4051,11 @@ void MachineInstance::setStateMachine(MachineClass *machine_class) {
     //if (state_machine) return;
     state_machine = machine_class;
     DBG_PARSER << _name << " is of class " << machine_class->name << "\n";
+    if (machine_class && machine_class->name == "COMMANDCLOCK") {
+        std::unique_lock<std::mutex> lock(global_lists_mutex);
+        registerCommandClockLocked();
+        command_clock_cache_valid = false;
+    }
     if (my_instance_type == MACHINE_INSTANCE && machine_class->allow_auto_states &&
         (machine_class->stable_states.size() || machine_class->name == "LIST" ||
          machine_class->name == "REFERENCE" ||
@@ -4665,6 +4878,10 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
         return false;
     }
 
+    if (property == "notify_period" || property == "notify_phase" || property == "command" ||
+        property == "rate") {
+        command_clock_cache_valid = false;
+    }
     DBG_M_PROPERTIES << _name << " setvalue " << property << " to " << new_value << "\n";
     if (property.find('.') != std::string::npos) {
         // property is on another machine

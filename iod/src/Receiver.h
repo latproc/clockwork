@@ -18,7 +18,13 @@ class Receiver : public Transmitter {
         boost::mutex::scoped_lock lock(q_mutex);
         return mail_queue.size();
     }
-    bool hasPending(const Message &msg);
+    /** True if mail holds a matching message. If out_age_us is set, returns age
+     *  of the oldest matching package (µs since enqueued_us).
+     *  now_us: 0 means use microsecs(); tests may inject a synthetic now. */
+    bool hasPending(const Message &msg, uint64_t *out_age_us = nullptr,
+                    uint64_t now_us = 0);
+    /** Remove all mail packages whose message matches msg. Returns count dropped. */
+    size_t dropPending(const Message &msg);
     long getId() const { return id; }
 
   protected:

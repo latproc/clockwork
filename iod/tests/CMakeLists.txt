@@ -103,6 +103,22 @@ target_link_libraries(test_clock gmock_main cw_client cw_interpreter ${ZeroMQ_LI
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_clock COMMAND test_clock)
 
+add_executable(test_command_clock test_command_clock.cpp)
+target_include_directories(test_command_clock PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test_command_clock gtest_main pthread)
+add_test(NAME test_command_clock COMMAND test_command_clock)
+
+add_test(NAME runtime_command_clock COMMAND sh
+  ${PROJECT_SOURCE_DIR}/tests/run_cw_runtime.sh
+  $<TARGET_FILE:cw> ${PROJECT_SOURCE_DIR}/../tests/command_clock.cw
+  --must-contain "COMMANDCLOCK calcAdjust tick")
+add_test(NAME runtime_command_clock_update COMMAND sh
+  ${PROJECT_SOURCE_DIR}/tests/run_cw_runtime.sh
+  $<TARGET_FILE:cw> ${PROJECT_SOURCE_DIR}/../tests/command_clock.cw
+  --must-contain "COMMANDCLOCK update tick")
+set_tests_properties(runtime_command_clock runtime_command_clock_update
+  PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
+
 add_executable(test_msg_encoding test_msg_encoding.cpp)
 set_target_properties (test_msg_encoding PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(test_msg_encoding gmock_main cw_interpreter cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${Mosquitto_LIBRARIES} ${DL_LIBRARY} pthread)
@@ -259,13 +275,18 @@ target_link_libraries(test_sstimer_diag gmock_main cw_client cw_interpreter
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 endif()
 
-# COMMANDCLOCK is a no-op type on this branch (no calcAdjust dispatch). The
-# builtin class must make an instance load without an LPC body, and an LPC
-# COMMANDCLOCK MACHINE body must still be accepted.
+# COMMANDCLOCK dispatch is opt-in on this branch. The builtin class must make an
+# instance load without an LPC body, and an LPC class must still be accepted.
 add_test(NAME commandclock_builtin_parses COMMAND $<TARGET_FILE:cw> -t
   ${PROJECT_SOURCE_DIR}/tests/fixtures/commandclock_builtin.cw)
 add_test(NAME commandclock_lpc_class_parses COMMAND $<TARGET_FILE:cw> -t
   ${PROJECT_SOURCE_DIR}/tests/fixtures/commandclock_lpc_class.cw)
+add_test(NAME runtime_command_clock_inert_without_optin COMMAND sh
+  ${PROJECT_SOURCE_DIR}/tests/run_cw_runtime.sh
+  $<TARGET_FILE:cw> ${PROJECT_SOURCE_DIR}/tests/fixtures/commandclock_builtin.cw
+  --must-not-contain "unexpected COMMANDCLOCK dispatch without opt-in")
+set_tests_properties(runtime_command_clock_inert_without_optin
+  PROPERTIES RUN_SERIAL TRUE TIMEOUT 20)
 
 # VELOCITY is a built-in derived machine with one source parameter.
 add_test(NAME velocity_machine_parses COMMAND $<TARGET_FILE:cw> -t

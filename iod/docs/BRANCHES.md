@@ -54,7 +54,7 @@ Port line: `Port of <hash> from <branch>: <one line>`.
 |--------|------|
 | `4e7ec4ba` | Load-safe overdue TIMER recovery (`TimerOverduePolicy`) |
 | `12d65404` | Opt-in STALLSNAP processing stall trace |
-| COMMANDCLOCK no-op | builtin type: instances load, no calcAdjust dispatch |
+| COMMANDCLOCK dispatch | opts in with `dispatch:1`; shared-tree default remains inert until LPC migration |
 
 Port STALLSNAP to line **B** as `scope: iod-core` when next syncing.
 

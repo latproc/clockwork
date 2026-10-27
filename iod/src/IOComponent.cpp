@@ -119,6 +119,8 @@ void handle_io_sampling(uint64_t io_clock) {
         // regular_poll devices: handleChange mirrors wire value into address.value.
         ioc->filter(ioc->address.value);
     }
+    // Periodic control is distinct from ANALOGINPUT/COUNTER change emits.
+    MachineInstance::dispatchCommandClocks(now);
 }
 
 void IOComponent::publishSampleTime(uint64_t sample_clock, bool publish_raw, int64_t raw) {
