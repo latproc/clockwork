@@ -610,6 +610,56 @@ After it, `TAKE FIRST FROM all`, `SIZE OF all`, and `COPY PROPERTIES FROM x TO
 cust` all work. Each list member is a JSON object keyed by the query's column
 names (`ITEM ${name} OF x` reads a field).
 
+### Live query watch
+
+Add `watch` to a select to keep `all` current:
+
+```clockwork
+OPTION q JSON_VALUE {
+    "action": "select", "auth": "xxx", "type": "bale_instances",
+    "where": {"station": "GrabChamber"}, "order": ["entered_at"],
+    "watch": {
+        "id": "grab_chamber_occupancy",
+        "tables": ["bale_instances"],
+        "coalesce_ms": 50,
+        "renew_ms": 5000,
+        "lease_ms": 15000
+    }
+};
+QUERY q INTO all;
+```
+
+`dbd` registers the query after the initial reply. Table changes from `dbsvr`
+coalesce into one rerun of the same select; the normal `response_changed`
+automatic fill updates `all`.
+
+The owning machine should declare and observe:
+
+```clockwork
+OPTION watch_status "inactive";
+OPTION watch_id "";
+OPTION watch_generation 0;
+OPTION watch_error "";
+RECEIVE watch_status_changed { /* status property has changed */ }
+```
+
+The client must issue the watched query again at `renew_ms`. This refreshes
+missed PUB state and re-registers after `dbd` restart. A registration not
+renewed within `lease_ms` becomes stale and is later removed.
+
+A watch must be a single top-level select, not an entry inside a batch query.
+
+For a view, name the underlying tables explicitly:
+
+```json
+"type": "ejected_bales",
+"watch": {"tables": ["bale_instances"]}
+```
+
+`watch_status`, `watch_list` and `watch_remove` are local `dbd` request actions;
+they are never forwarded to `dbsvr`. A `watch:false` property removes the
+registration after running its final query.
+
 **Handling the reply yourself.** If the machine declares its own `RECEIVE
 response_changed`, that handler wins and no automatic fill is installed — the
 author owns the reply (fill the list, drain it with `TAKE FIRST`, and so on).

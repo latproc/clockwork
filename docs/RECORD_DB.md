@@ -1,6 +1,6 @@
 # Clockwork RECORD and native database
 
-**Status:** Draft (implementation in progress: grammar, scaffold, WAL, dbd reconnect, typed JSON, PUB, RECORD_APPLY, COPY-from-class, cw-migrate). Martin 2026-08-24: query results are not a graph of unlinked machines; Clockwork stays a full language (no Lua/Python).  
+**Status:** Draft (implemented: grammar, scaffold, WAL, dbd reconnect, typed JSON, PUB, RECORD_APPLY, COPY-from-class, cw-migrate and live query watches in `dbd`). Martin 2026-08-24: query results are not a graph of unlinked machines; Clockwork stays a full language (no Lua/Python).
 **Date:** 2026-08-24  
 **Author:** (design)  
 **Repos:**
@@ -804,7 +804,58 @@ NoteEditor MACHINE {
 
 `TAKE FIRST FROM customers` then works unchanged.
 
-**Query subscriptions** (a LIST that stays a live query result without re-querying every scan) stay a later piece of the fan-out question.
+**Query watch subscriptions** are implemented in `dbd` without changing the
+query language. Add a `watch` object to the select JSON:
+
+```json
+{
+  "action": "select", "auth": "xxx", "type": "customer",
+  "where": {"city": "Perth"}, "order": ["name"],
+  "respond_to": "ed.response",
+  "watch": {
+    "id": "perth_customers",
+    "tables": ["customer"],
+    "coalesce_ms": 50,
+    "renew_ms": 5000,
+    "lease_ms": 15000
+  }
+}
+```
+
+`dbd` strips the watch controls before sending the select to `dbsvr`, applies
+the initial reply normally, then records the query against the listed source
+tables. A committed row change in any listed table coalesces and reruns the
+query, which returns through the normal `response` / `response_changed` path.
+Use explicit `tables` when `type` is a view because views do not publish their
+own notifications.
+
+The watch owner receives `watch_status`, `watch_id`, `watch_generation` and
+`watch_error`, followed by `watch_status_changed` on state transitions.
+`watch_status` is one of `inactive`, `pending`, `active`, `stale`, `error` or
+`removed`.
+
+Local `dbd` control requests:
+
+```json
+{"action":"watch_status","watch_id":"perth_customers"}
+{"action":"watch_list"}
+{"action":"watch_remove","watch_id":"perth_customers"}
+```
+
+These are consumed by `dbd`, not forwarded to `dbsvr`. Watch state is
+intentionally runtime adapter state, not a database table: it names a live iod
+machine through `respond_to`. The LPC helper must reissue the watched query at
+`renew_ms`; this both refreshes missed PUB state and re-registers after a `dbd`
+restart. A query not renewed within `lease_ms` first becomes `stale`, then is
+removed. `watch:false` on a select removes the registration after its one-shot
+query.
+
+A watch must be a single top-level select. A batch containing `watch` entries is
+rejected, rather than silently treating those entries as one-shot queries.
+
+Notifications are best-effort, so the renewal query is the recovery boundary.
+Do not persist watches as ordinary sqlite rows without an owner-generation and
+stale-entry design.
 
 Instance reuse: COPY INTO a LIST does not destroy a RECORD that is also a named instance or a member of another LIST.
 

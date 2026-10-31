@@ -851,6 +851,11 @@ set_target_properties(test_db_notify PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATO
 target_include_directories(test_db_notify PRIVATE src)
 target_link_libraries(test_db_notify cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
 add_test(NAME test_db_notify COMMAND test_db_notify)
+add_executable(test_db_watch tests/test_db_watch.cpp src/DbWatch.cpp)
+set_target_properties(test_db_watch PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_db_watch PRIVATE src)
+target_link_libraries(test_db_watch cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_db_watch COMMAND test_db_watch)
 add_executable(test_two_process_apply tests/test_two_process_apply.cpp src/DbNotify.cpp)
 set_target_properties(test_two_process_apply PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
 target_include_directories(test_two_process_apply PRIVATE src tests)
@@ -914,6 +919,20 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
     TIMEOUT 45)
 else()
   set_tests_properties(test_dbd_batch PROPERTIES
+    ENVIRONMENT "CW=$<TARGET_FILE:cw>;DBD=$<TARGET_FILE:dbd>"
+    TIMEOUT 20)
+endif()
+add_executable(test_dbd_watch tests/test_dbd_watch.cpp)
+set_target_properties(test_dbd_watch PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR")
+target_include_directories(test_dbd_watch PRIVATE src)
+target_link_libraries(test_dbd_watch cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} pthread)
+add_test(NAME test_dbd_watch COMMAND test_dbd_watch)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr")
+  set_tests_properties(test_dbd_watch PROPERTIES
+    ENVIRONMENT "CW=$<TARGET_FILE:cw>;DBD=$<TARGET_FILE:dbd>;DBSVR=${CMAKE_CURRENT_SOURCE_DIR}/../../datastore/build-wal/dbsvr"
+    TIMEOUT 45)
+else()
+  set_tests_properties(test_dbd_watch PROPERTIES
     ENVIRONMENT "CW=$<TARGET_FILE:cw>;DBD=$<TARGET_FILE:dbd>"
     TIMEOUT 20)
 endif()
@@ -1095,12 +1114,13 @@ target_link_libraries(persistd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "p
 
 # modbusd needs libmodbus. dbd talks ZMQ only.
 set(CLOCKWORK_RUNTIME_TARGETS cw cw-scaffold iosh iocmd device_connector persistd)
-add_executable(dbd src/dbd.cpp src/DeadlineReq.cpp src/DbNotify.cpp)
+add_executable(dbd src/dbd.cpp src/DeadlineReq.cpp src/DbNotify.cpp src/DbWatch.cpp)
 target_link_libraries(dbd cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} "pthread")
 list(APPEND CLOCKWORK_RUNTIME_TARGETS dbd)
 add_dependencies(test_two_dbd dbd)
 add_dependencies(test_cw_system cw dbd)
 add_dependencies(test_dbd_batch cw dbd)
+add_dependencies(test_dbd_watch cw dbd)
 add_dependencies(test_property_padding cw)
 if (MODBUS_FOUND)
   add_executable(modbusd src/modbusd.cpp )

@@ -46,6 +46,7 @@
 #include "ConnectionManager.h"
 #include "DeadlineReq.h"
 #include "DbNotify.h"
+#include "DbWatch.h"
 #include "MessageEncoding.h"
 #include "MessagingInterface.h"
 #include "SocketMonitor.h"
@@ -90,6 +91,44 @@ static bool sendIodCommand(const std::string &cmd, std::string &reply) {
         return g_iod_req->request(cmd, reply, IOD_CMD_TIMEOUT_MS);
     }
     return false;
+}
+
+static void send_watch_status(const dbwatch::Status &status) {
+    if (status.respond_to.empty()) {
+        return;
+    }
+    std::string machine = status.respond_to;
+    size_t dot = machine.rfind('.');
+    if (dot != std::string::npos) {
+        machine.resize(dot);
+    }
+    std::string reply;
+    auto send_property = [&](const char *name, const Value &value) {
+        auto cmd = MessageEncoding::encodeCommand(
+            "PROPERTY", Value(machine), Value(name), value);
+        if (!cmd.empty()) {
+            sendIodCommand(cmd, reply);
+        }
+    };
+    send_property("watch_status", Value(status.status, Value::t_string));
+    send_property("watch_id", Value(status.watch_id, Value::t_string));
+    send_property("watch_generation",
+                  Value(static_cast<int64_t>(status.generation)));
+    send_property("watch_error", Value(status.last_error, Value::t_string));
+    if (status.status_transition) {
+        auto update = MessageEncoding::encodeCommand(
+            "SEND", Value("watch_status_changed", Value::t_string),
+            Value("TO", Value::t_string), Value(machine));
+        if (!update.empty()) {
+            sendIodCommand(update, reply);
+        }
+    }
+}
+
+static void send_watch_statuses(const std::vector<dbwatch::Status> &statuses) {
+    for (const auto &status : statuses) {
+        send_watch_status(status);
+    }
 }
 
 // Deliver one request's reply payload to the machine named by that request's
@@ -176,6 +215,62 @@ static void send_response_to_clockwork(cJSON *json_request, const char *buf) {
         send_one_response_to_clockwork(json_request, msg);
     }
     cJSON_Delete(msg);
+}
+
+static std::string error_envelope(const std::string &error) {
+    cJSON *response = cJSON_CreateString(error.c_str());
+    cJSON *envelope = cJSON_CreateObject();
+    cJSON_AddNumberToObject(envelope, "status", 1);
+    cJSON_AddStringToObject(envelope, "request", "");
+    cJSON_AddItemToObject(envelope, "response", response);
+    char *encoded = cJSON_PrintUnformatted(envelope);
+    std::string result = encoded ? encoded : "{}";
+    free(encoded);
+    cJSON_Delete(envelope);
+    return result;
+}
+
+static std::string watch_response_envelope(const std::string &response) {
+    cJSON *payload = cJSON_Parse(response.c_str());
+    if (!payload) {
+        return error_envelope("invalid watch status response");
+    }
+    cJSON *envelope = cJSON_CreateObject();
+    cJSON_AddNumberToObject(envelope, "status", 0);
+    cJSON_AddStringToObject(envelope, "request", "");
+    cJSON_AddItemToObject(envelope, "response", payload);
+    char *encoded = cJSON_PrintUnformatted(envelope);
+    std::string result = encoded ? encoded : "{}";
+    free(encoded);
+    cJSON_Delete(envelope);
+    return result;
+}
+
+static bool response_ok(cJSON *reply) {
+    if (!reply) {
+        return false;
+    }
+    cJSON *status = cJSON_GetObjectItem(reply, "status");
+    if (!status) {
+        return true;
+    }
+    if (status->type != cJSON_Number) {
+        return false;
+    }
+    if (status->valueNumber.kind == cJSON_Number_int_t) {
+        return status->valueNumber.val._int == 0;
+    }
+    return status->valueNumber.val._double == 0;
+}
+
+static std::string reply_error(cJSON *reply, const std::string &fallback) {
+    if (reply) {
+        cJSON *response = cJSON_GetObjectItem(reply, "response");
+        if (response && response->type == cJSON_String && response->valuestring) {
+            return response->valuestring;
+        }
+    }
+    return fallback;
 }
 
 static void apply_one_to_records(cJSON *request, cJSON *reply) {
@@ -279,7 +374,48 @@ static void apply_rows_to_records(cJSON *request, cJSON *reply) {
     apply_one_to_records(request, reply);
 }
 
-static void apply_notify_payload(const std::string &payload) {
+static bool handle_watch_control(dbwatch::Registry &watches,
+                                 const dbwatch::RequestPlan &plan,
+                                 cJSON *request) {
+    if (plan.kind != dbwatch::RequestKind::WatchStatus &&
+        plan.kind != dbwatch::RequestKind::WatchList &&
+        plan.kind != dbwatch::RequestKind::WatchRemove) {
+        return false;
+    }
+    std::vector<dbwatch::Status> statuses;
+    std::string error;
+    if (plan.kind == dbwatch::RequestKind::WatchList) {
+        statuses = watches.list(dbwatch::Clock::now());
+    }
+    else if (plan.kind == dbwatch::RequestKind::WatchStatus) {
+        dbwatch::Status status;
+        if (!watches.status(plan.watch_id, dbwatch::Clock::now(), status,
+                            error)) {
+            std::string envelope = error_envelope(error);
+            send_response_to_clockwork(request, envelope.c_str());
+            return true;
+        }
+        statuses.push_back(status);
+    }
+    else {
+        dbwatch::Status status =
+            watches.removed(plan.watch_id, dbwatch::Clock::now(), error);
+        if (!error.empty()) {
+            std::string envelope = error_envelope(error);
+            send_response_to_clockwork(request, envelope.c_str());
+            return true;
+        }
+        send_watch_status(status);
+        statuses.push_back(status);
+    }
+    std::string envelope =
+        watch_response_envelope(dbwatch::statuses_json(statuses));
+    send_response_to_clockwork(request, envelope.c_str());
+    return true;
+}
+
+static void apply_notify_payload(const std::string &payload,
+                                 dbwatch::Registry &watches) {
     std::vector<DbNotifyRow> rows;
     parseDbNotify(payload, rows);
     for (size_t i = 0; i < rows.size(); ++i) {
@@ -301,6 +437,44 @@ static void apply_notify_payload(const std::string &payload) {
         }
         std::string reply_s;
         sendIodCommand(cmd, reply_s);
+        watches.note_table_changed(rows[i].type, dbwatch::Clock::now());
+    }
+}
+
+static void pump_watch_refreshes(dbwatch::Registry &watches,
+                                 DeadlineReq &dbsvr_req,
+                                 dbwatch::TimePoint now, bool channel_up) {
+    if (!channel_up) {
+        return;
+    }
+    send_watch_statuses(watches.expire(now));
+
+    std::vector<dbwatch::RefreshRequest> due = watches.due_refreshes(now);
+    for (const auto &request : due) {
+        std::string reply;
+        if (!dbsvr_req.request(request.database_json.c_str(), reply,
+                               DBSVR_TIMEOUT_MS)) {
+            send_watch_statuses(watches.refresh_failed(
+                request, dbwatch::Clock::now(), "dbsvr watch refresh failed"));
+            continue;
+        }
+        cJSON *parsed_request = cJSON_Parse(request.database_json.c_str());
+        cJSON *parsed_reply = cJSON_Parse(reply.c_str());
+        if (!response_ok(parsed_reply)) {
+            std::string error =
+                reply_error(parsed_reply, "watch refresh rejected");
+            send_watch_statuses(watches.refresh_failed(
+                request, dbwatch::Clock::now(), error));
+            cJSON_Delete(parsed_reply);
+            cJSON_Delete(parsed_request);
+            continue;
+        }
+        send_response_to_clockwork(parsed_request, reply.c_str());
+        apply_rows_to_records(parsed_request, parsed_reply);
+        send_watch_statuses(
+            watches.refresh_succeeded(request, dbwatch::Clock::now()));
+        cJSON_Delete(parsed_reply);
+        cJSON_Delete(parsed_request);
     }
 }
 
@@ -494,6 +668,7 @@ int main(int argc, const char *argv[]) {
     subscription_manager.monit_subs.addResponder(ZMQ_EVENT_DISCONNECTED, &disconnect_responder);
     subscription_manager.monit_subs.addResponder(ZMQ_EVENT_CONNECTED, &connect_responder);
     subscription_manager.setupConnections();
+    dbwatch::Registry watches;
 
     try {
         int exception_count = 0;
@@ -541,6 +716,7 @@ int main(int argc, const char *argv[]) {
             }
             if (need_refresh && subscription_manager.setupStatus() == SubscriptionManager::e_done) {
                 need_refresh = false;
+                watches.mark_all_dirty(dbwatch::Clock::now());
             }
 
             /* CHANNEL handshake only polls iosh_cmd while setup/subs are down.
@@ -557,10 +733,13 @@ int main(int argc, const char *argv[]) {
                     zmq::message_t note;
                     while (notify_sub.recv(&note, ZMQ_DONTWAIT)) {
                         std::string payload(static_cast<char *>(note.data()), note.size());
-                        apply_notify_payload(payload);
+                        apply_notify_payload(payload, watches);
                     }
                 }
             }
+
+            pump_watch_refreshes(watches, dbsvr_req, dbwatch::Clock::now(),
+                                 channel_up);
 
             if (!channel_up) {
                 usleep(10000);
@@ -610,6 +789,7 @@ int main(int argc, const char *argv[]) {
             if (cmd == "STARTUP") {
                 FileLogger fl(program_name);
                 fl.f() << " iod startup detected. reconnecting CHANNEL\n";
+                watches.clear();
                 subscription_manager.forceFullReconnect("iod STARTUP");
                 iod_req.reconnect();
                 continue;
@@ -624,11 +804,32 @@ int main(int argc, const char *argv[]) {
             if (!json_request) {
                 continue;
             }
+            dbwatch::RequestPlan watch_plan;
+            std::string watch_error;
+            if (!watches.prepare(json_request, dbwatch::Clock::now(),
+                                 watch_plan, watch_error)) {
+                std::string envelope = error_envelope(watch_error);
+                send_response_to_clockwork(json_request, envelope.c_str());
+                cJSON_Delete(json_request);
+                continue;
+            }
+            if (handle_watch_control(watches, watch_plan, json_request)) {
+                cJSON_Delete(json_request);
+                continue;
+            }
             if (DEBUG_BASIC) {
                 std::cout << "sending: " << &data[0] << "\n";
             }
             std::string dbsvr_reply;
-            if (!dbsvr_req.request(&data[0], dbsvr_reply, DBSVR_TIMEOUT_MS)) {
+            bool is_watch_set =
+                watch_plan.kind == dbwatch::RequestKind::WatchSet;
+            bool is_watch_remove =
+                watch_plan.kind == dbwatch::RequestKind::WatchQueryAndRemove;
+            const std::string &db_request =
+                (is_watch_set || is_watch_remove) ? watch_plan.database_json
+                                                  : std::string(&data[0]);
+            if (!dbsvr_req.request(db_request.c_str(), dbsvr_reply,
+                                   DBSVR_TIMEOUT_MS)) {
                 std::cerr << "dbsvr request failed; will retry with a new socket\n";
                 // iod-15: report the failure back to Clockwork rather than
                 // silently dropping it, so the author's ON ERROR / CATCH /
@@ -637,6 +838,16 @@ int main(int argc, const char *argv[]) {
                 static const char *error_reply =
                     "{\"status\":1,\"request\":\"\",\"response\":\"dbsvr request failed (timeout)\"}";
                 send_response_to_clockwork(json_request, error_reply);
+                if (is_watch_set) {
+                    send_watch_status(watches.activation_failed(
+                        watch_plan, dbwatch::Clock::now(),
+                        "dbsvr watch registration failed"));
+                }
+                else if (is_watch_remove) {
+                    std::string remove_error;
+                    send_watch_status(watches.query_and_remove(
+                        watch_plan, dbwatch::Clock::now(), remove_error));
+                }
                 cJSON_Delete(json_request);
                 continue;
             }
@@ -646,6 +857,23 @@ int main(int argc, const char *argv[]) {
             send_response_to_clockwork(json_request, dbsvr_reply.c_str());
             cJSON *parsed_reply = cJSON_Parse(dbsvr_reply.c_str());
             apply_rows_to_records(json_request, parsed_reply);
+            if (is_watch_set) {
+                if (response_ok(parsed_reply)) {
+                    send_watch_status(
+                        watches.activated(watch_plan, dbwatch::Clock::now()));
+                }
+                else {
+                    send_watch_status(watches.activation_failed(
+                        watch_plan, dbwatch::Clock::now(),
+                        reply_error(parsed_reply, "watch registration rejected")));
+                }
+            }
+            else if (is_watch_remove) {
+                std::string remove_error;
+                dbwatch::Status removed = watches.query_and_remove(
+                    watch_plan, dbwatch::Clock::now(), remove_error);
+                send_watch_status(removed);
+            }
             cJSON_Delete(parsed_reply);
             cJSON_Delete(json_request);
         }
