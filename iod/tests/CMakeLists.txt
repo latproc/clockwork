@@ -89,6 +89,10 @@ target_link_libraries(test_velocity_instance gmock cw_interpreter cw_client
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_velocity_instance COMMAND test_velocity_instance)
 
+add_executable(test_io_signed_input test_io_signed_input.cpp)
+target_link_libraries(test_io_signed_input gtest_main pthread)
+add_test(NAME test_io_signed_input COMMAND test_io_signed_input)
+
 add_executable(test_bit_ops test_bit_ops.cpp
    ${PROJECT_SOURCE_DIR}/src/bit_ops.cpp
 )

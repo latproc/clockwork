@@ -1875,11 +1875,11 @@ void IOComponent::handleChange(std::list<Package *> &work_queue) {
             val = *(int8_t *)(offset);
         }
         else if (address.bitlen == 16) {
-            val = fromU16(offset);
+            val = address.decodeInputValue(fromU16(offset));
             //std::cout << " 16bit value: " << val << " " << std::hex << val << std::dec << "\n";
         }
         else if (address.bitlen == 32) {
-            val = fromU32(offset);
+            val = address.decodeInputValue(fromU32(offset));
         }
         else if (address.bitlen == 64) {
             val = fromU64(offset);

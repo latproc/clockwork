@@ -54,6 +54,23 @@ struct IOAddress {
     IOAddress()
         : module_position(0), io_offset(0), io_bitpos(0), value(0), bitlen(1), entry_position(0),
           is_signed(false) {}
+    /**
+     * Convert a raw process-image value into the signed integer used by
+     * Clockwork. This is deliberately separate from the output write casts:
+     * input values need sign extension from their declared PDO width.
+     */
+    int64_t decodeInputValue(uint64_t raw) const {
+        if (!is_signed) {
+            return static_cast<int64_t>(raw);
+        }
+        if (bitlen == 16) {
+            return static_cast<int16_t>(static_cast<uint16_t>(raw));
+        }
+        if (bitlen == 32) {
+            return static_cast<int32_t>(static_cast<uint32_t>(raw));
+        }
+        return static_cast<int64_t>(raw);
+    }
     std::string description;
 };
 

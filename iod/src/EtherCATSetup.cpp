@@ -427,6 +427,9 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                 unsigned int direction = module->syncs[ed->sm_index].dir;
                 unsigned int offset_idx = entry_position;
                 unsigned int bitlen = module->pdo_entries[entry_position].bit_length;
+                int64_t signed_option = 0;
+                const bool is_signed =
+                    m->getValue("signed").asInteger(signed_option) && signed_option != 0;
 
                 if (direction == EC_DIR_OUTPUT) {
                     DBG_ETHERCAT << "Adding new output device " << m->getName()
@@ -437,7 +440,7 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                                  << " bitlen: " << bitlen << "\n";
                     IOAddress addr(IOComponent::add_io_entry(
                         ed->name.c_str(), module_position, module->offsets[offset_idx],
-                        module->bit_positions[offset_idx], offset_idx, bitlen));
+                        module->bit_positions[offset_idx], offset_idx, bitlen, is_signed));
 
                     if (bitlen == 1) {
                         Output *o = new Output(addr);
@@ -471,7 +474,7 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
 #endif
                     IOAddress addr(IOComponent::add_io_entry(
                         ed->name.c_str(), module_position, module->offsets[offset_idx],
-                        module->bit_positions[offset_idx], offset_idx, bitlen));
+                        module->bit_positions[offset_idx], offset_idx, bitlen, is_signed));
 
                     if (bitlen == 1) {
                         Input *in = new Input(addr);
@@ -498,6 +501,10 @@ void generateIOComponentModules(std::map<unsigned int, DeviceInfo *> slave_confi
                             else {
                                 in = source->second;
                                 IOComponent::devices[m->getName()] = in;
+                                // A physical counter can back both a VELOCITY
+                                // and a COUNTER declaration. If either declares
+                                // signed:1, decode the shared samples as signed.
+                                in->address.is_signed = in->address.is_signed || is_signed;
                             }
                             m->io_interface = in;
                             in->addDependent(m);
