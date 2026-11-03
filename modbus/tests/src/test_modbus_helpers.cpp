@@ -81,3 +81,19 @@ TEST(next_modbus_poll_interval_us, doublesThenCaps) {
     EXPECT_EQ(2000000u, next_modbus_poll_interval_us(false, 2000000, 100000, 2000000));
     EXPECT_EQ(2000000u, next_modbus_poll_interval_us(false, 1500000, 100000, 2000000));
 }
+
+TEST(modbus_poll_is_active, requires_an_open_transport) {
+    EXPECT_FALSE(modbus_poll_is_active(false, true, true));
+}
+
+TEST(modbus_poll_is_active, requires_configured_poll_targets) {
+    EXPECT_FALSE(modbus_poll_is_active(true, false, true));
+}
+
+TEST(modbus_poll_is_active, requires_a_successful_cycle) {
+    EXPECT_FALSE(modbus_poll_is_active(true, true, false));
+}
+
+TEST(modbus_poll_is_active, accepts_a_complete_successful_cycle) {
+    EXPECT_TRUE(modbus_poll_is_active(true, true, true));
+}

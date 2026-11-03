@@ -41,7 +41,10 @@ class ModbusClientThread {
     bool &update_status;
 
     bool finished;
-    bool connected;
+    // The serial fd/TCP socket is open. This does not mean the slave is
+    // answering; poll health is represented by slave_silent_cycles and the
+    // publication status in operator().
+    bool transport_open;
     // Consecutive failed poll cycles while the serial ctx is still open (slave
     // missing). Not a process restart. Refresh+republish when this drops to 0.
     unsigned slave_silent_cycles;
@@ -86,6 +89,8 @@ class ModbusClientThread {
     modbus_t *openConnection();
 
     void close_connection();
+    // Caller holds update_mutex.
+    void close_connection_locked();
 
     bool check_error(int rc, const char *msg, int entry, int *retry);
     int setBit(int addr, bool which);

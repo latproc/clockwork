@@ -35,6 +35,14 @@ int main() {
     expect_eq("fail doubles", next_modbus_poll_interval_us(false, 100000, 100000, 2000000), 200000);
     expect_eq("fail caps", next_modbus_poll_interval_us(false, 2000000, 100000, 2000000), 2000000);
 
+    if (modbus_poll_is_active(false, true, true) ||
+        modbus_poll_is_active(true, false, true) ||
+        modbus_poll_is_active(true, true, false) ||
+        !modbus_poll_is_active(true, true, true)) {
+        std::cerr << "FAIL modbus poll health truth table\n";
+        ++fails;
+    }
+
     if (fails) {
         std::cerr << fails << " failed\n";
         return 1;

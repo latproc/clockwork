@@ -19,8 +19,8 @@ TEST(sendChanges, sendsWhenChanges) {
 
     Options options;
     options.verbose = true;
-    uint8_t buffer[10];
-    for (int i=0; i<10; i++) {
+    uint8_t buffer[11];
+    for (int i=0; i<11; i++) {
         buffer[i] = 0;
     }
     ModbusMonitor mm("test", 1, 10, 1, "bool", true);

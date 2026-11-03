@@ -192,3 +192,7 @@ unsigned next_modbus_poll_interval_us(bool cycle_ok, unsigned current_us, unsign
     }
     return next;
 }
+
+bool modbus_poll_is_active(bool transport_open, bool have_poll_targets, bool cycle_ok) {
+    return transport_open && have_poll_targets && cycle_ok;
+}
