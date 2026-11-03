@@ -13,6 +13,7 @@
 #include <MessageEncoding.h>
 #include <MessagingInterface.h>
 #include <boost/thread.hpp>
+#include <atomic>
 #include <fstream>
 #include <iostream>
 #include <libgen.h>
@@ -38,7 +39,7 @@ class ModbusClientThread {
     uint16_t *tab_rq_registers;
     uint16_t *tab_rw_rq_registers;
     const Options &options;
-    bool &update_status;
+    std::atomic<bool> &update_status;
 
     bool finished;
     // The serial fd/TCP socket is open. This does not mean the slave is
@@ -83,7 +84,8 @@ class ModbusClientThread {
     void refresh();
 
     ModbusClientThread(const ModbusSettings &modbus_settings, MonitorConfiguration &modbus_config,
-                       const Options &options, bool &update_status, const char *sock_name = 0);
+                       const Options &options, std::atomic<bool> &update_status,
+                       const char *sock_name = 0);
 
     ~ModbusClientThread();
     modbus_t *openConnection();

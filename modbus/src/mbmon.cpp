@@ -11,6 +11,7 @@
 #include <MessageEncoding.h>
 #include <MessagingInterface.h>
 #include <boost/thread.hpp>
+#include <atomic>
 #include <iostream>
 #include <libgen.h>
 #include <map>
@@ -22,8 +23,8 @@
 #include <value.h>
 #include <zmq.hpp>
 
-bool iod_connected = false;
-bool update_status = true;
+std::atomic<bool> iod_connected(false);
+std::atomic<bool> update_status(true);
 //const char *program_name;
 
 /*
@@ -199,7 +200,7 @@ ModbusClientThread *mb = 0;
 // restart (zombie TCP / long outage), so recovery is driven from the main
 // loop via checkConnections + forceFullReconnect. Supervise exit is a
 // last-resort fallback if soft reconnect stalls (same class of issue as humid).
-static bool need_refresh = false;
+static std::atomic<bool> need_refresh(false);
 static bool reported_iod_down = false;
 
 class SetupDisconnectMonitor : public EventResponder {

@@ -119,7 +119,7 @@ void ModbusClientThread::refresh() {
 
 ModbusClientThread::ModbusClientThread(const ModbusSettings &modbus_settings,
                                        MonitorConfiguration &modbus_config, const Options &options,
-                                       bool &update_status, const char *sock_name)
+                                       std::atomic<bool> &update_status, const char *sock_name)
     : ctx(0), tab_rp_bits(0), tab_ro_bits(0), tab_rq_registers(0), tab_rw_rq_registers(0),
       options(options), update_status(update_status), finished(false), transport_open(false),
       slave_silent_cycles(0), poll_interval_us(kPollMinUs), transient_error_logs(0),
