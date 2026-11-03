@@ -83,6 +83,11 @@ ModbusIoErrorKind classify_modbus_io_error(int rc, ModbusType mt);
 unsigned next_modbus_poll_interval_us(bool cycle_ok, unsigned current_us, unsigned min_us,
                                       unsigned max_us);
 
+// A Modbus master is "active" only after a complete poll cycle succeeds and
+// there was at least one configured object to read. An open RTU fd or CHANNEL
+// connection alone is not evidence that the slave is answering.
+bool modbus_poll_is_active(bool transport_open, bool have_poll_targets, bool cycle_ok);
+
 // ZMQ REQ helpers shared by mbmon and ModbusClientThread. Half-open REQ after
 // timeout/EFSM cannot send again until the socket is recreated.
 constexpr int64_t IOD_CMD_TIMEOUT_MS = 3000;

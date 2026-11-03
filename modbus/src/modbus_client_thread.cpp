@@ -121,7 +121,7 @@ ModbusClientThread::ModbusClientThread(const ModbusSettings &modbus_settings,
                                        MonitorConfiguration &modbus_config, const Options &options,
                                        bool &update_status, const char *sock_name)
     : ctx(0), tab_rp_bits(0), tab_ro_bits(0), tab_rq_registers(0), tab_rw_rq_registers(0),
-      options(options), update_status(update_status), finished(false), connected(false),
+      options(options), update_status(update_status), finished(false), transport_open(false),
       slave_silent_cycles(0), poll_interval_us(kPollMinUs), transient_error_logs(0),
       bits_monitor("coils", options), robits_monitor("discrete", options),
       regs_monitor("registers", options), holdings_monitor("holdings", options), mc(modbus_config),
@@ -332,14 +332,18 @@ void ModbusClientThread::close_connection() {
     update_status = true;
 
     boost::mutex::scoped_lock lock(update_mutex);
+    close_connection_locked();
+}
+
+void ModbusClientThread::close_connection_locked() {
     if (!ctx) {
-        connected = false;
+        transport_open = false;
         return;
     }
     modbus_flush(ctx);
     modbus_close(ctx);
     modbus_free(ctx);
-    connected = false;
+    transport_open = false;
     ctx = 0;
 }
 
@@ -356,13 +360,12 @@ bool ModbusClientThread::check_error(int rc, const char *msg, int entry, int *re
         return true;
     }
     fprintf(stderr, "%s %s, entry %d disconnecting %d\n", msg, err_str.c_str(), entry, *retry);
-    if (connected) {
-        close_connection();
-    }
     return false;
 }
 
 int ModbusClientThread::setBit(int addr, bool which) {
+    if (!transport_open || !ctx)
+        return ENXIO;
     std::cerr << "set bit " << addr << " to " << which << "\n";
     boost::mutex::scoped_lock lock(update_mutex);
     int rc = 0;
@@ -371,13 +374,14 @@ int ModbusClientThread::setBit(int addr, bool which) {
         int saved_errno = errno;
         std::cerr << "modbus_write_bit failed: " << show_modbus_error(saved_errno) << "\n";
         if (check_error(saved_errno, "modbus_write_bit", addr, &retries)) {
-            if (!connected) {
-                return saved_errno;
-            }
             if (--retries > 0)
                 continue;
+            return saved_errno;
         }
         else {
+            close_connection_locked();
+            sendStatus("disconnected");
+            update_status = true;
             return saved_errno;
         }
     }
@@ -386,7 +390,7 @@ int ModbusClientThread::setBit(int addr, bool which) {
 
 // Attempt to set the given register. If an error occurs, retry up to 3 times.
 int ModbusClientThread::setRegister(int addr, uint16_t val) {
-    if (!connected)
+    if (!transport_open || !ctx)
         return ENXIO;
     if (options.verbose)
         std::cerr << "set register " << addr << " to " << val << "\n";
@@ -401,9 +405,6 @@ int ModbusClientThread::setRegister(int addr, uint16_t val) {
         int saved_errno = errno;
         std::cerr << "modbus_write_register failed: " << show_modbus_error(saved_errno) << "\n";
         if (check_error(saved_errno, "modbus_write_register(s) ", addr, &retries)) {
-            if (!connected) {
-                return saved_errno;
-            }
             if (--retries > 0) {
                 if (settings.support_single_register_write)
                     rc = modbus_write_register(ctx, addr, val);
@@ -416,6 +417,9 @@ int ModbusClientThread::setRegister(int addr, uint16_t val) {
             }
         }
         else {
+            close_connection_locked();
+            sendStatus("disconnected");
+            update_status = true;
             return saved_errno;
         }
     }
@@ -424,7 +428,7 @@ int ModbusClientThread::setRegister(int addr, uint16_t val) {
 
 // Attempt to set the given registers. If an error occurs, retry up to 3 times.
 int ModbusClientThread::setRegisters(int addr, uint16_t *val, unsigned int n) {
-    if (!connected) {
+    if (!transport_open || !ctx) {
         return ENXIO;
     }
     if (options.verbose) {
@@ -434,18 +438,15 @@ int ModbusClientThread::setRegisters(int addr, uint16_t *val, unsigned int n) {
         std::cerr << "\n";
     }
     boost::mutex::scoped_lock lock(update_mutex);
-    int rc = 0;
     int retries = 3; // TODO: Make this a setting
-    rc = modbus_write_registers(ctx, addr, static_cast<int>(n), val);
-    while ((rc = modbus_write_registers(ctx, addr, static_cast<int>(n), val)) == -1) {
+    int rc = modbus_write_registers(ctx, addr, static_cast<int>(n), val);
+    while (rc == -1) {
         int saved_errno = errno;
         std::cerr << "modbus_write_registers: " << show_modbus_error(saved_errno) << "\n";
         if (check_error(saved_errno, "modbus_write_registers ", addr, &retries)) {
-            if (!connected) {
-                return saved_errno;
-            }
             if (--retries > 0) {
                 usleep(250); // TODO: Remove this sleep
+                rc = modbus_write_registers(ctx, addr, static_cast<int>(n), val);
                 continue;
             }
             else {
@@ -453,6 +454,9 @@ int ModbusClientThread::setRegisters(int addr, uint16_t *val, unsigned int n) {
             }
         }
         else {
+            close_connection_locked();
+            sendStatus("disconnected");
+            update_status = true;
             return saved_errno;
         }
     }
@@ -463,7 +467,7 @@ void ModbusClientThread::operator()() {
     recreateCmdSocket();
 
     while (!finished) {
-        if (!connected) {
+        if (!transport_open) {
             boost::mutex::scoped_lock lock(update_mutex);
             if (ctx) {
                 modbus_close(ctx);
@@ -472,7 +476,7 @@ void ModbusClientThread::operator()() {
             }
             ctx = openConnection();
             if (ctx) {
-                connected = true;
+                transport_open = true;
                 update_status = true;
                 // Clear change caches so the first poll after (re)connect republishes
                 // current discrete/register state to clockwork (see BufferMonitor::refresh).
@@ -497,7 +501,16 @@ void ModbusClientThread::operator()() {
             sendStatus("initialising");
         }
 
-        bool cycle_ok = true;
+        bool have_poll_targets = false;
+        for (const auto &entry : mc.monitors) {
+            const unsigned group = entry.second.group();
+            if (entry.second.length() > 0 &&
+                (group == 0 || group == 1 || group == 3 || group == 4)) {
+                have_poll_targets = true;
+                break;
+            }
+        }
+        bool cycle_ok = have_poll_targets;
         if (!collect_selected_updates(robits_monitor, 1, tab_ro_bits, mc.monitors,
                                       "modbus_read_input_bits", modbus_read_input_bits)) {
             cycle_ok = false;
@@ -517,10 +530,11 @@ void ModbusClientThread::operator()() {
             cycle_ok = false;
         }
 
-        if (!cycle_ok) {
+        if (!modbus_poll_is_active(transport_open, have_poll_targets, cycle_ok)) {
             if (slave_silent_cycles == 0) {
                 sendStatus("disconnected");
-                std::cerr << "modbus slave silent — keeping serial open, backing off polls\n";
+                std::cerr << "modbus poll unavailable — keeping the transport open and backing off"
+                          << " (targets=" << have_poll_targets << ")\n";
             }
             ++slave_silent_cycles;
             if (slave_silent_cycles == 1 || (slave_silent_cycles % 50) == 0) {
@@ -530,7 +544,7 @@ void ModbusClientThread::operator()() {
         else {
             if (slave_silent_cycles > 0) {
                 std::cerr << "modbus slave returned after " << slave_silent_cycles
-                          << " silent cycles — republished\n";
+                          << " unavailable cycles — republished\n";
             }
             slave_silent_cycles = 0;
             transient_error_logs = 0;
@@ -580,9 +594,10 @@ collect_selected_updates(ModbusClientThread &client, modbus_t *ctx, const Option
                 if (options.verbose)
                     std::cerr << "called: read_fn(ctx, " << offset << ", " << item.second.length()
                               << ", " << dest + offset << "))\n";
-                client.check_error(saved_errno, fn_name, static_cast<int>(offset), &retry);
-                if (!client.connected) {
+                if (!client.check_error(saved_errno, fn_name, static_cast<int>(offset), &retry)) {
+                    client.close_connection();
                     result.error = saved_errno;
+                    return result;
                 }
                 if (--retry > 0)
                     continue;
@@ -596,7 +611,7 @@ collect_selected_updates(ModbusClientThread &client, modbus_t *ctx, const Option
             }
         }
     }
-    if (!client.connected) {
+    if (!client.transport_open) {
         std::cerr << "Lost connection\n";
         result.error = ENXIO;
         return result;
