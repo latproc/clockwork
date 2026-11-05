@@ -1593,7 +1593,13 @@ static const char *persist_entry_reject_reason(MachineInstance *m, const std::st
 
 void load_properties_file(const std::string &filename, bool only_persistent) {
     PersistentStore store(filename);
-    store.load();
+    std::string store_error;
+    if (!store.load(&store_error)) {
+        std::cerr << "PERSISTENT STORE LOAD FAILED: " << store_error << "\n" << std::flush;
+        FileLogger fl(program_name);
+        fl.f() << "PERSISTENT STORE LOAD FAILED: " << store_error << "\n" << std::flush;
+        return;
+    }
 
     const PersistFilterMode filter_mode = persist_filter_mode();
 

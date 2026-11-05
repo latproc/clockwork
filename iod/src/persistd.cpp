@@ -44,7 +44,7 @@
 
 namespace po = boost::program_options;
 
-bool done = false;
+volatile sig_atomic_t done = 0;
 zmq::socket_t *cmd_socket = 0;
 
 // PERSISTENT STATUS can be large; still must not block forever if iod is stuck.
@@ -73,7 +73,7 @@ static bool sendWithDeadline(zmq::socket_t &sock, const std::string &msg, std::s
     }
 
     const uint64_t deadline = microsecs() + (uint64_t)timeout_ms * 1000ULL;
-    while (microsecs() < deadline) {
+    while (microsecs() < deadline && !done) {
         int64_t remain_ms = (int64_t)((deadline - microsecs()) / 1000ULL);
         if (remain_ms < 1) {
             remain_ms = 1;
@@ -107,14 +107,10 @@ static bool sendWithDeadline(zmq::socket_t &sock, const std::string &msg, std::s
 }
 
 static void finish(int sig) {
-    struct sigaction sa;
-    sa.sa_handler = SIG_DFL;
-    sigemptyset(&sa.sa_mask);
-    sa.sa_flags = 0;
-    sigaction(SIGTERM, &sa, 0);
-    sigaction(SIGINT, &sa, 0);
-    done = true;
-    exit(0);
+    (void)sig;
+    // A signal can arrive inside PersistentStore::save(). Let the current
+    // update finish instead of exiting from the handler mid-write.
+    done = 1;
 }
 
 bool setup_signals() {
@@ -126,6 +122,17 @@ bool setup_signals() {
         return false;
     }
     return true;
+}
+
+static bool save_persistent_store(PersistentStore &store, const char *context) {
+    std::string error;
+    if (store.save(&error)) {
+        return true;
+    }
+    std::cerr << "persistd failed to save " << context << ": " << error << "\n" << std::flush;
+    FileLogger fl(program_name);
+    fl.f() << "failed to save " << context << ": " << error << "\n" << std::flush;
+    return false;
 }
 
 // Soft-reconnect state. ZMQ_EVENT_DISCONNECTED often does not fire on iod
@@ -274,7 +281,7 @@ bool CollectPersistentStatus(PersistentStore &store, SubscriptionManager &subscr
         if (ok) {
             if (strncasecmp(initial_settings.c_str(), "ignored", strlen("ignored")) != 0) {
                 if (loadActiveData(store, initial_settings.c_str())) {
-                    store.save();
+                    save_persistent_store(store, "PERSISTENT STATUS");
                 }
                 return true;
             }
@@ -329,7 +336,9 @@ int main(int argc, const char *argv[]) {
     ignored_properties.insert("IOTIME");
 
     po::options_description desc("Allowed options");
-    desc.add_options()("help", "produce help message")("verbose", "display changes on stdout");
+    desc.add_options()("help", "produce help message")("verbose", "display changes on stdout")(
+        "setup-port", po::value<int>()->default_value(5555),
+        "Clockwork setup/command port");
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
@@ -352,7 +361,9 @@ int main(int argc, const char *argv[]) {
     PersistentStore store("persist.dat");
     //store.load(); // disabled load store since we take it from clockwork now
 
-    SubscriptionManager subscription_manager("PERSISTENCE_CHANNEL", eCLOCKWORK);
+    const int setup_port = vm["setup-port"].as<int>();
+    SubscriptionManager subscription_manager("PERSISTENCE_CHANNEL", eCLOCKWORK, "localhost",
+                                             setup_port, setup_port);
     SetupConnectMonitor connect_responder;
     SetupDisconnectMonitor disconnect_responder;
     cmd_socket = &subscription_manager.setup();
@@ -602,7 +613,7 @@ int main(int argc, const char *argv[]) {
                     Value property_name = *iter++;
                     Value value = *iter++;
                     store.insert(machine_name.asString(), property_name.asString(), value);
-                    store.save();
+                    save_persistent_store(store, "PROPERTY");
                 }
                 else {
                     std::cerr << "unexpected command: " << cmd << " sent to persistd\n";
@@ -615,7 +626,7 @@ int main(int argc, const char *argv[]) {
                 std::string machine_name;
                 store.split(machine_name, property);
                 store.insert(machine_name, property, value.c_str());
-                store.save();
+                save_persistent_store(store, "PROPERTY");
             }
             if (param_list) {
                 delete param_list;
@@ -628,5 +639,13 @@ int main(int argc, const char *argv[]) {
         delete[] data;
     }
 
-    return 0;
+    if (store.dirty()) {
+        save_persistent_store(store, "final update during shutdown");
+    }
+    std::cout.flush();
+    std::cerr.flush();
+    // The ZMQ monitor threads make context_t::close() block on some supported
+    // runtimes. The persistent store is already fsynced at this point, so exit
+    // without waiting for library teardown that cannot affect file integrity.
+    _exit(0);
 }
