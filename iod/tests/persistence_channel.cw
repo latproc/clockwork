@@ -1,0 +1,7 @@
+PERSISTENCE_CHANNEL CHANNEL {
+    OPTION host "localhost";
+    OPTION port 27901;
+    MONITORS PERSISTENT == "true";
+    PUBLISHER;
+    IGNORES STATE_CHANGES;
+}

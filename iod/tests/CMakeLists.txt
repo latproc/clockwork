@@ -55,6 +55,19 @@ target_link_libraries(test_value gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_
 include_directories("${PROJECT_SOURCE_DIR}/tests")
 add_test(NAME test_value COMMAND test_value)
 
+add_executable(test_persistent_store test_persistent_store.cpp
+  ${PROJECT_SOURCE_DIR}/src/PersistentStore.cpp)
+target_compile_definitions(test_persistent_store PRIVATE PERSISTENT_STORE_TESTING)
+target_include_directories(test_persistent_store PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test_persistent_store gmock_main cw_client
+  ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${DL_LIBRARY} pthread)
+add_test(NAME test_persistent_store COMMAND test_persistent_store)
+add_test(NAME persistd_sigterm_runtime
+  COMMAND sh ${PROJECT_SOURCE_DIR}/tests/run_persistd_sigterm.sh
+    $<TARGET_FILE:persistd> $<TARGET_FILE:cw> $<TARGET_FILE:iocmd>
+    ${PROJECT_SOURCE_DIR}/tests)
+set_tests_properties(persistd_sigterm_runtime PROPERTIES RUN_SERIAL TRUE)
+
 add_executable(test_disable_action iod_mock.h test_disable_action.cpp )
 set_target_properties (test_disable_action PROPERTIES COMPILE_DEFINITIONS "EC_SIMULATOR" )
 target_link_libraries(test_disable_action gmock_main cw_interpreter cw_client
