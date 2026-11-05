@@ -2,6 +2,7 @@
 #include "gtest/gtest.h"
 
 #include <cerrno>
+#include <cmath>
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
@@ -253,11 +254,13 @@ TEST(PersistentStore, KeepsLegacyFormatWhereItIsLossless) {
     PersistentStore store(directory.file());
     store.insert("M_FORMAT", "zero", Value(0.0));
     store.insert("M_FORMAT", "simple", Value(0.05));
+    store.insert("M_FORMAT", "ulp_noise", Value(std::nextafter(0.05, 0.0)));
     store.insert("M_FORMAT", "precise", Value(0.12345678901234567));
     store.insert("M_FORMAT", "enabled", Value(true));
 
     EXPECT_EQ(line_for(store, "M_FORMAT", "zero"), "M_FORMAT zero 0.0");
     EXPECT_EQ(line_for(store, "M_FORMAT", "simple"), "M_FORMAT simple 0.050000");
+    EXPECT_EQ(line_for(store, "M_FORMAT", "ulp_noise"), "M_FORMAT ulp_noise 0.050000");
     EXPECT_NE(line_for(store, "M_FORMAT", "precise"), "M_FORMAT precise 0.123457");
     EXPECT_EQ(line_for(store, "M_FORMAT", "enabled"), "M_FORMAT enabled true");
 }
