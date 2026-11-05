@@ -52,7 +52,8 @@ if ! kill -0 "${cw_pid}" 2>/dev/null; then
     exit 1
 fi
 
-"${PERSISTD}" --verbose --setup-port "${setup_port}" >"${WORK}/persistd.log" 2>&1 &
+"${PERSISTD}" --verbose --setup-port "${setup_port}" --flush-ms 200 \
+    >"${WORK}/persistd.log" 2>&1 &
 persistd_pid=$!
 
 i=0
@@ -87,7 +88,28 @@ test "$(tail -c 1 "${WORK}/persist.dat" | wc -l | tr -d ' ')" -eq 1
     done
 ) | "${IOCMD}" -p "${setup_port}" >"${WORK}/iocmd.log" 2>&1 &
 writer_pid=$!
-sleep 0.1
+write_bytes_before=
+if [ -r "/proc/${persistd_pid}/io" ]; then
+    write_bytes_before=$(awk '/^write_bytes:/ {print $2}' "/proc/${persistd_pid}/io")
+fi
+sleep 1.5
+
+grep -Eq '^sample b (499|499\.000000)$' "${WORK}/persist.dat"
+coalesced_saves=$(grep -c 'persistd saved coalesced batch' "${WORK}/persistd.log" || true)
+echo "persistd coalesced saves after 500 updates: ${coalesced_saves}"
+if [ "${coalesced_saves}" -gt 10 ]; then
+    echo "persistd performed too many saves for a 500-update burst" >&2
+    exit 1
+fi
+if [ -n "${write_bytes_before}" ]; then
+    write_bytes_after=$(awk '/^write_bytes:/ {print $2}' "/proc/${persistd_pid}/io")
+    write_delta=$((write_bytes_after - write_bytes_before))
+    echo "persistd write_bytes for 500 coalesced updates: ${write_delta}"
+    if [ "${write_delta}" -ge 2000000 ]; then
+        echo "persistd used too much disk I/O for the coalesced update batch" >&2
+        exit 1
+    fi
+fi
 
 kill -TERM "${persistd_pid}"
 i=0
@@ -112,7 +134,8 @@ PERSIST_STORE_EXTERNAL_FIXTURE="${WORK}/persist.dat" "${STORE_TEST}" \
     >"${WORK}/store-term-check.log" 2>&1 ||
     { cat "${WORK}/store-term-check.log" >&2; exit 1; }
 
-"${PERSISTD}" --verbose --setup-port "${setup_port}" >>"${WORK}/persistd.log" 2>&1 &
+"${PERSISTD}" --verbose --setup-port "${setup_port}" --flush-ms 200 \
+    >>"${WORK}/persistd.log" 2>&1 &
 persistd_pid=$!
 sleep 4
 (

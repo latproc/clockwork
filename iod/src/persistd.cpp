@@ -27,6 +27,7 @@
 #include "cJSON.h"
 #include "symboltable.h"
 #include "value.h"
+#include <algorithm>
 #include <boost/foreach.hpp>
 #include <boost/program_options.hpp>
 #include <fstream>
@@ -338,7 +339,9 @@ int main(int argc, const char *argv[]) {
     po::options_description desc("Allowed options");
     desc.add_options()("help", "produce help message")("verbose", "display changes on stdout")(
         "setup-port", po::value<int>()->default_value(5555),
-        "Clockwork setup/command port");
+        "Clockwork setup/command port")(
+        "flush-ms", po::value<int>()->default_value(1000),
+        "maximum delay before coalesced persistent updates are saved");
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
     po::notify(vm);
@@ -351,6 +354,12 @@ int main(int argc, const char *argv[]) {
     if (vm.count("verbose")) {
         verbose = true;
     }
+    const int configured_flush_ms = vm["flush-ms"].as<int>();
+    if (configured_flush_ms <= 0) {
+        std::cerr << "persistd: --flush-ms must be greater than zero\n";
+        return 2;
+    }
+    const uint64_t flush_interval_us = static_cast<uint64_t>(configured_flush_ms) * 1000ULL;
 
     setup_signals();
 
@@ -360,6 +369,15 @@ int main(int argc, const char *argv[]) {
 
     PersistentStore store("persist.dat");
     //store.load(); // disabled load store since we take it from clockwork now
+
+    auto flush_and_exit = [&store](int status) {
+        if (store.dirty()) {
+            save_persistent_store(store, "final update before supervised restart");
+        }
+        std::cout.flush();
+        std::cerr.flush();
+        _exit(status);
+    };
 
     const int setup_port = vm["setup-port"].as<int>();
     SubscriptionManager subscription_manager("PERSISTENCE_CHANNEL", eCLOCKWORK, "localhost",
@@ -384,12 +402,36 @@ int main(int argc, const char *argv[]) {
     const uint64_t not_done_limit_us = 20000000ULL; // safety if CHANNEL stalls
     uint64_t last_zombie_check_us = 0;
     uint64_t not_done_since_us = 0;
+    uint64_t dirty_since_us = 0;
+    uint64_t pending_updates = 0;
 
     while (!done) {
         zmq::pollitem_t items[] = {
             {(void *)subscription_manager.setup(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0},
             {(void *)subscription_manager.subscriber(), 0, ZMQ_POLLERR | ZMQ_POLLIN, 0},
         };
+
+        const uint64_t loop_now_us = microsecs();
+        if (store.dirty() && dirty_since_us == 0) {
+            dirty_since_us = loop_now_us;
+        }
+        if (store.dirty() && loop_now_us - dirty_since_us >= flush_interval_us) {
+            std::ostringstream context;
+            context << "coalesced PROPERTY batch (" << pending_updates << " updates)";
+            if (save_persistent_store(store, context.str().c_str())) {
+                if (verbose) {
+                    std::cout << "persistd saved coalesced batch of " << pending_updates
+                              << " updates\n"
+                              << std::flush;
+                }
+                pending_updates = 0;
+                dirty_since_us = 0;
+            }
+            else {
+                // Keep the data dirty, but avoid retrying in a tight loop.
+                dirty_since_us = loop_now_us;
+            }
+        }
 
         try {
             if (!subscription_manager.checkConnections()) {
@@ -425,7 +467,7 @@ int main(int argc, const char *argv[]) {
                                << "s; exiting for supervise restart\n"
                                << std::flush;
                     }
-                    exit(0);
+                    flush_and_exit(0);
                 }
 
                 usleep(1000000);
@@ -513,6 +555,8 @@ int main(int argc, const char *argv[]) {
                 had_session = true;
                 need_refresh = false;
                 must_rechannel = false;
+                dirty_since_us = 0;
+                pending_updates = 0;
                 last_zombie_check_us = microsecs();
             }
         }
@@ -528,9 +572,22 @@ int main(int argc, const char *argv[]) {
             continue;
         }
 
+        int poll_timeout_ms = 500;
+        if (store.dirty() && dirty_since_us != 0) {
+            const uint64_t elapsed = microsecs() - dirty_since_us;
+            if (elapsed < flush_interval_us) {
+                const uint64_t remaining_ms = (flush_interval_us - elapsed + 999ULL) / 1000ULL;
+                poll_timeout_ms =
+                    static_cast<int>(std::min<uint64_t>(500ULL, std::max<uint64_t>(1ULL, remaining_ms)));
+            }
+            else {
+                poll_timeout_ms = 1;
+            }
+        }
+
         int rc = 0;
         try {
-            rc = zmq::poll(&items[0], 2, 500);
+            rc = zmq::poll(&items[0], 2, poll_timeout_ms);
         }
         catch (const zmq::error_t &e) {
             if (errno == EINTR || errno == EAGAIN) {
@@ -564,7 +621,7 @@ int main(int argc, const char *argv[]) {
                     need_refresh = true;
                     subscription_manager.forceFullReconnect("persistd subscriber recv error");
                     if (++sub_error_count > 5) {
-                        exit(0); // supervise restart
+                        flush_and_exit(0); // supervise restart
                     }
                     usleep(200000);
                 }
@@ -592,7 +649,7 @@ int main(int argc, const char *argv[]) {
             need_refresh = true;
             subscription_manager.forceFullReconnect("persistd subscriber exception");
             if (++sub_error_count > 5) {
-                exit(0);
+                flush_and_exit(0);
             }
             usleep(200000);
             continue;
@@ -612,8 +669,11 @@ int main(int argc, const char *argv[]) {
                     Value machine_name = *iter++;
                     Value property_name = *iter++;
                     Value value = *iter++;
+                    if (!store.dirty()) {
+                        dirty_since_us = microsecs();
+                    }
                     store.insert(machine_name.asString(), property_name.asString(), value);
-                    save_persistent_store(store, "PROPERTY");
+                    ++pending_updates;
                 }
                 else {
                     std::cerr << "unexpected command: " << cmd << " sent to persistd\n";
@@ -625,8 +685,11 @@ int main(int argc, const char *argv[]) {
                 iss >> property >> op >> value;
                 std::string machine_name;
                 store.split(machine_name, property);
+                if (!store.dirty()) {
+                    dirty_since_us = microsecs();
+                }
                 store.insert(machine_name, property, value.c_str());
-                save_persistent_store(store, "PROPERTY");
+                ++pending_updates;
             }
             if (param_list) {
                 delete param_list;
@@ -639,13 +702,5 @@ int main(int argc, const char *argv[]) {
         delete[] data;
     }
 
-    if (store.dirty()) {
-        save_persistent_store(store, "final update during shutdown");
-    }
-    std::cout.flush();
-    std::cerr.flush();
-    // The ZMQ monitor threads make context_t::close() block on some supported
-    // runtimes. The persistent store is already fsynced at this point, so exit
-    // without waiting for library teardown that cannot affect file integrity.
-    _exit(0);
+    flush_and_exit(0);
 }
