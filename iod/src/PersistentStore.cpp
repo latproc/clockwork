@@ -233,7 +233,9 @@ std::string serialise_value(const Value &value) {
         char *end = 0;
         errno = 0;
         const double round_trip = strtod(legacy_text.c_str(), &end);
-        if (errno == 0 && end && *end == 0 && round_trip == number &&
+        const double tolerance = 1.0e-12 * std::max(1.0, std::fabs(number));
+        if (errno == 0 && end && *end == 0 &&
+            std::fabs(round_trip - number) <= tolerance &&
             std::signbit(round_trip) == std::signbit(number)) {
             return legacy_text;
         }
