@@ -195,6 +195,24 @@ void populate_types(PersistentStore &store) {
     store.insert("M_TYPES", "empty", Value());
 }
 
+std::string line_for(const PersistentStore &store, const std::string &machine,
+                     const std::string &property) {
+    std::ostringstream out;
+    store.operator<<(out);
+    std::istringstream lines(out.str());
+    std::string line;
+    while (std::getline(lines, line)) {
+        std::istringstream fields(line);
+        std::string actual_machine;
+        std::string actual_property;
+        fields >> actual_machine >> actual_property;
+        if (actual_machine == machine && actual_property == property) {
+            return line;
+        }
+    }
+    return "";
+}
+
 } // namespace
 
 TEST(PersistentStore, RoundTripsLargeDatasetAndValueTypes) {
@@ -228,6 +246,20 @@ TEST(PersistentStore, RoundTripsLargeDatasetAndValueTypes) {
     rewritten.init_values = loaded.init_values;
     ASSERT_TRUE(rewritten.save(&error)) << error;
     EXPECT_EQ(read_file(directory.file("rewritten.dat")), read_file(directory.file()));
+}
+
+TEST(PersistentStore, KeepsLegacyFormatWhereItIsLossless) {
+    TempDirectory directory;
+    PersistentStore store(directory.file());
+    store.insert("M_FORMAT", "zero", Value(0.0));
+    store.insert("M_FORMAT", "simple", Value(0.05));
+    store.insert("M_FORMAT", "precise", Value(0.12345678901234567));
+    store.insert("M_FORMAT", "enabled", Value(true));
+
+    EXPECT_EQ(line_for(store, "M_FORMAT", "zero"), "M_FORMAT zero 0.0");
+    EXPECT_EQ(line_for(store, "M_FORMAT", "simple"), "M_FORMAT simple 0.050000");
+    EXPECT_NE(line_for(store, "M_FORMAT", "precise"), "M_FORMAT precise 0.123457");
+    EXPECT_EQ(line_for(store, "M_FORMAT", "enabled"), "M_FORMAT enabled true");
 }
 
 TEST(PersistentStore, KeepsBackupAndRecoversCorruptPrimary) {

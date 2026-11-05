@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
@@ -217,14 +218,29 @@ std::string serialise_value(const Value &value) {
     std::ostringstream out;
     switch (value.kind) {
     case Value::t_bool:
-        return value.asString() == "true" || value.asString() == "TRUE" ? "TRUE" : "FALSE";
+        return value.asString() == "true" || value.asString() == "TRUE" ? "true" : "false";
     case Value::t_integer:
         out << value.asString();
         return out.str();
-    case Value::t_float:
+    case Value::t_float: {
+        const double number = value.toFloat();
+        if (number == 0.0) {
+            return std::signbit(number) ? "-0.0" : "0.0";
+        }
+        std::ostringstream legacy;
+        legacy << std::fixed << std::setprecision(6) << number;
+        const std::string legacy_text = legacy.str();
+        char *end = 0;
+        errno = 0;
+        const double round_trip = strtod(legacy_text.c_str(), &end);
+        if (errno == 0 && end && *end == 0 && round_trip == number &&
+            std::signbit(round_trip) == std::signbit(number)) {
+            return legacy_text;
+        }
         out << std::setprecision(std::numeric_limits<double>::max_digits10)
-            << std::scientific << value.toFloat();
+            << std::scientific << number;
         return out.str();
+    }
     case Value::t_string:
         return quote_string(value.asString());
     case Value::t_symbol: {
