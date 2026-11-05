@@ -65,7 +65,7 @@ add_test(NAME test_persistent_store COMMAND test_persistent_store)
 add_test(NAME persistd_sigterm_runtime
   COMMAND sh ${PROJECT_SOURCE_DIR}/tests/run_persistd_sigterm.sh
     $<TARGET_FILE:persistd> $<TARGET_FILE:cw> $<TARGET_FILE:iocmd>
-    ${PROJECT_SOURCE_DIR}/tests)
+    $<TARGET_FILE:test_persistent_store> ${PROJECT_SOURCE_DIR}/tests)
 set_tests_properties(persistd_sigterm_runtime PROPERTIES RUN_SERIAL TRUE)
 
 add_executable(test_disable_action iod_mock.h test_disable_action.cpp )

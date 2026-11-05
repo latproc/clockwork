@@ -1,15 +1,16 @@
 #!/bin/sh
 set -eu
 
-if [ "$#" -ne 4 ]; then
-    echo "usage: run_persistd_sigterm.sh <persistd> <cw> <iocmd> <source-dir>" >&2
+if [ "$#" -ne 5 ]; then
+    echo "usage: run_persistd_sigterm.sh <persistd> <cw> <iocmd> <store-test> <source-dir>" >&2
     exit 2
 fi
 
 PERSISTD="$1"
 CW="$2"
 IOCMD="$3"
-SOURCE_DIR="$4"
+STORE_TEST="$4"
+SOURCE_DIR="$5"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/persistd-sigterm.XXXXXX")
 setup_port=$((29000 + ($$ % 500)))
 channel_port=$((setup_port + 500))
@@ -105,3 +106,31 @@ wait "${writer_pid}" 2>/dev/null || true
 grep -q '^sample a ' "${WORK}/persist.dat"
 grep -q '^sample e ' "${WORK}/persist.dat"
 test "$(tail -c 1 "${WORK}/persist.dat" | wc -l | tr -d ' ')" -eq 1
+PERSIST_STORE_EXTERNAL_FIXTURE="${WORK}/persist.dat" "${STORE_TEST}" \
+    --gtest_color=no --gtest_brief=1 \
+    --gtest_filter='PersistentStore.OptionalExternalProductionFixtureRoundTripsExactly' \
+    >"${WORK}/store-term-check.log" 2>&1 ||
+    { cat "${WORK}/store-term-check.log" >&2; exit 1; }
+
+"${PERSISTD}" --verbose --setup-port "${setup_port}" >>"${WORK}/persistd.log" 2>&1 &
+persistd_pid=$!
+sleep 4
+(
+    i=0
+    while [ "${i}" -lt 500 ]; do
+        printf 'PROPERTY sample c %s;\n' "${i}"
+        i=$((i + 1))
+    done
+) | "${IOCMD}" -p "${setup_port}" >"${WORK}/iocmd-kill.log" 2>&1 &
+writer_pid=$!
+sleep 0.1
+kill -KILL "${persistd_pid}"
+wait "${persistd_pid}" 2>/dev/null || true
+persistd_pid=
+wait "${writer_pid}" 2>/dev/null || true
+
+PERSIST_STORE_EXTERNAL_FIXTURE="${WORK}/persist.dat" "${STORE_TEST}" \
+    --gtest_color=no --gtest_brief=1 \
+    --gtest_filter='PersistentStore.OptionalExternalProductionFixtureRoundTripsExactly' \
+    >"${WORK}/store-kill-check.log" 2>&1 ||
+    { cat "${WORK}/store-kill-check.log" >&2; exit 1; }
