@@ -2473,6 +2473,13 @@ void IOComponent::handleChange(std::list<Package *> &work_queue, bool run_filter
             if (direction() != DirOutput) {
                 publishSampleTime(read_time ? read_time : io_clock);
             }
+            // Mark listeners before the on_enter package runs, so absorb treats
+            // this as a change-driven WHEN and not a paced TIMER recheck.
+            for (MachineInstance *owner : owners) {
+                if (owner) {
+                    owner->noteDigitalInputEdge();
+                }
+            }
             std::list<MachineInstance *>::iterator iter;
 #ifndef DISABLE_LEAVE_FUNCTIONS
             if (address.value) {

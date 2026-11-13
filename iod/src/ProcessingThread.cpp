@@ -35,6 +35,7 @@
 
 #include "ClientInterface.h"
 #include "DebugExtra.h"
+#include "ElcAbsorbWake.h"
 #include "IODCommand.h"
 #include "IODCommands.h"
 #include "IOInterface.h"
@@ -1265,26 +1266,6 @@ void ProcessingThread::operator()() {
                         }
                     }
                 }
-#if !defined(USE_ETHERCAT)
-                // cw has no bus clock to pace the loop, so wake at the earliest
-                // COMMANDCLOCK boundary instead of the idle/paced wait. Capping
-                // after the branches above means a busy dependant cannot push the
-                // next tick out to the 20 ms clamp. The dispatch itself runs after
-                // this poll returns (below).
-                if (status == e_waiting && processing_state == eIdle) {
-                    const uint64_t clock_wake_us =
-                        MachineInstance::nextCommandClockWakeUs(curr_t);
-                    if (clock_wake_us != 0) {
-                        int clock_wait_ms =
-                            (clock_wake_us > curr_t)
-                                ? static_cast<int>((clock_wake_us - curr_t) / 1000)
-                                : 0;
-                        if (clock_wait_ms < wait_ms) {
-                            wait_ms = clock_wait_ms;
-                        }
-                    }
-                }
-#endif
                 if (wait_ms < 1) {
                     wait_ms = 1;
                 }
@@ -1302,6 +1283,14 @@ void ProcessingThread::operator()() {
             }
             IOComponent::noteHiScan(microsecs() - t_scan0);
             } // !tight_absorb: poll rebuild + runnable scan
+            // Clock cap runs even when absorb skipped the rebuild above. cw and
+            // iod-elc both wake at the next COMMANDCLOCK boundary; analog frames
+            // stay absorbed, but calcAdjust is not quantised to that absorb.
+            if (status == e_waiting && processing_state == eIdle) {
+                curr_t = microsecs();
+                const uint64_t clock_wake_us = MachineInstance::nextCommandClockWakeUs(curr_t);
+                poll_wait = ElcAbsorbWake::capWaitMs(poll_wait, curr_t, clock_wake_us);
+            }
             tight_absorb = false;
 
             //if (Watchdog::anyTriggered(curr_t))
@@ -1334,20 +1323,15 @@ void ProcessingThread::operator()() {
             curr_t = microsecs();
             StallTrace::markStage(StallTrace::StageOuterHousekeeping);
 
-#if !defined(USE_ETHERCAT)
-            // cw is the Clockwork runtime without an EtherCAT transport: there is
-            // no bus sample clock, machine_is_ready never latches, and the IO
-            // sample path that normally dispatches COMMANDCLOCKs
-            // (handle_io_sampling) therefore never runs. This wait loop is where
-            // such a runtime spends its idle time, so drive the COMMANDCLOCK
-            // cadence here from the monotonic runtime clock. The poll wait above
-            // is capped to the next clock boundary, so a due tick is dispatched
-            // within ~1 ms of it rather than at the idle absorb.
+            // Dispatch on the clock boundary even while analog absorb continues.
+            // cw has no bus sample, so this wait is its only cadence. iod-elc
+            // used to compile this out, and absorb then never took the exit
+            // that used to be the only dispatch. One send per period still
+            // reaches every consumer: a late due() must not reset a K=1 fan-out.
             if (status == e_waiting && processing_state == eIdle &&
                 MachineInstance::commandClockCount()) {
                 MachineInstance::dispatchCommandClocks(curr_t);
             }
-#endif
 
             // ---- In-wait EC + scheduler service (event-safe, no usleep) ----
             // Drain EC first so digital edges are never delayed by a TIMER poke.

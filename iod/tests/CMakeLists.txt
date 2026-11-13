@@ -49,6 +49,11 @@ target_include_directories(test_elc_domain_cw_mirror PRIVATE ${PROJECT_SOURCE_DI
 target_link_libraries(test_elc_domain_cw_mirror gtest_main pthread)
 add_test(NAME test_elc_domain_cw_mirror COMMAND test_elc_domain_cw_mirror)
 
+add_executable(test_elc_absorb_wake test_elc_absorb_wake.cpp)
+target_include_directories(test_elc_absorb_wake PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_link_libraries(test_elc_absorb_wake gtest_main pthread)
+add_test(NAME test_elc_absorb_wake COMMAND test_elc_absorb_wake)
+
 # Now simply link against gtest or gtest_main as needed. Eg
 add_executable(test_value test_value.cpp )
 target_link_libraries(test_value gmock_main cw_client ${ZeroMQ_LIBRARY} ${Boost_LIBRARIES} ${DL_LIBRARY} pthread)

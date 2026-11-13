@@ -239,6 +239,9 @@ class MachineInstance : public Receiver, public ModbusAddressable, public Trigge
        so the wait-loop absorb can admit it promptly instead of at the paced
        recheck. State changes only - see pending_change_check. */
     void noteStateChange(MachineInstance *source, const std::string &state_name);
+    /* A POINT / STATUS_FLAG / FLAG wire or VALUE edge. Marks listeners
+       change-driven so absorb runs their WHEN now. Not for analog VALUE. */
+    void noteDigitalInputEdge();
     /* Internal state-change propagation through composite LIST/REFERENCE
        dependencies. A LIST does not run WHEN rules itself, but its dependants
        do; they must inherit the change-driven mark too. */

@@ -25,6 +25,7 @@
 #include "ControlSystemMachine.h"
 #include "DebugExtra.h"
 #include "Dispatcher.h"
+#include "ElcAbsorbWake.h"
 #include "ExecuteMessageAction.h"
 #include "Expression.h"
 #include "FireTriggerAction.h"
@@ -1464,6 +1465,20 @@ void MachineInstance::noteStateChange(MachineInstance *source, const std::string
     }
     pending_change_check = true;
     setNeedsCheck();
+}
+
+void MachineInstance::noteDigitalInputEdge() {
+    if (!ElcAbsorbWake::isDigitalEdgeType(_type.c_str())) {
+        return;
+    }
+    std::set<MachineInstance *>::iterator dep_iter = depends.begin();
+    while (dep_iter != depends.end()) {
+        MachineInstance *dep = *dep_iter++;
+        if (dep == this) {
+            continue;
+        }
+        dep->noteStateChange(this, current_state.getName());
+    }
 }
 
 void MachineInstance::noteIndirectStateChange(std::set<MachineInstance *> &visited) {
@@ -3022,6 +3037,12 @@ void MachineInstance::notifyCommandConsumers(const char *command_name,
     uint64_t stale_us = notify_period_ms * 2ULL * 1000ULL;
     if (stale_us < 50000ULL) {
         stale_us = 50000ULL;
+    }
+    // A late due() while the previous period has not reached every consumer
+    // keeps command_fanout_skip and finishes that fan-out. Resetting here
+    // re-sends only the first dependant (K=1) and drops the rest.
+    if (!continue_fanout && ElcAbsorbWake::dueKeepsFanoutSkip(command_fanout_pending)) {
+        continue_fanout = true;
     }
     if (!continue_fanout) {
         command_fanout_skip = 0;
@@ -5826,6 +5847,10 @@ bool MachineInstance::setValue(const std::string &property, const Value &new_val
             property_val.token_id != ClockworkToken::DEBUG) {
             setNeedsCheck();
             notifyDependents();
+        }
+        // Analog VALUE stays paced. A POINT / flag VALUE edge has to leave absorb.
+        if (property_val.token_id == ClockworkToken::tokVALUE) {
+            noteDigitalInputEdge();
         }
         return true;
     }
